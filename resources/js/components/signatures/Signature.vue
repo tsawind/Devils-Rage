@@ -3,6 +3,7 @@ import TrashIcon from '@/components/icons/TrashIcon.vue';
 import MapConnectionInput from '@/components/signatures/MapConnectionInput.vue';
 import SignatureTimeDetails from '@/components/signatures/SignatureTimeDetails.vue';
 import SignatureTypeInput from '@/components/signatures/SignatureTypeInput.vue';
+import StaticRenameDialog from '@/components/signatures/StaticRenameDialog.vue';
 import WormholeTypeInput from '@/components/signatures/WormholeTypeInput.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog';
@@ -24,8 +25,8 @@ import usePermission from '@/composables/usePermission';
 import { useShowMap } from '@/composables/useShowMap';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
-import { aliasForSlot, isIgnoredAlias, staticSlotAlias } from '@/lib/alias';
-import { buildSignatureBookmark, visibleBookmarkName } from '@/lib/bookmark';
+import { aliasForSlot, displayAlias, isIgnoredAlias, staticSlotAlias } from '@/lib/alias';
+import { buildSignatureBookmark, formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
 import { isK162, validateManualAlias } from '@/lib/chainNumbering';
 import { Data } from '@/lib/data';
@@ -41,7 +42,16 @@ import { AcceptableValue } from 'reka-ui';
 import { type Component, computed, nextTick, ref, toRef } from 'vue';
 import { toast } from 'vue-sonner';
 
-const { signature, unconnected_connections, connected_connections, selected_map_solarsystem, planned_alias, number_owners, static_owner_id } = defineProps<{
+const {
+    signature,
+    unconnected_connections,
+    connected_connections,
+    selected_map_solarsystem,
+    planned_alias,
+    claim_alias = null,
+    number_owners,
+    static_owner_id,
+} = defineProps<{
     signature: TSignature;
     is_deleted?: boolean;
     is_new?: boolean;
@@ -51,6 +61,8 @@ const { signature, unconnected_connections, connected_connections, selected_map_
     selected_map_solarsystem: TResolvedSelectedMapSolarsystem;
     /** The chain alias reserved for this hole among the system's unjumped wormholes. */
     planned_alias?: string | null;
+    /** Combat chains: the next free number, taken by this hole if it is copied before it has one. */
+    claim_alias?: string | null;
     /** Who holds each number in this system (alias → owner), for hand-set numbers. */
     number_owners?: Map<string, { signatureId: number | null; label: string }>;
     /** The signature marked as this system's static, if any. */
@@ -178,7 +190,16 @@ function handleTypeChange(value: AcceptableValue) {
     if (isStaticType) {
         pending_type_id.value = typeId;
         pending_type_name.value = wormholeName;
-        static_choice_open.value = true;
+
+        // Two holes of the static type (one of them is wandering), or the
+        // static's number is already held by something else: ask.
+        const slotOwner = number_owners?.get(static_slot.value.toUpperCase());
+        if (static_taken_by_other.value || (slotOwner && slotOwner.signatureId !== signature.id)) {
+            static_choice_open.value = true;
+            return;
+        }
+
+        markStaticAutomatically(typeId);
         return;
     }
 
@@ -213,6 +234,117 @@ const { remaining: static_choice_remaining, fraction: static_choice_fraction } =
     () => popup_seconds.value,
     () => chooseStaticKind('unknown'),
 );
+
+// ---- The static type on the only candidate: it is the static ---------------
+
+const rename_open = ref(false);
+
+/**
+ * The hole has this system's static type and no other hole is the static, so
+ * it is the static. With no number yet it simply takes the static's slot; a
+ * hole already numbered (bookmarked in game) asks whether to rename it, and
+ * keeps its name unless the scanner chooses to rename.
+ */
+function markStaticAutomatically(typeId: number | null): void {
+    if (signature.alias && signature.alias !== static_slot.value) {
+        rename_open.value = true;
+        return;
+    }
+
+    const previous: Record<string, FormDataConvertible> = {
+        signature_type_id: signature.signature_type_id,
+        is_static: Boolean(signature.is_static),
+        is_wandering: Boolean(signature.is_wandering),
+        alias: signature.alias ?? null,
+    };
+    handleChange({ signature_type_id: typeId, ...flagChanges(true, false) });
+    toast.success(`${signature.signature_id ?? 'Signature'} marked as the static`, {
+        description: `Takes ${displayAlias(static_slot.value)}`,
+        action: { label: 'Undo', onClick: () => handleChange(previous) },
+    });
+}
+
+/** The type picked for the pending static, to name the bookmarks it will get. */
+const pending_type = computed(() => availableTypes.value.find((type) => type.id === pending_type_id.value) ?? null);
+
+/** The bookmark this hole gets as the static, named `alias`. */
+function staticBookmarkName(alias: string): string {
+    const target = selected_connection.value?.target ?? null;
+    return buildSignatureBookmark({
+        signature: {
+            ...signature,
+            is_static: true,
+            is_wandering: false,
+            signature_type: pending_type.value ? { target_class: pending_type.value.target_class } : signature.signature_type,
+            wormhole: pending_type.value ? { name: pending_type.value.signature } : signature.wormhole,
+        },
+        currentSystem: {
+            alias: selected_map_solarsystem.alias,
+            class: selected_map_solarsystem.solarsystem.class,
+            combatHome: is_combat_home.value,
+            combatColor: map_system.value?.combat_color ?? null,
+        },
+        connectionTarget: target ? { ...target, alias } : null,
+        aliases: chainAliases(map_solarsystems.value, map_system.value),
+        formats: page.props.map,
+        detectReturn: true,
+        plannedAlias: alias,
+    });
+}
+
+/** The far side's way-back bookmark, when the hole is already jumped and the far system is named `alias`. */
+function farSideReturnName(alias: string): string | null {
+    const connection = selected_connection.value;
+    if (!connection) return null;
+    const farSignature = (connection.signatures ?? []).find((candidate) => candidate.map_solarsystem_id !== selected_map_solarsystem.id);
+    return formatBookmarkName(
+        {
+            alias: selected_map_solarsystem.alias,
+            solarsystem: selected_map_solarsystem.solarsystem,
+            combat_home: is_combat_home.value,
+            combat_color: map_system.value?.combat_color ?? null,
+        },
+        { signatureId: farSignature?.signature_id ?? null },
+        page.props.map,
+        alias,
+        alias,
+        connection.target.solarsystem.class,
+        connection.target.combat_color ?? null,
+    );
+}
+
+const rename_changes = computed(() => {
+    if (!rename_open.value) return [];
+    const from = signature.alias ?? '';
+    const to = static_slot.value;
+    const changes = [{ label: 'In this system', from: bookmark_name.value, to: staticBookmarkName(to) }];
+    const farFrom = farSideReturnName(from);
+    const farTo = farSideReturnName(to);
+    if (farFrom && farTo) changes.push({ label: 'On the far side (way back)', from: farFrom, to: farTo });
+    return changes;
+});
+
+/** Systems further down this hole's branch, which keep their names if it is renamed. */
+const rename_beyond = computed(() => {
+    const from = (signature.alias ?? '').toUpperCase();
+    if (!from) return [];
+    return chainAliases(map_solarsystems.value, map_system.value)
+        .filter((alias) => alias.toUpperCase().startsWith(from) && alias.length > from.length)
+        .map((alias) => displayAlias(alias));
+});
+
+function handleRenameChoice(choice: 'rename' | 'keep'): void {
+    const typeId = pending_type_id.value;
+    if (choice === 'keep') {
+        handleChange({ signature_type_id: typeId, is_static: true, is_wandering: false });
+        return;
+    }
+
+    const name = staticBookmarkName(static_slot.value);
+    handleChange({ signature_type_id: typeId, is_static: true, is_wandering: false, alias: static_slot.value });
+    navigator.clipboard.writeText(name).catch(() => undefined);
+    toast.success(`Renamed to ${displayAlias(static_slot.value)}`, { description: `Copied ${visibleBookmarkName(name)}` });
+}
 
 // ---- Chain numbering: Static / Wandering / hand-set number ----------------
 
@@ -356,17 +488,47 @@ function handleTogglePreserveMass() {
 const page = useShowMap();
 const { map_solarsystems } = useMapSolarsystems();
 
+// ---- Name column -----------------------------------------------------------
+
+/** Linked holes show where they lead; unjumped ones the number they have (bold once locked) or will get. */
+const name_label = computed(() => {
+    if (!isWormhole.value) return '';
+    const target = selected_connection.value?.target;
+    if (target) return displayAlias(target.alias) || '—';
+    const alias = signature.alias ?? planned_alias;
+    return alias ? displayAlias(alias) : '·';
+});
+
+const name_class = computed(() => {
+    if (selected_connection.value) return 'text-foreground';
+    if (signature.alias) return 'font-bold text-foreground';
+    return 'text-muted-foreground';
+});
+
+const name_title = computed(() => {
+    if (!isWormhole.value) return undefined;
+    if (selected_connection.value) return 'Leads to this system';
+    if (signature.alias) return 'Number locked (copied or jumped)';
+    if (planned_alias) return 'The number this hole gets';
+    return 'Combat chain: numbered when it is jumped or copied';
+});
+
 // The destination bookmark for this hole: the real connection target when one
 // is set, otherwise the auto-suggested next chain alias.
 const bookmark_name = computed(() =>
     buildSignatureBookmark({
         signature,
-        currentSystem: { alias: selected_map_solarsystem.alias, class: selected_map_solarsystem.solarsystem.class, combatHome: is_combat_home.value, combatColor: map_system.value?.combat_color ?? null },
+        currentSystem: {
+            alias: selected_map_solarsystem.alias,
+            class: selected_map_solarsystem.solarsystem.class,
+            combatHome: is_combat_home.value,
+            combatColor: map_system.value?.combat_color ?? null,
+        },
         connectionTarget: selected_connection.value?.target ?? null,
         aliases: chainAliases(map_solarsystems.value, map_system.value),
         formats: page.props.map,
         detectReturn: true,
-        plannedAlias: planned_alias,
+        plannedAlias: planned_alias ?? claim_alias,
     }),
 );
 
@@ -375,8 +537,10 @@ function copyBookmark() {
 
     // Copying an unjumped hole's bookmark locks its number, so it never shifts
     // under a bookmark someone has saved in game.
-    if (isWormhole.value && !signature.alias && !signature.map_connection_id && planned_alias && can_write.value) {
-        handleChange({ alias: planned_alias });
+    // In a combat chain a hole still in limbo claims the next free number.
+    const lock = planned_alias ?? claim_alias;
+    if (isWormhole.value && !signature.alias && !signature.map_connection_id && lock && can_write.value) {
+        handleChange({ alias: lock });
     }
 
     toast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(bookmark_name.value) });
@@ -390,6 +554,7 @@ function copyBookmark() {
         :data-deleted="Data(is_deleted)"
         :data-new="Data(is_new)"
         :data-updated="Data(is_updated)"
+        :title="is_deleted ? 'Not in your last paste (ignored in game, or gone). It keeps its number until you delete it.' : undefined"
     >
         <!-- Signature ID -->
         <div class="w-16 shrink-0">
@@ -477,9 +642,9 @@ function copyBookmark() {
             />
         </div>
 
-        <!-- Age -->
-        <div class="w-10 shrink-0 text-right">
-            <SignatureTimeDetails :category="signature.signature_category?.name" :selected_connection="selected_connection" :signature="signature" />
+        <!-- Name: the number this hole has or gets, or where it leads -->
+        <div class="w-16 shrink-0 truncate font-mono text-xs" :title="name_title">
+            <span :class="name_class">{{ name_label }}</span>
         </div>
 
         <!-- Actions -->
@@ -587,6 +752,24 @@ function copyBookmark() {
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>
+
+        <!-- Age -->
+        <div class="w-10 shrink-0 text-right">
+            <SignatureTimeDetails :category="signature.signature_category?.name" :selected_connection="selected_connection" :signature="signature" />
+        </div>
+
+        <!-- Already bookmarked hole is the static: rename or keep? -->
+        <StaticRenameDialog
+            v-if="rename_open"
+            v-model:open="rename_open"
+            :signature-label="signature.signature_id ?? 'This signature'"
+            :from-alias="displayAlias(signature.alias)"
+            :to-alias="displayAlias(static_slot)"
+            :changes="rename_changes"
+            :beyond="rename_beyond"
+            :countdown-seconds="popup_seconds"
+            @choose="handleRenameChoice"
+        />
 
         <!-- Static, wandering or unknown? -->
         <Dialog :open="static_choice_open" @update:open="handleStaticChoiceOpenChange">

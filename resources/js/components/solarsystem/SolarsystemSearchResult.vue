@@ -2,6 +2,7 @@
 import SolarsystemSovereignty from '@/components/map/SolarsystemSovereignty.vue';
 import SolarsystemClass from '@/components/solarsystem/SolarsystemClass.vue';
 import SolarsystemEffect from '@/components/solarsystem/SolarsystemEffect.vue';
+import { displayAlias } from '@/lib/alias';
 import type { TResolvedSolarsystem } from '@/pages/maps';
 
 const {
@@ -22,7 +23,7 @@ const {
             <SolarsystemClass :solarsystem_class="solarsystem.class" />
         </span>
         <span class="min-w-0 truncate">
-            <span v-if="alias" class="mr-1 font-medium text-foreground">{{ alias }}</span>
+            <span v-if="alias" class="mr-1 font-medium text-foreground">{{ displayAlias(alias) }}</span>
             <span class="font-medium" :class="alias ? 'text-muted-foreground' : 'text-foreground'">{{ solarsystem.name }}</span>
             <span v-if="occupier_alias" class="text-muted-foreground"> ({{ occupier_alias }})</span>
         </span>

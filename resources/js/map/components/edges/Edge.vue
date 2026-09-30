@@ -18,10 +18,12 @@ type Props = {
     connection?: TMapConnection | null;
     isOnRoute?: boolean;
     rallyDirection?: 'forward' | 'reverse' | null;
+    /** Combat chain color: a glowing band behind the line in that color. */
+    chainColor?: string | null;
     scale: number;
 };
 
-const { geometry, connection = null, isOnRoute = false, rallyDirection = null, scale } = defineProps<Props>();
+const { geometry, connection = null, isOnRoute = false, rallyDirection = null, chainColor = null, scale } = defineProps<Props>();
 
 const emit = defineEmits<{
     (e: 'connectionContextMenu', event: MouseEvent): void;
@@ -109,6 +111,11 @@ function getDashArray(): string | undefined {
 
 <template>
     <g pointer-events="visiblePainted" class="group text-neutral-300 dark:text-neutral-700">
+        <!-- Combat chain: a soft band in the chain's color behind the connection, so the chain reads as one colored path. -->
+        <template v-if="chainColor">
+            <path :d="path.d" :stroke="chainColor" fill="none" :stroke-width="isOrthogonal ? 9 : 14" stroke-opacity="0.18" stroke-linejoin="round" stroke-linecap="round" />
+            <path :d="path.d" :stroke="chainColor" fill="none" :stroke-width="isOrthogonal ? 4 : 7" stroke-opacity="0.55" stroke-linejoin="round" stroke-linecap="round" />
+        </template>
         <!-- Stargates are permanent, so they draw a single solid line instead of the wormhole's mass/lifetime styling. -->
         <path
             v-if="isStargate"

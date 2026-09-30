@@ -184,4 +184,25 @@ describe('computeTreeLayout', () => {
         // levelGap 100 snaps to whole grid cells: round(100 / 40) * 40 = 120.
         expect(positions.get(2)!.x).toBe(120);
     });
+
+    it('grows a combat chain straight down from its combat home, side branches to the right', () => {
+        const edges = [
+            [1, 2],
+            [2, 3],
+            [3, 4],
+            [4, 5],
+            [5, 6],
+            [5, 7],
+            [2, 8],
+        ].map(([from, to]) => ({ from, to }));
+        const positions = layout({ nodeIds: [1, 2, 3, 4, 5, 6, 7, 8], edges, fallbackRootId: 1, verticalRootIds: [3] });
+
+        const home = positions.get(3)!;
+        expect(positions.get(4)).toEqual({ x: home.x, y: home.y + 80 });
+        expect(positions.get(5)).toEqual({ x: home.x, y: home.y + 160 });
+        expect(positions.get(6)).toEqual({ x: home.x, y: home.y + 240 });
+        expect(positions.get(7)).toEqual({ x: home.x + 220, y: home.y + 240 });
+        // A main-tree sibling below the combat home is moved out of the chain's way.
+        expect(positions.get(8)!.y).toBeGreaterThan(home.y + 240);
+    });
 });

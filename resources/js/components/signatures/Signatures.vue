@@ -21,6 +21,8 @@ import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { useShowMap } from '@/composables/useShowMap';
 import usePermission from '@/composables/usePermission';
+import { signatureCategories } from '@/const/signatures';
+import { suggestAlias } from '@/lib/alias';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
@@ -72,19 +74,24 @@ const { map_solarsystems } = useMapSolarsystems();
 
 // Reserve a chain alias for every unjumped wormhole in this system (statics
 // first), so e.g. the static suggests " 1" and the next hole " 2".
-const visible_signatures = computed(() => signatures.value.filter((signature) => !signature.deleted));
-
 // This system as the map knows it (combat chain color, combat home).
 const map_system = computed(() => map_solarsystems.value.find((solarsystem) => solarsystem.id === props.map_solarsystem?.id) ?? null);
 
 // Numbers already used in this system's chain (each combat chain numbers from 1 on its own).
 const chain_aliases = computed(() => chainAliases(map_solarsystems.value, map_system.value));
 
+// Red rows (missing from the last paste: ignored in game, or gone) are
+// included, so the numbers they hold stay reserved until they are deleted.
 const planned_aliases = computed(() =>
     planAliasesForSystem({
-        signatures: visible_signatures.value,
+        signatures: signatures.value,
         system: props.map_solarsystem
-            ? { alias: props.map_solarsystem.alias, solarsystem: props.map_solarsystem.solarsystem, combat_home: map_system.value?.combat_home ?? false }
+            ? {
+                  alias: props.map_solarsystem.alias,
+                  solarsystem: props.map_solarsystem.solarsystem,
+                  combat_home: map_system.value?.combat_home ?? false,
+                  combat_color: map_system.value?.combat_color ?? null,
+              }
             : null,
         aliases: chain_aliases.value,
         formats: page.props.map,
@@ -97,15 +104,31 @@ const number_owners = computed(() => {
     for (const alias of chain_aliases.value) {
         owners.set(alias.toUpperCase(), { signatureId: null, label: `system ${alias} on the map` });
     }
-    for (const signature of visible_signatures.value) {
-        const alias = planned_aliases.value.get(signature.id);
+    for (const signature of signatures.value) {
+        const alias = planned_aliases.value.get(signature.id) ?? signature.alias ?? null;
         if (alias) owners.set(alias.toUpperCase(), { signatureId: signature.id, label: signature.signature_id ?? 'another signature' });
     }
     return owners;
 });
 
-// The one hole in this system marked as the static, if any.
-const static_owner_id = computed(() => visible_signatures.value.find((signature) => signature.is_static)?.id ?? null);
+// The one hole in this system marked as the static, if any (red rows included).
+const static_owner_id = computed(() => signatures.value.find((signature) => signature.is_static)?.id ?? null);
+
+// Combat chains number holes in the order they are claimed (copied or jumped):
+// the next free number in this system, for a hole still in "limbo".
+const claim_alias = computed<string | null>(() => {
+    const system = props.map_solarsystem;
+    if (!system || !map_system.value?.combat_color) return null;
+    return suggestAlias({
+        parentAlias: system.alias,
+        targetIsWormhole: true,
+        originIsWormhole: true,
+        aliases: [...chain_aliases.value, ...number_owners.value.keys()],
+        scheme: page.props.map.bookmark_alias_scheme,
+        ignoredAlias: page.props.map.bookmark_ignored_alias,
+        combatHome: Boolean(map_system.value.combat_home),
+    });
+});
 
 // ---- Return hole after a paste ---------------------------------------------
 // After a jump the connection back has no signature on this side yet. When a
@@ -153,6 +176,15 @@ async function handlePasted(pasted: TRawSignature[]): Promise<void> {
         })
         .map((signature) => ({ id: signature.id, distance: distances.get(signature.signature_id ?? '') ?? null, signature }));
 
+    // A paste of just one signature after your jump into this system can only be the hole you came through.
+    if (pasted.length === 1 && jump) {
+        const only = system.signatures.find((signature) => signature.signature_id === pasted[0].signature_id);
+        if (only && !only.map_connection_id && (isWormholeSignature(only) || !only.signature_category_id)) {
+            linkReturnHole(only, ordered[0], true);
+            return;
+        }
+    }
+
     const decision = decideReturnHole({ candidates, jumpedAt: jump?.at ?? null, now: Date.now() });
     if (decision.mode === 'none') return;
 
@@ -187,7 +219,12 @@ function linkReturnHole(signature: TSignature, connection: TProcessedConnection,
     if (!system) return;
 
     const previousTypeId = signature.signature_type_id;
-    updateSignature(signature, { map_connection_id: connection.id });
+    // A hole not categorised yet becomes a wormhole when it is linked.
+    const wormholeCategoryId = signatureCategories.find((category) => category.code === 'wormhole')?.id ?? null;
+    updateSignature(signature, {
+        map_connection_id: connection.id,
+        ...(!signature.signature_category_id && wormholeCategoryId !== null ? { signature_category_id: wormholeCategoryId } : {}),
+    });
 
     const name = formatBookmarkName(
         connection.target,
@@ -363,7 +400,9 @@ function createNewSignature() {
                                 <TrashIcon />
                             </MapPanelHeaderActionButton>
                         </TooltipTrigger>
-                        <TooltipContent> Delete missing signatures and their connections </TooltipContent>
+                        <TooltipContent>
+                            Delete missing (red) signatures and their connections. Careful: signatures you ignore in game show red too.
+                        </TooltipContent>
                     </Tooltip>
                     <Tooltip>
                         <TooltipTrigger as-child>
@@ -406,12 +445,13 @@ function createNewSignature() {
                     <ArrowDown v-if="sortPreferences.column === 'type' && sortPreferences.direction === 'desc'" class="size-3" />
                 </button>
                 <span class="min-w-0 flex-1">Conn</span>
+                <span class="w-16 shrink-0">Name</span>
+                <span class="w-14 shrink-0"></span>
                 <button class="flex w-10 shrink-0 items-center justify-end gap-1 hover:text-foreground" @click="handleSort('age')">
                     <span>Age</span>
                     <ArrowUp v-if="sortPreferences.column === 'age' && sortPreferences.direction === 'asc'" class="size-3" />
                     <ArrowDown v-if="sortPreferences.column === 'age' && sortPreferences.direction === 'desc'" class="size-3" />
                 </button>
-                <span class="w-14 shrink-0"></span>
             </div>
 
             <!-- Auto-link countdown -->
@@ -436,6 +476,7 @@ function createNewSignature() {
                     :connected_connections="connected_connections"
                     :selected_map_solarsystem="map_solarsystem"
                     :planned_alias="planned_aliases.get(signature.id) ?? null"
+                    :claim_alias="claim_alias"
                     :number_owners="number_owners"
                     :static_owner_id="static_owner_id"
                 />

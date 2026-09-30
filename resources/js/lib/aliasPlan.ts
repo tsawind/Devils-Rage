@@ -15,16 +15,23 @@ export function isWormholeSignature(signature: Pick<TSignature, 'signature_categ
 /**
  * Chain numbers for every wormhole signature in one system (signature id →
  * alias): locked numbers are kept, the hole marked Static takes the static slot, the
- * rest get the lowest free slot from 2 up. See `planSignatureAliases`.
+ * rest get the lowest free slot. See `planSignatureAliases`.
+ *
+ * Signatures flagged `deleted` (missing from the last paste: ignored in game,
+ * or gone) keep their locked number but never get a new one. In a combat chain
+ * (the system has a combat color) unjumped holes wait without a number, so the
+ * next jump gets the next number.
  */
 export function planAliasesForSystem(params: {
-    signatures: TSignature[] | null | undefined;
+    signatures: (TSignature & { deleted?: boolean })[] | null | undefined;
     system:
         | {
               alias?: string | null;
               solarsystem?: { class?: TStringedSolarsystemClass | null } | null;
               /** A combat home numbers its holes 1, 2, 3 (static 0). */
               combat_home?: boolean | null;
+              /** In a combat chain: holes are numbered in jump order. */
+              combat_color?: string | null;
           }
         | null
         | undefined;
@@ -41,6 +48,7 @@ export function planAliasesForSystem(params: {
         scheme: formats.bookmark_alias_scheme,
         ignoredAlias: formats.bookmark_ignored_alias,
         combatHome: Boolean(system.combat_home),
+        limbo: Boolean(system.combat_color),
         signatures: signatures.map((signature) => {
             const targetClass = signature.signature_type?.target_class ?? null;
             const knownClass = targetClass && targetClass !== 'unknown' ? targetClass : null;
@@ -52,6 +60,7 @@ export function planAliasesForSystem(params: {
                 isStatic: Boolean(signature.is_static),
                 targetIsWormhole: !knownClass || isWormholeClass(knownClass as TStringedSolarsystemClass),
                 targetClass: knownClass,
+                reserveOnly: Boolean(signature.deleted),
             };
         }),
     });

@@ -1,3 +1,4 @@
+import { displayAlias } from '@/lib/alias';
 import { TSolarsystemType } from '@/types/models';
 
 /**
@@ -8,7 +9,7 @@ export function isWormholeSystem(solarsystem?: { type: TSolarsystemType } | null
     return solarsystem?.type === 'wh';
 }
 
-/** "ALIAS (Name)" when the system carries an alias, otherwise just the name. */
+/** "ALIAS (Name)" when the system carries an alias, otherwise just the name. Aliases show as people read them ("Alpha", "A111-102"). */
 export function aliasedSolarsystemLabel(alias: string | null | undefined, name: string): string {
-    return alias ? `${alias} (${name})` : name;
+    return alias ? `${displayAlias(alias)} (${name})` : name;
 }

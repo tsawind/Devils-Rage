@@ -1,5 +1,5 @@
-import { planSignatureAliases, staticSlotAlias, suggestAlias, aliasForSlot } from '@/lib/alias';
-import { formatBookmarkName, isCombatHomeReturn } from '@/lib/bookmark';
+import { aliasForSlot, displayAlias, formatAliasPath, localSlot, planSignatureAliases, staticSlotAlias, suggestAlias } from '@/lib/alias';
+import { buildSignatureBookmark, formatBookmarkName, isCombatHomeReturn } from '@/lib/bookmark';
 import { chainAliases, combatColorHex, combatColorLabel, DEAD_END_STALE_MS, describeChainRoute, describeRoute, isDeadEnd } from '@/lib/combat';
 import { describe, expect, it } from 'vitest';
 
@@ -143,7 +143,7 @@ describe('route texts', () => {
                 combat_color: 'red',
                 solarsystem: { name: 'Amarr', class: 'h', region: { name: 'Domain' } },
             }),
-        ).toBe('Red route 1121 → highsec exit (Amarr, Domain)');
+        ).toBe('Red route 112-1 → highsec exit (Amarr, Domain)');
         expect(describeChainRoute({ alias: '112', combat_color: 'red', solarsystem: { name: 'J123456', class: '3' } })).toBe(
             'Red route 112 → C3 wormhole',
         );
@@ -164,7 +164,7 @@ describe('route texts', () => {
                 ],
                 'Nearest highsec',
             ),
-        ).toBe('Nearest highsec: 1121 → Tama (lowsec) → 3 gates → Hirri — 4 jumps');
+        ).toBe('Nearest highsec: 112-1 → Tama (lowsec) → 3 gates → Hirri — 4 jumps');
     });
 
     it('keeps single gate jumps and chain aliases', () => {
@@ -188,3 +188,91 @@ describe('route texts', () => {
         expect(combatColorLabel('pink')).toBeNull();
     });
 });
+
+describe('patch 11: names', () => {
+    it('groups chain aliases in threes', () => {
+        expect(formatAliasPath('A111102111140')).toBe('A111-102-111-140');
+        expect(formatAliasPath('1111111')).toBe('111-111-1');
+        expect(formatAliasPath('A0123')).toBe('A012-3');
+        expect(formatAliasPath('A01')).toBe('A01');
+        expect(formatAliasPath('112')).toBe('112');
+        expect(formatAliasPath('Daisy')).toBe('Daisy');
+        expect(formatAliasPath('HOMEBASE')).toBe('HOMEBASE');
+    });
+
+    it('shows home holes by callsign and never changes the alphabetical scheme', () => {
+        expect(displayAlias('A')).toBe('Alpha');
+        expect(displayAlias('B')).toBe('Bravo');
+        expect(displayAlias('A1')).toBe('A1');
+        expect(displayAlias('A1111')).toBe('A111-1');
+        expect(displayAlias('A', 'alphabetical')).toBe('A');
+        expect(displayAlias(null)).toBe('');
+        expect(localSlot('1121')).toBe('1');
+    });
+
+    it('uses dashes in main-chain bookmarks', () => {
+        const system = { alias: 'A1111', solarsystem: { class: '3' as const, name: 'J1' } };
+        const parent = { alias: 'A111', solarsystem: { class: '4' as const, name: 'J0' } };
+        expect(formatBookmarkName(system, { signatureId: 'ABC-123' }, FORMATS, 'A111', 'A111', '4')).toBe(' A111-1 ABC C3');
+        expect(formatBookmarkName(parent, { signatureId: 'ABC-123' }, FORMATS, 'A1111', 'A1111', '3')).toBe('  * A111-1 ABC C3');
+    });
+
+    it('names combat chain holes by their own number, and returns by the full path', () => {
+        const member = { alias: '1112', combat_color: 'red', solarsystem: { class: '3' as const, name: 'J2' } };
+        // Forward, from 111 into 1112: just "2".
+        expect(formatBookmarkName(member, { signatureId: 'LIH-655' }, FORMATS, '111', '111', '5', 'red')).toBe(' 2 LIH C3');
+        // Way back, standing in 1112: the whole path.
+        const parent = { alias: '111', combat_color: 'red', solarsystem: { class: '5' as const, name: 'J3' } };
+        expect(formatBookmarkName(parent, { signatureId: 'MJK-060' }, FORMATS, '1112', '1112', '3', 'red')).toBe('  * 111-2 MJK C3');
+        // An unjumped hole in a combat system copied with its claimed number.
+        expect(
+            buildSignatureBookmark({
+                signature: { signature_id: 'LIH-655', ship_size: null, mass_status: null, lifetime: 'healthy' },
+                currentSystem: { alias: '111', class: '5', combatColor: 'red' },
+                aliases: [],
+                formats: FORMATS,
+                plannedAlias: '1111',
+            }),
+        ).toBe(' 1 LIH');
+    });
+});
+
+describe('patch 11: numbering', () => {
+    it('keeps numbers held by red rows and recategorised signatures', () => {
+        const planned = planSignatureAliases({
+            parentAlias: 'A',
+            originIsWormhole: true,
+            aliases: [],
+            ignoredAlias: 'Daisy',
+            signatures: [
+                { id: 1, isWormhole: true, isConnected: false, lockedAlias: 'A1', reserveOnly: true },
+                { id: 2, isWormhole: false, isConnected: false, lockedAlias: 'A2' },
+                { id: 3, isWormhole: true, isConnected: false },
+                { id: 4, isWormhole: true, isConnected: false, reserveOnly: true },
+            ],
+        });
+        expect(planned.get(1)).toBe('A1');
+        expect(planned.get(3)).toBe('A3');
+        expect(planned.get(4)).toBe(undefined);
+    });
+
+    it('leaves combat chain holes in limbo until jumped, except the static', () => {
+        const planned = planSignatureAliases({
+            parentAlias: '1',
+            originIsWormhole: true,
+            aliases: ['1'],
+            limbo: true,
+            signatures: [
+                { id: 1, isWormhole: true, isConnected: false },
+                { id: 2, isWormhole: true, isConnected: false, isStatic: true },
+                { id: 3, isWormhole: true, isConnected: false, lockedAlias: '12' },
+            ],
+        });
+        expect(planned.get(1)).toBe(undefined);
+        expect(planned.get(2)).toBe('10');
+        expect(planned.get(3)).toBe('12');
+        // The next jump takes the next free number.
+        expect(suggestAlias({ parentAlias: '1', targetIsWormhole: true, originIsWormhole: true, aliases: ['1', '12', '10'] })).toBe('11');
+    });
+});
+

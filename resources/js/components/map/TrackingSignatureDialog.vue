@@ -14,6 +14,7 @@ import { Data } from '@/lib/data';
 import { SHIP_SIZE_OPTIONS, shipSizeFromJumpMass } from '@/lib/shipSize';
 import { isK162 } from '@/lib/chainNumbering';
 import { groupSignatureOptions } from '@/lib/signatureCompatibility';
+import { displayAlias } from '@/lib/alias';
 import { aliasedSolarsystemLabel } from '@/lib/solarsystem';
 import { updateMapUserSettings } from '@/map/api';
 import { TMapSolarsystem } from '@/pages/maps';
@@ -119,6 +120,12 @@ const destinationLabels = computed<Map<number, string>>(() => {
 
     return labels;
 });
+
+/** The name each unjumped hole has or gets (e.g. "A04"), shown next to its signature. */
+function holeName(signature: TSignature): string {
+    if (signature.map_connection_id) return '';
+    return displayAlias(props.plannedAliases?.get(signature.id) ?? signature.alias ?? '');
+}
 
 const open = defineModel<boolean>('open', { required: true });
 
@@ -423,33 +430,35 @@ const selectedShipSizeOption = computed(() => shipSizeOptions.find((option) => o
                     </div>
                     <RadioGroup
                         ref="signatureList"
-                        class="grid h-64 grid-cols-[auto_auto_auto_1fr] content-start gap-0 gap-x-4 overflow-y-auto"
+                        class="grid h-64 grid-cols-[auto_auto_auto_auto_1fr] content-start gap-0 gap-x-4 overflow-y-auto"
                         v-model:model-value="selectedSignatureId"
                         @keydown.enter="handleConfirm"
                     >
                         <label
-                            class="col-span-4 grid grid-cols-subgrid items-center-safe rounded-sm p-2 text-left text-xs transition-colors hover:bg-muted/40 has-data-[state=checked]:bg-muted/60"
+                            class="col-span-5 grid grid-cols-subgrid items-center-safe rounded-sm p-2 text-left text-xs transition-colors hover:bg-muted/40 has-data-[state=checked]:bg-muted/60"
                         >
                             <RadioGroupItem :value="null" />
                             <div class="font-medium">Unknown</div>
+                            <div />
                             <div class="text-muted-foreground">—</div>
                             <div />
                         </label>
                         <template v-for="section in sections" :key="section.key">
                             <div
                                 v-if="section.label && section.options.length"
-                                class="col-span-4 mt-2 border-t border-border/50 px-2 pt-2.5 pb-1 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+                                class="col-span-5 mt-2 border-t border-border/50 px-2 pt-2.5 pb-1 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
                             >
                                 {{ section.label }}
                             </div>
                             <label
                                 v-for="option in section.options"
                                 :key="option.id"
-                                class="col-span-4 grid grid-cols-subgrid items-center-safe rounded-sm p-2 text-left text-xs transition-colors hover:bg-muted/40 has-data-[state=checked]:bg-muted/60 has-data-[state=checked]:opacity-100 data-demoted:opacity-60"
+                                class="col-span-5 grid grid-cols-subgrid items-center-safe rounded-sm p-2 text-left text-xs transition-colors hover:bg-muted/40 has-data-[state=checked]:bg-muted/60 has-data-[state=checked]:opacity-100 data-demoted:opacity-60"
                                 :data-demoted="Data(section.key !== 'likely')"
                             >
                                 <RadioGroupItem :value="option.id" />
                                 <div class="font-medium">{{ option.signature_id }}</div>
+                                <div class="font-mono font-bold text-amber-400">{{ holeName(option) }}</div>
                                 <WormholeOption :wormhole="option.signature_type" v-if="option.signature_type" />
                                 <div class="text-muted-foreground" v-else-if="option.raw_type_name">{{ option.raw_type_name }}</div>
                                 <div class="text-muted-foreground" v-else>Unknown</div>
@@ -458,7 +467,7 @@ const selectedShipSizeOption = computed(() => shipSizeOptions.find((option) => o
                                 </div>
                             </label>
                         </template>
-                        <div v-if="search && !filtered.length" class="col-span-4 px-2 py-3 text-xs text-muted-foreground">
+                        <div v-if="search && !filtered.length" class="col-span-5 px-2 py-3 text-xs text-muted-foreground">
                             No signatures match "{{ search }}"
                         </div>
                     </RadioGroup>

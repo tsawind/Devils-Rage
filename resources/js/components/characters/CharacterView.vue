@@ -5,6 +5,7 @@ import SolarsystemSovereignty from '@/components/map/SolarsystemSovereignty.vue'
 import SolarsystemClass from '@/components/solarsystem/SolarsystemClass.vue';
 import SolarsystemEffect from '@/components/solarsystem/SolarsystemEffect.vue';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { displayAlias } from '@/lib/alias';
 import { TCharacter } from '@/types/models';
 import type { TStaticSolarsystem } from '@/types/static-data';
 import { vElementHover } from '@vueuse/components';
@@ -107,7 +108,7 @@ function onRouteHover(hovered: boolean): void {
         </div>
 
         <div class="min-w-0 truncate text-xs">
-            <span v-if="alias" class="font-medium">{{ alias }}</span>
+            <span v-if="alias" class="font-medium">{{ displayAlias(alias) }}</span>
             <span v-if="static_solarsystem" :class="alias ? 'text-muted-foreground' : 'font-medium'"> {{ static_solarsystem.name }}</span>
             <span v-else-if="!alias" class="text-muted-foreground">--</span>
             <span v-if="static_solarsystem?.region" class="text-muted-foreground"> · {{ static_solarsystem.region.name }}</span>

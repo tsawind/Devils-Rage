@@ -291,6 +291,12 @@ export type TAliasPlanSignature = {
     targetIsWormhole?: boolean;
     /** The known destination class, if identified ("unknown"/null otherwise). */
     targetClass?: string | null;
+    /**
+     * Only holds on to its locked number, never gets a new one: a signature
+     * missing from the last paste (ignored in game, or gone) still owns its
+     * number until it is deleted.
+     */
+    reserveOnly?: boolean;
 };
 
 /**
@@ -344,6 +350,11 @@ export function planSignatureAliases(params: {
     ignoredAlias?: string;
     /** The system is a combat home: its holes start a fresh chain (1, 2, 3, static 0). */
     combatHome?: boolean;
+    /**
+     * Combat chains number holes in the order they are jumped: unjumped holes
+     * wait in "limbo" without a number (only the static takes its slot).
+     */
+    limbo?: boolean;
 }): Map<number, string> {
     const planned = new Map<number, string>();
     const wormholes = params.signatures.filter((signature) => signature.isWormhole).toSorted((a, b) => a.id - b.id);
@@ -358,15 +369,16 @@ export function planSignatureAliases(params: {
     const staticSlot = `${prefix}${staticChar}`;
     const taken = new Set(params.aliases.map((alias) => alias.trim().toUpperCase()));
 
-    for (const signature of wormholes) {
+    // Every locked number is taken, whatever the signature is now (a hole later
+    // recategorised, or one missing from the last paste, still owns its number).
+    for (const signature of params.signatures) {
         const locked = signature.lockedAlias?.trim().toUpperCase();
-        if (locked) {
-            planned.set(signature.id, locked);
-            taken.add(locked);
-        }
+        if (!locked) continue;
+        taken.add(locked);
+        if (signature.isWormhole) planned.set(signature.id, locked);
     }
 
-    const unnumbered = wormholes.filter((signature) => !planned.has(signature.id) && !signature.isConnected);
+    const unnumbered = wormholes.filter((signature) => !planned.has(signature.id) && !signature.isConnected && !signature.reserveOnly);
 
     const staticHole = unnumbered.find((signature) => signature.isStatic);
     if (staticHole && !taken.has(staticSlot)) {
@@ -375,7 +387,7 @@ export function planSignatureAliases(params: {
     }
 
     for (const signature of unnumbered) {
-        if (planned.has(signature.id)) continue;
+        if (planned.has(signature.id) || params.limbo) continue;
 
         let index = 0;
         while (index < slots.length - 1 && taken.has(`${prefix}${slots[index]}`)) {
@@ -406,7 +418,7 @@ function planAlphabetical(
     }
 
     for (const signature of wormholes) {
-        if (planned.has(signature.id) || signature.isConnected) continue;
+        if (planned.has(signature.id) || signature.isConnected || signature.reserveOnly) continue;
 
         const targetClass = signature.targetClass && signature.targetClass !== 'unknown' ? signature.targetClass : null;
         const targetIsWormhole = signature.targetIsWormhole ?? true;
@@ -427,4 +439,42 @@ function planAlphabetical(
     }
 
     return planned;
+}
+
+// ---- Display (patch 11) -------------------------------------------------------
+
+/**
+ * A chain alias in groups of three, easier to read at a glance:
+ * "A111102111140" → "A111-102-111-140", "1111111" → "111-111-1". A leading
+ * letter (home's hole, e.g. the "A" of Alpha) stays in front of the first group.
+ * Only chain-looking aliases (upper-case letters and digits, with a digit
+ * somewhere) are grouped; anything else ("Daisy", "HOME") is left alone.
+ */
+export function formatAliasPath(alias: string | null | undefined): string {
+    const value = (alias ?? '').trim();
+    if (!/^[A-Z0-9]+$/.test(value) || !/\d/.test(value)) return value;
+
+    const head = /^[A-Z]/.test(value) ? value[0] : '';
+    const rest = value.slice(head.length);
+    if (rest.length <= 3) return value;
+
+    const groups = rest.match(/.{1,3}/g) ?? [rest];
+    return `${head}${groups.join('-')}`;
+}
+
+/**
+ * How an alias is shown to people: home's holes by their callsign ("A" →
+ * "Alpha"), chain aliases grouped in threes ("A111-102"). The stored alias is
+ * never changed. The alphabetical scheme keeps its aliases as they are.
+ */
+export function displayAlias(alias: string | null | undefined, scheme?: TAliasScheme): string {
+    const value = (alias ?? '').trim();
+    if (scheme === 'alphabetical') return value;
+    return homeCallsign(value) ?? formatAliasPath(value);
+}
+
+/** The hole's own number within its system: the last character of a chain alias ("1121" → "1"). */
+export function localSlot(alias: string | null | undefined): string {
+    const value = (alias ?? '').trim();
+    return value ? value[value.length - 1] : '';
 }

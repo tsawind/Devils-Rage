@@ -1,4 +1,5 @@
 import { isWormholeClass } from '@/const/solarsystemClasses';
+import { displayAlias } from '@/lib/alias';
 import type { TStringedSolarsystemClass } from '@/types/models';
 
 /**
@@ -103,7 +104,7 @@ type TRouteSystem = {
  */
 export function describeChainRoute(system: TRouteSystem): string {
     const color = combatColorLabel(system.combat_color);
-    const who = system.alias?.trim() || system.solarsystem.name;
+    const who = displayAlias(system.alias) || system.solarsystem.name;
     const solarsystemClass = system.solarsystem.class ?? null;
 
     let destination: string;
@@ -135,7 +136,7 @@ export type TRouteHop = {
 export function describeRoute(hops: readonly TRouteHop[], label: string): string | null {
     if (hops.length === 0) return null;
 
-    const nameOf = (hop: TRouteHop): string => hop.alias?.trim() || hop.name;
+    const nameOf = (hop: TRouteHop): string => displayAlias(hop.alias) || hop.name;
     const parts: string[] = [nameOf(hops[0])];
     let gates = 0;
 

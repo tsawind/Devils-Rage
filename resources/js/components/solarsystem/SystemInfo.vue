@@ -7,6 +7,7 @@ import MapPanelHeader from '@/components/ui/map-panel/MapPanelHeader.vue';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSovereignty } from '@/composables/useSovereigntyData';
 import { isWormholeClass } from '@/const/solarsystemClasses';
+import { displayAlias } from '@/lib/alias';
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import { computed } from 'vue';
 
@@ -56,7 +57,7 @@ const dotlanLink = computed(() => {
                 <div class="flex items-center gap-2">
                     <SolarsystemClass :solarsystem_class="system?.class" />
                     <span class="truncate text-sm font-medium">
-                        {{ map_solarsystem.alias || system?.name }}
+                        {{ displayAlias(map_solarsystem.alias) || system?.name }}
                         <span v-if="map_solarsystem.alias" class="text-muted-foreground">({{ system?.name }})</span>
                     </span>
                     <span v-if="system?.effect?.name" class="shrink-0 text-[10px]" :class="effectColor">

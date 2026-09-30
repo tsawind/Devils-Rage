@@ -1,5 +1,5 @@
 import { isWormholeClass } from '@/const/solarsystemClasses';
-import { aliasTargetKind, homeCallsign, isIgnoredAlias, suggestAlias, TAliasScheme } from '@/lib/alias';
+import { aliasTargetKind, formatAliasPath, homeCallsign, isIgnoredAlias, localSlot, suggestAlias, TAliasScheme } from '@/lib/alias';
 import { connectionFlag } from '@/lib/chainNumbering';
 import { TResolvedSolarsystem } from '@/pages/maps';
 import { TSignature, TStringedSolarsystemClass } from '@/types/models';
@@ -155,17 +155,27 @@ export function getSignatureIdShort(signatureId: string | null | undefined): str
 
 /**
  * `{alias}` for a hole: home's holes use their callsign with an extra leading
- * space ("A" → "  Alpha" once the template's own `{_}` is added), every other
- * alias as is.
+ * space ("A" → "  Alpha" once the template's own `{_}` is added), chain
+ * aliases in groups of three ("A111-102"). Inside a combat chain (`local`) a
+ * hole is named by its own number only ("111" → "1"): EVE lists bookmarks per
+ * system, so the chain is jumped 1 → 1 → 1.
  */
-function aliasTokenValue(alias: string | null | undefined, useCallsigns: boolean): string {
-    const callsign = useCallsigns ? homeCallsign(alias) : null;
-    return callsign ? `${BOOKMARK_SPACE}${callsign}` : (alias ?? '');
+function aliasTokenValue(alias: string | null | undefined, useCallsigns: boolean, local = false): string {
+    if (!useCallsigns) return alias ?? '';
+    if (local) return localSlot(alias);
+    const callsign = homeCallsign(alias);
+    return callsign ? `${BOOKMARK_SPACE}${callsign}` : formatAliasPath(alias);
 }
 
-/** `{here}`: a system directly off home is named by its callsign ("A" → "Alpha"). */
+/** `{here}`: a system directly off home is named by its callsign ("A" → "Alpha"), others by their full path ("111-2"). */
 function hereTokenValue(alias: string | null | undefined, useCallsigns: boolean): string {
-    return (useCallsigns ? homeCallsign(alias) : null) ?? alias ?? '';
+    if (!useCallsigns) return alias ?? '';
+    return homeCallsign(alias) ?? formatAliasPath(alias);
+}
+
+/** Whether a system is a combat chain member (not the combat home), so its forward bookmark uses just its own number. */
+function isCombatMember(system: { combat_color?: string | null; combat_home?: boolean | null }): boolean {
+    return Boolean(system.combat_color) && !system.combat_home;
 }
 
 /**
@@ -182,7 +192,7 @@ export function getBookmarkTokenValues(
     useCallsigns = true,
 ): Record<TBookmarkToken, string> {
     return {
-        alias: aliasTokenValue(system.alias, useCallsigns),
+        alias: aliasTokenValue(system.alias, useCallsigns, isCombatMember(system)),
         here: hereTokenValue(hereAlias, useCallsigns),
         hereclass: hereClass ? getBookmarkClassString({ class: hereClass, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
@@ -374,6 +384,8 @@ export function buildSignatureBookmark(params: {
                     combatHome: currentSystem.combatHome,
                 }),
             useCallsigns,
+            // Holes found from a combat chain system are chain members: just their own number.
+            Boolean(currentSystem.combatColor),
         ),
         here: hereTokenValue(currentSystem.alias, useCallsigns),
         hereclass: currentSystem.class ? getBookmarkClassString({ class: currentSystem.class, name: '' }) : '',

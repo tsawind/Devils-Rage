@@ -14,6 +14,12 @@ export type TreeLayoutInput = {
     fallbackRootId?: number | null;
     /** Orders siblings (and separate trees) along the cross axis. */
     compareNodes?: (a: number, b: number) => number;
+    /**
+     * Systems whose branch grows straight down instead of to the right (combat
+     * homes): one row per jump below it, side branches stepping right. Systems
+     * of the main tree below that would overlap are moved down out of the way.
+     */
+    verticalRootIds?: number[];
 };
 
 export type TreeLayoutOptions = {
@@ -154,6 +160,31 @@ export function computeTreeLayout(input: TreeLayoutInput, options: TreeLayoutOpt
             children.sort(compare);
         }
         roots.sort(compare);
+    }
+
+    // --- Cut out the branches that grow downwards (combat chains); they are placed after the main layout. ---
+    const verticalBlocks: { rootId: number; members: number[]; children: Map<number, number[]> }[] = [];
+    const inBlock = new Set<number>();
+    const verticalRoots = (input.verticalRootIds ?? [])
+        .filter((id) => adjacency.has(id))
+        .sort((a, b) => (depthOf.get(a) ?? 0) - (depthOf.get(b) ?? 0));
+    for (const rootId of verticalRoots) {
+        if (inBlock.has(rootId)) continue; // already part of an outer chain's block
+        const children = new Map<number, number[]>();
+        const members: number[] = [];
+        const stack = [...(childrenOf.get(rootId) ?? [])];
+        children.set(rootId, [...(childrenOf.get(rootId) ?? [])]);
+        while (stack.length > 0) {
+            const id = stack.pop()!;
+            members.push(id);
+            inBlock.add(id);
+            const below = childrenOf.get(id) ?? [];
+            children.set(id, [...below]);
+            stack.push(...below);
+        }
+        if (members.length === 0) continue;
+        childrenOf.set(rootId, []);
+        verticalBlocks.push({ rootId, members, children });
     }
 
     // --- Materialise the forest as linked node records for the layout passes. ---
@@ -328,6 +359,7 @@ export function computeTreeLayout(input: TreeLayoutInput, options: TreeLayoutOpt
     // firstWalk centres the forest around zero, so cross can be negative; drop it onto the top margin.
     let minCross = Infinity;
     for (const node of nodes.values()) {
+        if (inBlock.has(node.id)) continue; // placed separately, never walked
         minCross = Math.min(minCross, node.cross);
     }
     if (!Number.isFinite(minCross)) {
@@ -336,11 +368,80 @@ export function computeTreeLayout(input: TreeLayoutInput, options: TreeLayoutOpt
 
     const positions = new Map<number, Coordinates>();
     for (const node of nodes.values()) {
+        if (inBlock.has(node.id)) continue;
         positions.set(node.id, {
             x: snap(marginX + node.depth * levelGap),
             y: snap(marginY + node.cross - minCross),
         });
     }
 
+    placeVerticalBlocks(verticalBlocks, positions, input.compareNodes, snap);
+
     return positions;
+}
+
+/** Row height of a downward chain and column width of its side branches, in base units. */
+const VERTICAL_ROW_GAP = 80;
+const VERTICAL_COLUMN_GAP = 220;
+/** A fixed-width node's width, for the overlap test when moving systems out of a chain's way. */
+const NODE_WIDTH = 180;
+
+/**
+ * Place each downward branch (combat chain) under its root: the first child
+ * continues straight down (one row per jump), every other child starts a new
+ * column to the right, so the chain reads 1 → 1 → 1 top to bottom. Main-tree
+ * systems below the root that the branch would cover are moved down by the
+ * branch's height.
+ */
+function placeVerticalBlocks(
+    blocks: { rootId: number; members: number[]; children: Map<number, number[]> }[],
+    positions: Map<number, Coordinates>,
+    compareNodes: ((a: number, b: number) => number) | undefined,
+    snap: (value: number) => number,
+): void {
+    const ordered = blocks
+        .filter((block) => positions.has(block.rootId))
+        .sort((a, b) => positions.get(a.rootId)!.y - positions.get(b.rootId)!.y || positions.get(a.rootId)!.x - positions.get(b.rootId)!.x);
+
+    for (const block of ordered) {
+        const root = positions.get(block.rootId);
+        if (!root) continue;
+
+        const placed = new Map<number, Coordinates>();
+        let lastColumn = 0;
+        let right = root.x;
+        let bottom = root.y;
+
+        const place = (id: number, column: number, row: number): void => {
+            if (id !== block.rootId) {
+                const point = { x: snap(root.x + column * VERTICAL_COLUMN_GAP), y: snap(root.y + row * VERTICAL_ROW_GAP) };
+                placed.set(id, point);
+                right = Math.max(right, point.x);
+                bottom = Math.max(bottom, point.y);
+            }
+            const children = [...(block.children.get(id) ?? [])];
+            if (compareNodes) children.sort(compareNodes);
+            children.forEach((child, index) => {
+                if (index === 0) {
+                    place(child, column, row + 1);
+                } else {
+                    lastColumn += 1;
+                    place(child, lastColumn, row + 1);
+                }
+            });
+        };
+        place(block.rootId, 0, 0);
+
+        // Move whatever sits below the root inside the branch's columns down by the branch's height.
+        const height = bottom - root.y;
+        const left = root.x;
+        const rightEdge = right + NODE_WIDTH;
+        for (const [id, point] of positions) {
+            if (id === block.rootId || point.y <= root.y) continue;
+            if (point.x + NODE_WIDTH <= left || point.x >= rightEdge) continue;
+            positions.set(id, { x: point.x, y: point.y + height });
+        }
+
+        for (const [id, point] of placed) positions.set(id, point);
+    }
 }

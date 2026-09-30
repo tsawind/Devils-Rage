@@ -157,8 +157,8 @@ function handleSubmit() {
         <div
             v-if="chainHex"
             class="pointer-events-none absolute rounded-md"
-            :class="[isCombatHome ? '-inset-1 border-2' : '-inset-[3px] border', { 'animate-pulse': isCombatPulsing }]"
-            :style="{ borderColor: chainHex ?? undefined }"
+            :class="[isCombatHome ? '-inset-1 border-2' : '-inset-[3px] border', { 'combat-pulse': isCombatPulsing }]"
+            :style="{ borderColor: chainHex ?? undefined, '--chain': chainHex ?? undefined }"
         />
         <div
             v-if="isCombatHome"
@@ -235,4 +235,23 @@ function handleSubmit() {
     </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+/* The combat home while someone works its chain: a bright glow that swells in and out. */
+.combat-pulse {
+    animation: combat-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes combat-pulse {
+    0%,
+    100% {
+        box-shadow:
+            0 0 0 0 var(--chain),
+            0 0 6px 1px var(--chain);
+    }
+    50% {
+        box-shadow:
+            0 0 0 4px color-mix(in srgb, var(--chain) 45%, transparent),
+            0 0 24px 8px var(--chain);
+    }
+}
+</style>

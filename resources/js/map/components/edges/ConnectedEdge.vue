@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { combatColorHex } from '@/lib/combat';
 import Edge from '@/map/components/edges/Edge.vue';
 import { nodeRect } from '@/map/core/coords';
 import { freeEdgeGeometry } from '@/map/core/geometry/freeRouting';
@@ -49,6 +50,16 @@ const geometry = computed<EdgeGeometry | null>(() => {
 });
 
 const isOnRoute = computed(() => store.routeConnectionIds.value.has(id));
+
+/** Both ends in the same combat chain: the line is drawn in the chain's color. */
+const chainColor = computed<string | null>(() => {
+    const resolved = connection.value;
+    if (!resolved) return null;
+    const source = store.systems.get(resolved.from_map_solarsystem_id);
+    const target = store.systems.get(resolved.to_map_solarsystem_id);
+    if (!source?.combat_color || source.combat_color !== target?.combat_color) return null;
+    return combatColorHex(source.combat_color);
+});
 const rallyDirection = computed<'forward' | 'reverse' | null>(() => store.rallyEdgeDirections.value.get(id) ?? null);
 
 function handleConnectionClick(event: MouseEvent): void {
@@ -71,6 +82,7 @@ function handleConnectionContextMenu(event: MouseEvent): void {
         :connection="connection"
         :is-on-route="isOnRoute"
         :rally-direction="rallyDirection"
+        :chain-color="chainColor"
         :scale="store.scale.value"
         @connection-click="handleConnectionClick"
         @connection-context-menu="handleConnectionContextMenu"

@@ -3,6 +3,7 @@ import QuestionIcon from '@/components/icons/QuestionIcon.vue';
 import { AllianceLogo, CharacterImage, CorporationLogo, TypeImage } from '@/components/images';
 import VictimImage from '@/components/map-killmails/VictimImage.vue';
 import SolarsystemClass from '@/components/solarsystem/SolarsystemClass.vue';
+import { displayAlias } from '@/lib/alias';
 import { formatISK } from '@/lib/utils';
 import type { TResolvedSolarsystem } from '@/pages/maps';
 import { TKillmail } from '@/types/models';
@@ -113,7 +114,7 @@ const finalBlow = computed(() => killmail.data.attackers.find((a) => a.final_blo
         <SolarsystemClass :solarsystem_class="solarsystem.class" class="justify-self-center" />
 
         <span class="truncate font-mono text-xs">
-            <span v-if="alias" class="font-medium">{{ alias }} </span>
+            <span v-if="alias" class="font-medium">{{ displayAlias(alias) }} </span>
             <span :class="{ 'text-muted-foreground': alias }">{{ solarsystem.name }}</span>
         </span>
 

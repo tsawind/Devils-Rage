@@ -152,6 +152,8 @@ function toTreeInput(entities: EntityState, homeSolarsystemId: number | null): T
         })),
         rootIds: systems.filter((system) => system.pinned).map((system) => system.id),
         fallbackRootId,
+        // Combat chains grow straight down from their combat home.
+        verticalRootIds: systems.filter((system) => system.combat_home && system.combat_color).map((system) => system.id),
         compareNodes: (a: number, b: number): number => {
             const systemA = systemsById.get(a);
             const systemB = systemsById.get(b);
