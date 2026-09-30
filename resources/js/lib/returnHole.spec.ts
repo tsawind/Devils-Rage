@@ -45,13 +45,13 @@ describe('decideReturnHole', () => {
     const au = (value: number) => ({ meters: value * 1.5e11, onGrid: false, text: `${value} AU` });
     const now = 1_000_000;
 
-    it('links automatically within 30 s of your jump when exactly one wormhole is on grid', () => {
-        const decision = decideReturnHole({ candidates: [{ id: 1, distance: au(9) }, { id: 2, distance: grid(2600) }], jumpedAt: now - 20_000, now });
+    it('links automatically within 80 s of your jump when exactly one wormhole is on grid', () => {
+        const decision = decideReturnHole({ candidates: [{ id: 1, distance: au(9) }, { id: 2, distance: grid(2600) }], jumpedAt: now - 75_000, now });
         expect(decision).toEqual({ mode: 'auto', candidateId: 2 });
     });
 
-    it('asks after 30 s, preselecting the on-grid hole', () => {
-        const decision = decideReturnHole({ candidates: [{ id: 1, distance: au(9) }, { id: 2, distance: grid(2600) }], jumpedAt: now - 31_000, now });
+    it('asks after 80 s, preselecting the on-grid hole', () => {
+        const decision = decideReturnHole({ candidates: [{ id: 1, distance: au(9) }, { id: 2, distance: grid(2600) }], jumpedAt: now - 81_000, now });
         expect(decision).toEqual({ mode: 'ask', preselectId: 2, ordered: [2, 1] });
     });
 

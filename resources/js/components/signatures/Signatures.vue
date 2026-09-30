@@ -98,7 +98,7 @@ const static_owner_id = computed(() => visible_signatures.value.find((signature)
 // ---- Return hole after a paste ---------------------------------------------
 // After a jump the connection back has no signature on this side yet. When a
 // scan is pasted here, link the hole we came through: automatically within
-// 30 s of our own jump when exactly one wormhole is on grid, otherwise ask.
+// 80 s of our own jump when exactly one wormhole is on grid, otherwise ask.
 
 type TReturnCandidate = { id: number; distance: TScanDistance | null; signature: TSignature };
 

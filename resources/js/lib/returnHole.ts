@@ -19,7 +19,7 @@ export type TScanDistance = {
 const METERS_PER_AU = 149_597_870_700;
 
 /** How long after your own jump a single on-grid wormhole is linked without asking. */
-export const AUTO_LINK_WINDOW_MS = 30_000;
+export const AUTO_LINK_WINDOW_MS = 80_000;
 
 /**
  * Parse a probe-scanner distance such as "2,600 m", "505 km", "12.56 AU",
@@ -96,7 +96,7 @@ export type TReturnHoleDecision =
  * Decide what to do after a paste in a system that still has a connection
  * without a signature on this side:
  * - no wormhole candidates: nothing;
- * - within 30 s of your own jump into this system and exactly one wormhole on
+ * - within 80 s of your own jump into this system and exactly one wormhole on
  *   grid: link it automatically;
  * - otherwise ask, nearest first, preselecting the nearest one if it is on grid.
  */
