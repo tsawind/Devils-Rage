@@ -217,6 +217,7 @@ export function useTracking() {
             page.props.map,
             here,
             here,
+            target_solarsystem.value.class,
         );
 
         if (!name) return;

@@ -54,6 +54,7 @@ const fields: Field[] = [
         sample: {
             alias: '12',
             here: '1',
+            hereclass: 'C6',
             sig: 'ABC',
             class: 'C3',
             name: 'J123456',
@@ -74,6 +75,7 @@ const fields: Field[] = [
         sample: {
             alias: '12',
             here: '1',
+            hereclass: 'C6',
             sig: 'ABC',
             class: 'HS',
             name: 'Jita',
@@ -95,6 +97,7 @@ const fields: Field[] = [
         sample: {
             alias: '1',
             here: '12',
+            hereclass: 'C6',
             sig: 'ABC',
             class: 'C3',
             name: 'J123456',

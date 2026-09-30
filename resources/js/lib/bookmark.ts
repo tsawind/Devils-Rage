@@ -42,7 +42,7 @@ export type TBookmarkContext = {
  * The placeholder tokens that may appear in a bookmark format template. Kept in
  * sync with the `BookmarkToken` enum on the backend.
  */
-export const BOOKMARK_TOKENS = ['alias', 'here', 'sig', 'class', 'name', 'region', 'occupier', 'size', 'wh', 'mass', 'life', '_'] as const;
+export const BOOKMARK_TOKENS = ['alias', 'here', 'hereclass', 'sig', 'class', 'name', 'region', 'occupier', 'size', 'wh', 'mass', 'life', '_'] as const;
 
 /**
  * Stand-in for the `{_}` token while a template renders. Ordinary whitespace is
@@ -124,10 +124,16 @@ export function getSignatureIdShort(signatureId: string | null | undefined): str
  * dropped when the template renders. Mass and lifetime deliberately stay empty
  * while the hole is fresh/healthy, so they only surface once it degrades.
  */
-export function getBookmarkTokenValues(system: BookmarkSystem, context: TBookmarkContext, hereAlias?: string | null): Record<TBookmarkToken, string> {
+export function getBookmarkTokenValues(
+    system: BookmarkSystem,
+    context: TBookmarkContext,
+    hereAlias?: string | null,
+    hereClass?: TStringedSolarsystemClass | null,
+): Record<TBookmarkToken, string> {
     return {
         alias: system.alias ?? '',
         here: hereAlias ?? '',
+        hereclass: hereClass ? getBookmarkClassString({ class: hereClass, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
         class: getBookmarkClassString(system.solarsystem),
         name: system.solarsystem.name,
@@ -171,6 +177,7 @@ export function renderBookmarkTemplate(template: string, values: Record<TBookmar
  * `hereAlias` fills the `{here}` token: the alias of the system the bookmark is
  * saved in (the system you are standing in). It defaults to `oppositeAlias`,
  * which is the other endpoint of the connection, i.e. where you stand.
+ * `hereClass` fills `{hereclass}`: the class of that same system (e.g. "C6").
  */
 export function formatBookmarkName(
     system: BookmarkSystem,
@@ -178,6 +185,7 @@ export function formatBookmarkName(
     formats?: TBookmarkFormats | null,
     oppositeAlias?: string | null,
     hereAlias: string | null | undefined = oppositeAlias,
+    hereClass?: TStringedSolarsystemClass | null,
 ): string {
     const template = isReturnBookmark(system.alias, oppositeAlias, formats?.bookmark_ignored_alias)
         ? formats?.bookmark_format_return || DEFAULT_BOOKMARK_FORMAT_RETURN
@@ -185,7 +193,7 @@ export function formatBookmarkName(
           ? formats?.bookmark_format_wormhole || DEFAULT_BOOKMARK_FORMAT_WORMHOLE
           : formats?.bookmark_format_kspace || DEFAULT_BOOKMARK_FORMAT_KSPACE;
 
-    return renderBookmarkTemplate(template, getBookmarkTokenValues(system, context, hereAlias));
+    return renderBookmarkTemplate(template, getBookmarkTokenValues(system, context, hereAlias, hereClass));
 }
 
 /**
@@ -265,7 +273,14 @@ export function buildSignatureBookmark(params: {
                   }),
               };
 
-        return formatBookmarkName(system, context, formats, detectReturn ? currentSystem.alias : undefined, currentSystem.alias);
+        return formatBookmarkName(
+            system,
+            context,
+            formats,
+            detectReturn ? currentSystem.alias : undefined,
+            currentSystem.alias,
+            currentSystem.class,
+        );
     }
 
     const knownClass = knownTargetClass(signature.signature_type?.target_class);
@@ -283,6 +298,7 @@ export function buildSignatureBookmark(params: {
                 ignoredAlias: formats.bookmark_ignored_alias,
             }) ?? '',
         here: currentSystem.alias ?? '',
+        hereclass: currentSystem.class ? getBookmarkClassString({ class: currentSystem.class, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
         class: knownClass ? getBookmarkClassString({ class: knownClass, name: '' }) : '',
         name: '',

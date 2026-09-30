@@ -471,3 +471,48 @@ describe("Devil's Rage scheme ({_} spaces and {here})", () => {
         expect(formatBookmarkName(c6('A'), context, {})).toBe('A ABC C6');
     });
 });
+
+describe("Devil's Rage full scheme (sig and class)", () => {
+    const formats: TBookmarkFormats = {
+        bookmark_format_wormhole: '{_}{alias} {sig} {class}',
+        bookmark_format_kspace: '{_}{alias} {sig} {class}',
+        bookmark_format_return: '{_}{_}*{_}{here} {sig} {hereclass}',
+        bookmark_ignored_alias: 'Daisy',
+    };
+    const daisy = { alias: 'Daisy', solarsystem: { class: '5' as const, name: 'J145735' } };
+    const one = { alias: '1', solarsystem: { class: '6' as const, name: 'J100001' } };
+
+    it('outbound from Daisy: " 1 SOF C6"', () => {
+        expect(formatBookmarkName(one, { signatureId: 'SOF-123' }, formats, 'Daisy', 'Daisy', '5')).toBe(' 1 SOF C6');
+    });
+
+    it('return from 1 to Daisy: "  * 1 KXR C6"', () => {
+        expect(formatBookmarkName(daisy, { signatureId: 'KXR-456' }, formats, '1', '1', '6')).toBe('  * 1 KXR C6');
+    });
+
+    it('return signature row in 1 (connected, detectReturn)', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'KXR-456' }),
+            currentSystem: { alias: '1', class: '6' },
+            connectionTarget: daisy,
+            aliases: ['Daisy', '1'],
+            formats,
+            detectReturn: true,
+        });
+        expect(name).toBe('  * 1 KXR C6');
+    });
+
+    it('unscanned outbound signature in Daisy identified as a C6 static', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'SOF-123', signature_type: { target_class: '6' } }),
+            currentSystem: { alias: 'Daisy', class: '5' },
+            aliases: ['Daisy'],
+            formats,
+        });
+        expect(name).toBe(' 1 SOF C6');
+    });
+
+    it('jump copy before the return signature is scanned leaves the sig out', () => {
+        expect(formatBookmarkName(daisy, { signatureId: null }, formats, '1', '1', '6')).toBe('  * 1 C6');
+    });
+});

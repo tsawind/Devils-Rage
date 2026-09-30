@@ -8,6 +8,7 @@ enum BookmarkToken: string
 {
     case Alias = 'alias';
     case Here = 'here';
+    case HereClass = 'hereclass';
     case Sig = 'sig';
     case SystemClass = 'class';
     case Name = 'name';

@@ -35,6 +35,8 @@ const source_name = computed(() =>
         },
         store.meta.value,
         map_connection.target.alias,
+        map_connection.target.alias,
+        map_connection.target.solarsystem.class,
     ),
 );
 
@@ -50,6 +52,8 @@ const target_name = computed(() =>
         },
         store.meta.value,
         map_connection.source.alias,
+        map_connection.source.alias,
+        map_connection.source.solarsystem.class,
     ),
 );
 
