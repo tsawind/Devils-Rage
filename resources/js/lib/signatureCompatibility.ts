@@ -62,5 +62,24 @@ export function groupSignatureOptions(signatures: TSignature[], targetClass: TSt
         }
     }
 
+    groups.likely = groups.likely.toSorted((a, b) => likelyRank(a, targetClass) - likelyRank(b, targetClass));
+
     return groups;
+}
+
+/**
+ * Order within the "likely" section, so the hole you most probably jumped is
+ * first (and gets preselected): a wormhole whose identified type leads to
+ * exactly the class you landed in, then other wormholes (untyped or K162),
+ * then signatures not yet categorised. Ties keep their existing order.
+ */
+function likelyRank(signature: TSignature, targetClass: TStringedSolarsystemClass | null | undefined): number {
+    const isWormhole = signature.signature_category?.code === 'wormhole';
+    const destinationClass = signature.signature_type?.target_class;
+
+    if (isWormhole && targetClass && destinationClass && destinationClass !== 'unknown' && destinationClass === targetClass) {
+        return 0;
+    }
+
+    return isWormhole ? 1 : 2;
 }

@@ -93,3 +93,20 @@ describe('groupSignatureOptions', () => {
         expect(groups).toEqual({ likely: [], connected: [], unlikely: [] });
     });
 });
+
+describe('groupSignatureOptions (likely order)', () => {
+    it('puts a wormhole typed to the landed class first, then other wormholes, then uncategorised', () => {
+        const uncategorised = signature({ id: 1 });
+        const untypedWormhole = signature({ id: 2, categoryCode: 'wormhole' });
+        const matchingStatic = signature({ id: 3, categoryCode: 'wormhole', targetClass: '6' });
+        const groups = groupSignatureOptions([uncategorised, untypedWormhole, matchingStatic], '6');
+
+        expect(groups.likely).toEqual([matchingStatic, untypedWormhole, uncategorised]);
+    });
+
+    it('keeps the original order among equals', () => {
+        const a = signature({ id: 1, categoryCode: 'wormhole' });
+        const b = signature({ id: 2, categoryCode: 'wormhole' });
+        expect(groupSignatureOptions([a, b], '6').likely).toEqual([a, b]);
+    });
+});
