@@ -5,6 +5,7 @@ import SignatureTimeDetails from '@/components/signatures/SignatureTimeDetails.v
 import SignatureTypeInput from '@/components/signatures/SignatureTypeInput.vue';
 import WormholeTypeInput from '@/components/signatures/WormholeTypeInput.vue';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -22,7 +23,7 @@ import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
 import { aliasForSlot, staticSlotAlias } from '@/lib/alias';
 import { buildSignatureBookmark, visibleBookmarkName } from '@/lib/bookmark';
-import { autoFlagsForType, isK162, validateManualAlias } from '@/lib/chainNumbering';
+import { isK162, validateManualAlias } from '@/lib/chainNumbering';
 import { Data } from '@/lib/data';
 import { formatDateToISO } from '@/lib/utils';
 import { deleteSignature, TProcessedConnection, updateMapConnection, updateSignature, useMapSolarsystems } from '@/map/api';
@@ -165,15 +166,40 @@ function handleTypeChange(value: AcceptableValue) {
         return;
     }
 
-    // Setting the type to the system's static type ticks Static (or Wandering
-    // when another hole already is the static); any other type clears both.
-    const flags = autoFlagsForType({
-        wormholeName,
-        staticNames: (selected_map_solarsystem.solarsystem.statics ?? []).map((wormholeStatic) => wormholeStatic.name),
-        otherStaticExists: static_owner_id != null && static_owner_id !== signature.id,
-    });
+    // A type that is one of this system's statics could be the static or a
+    // wandering hole of the same type: ask. Any other type can be neither.
+    const staticNames = (selected_map_solarsystem.solarsystem.statics ?? []).map((wormholeStatic) => wormholeStatic.name.trim().toUpperCase());
+    const isStaticType = wormholeName !== null && !isK162(wormholeName) && staticNames.includes(wormholeName.trim().toUpperCase());
 
-    handleChange({ signature_type_id: typeId, ...flagChanges(flags.is_static, flags.is_wandering) });
+    if (isStaticType) {
+        pending_type_id.value = typeId;
+        pending_type_name.value = wormholeName;
+        static_choice_open.value = true;
+        return;
+    }
+
+    const clearFlags = signature.is_static || signature.is_wandering ? flagChanges(false, false) : {};
+    handleChange({ signature_type_id: typeId, ...clearFlags });
+}
+
+// ---- "Static, wandering or unknown?" when a static type is picked ---------
+
+const static_choice_open = ref(false);
+const pending_type_id = ref<number | null>(null);
+const pending_type_name = ref<string | null>(null);
+
+function chooseStaticKind(kind: 'unknown' | 'static' | 'wandering'): void {
+    if (!static_choice_open.value) return;
+    static_choice_open.value = false;
+
+    if (kind === 'static' && static_taken_by_other.value) kind = 'unknown';
+
+    handleChange({ signature_type_id: pending_type_id.value, ...flagChanges(kind === 'static', kind === 'wandering') });
+}
+
+function handleStaticChoiceOpenChange(isOpen: boolean): void {
+    // Closing the popup without choosing keeps the type and counts as Unknown.
+    if (!isOpen) chooseStaticKind('unknown');
 }
 
 // ---- Chain numbering: Static / Wandering / hand-set number ----------------
@@ -539,5 +565,24 @@ function copyBookmark() {
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>
+
+        <!-- Static, wandering or unknown? -->
+        <Dialog :open="static_choice_open" @update:open="handleStaticChoiceOpenChange">
+            <DialogScrollContent class="max-w-sm">
+                <DialogHeader>
+                    <DialogTitle>{{ pending_type_name }} — which is it?</DialogTitle>
+                    <DialogDescription>
+                        {{ signature.signature_id ?? 'This signature' }} has this system's static type. Static takes slot 1; wandering is another hole of the same
+                        type.
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter class="gap-2 sm:justify-start">
+                    <Button autofocus @click="chooseStaticKind('unknown')">Unknown</Button>
+                    <Button variant="outline" :disabled="static_taken_by_other" @click="chooseStaticKind('static')">Static</Button>
+                    <Button variant="outline" @click="chooseStaticKind('wandering')">Wandering</Button>
+                </DialogFooter>
+                <p v-if="static_taken_by_other" class="text-xs text-muted-foreground">Another signature in this system is already the static.</p>
+            </DialogScrollContent>
+        </Dialog>
     </div>
 </template>

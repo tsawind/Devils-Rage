@@ -2,7 +2,7 @@ import { TRawSignature } from '@/lib/SignatureParser';
 import PasteSignatures from '@/routes/paste-signatures';
 import { router } from '@inertiajs/vue3';
 
-export function pasteSignatures(map_solarsystem_id: number, signatures: TRawSignature[]): void {
+export function pasteSignatures(map_solarsystem_id: number, signatures: TRawSignature[], onSuccess?: () => void): void {
     return router.post(
         PasteSignatures.store().url,
         {
@@ -18,6 +18,7 @@ export function pasteSignatures(map_solarsystem_id: number, signatures: TRawSign
             preserveScroll: true,
             preserveState: true,
             only: ['map', 'selected_map_solarsystem'],
+            onSuccess: () => onSuccess?.(),
             onError: () => router.reload({ only: ['map'] }),
         },
     );

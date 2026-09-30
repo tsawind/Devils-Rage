@@ -1,4 +1,5 @@
 import { signatureCategories, signatureTypes } from '@/const/signatures';
+import { distanceFromScanRow, TScanDistance } from '@/lib/returnHole';
 import { TSignatureCategory, TSignatureType } from '@/types/models';
 import { UTCDate } from '@date-fns/utc';
 import { toast } from 'vue-sonner';
@@ -9,6 +10,8 @@ export type TRawSignature = {
     signature_type_id: number | null;
     raw_type_name: string | null;
     created_at?: string;
+    /** Distance from the probe scanner (kept on the page only, never sent to the server). */
+    distance?: TScanDistance | null;
 };
 
 class SignatureParser {
@@ -50,6 +53,7 @@ class SignatureParser {
             signature_type_id: signature_type?.id || null,
             raw_type_name,
             created_at: new UTCDate().toISOString(),
+            distance: distanceFromScanRow(signature.slice(4)),
         };
     }
 

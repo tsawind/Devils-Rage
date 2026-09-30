@@ -25,6 +25,7 @@ final readonly class UpdateSignatureAction
         private MapBroadcaster $mapBroadcaster,
         private SyncConnectionShipSizeAction $syncConnectionShipSizeAction,
         private UpdateMapSolarsystemAction $updateMapSolarsystemAction,
+        private FillFarSideK162Action $fillFarSideK162Action,
     ) {}
 
     /**
@@ -49,6 +50,11 @@ final readonly class UpdateSignatureAction
             $this->syncConnectedSystemAlias($signature, $data, $previousAlias);
             $this->syncMassAndLifetime($signature, $data);
             $this->syncConnectionShipSizeAction->handle($signature);
+
+            // Linking a hole to a connection, or typing it, may reveal the far side as a K162.
+            if (! $data->map_connection_id instanceof Optional || ! $data->signature_type_id instanceof Optional) {
+                $this->fillFarSideK162Action->handle($signature->map_connection_id);
+            }
 
             broadcast(new SignatureUpdatedEvent($signature->mapSolarsystem->map_id))->toOthers();
 

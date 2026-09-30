@@ -12,7 +12,11 @@ import { useEventListener } from '@vueuse/core';
 import { computed, type MaybeRefOrGetter, ref, toValue, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
-export function usePasteSignatures(map_solarsystem: MaybeRefOrGetter<TSelectedMapSolarsystem | null>) {
+export function usePasteSignatures(
+    map_solarsystem: MaybeRefOrGetter<TSelectedMapSolarsystem | null>,
+    /** Runs once the pasted signatures are saved and the page has the fresh list. */
+    onPasted?: (signatures: TRawSignature[]) => void,
+) {
     const is_using_input = useIsUsingInput();
     const character = useActiveMapCharacter();
 
@@ -163,7 +167,7 @@ export function usePasteSignatures(map_solarsystem: MaybeRefOrGetter<TSelectedMa
         }
 
         pasted_signatures.value = signatures;
-        pasteSignatures(system.id, signatures);
+        pasteSignatures(system.id, signatures, () => onPasted?.(signatures));
     }
 
     function confirmPasteInDifferentSystem() {
@@ -171,8 +175,9 @@ export function usePasteSignatures(map_solarsystem: MaybeRefOrGetter<TSelectedMa
         const system = toValue(map_solarsystem);
         if (!system) return;
 
-        pasted_signatures.value = pending_signatures.value;
-        pasteSignatures(system.id, pending_signatures.value);
+        const pending = pending_signatures.value;
+        pasted_signatures.value = pending;
+        pasteSignatures(system.id, pending, () => onPasted?.(pending));
 
         pending_signatures.value = null;
         show_system_mismatch_warning.value = false;

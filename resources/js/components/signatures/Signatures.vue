@@ -3,6 +3,7 @@ import PasteIcon from '@/components/icons/PasteIcon.vue';
 import PlusIcon from '@/components/icons/PlusIcon.vue';
 import TrashIcon from '@/components/icons/TrashIcon.vue';
 import PasteSignatureWarningDialog from '@/components/signatures/PasteSignatureWarningDialog.vue';
+import ReturnHoleDialog from '@/components/signatures/ReturnHoleDialog.vue';
 import Signature from '@/components/signatures/Signature.vue';
 import SignaturesEmptyState from '@/components/signatures/SignaturesEmptyState.vue';
 import MapPanel from '@/components/ui/map-panel/MapPanel.vue';
@@ -11,6 +12,7 @@ import MapPanelHeader from '@/components/ui/map-panel/MapPanelHeader.vue';
 import MapPanelHeaderActionButton from '@/components/ui/map-panel/MapPanelHeaderActionButton.vue';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { recentJump } from '@/composables/signatures/recentJump';
 import { usePasteSignatures } from '@/composables/signatures/usePasteSignatures';
 import { useSignatures } from '@/composables/signatures/useSignatures';
 import { useSortableSignatures } from '@/composables/signatures/useSortedSignatures';
@@ -18,12 +20,18 @@ import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { useShowMap } from '@/composables/useShowMap';
 import usePermission from '@/composables/usePermission';
-import { planAliasesForSystem } from '@/lib/aliasPlan';
-import { createSignature, updateMapUserSettings, useMapSolarsystems } from '@/map/api';
+import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
+import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
+import { decideReturnHole, orderOpenConnections, type TReturnConnectionOption, type TReturnHoleOption, type TScanDistance } from '@/lib/returnHole';
+import type { TRawSignature } from '@/lib/SignatureParser';
+import { aliasedSolarsystemLabel } from '@/lib/solarsystem';
+import { createSignature, TProcessedConnection, updateMapUserSettings, updateSignature, useMapSolarsystems } from '@/map/api';
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
+import type { TSignature } from '@/types/models';
 import { useLocalStorage } from '@vueuse/core';
 import { ArrowDown, ArrowUp, CircleHelp, Cloud, Database, Fan, Flag, Gem, Landmark, Rows2, Rows3, Shield, Swords } from 'lucide-vue-next';
-import { type Component, computed } from 'vue';
+import { type Component, computed, nextTick, ref } from 'vue';
+import { toast } from 'vue-sonner';
 
 const props = defineProps<{
     map_solarsystem: TResolvedSelectedMapSolarsystem | null;
@@ -54,7 +62,7 @@ const {
     show_system_mismatch_warning,
     confirmPasteInDifferentSystem,
     cancelPaste,
-} = usePasteSignatures(() => props.map_solarsystem);
+} = usePasteSignatures(() => props.map_solarsystem, handlePasted);
 
 const { map_solarsystems } = useMapSolarsystems();
 
@@ -86,6 +94,124 @@ const number_owners = computed(() => {
 
 // The one hole in this system marked as the static, if any.
 const static_owner_id = computed(() => visible_signatures.value.find((signature) => signature.is_static)?.id ?? null);
+
+// ---- Return hole after a paste ---------------------------------------------
+// After a jump the connection back has no signature on this side yet. When a
+// scan is pasted here, link the hole we came through: automatically within
+// 30 s of our own jump when exactly one wormhole is on grid, otherwise ask.
+
+type TReturnCandidate = { id: number; distance: TScanDistance | null; signature: TSignature };
+
+const dismissed_connections = new Set<number>();
+const return_dialog_open = ref(false);
+const return_options = ref<TReturnHoleOption[]>([]);
+const return_preselect = ref<number | null>(null);
+const return_connections = ref<TReturnConnectionOption[]>([]);
+let pending_return: { candidates: TReturnCandidate[]; connections: TProcessedConnection[] } | null = null;
+
+async function handlePasted(pasted: TRawSignature[]): Promise<void> {
+    // Let the fresh signature list reach this component first.
+    await nextTick();
+
+    const system = props.map_solarsystem;
+    if (!system) return;
+
+    const open = connections.value.filter(
+        (connection) =>
+            connection.type !== 'stargate' &&
+            !dismissed_connections.has(connection.id) &&
+            !(connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === system.id),
+    );
+    if (open.length === 0) return;
+
+    const jump = recentJump.value && recentJump.value.toSolarsystemId === system.solarsystem_id ? recentJump.value : null;
+
+    const ordered = orderOpenConnections(
+        open.map((connection) => ({ ...connection, otherSolarsystemId: connection.target.solarsystem_id, createdAt: connection.created_at })),
+        jump?.fromSolarsystemId ?? null,
+    );
+
+    const distances = new Map(pasted.map((raw) => [raw.signature_id, raw.distance ?? null]));
+    const candidates: TReturnCandidate[] = system.signatures
+        .filter((signature) => {
+            if (signature.map_connection_id || !signature.signature_id || !distances.has(signature.signature_id)) return false;
+            if (isWormholeSignature(signature)) return true;
+            // Not categorised yet but sitting on grid: still a candidate.
+            return !signature.signature_category_id && Boolean(distances.get(signature.signature_id)?.onGrid);
+        })
+        .map((signature) => ({ id: signature.id, distance: distances.get(signature.signature_id ?? '') ?? null, signature }));
+
+    const decision = decideReturnHole({ candidates, jumpedAt: jump?.at ?? null, now: Date.now() });
+    if (decision.mode === 'none') return;
+
+    if (decision.mode === 'auto') {
+        const candidate = candidates.find((entry) => entry.id === decision.candidateId);
+        if (candidate) linkReturnHole(candidate.signature, ordered[0], true);
+        return;
+    }
+
+    pending_return = { candidates, connections: ordered };
+    return_options.value = decision.ordered.map((id) => {
+        const candidate = candidates.find((entry) => entry.id === id)!;
+        return {
+            id,
+            signatureId: candidate.signature.signature_id ?? '???',
+            typeLabel: candidate.signature.signature_type?.name ?? (isWormholeSignature(candidate.signature) ? 'Wormhole' : 'Unknown'),
+            distanceText: candidate.distance?.text ?? null,
+            onGrid: Boolean(candidate.distance?.onGrid),
+        };
+    });
+    return_preselect.value = decision.preselectId;
+    return_connections.value = ordered.map((connection) => ({
+        id: connection.id,
+        label: `Back to ${aliasedSolarsystemLabel(connection.target.alias, connection.target.solarsystem.name)}`,
+    }));
+    return_dialog_open.value = true;
+}
+
+/** Link the return hole, copy its return bookmark, and offer Undo. */
+function linkReturnHole(signature: TSignature, connection: TProcessedConnection, automatic: boolean): void {
+    const system = props.map_solarsystem;
+    if (!system) return;
+
+    const previousTypeId = signature.signature_type_id;
+    updateSignature(signature, { map_connection_id: connection.id });
+
+    const name = formatBookmarkName(
+        connection.target,
+        {
+            signatureId: signature.signature_id,
+            shipSize: connection.ship_size,
+            massStatus: connection.mass_status,
+            lifetime: connection.lifetime_status,
+        },
+        page.props.map,
+        system.alias,
+        system.alias,
+        system.solarsystem.class,
+    );
+    if (name) navigator.clipboard.writeText(name).catch(() => undefined);
+
+    toast.success(automatic ? `Linked ${signature.signature_id} as your return hole` : `Return hole ${signature.signature_id} linked`, {
+        description: name ? `Copied ${visibleBookmarkName(name)}` : undefined,
+        action: {
+            label: 'Undo',
+            onClick: () => updateSignature(signature, { map_connection_id: null, ...(previousTypeId === null ? { signature_type_id: null } : {}) }),
+        },
+    });
+}
+
+function handleReturnConfirm(selection: { signatureId: number; connectionId: number }): void {
+    const candidate = pending_return?.candidates.find((entry) => entry.id === selection.signatureId);
+    const connection = pending_return?.connections.find((entry) => entry.id === selection.connectionId);
+    if (candidate && connection) linkReturnHole(candidate.signature, connection, false);
+    pending_return = null;
+}
+
+function handleReturnSkip(connectionIds: number[]): void {
+    for (const id of connectionIds) dismissed_connections.add(id);
+    pending_return = null;
+}
 
 const UNCATEGORIZED_FILTER = '__uncategorized__';
 
@@ -278,6 +404,14 @@ function createNewSignature() {
                 </p>
             </div>
         </MapPanelContent>
+        <ReturnHoleDialog
+            v-model:open="return_dialog_open"
+            :options="return_options"
+            :preselect-id="return_preselect"
+            :connections="return_connections"
+            @confirm="handleReturnConfirm"
+            @skip="handleReturnSkip"
+        />
     </MapPanel>
 
     <!-- Warning dialog for pasting in different system -->

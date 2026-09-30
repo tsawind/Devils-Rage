@@ -1,3 +1,4 @@
+import { recordJump } from '@/composables/signatures/recentJump';
 import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
 import { useMapIgnoredSystems } from '@/composables/useMapIgnoredSystems';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
@@ -105,6 +106,7 @@ export function useTracking() {
             // but that must not create a connection between the two characters' systems.
             if (new_character_id !== old_character_id) return;
 
+            recordJump(old_solarsystem_id, new_solarsystem_id);
             handleSolarsystemJump(old_solarsystem_id, new_solarsystem_id);
         },
     );

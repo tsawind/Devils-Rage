@@ -7,6 +7,7 @@ namespace App\Actions\Tracking;
 use App\Actions\MapConnections\CreateMapConnectionAction;
 use App\Actions\MapSolarsystem\StoreMapSolarsystemAction;
 use App\Actions\MapSolarsystem\UpdateMapSolarsystemAction;
+use App\Actions\Signatures\FillFarSideK162Action;
 use App\Actions\Signatures\UpdateSignatureAction;
 use App\Data\SignatureData;
 use App\Data\TrackingData;
@@ -45,6 +46,7 @@ final readonly class StoreTrackingAction
         private UpdateMapSolarsystemAction $updateMapSolarsystemAction,
         private CreateMapConnectionAction $storeMapConnectionRequest,
         private UpdateSignatureAction $updateSignatureAction,
+        private FillFarSideK162Action $fillFarSideK162Action,
         #[Config('map.max_size.x')]
         private int $max_x,
         #[Config('map.max_size.y')]
@@ -121,6 +123,8 @@ final readonly class StoreTrackingAction
 
                 Signature::query()->where('id', $data->signature_id)
                     ->update($signature_update);
+
+                $this->fillFarSideK162Action->handle($connection->id);
             }
 
         }, 10);
