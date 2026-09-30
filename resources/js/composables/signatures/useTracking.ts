@@ -5,7 +5,7 @@ import { useShowMap } from '@/composables/useShowMap';
 import { useStaticData } from '@/composables/useStaticData';
 import { useTrackingSystems } from '@/composables/useTrackingSystems';
 import { aliasTargetKind, suggestAlias } from '@/lib/alias';
-import { buildSignatureBookmark } from '@/lib/bookmark';
+import { formatBookmarkName } from '@/lib/bookmark';
 import { groupSignatureOptions } from '@/lib/signatureCompatibility';
 import { isWormholeSystem } from '@/lib/solarsystem';
 import { createTracking, updateMapUserSettings, useMapSolarsystems } from '@/map/api';
@@ -189,33 +189,37 @@ export function useTracking() {
         );
     }
 
-    // Copy the connection bookmark for the system we just jumped into, using the
-    // same scheme as the connection context menu: the current system labelled
-    // with the signature we used in the origin. Delegates to the shared
-    // signature-bookmark builder: an empty chosen alias falls back to the
-    // guessed one only when the jump is eligible for a suggestion (wormhole
-    // target, or an origin that is part of the chain), otherwise the alias
-    // token stays blank.
+    // Copy the "way back" bookmark for the hole we just came through, named from
+    // where we now stand: the origin system is the destination of that
+    // bookmark, and the system we jumped into (its chosen alias) is `{here}`.
+    // Jumping down-chain (from "1" into "12") gives the return name, e.g.
+    // "  * 12"; jumping back up-chain (from "12" into "1") gives the forward
+    // name of the hole we left, e.g. " 12", since that is the bookmark we need
+    // on this side.
     function copyConnectionBookmark(signatureId: number | null, alias: string | null) {
         if (!map_user_settings.value.copy_bookmark_enabled) return;
-        const target = target_solarsystem.value;
-        if (!target) return;
+        const origin = origin_map_solarsystem.value;
+        if (!origin?.solarsystem || !target_solarsystem.value) return;
 
         const signature = signatures.value?.find((s) => s.id === signatureId) ?? null;
-        const name = buildSignatureBookmark({
-            signature: {
-                signature_id: signature?.signature_id ?? null,
-                ship_size: signature?.ship_size ?? null,
-                mass_status: signature?.mass_status ?? null,
+        const here = alias || existing_map_solarsystem.value?.alias || null;
+
+        const name = formatBookmarkName(
+            { alias: origin.alias, occupier_alias: origin.occupier_alias, solarsystem: origin.solarsystem },
+            {
+                // The signature on this side of the hole isn't known yet.
+                signatureId: null,
+                shipSize: signature?.ship_size ?? null,
+                massStatus: signature?.mass_status ?? null,
                 lifetime: signature?.lifetime ?? 'healthy',
-                wormhole: signature?.wormhole,
-                signature_type: signature?.signature_type,
+                wormholeCode: null,
             },
-            currentSystem: { alias: origin_map_solarsystem.value?.alias, class: origin_map_solarsystem.value?.solarsystem?.class },
-            connectionTarget: { alias, occupier_alias: existing_map_solarsystem.value?.occupier_alias, solarsystem: target },
-            aliases: known_aliases.value,
-            formats: page.props.map,
-        });
+            page.props.map,
+            here,
+            here,
+        );
+
+        if (!name) return;
 
         navigator.clipboard.writeText(name);
         toast.success('Copied bookmark to clipboard', { description: name });

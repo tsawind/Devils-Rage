@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TAliasScheme } from '@/lib/alias';
 import {
+    BOOKMARK_SPACE,
     BOOKMARK_TOKENS,
     DEFAULT_BOOKMARK_FORMAT_KSPACE,
     DEFAULT_BOOKMARK_FORMAT_RETURN,
@@ -23,7 +24,7 @@ const { map, canEdit } = defineProps<{
 }>();
 
 const aliasSchemeOptions: { value: TAliasScheme; label: string; example: string }[] = [
-    { value: 'numeric', label: 'Numeric', example: '11, 12, 13' },
+    { value: 'numeric', label: 'Numeric', example: '11, 12 … 19, 1A' },
     { value: 'alphabetical', label: 'Alphabetical', example: 'AA, AB, AH1' },
 ];
 
@@ -51,7 +52,8 @@ const fields: Field[] = [
         label: 'Wormhole systems',
         fallback: DEFAULT_BOOKMARK_FORMAT_WORMHOLE,
         sample: {
-            alias: 'Home',
+            alias: '12',
+            here: '1',
             sig: 'ABC',
             class: 'C3',
             name: 'J123456',
@@ -61,6 +63,7 @@ const fields: Field[] = [
             wh: 'K162',
             mass: 'reduced',
             life: 'EOL',
+            _: BOOKMARK_SPACE,
         },
     },
     {
@@ -69,7 +72,8 @@ const fields: Field[] = [
         label: 'K-space systems',
         fallback: DEFAULT_BOOKMARK_FORMAT_KSPACE,
         sample: {
-            alias: 'Home',
+            alias: '12',
+            here: '1',
             sig: 'ABC',
             class: 'HS',
             name: 'Jita',
@@ -79,6 +83,7 @@ const fields: Field[] = [
             wh: 'B274',
             mass: 'reduced',
             life: 'EOL',
+            _: BOOKMARK_SPACE,
         },
     },
     {
@@ -88,7 +93,8 @@ const fields: Field[] = [
         description: 'Used instead of the templates above for a bookmark that leads back up-chain, or to the home system.',
         fallback: DEFAULT_BOOKMARK_FORMAT_RETURN,
         sample: {
-            alias: 'HOME',
+            alias: '1',
+            here: '12',
             sig: 'ABC',
             class: 'C3',
             name: 'J123456',
@@ -98,6 +104,7 @@ const fields: Field[] = [
             wh: 'K162',
             mass: 'reduced',
             life: 'EOL',
+            _: BOOKMARK_SPACE,
         },
     },
 ];
@@ -123,7 +130,8 @@ const dirty = computed(
 
 function preview(field: Field): string {
     const rendered = renderBookmarkTemplate(drafts[field.key], field.sample);
-    return rendered || '—';
+    // Spaces are shown as "·" so leading/explicit spaces are visible.
+    return rendered ? rendered.replace(/ /g, '·') : '—';
 }
 
 function save(): void {
@@ -181,7 +189,8 @@ function insertToken(field: Field, token: TBookmarkToken): void {
     }
 
     const value = drafts[field.key];
-    const separator = value.length > 0 && !value.endsWith(' ') ? ' ' : '';
+    // {_} is itself a space, so it never gets an extra separator around it.
+    const separator = token !== '_' && value.length > 0 && !value.endsWith(' ') && !value.endsWith('{_}') ? ' ' : '';
     drafts[field.key] = `${value}${separator}{${token}}`;
 }
 
@@ -274,7 +283,7 @@ function resetToDefault(field: Field): void {
                         class="rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                         @click="insertToken(field, token)"
                     >
-                        {{ '{' + token + '}' }}
+                        {{ '{' + token + '}' }}<span v-if="token === '_'" class="ml-1 font-sans">space</span>
                     </button>
                     <Button variant="ghost" size="sm" class="ml-auto h-6 text-xs text-muted-foreground" @click="resetToDefault(field)">
                         Reset to default

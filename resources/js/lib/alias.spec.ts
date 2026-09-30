@@ -185,3 +185,27 @@ describe('suggestAlias', () => {
         expect(alias).toBeNull();
     });
 });
+
+describe('guessNextAlias (numeric, more than nine holes)', () => {
+    it('continues with letters after 9', () => {
+        const nine = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
+        expect(guessNextAlias('1', nine)).toBe('1A');
+        expect(guessNextAlias('1', [...nine, '1A'])).toBe('1B');
+    });
+
+    it('never treats a letter child as ambiguous with a deeper numeric alias', () => {
+        // "1A" is the tenth hole off 1; "111" is the first hole off 11.
+        expect(guessNextAlias('11', ['1', '11', '1A'])).toBe('111');
+        expect(guessNextAlias('1A', ['1', '1A'])).toBe('1A1');
+    });
+
+    it('reuses a freed slot before growing, letters included', () => {
+        const nine = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
+        expect(guessNextAlias('1', [...nine.filter((a) => a !== '12'), '1A'])).toBe('12');
+    });
+
+    it('numbers the holes off an ignored home alias 1, 2, 3', () => {
+        expect(guessNextAlias('Daisy', ['Daisy'], { ignoredAlias: 'Daisy' })).toBe('1');
+        expect(guessNextAlias('Daisy', ['Daisy', '1'], { ignoredAlias: 'Daisy' })).toBe('2');
+    });
+});

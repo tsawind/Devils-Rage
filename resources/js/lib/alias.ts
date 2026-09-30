@@ -124,16 +124,47 @@ function guessNextAlphabeticalAlias(prefix: string, aliases: string[], targetKin
 }
 
 /**
+ * The numeric scheme's slots: 1-9, then A-Z once a system has more than nine
+ * children. Every slot is a single character, so "110" can never be confused
+ * between "the tenth hole off 1" and "the first hole off 11" — the tenth hole
+ * off 1 is "1A".
+ */
+const NUMERIC_SLOTS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/**
+ * The lowest unused numeric slot extending `prefix`, so a slot freed by a
+ * deleted system is reused before the sequence grows. Only aliases exactly one
+ * character longer than `prefix` count as direct children, so deeper
+ * descendants ("121" under "1") are never mistaken for a direct child.
+ * Expects `prefix` and `aliases` already upper-cased by `guessNextAlias`.
+ */
+function nextNumericSlot(prefix: string, aliases: string[]): string {
+    const used = new Set<number>();
+    for (const alias of aliases) {
+        if (alias.length !== prefix.length + 1 || !alias.startsWith(prefix)) continue;
+
+        const index = NUMERIC_SLOTS.indexOf(alias.slice(prefix.length));
+        if (index !== -1) {
+            used.add(index);
+        }
+    }
+
+    let index = 0;
+    while (used.has(index)) {
+        index++;
+    }
+    return NUMERIC_SLOTS[Math.min(index, NUMERIC_SLOTS.length - 1)];
+}
+
+/**
  * Work out the next concatenated child alias for a system, given its parent's
  * alias and every alias already in use on the map.
  *
  * Numeric (default): top-level systems (no parent alias) are numbered 1, 2,
  * 3…; children of "1" become 11, 12, 13…; children of "12" become 121, 122…
- * The next index is the lowest unused direct-child index, so an alias freed
- * by a deleted system is filled before the sequence grows (1, 3, 4 suggests
- * 2). Direct children are aliases that extend the parent's prefix with digits
- * and are not themselves nested under a longer prefix, so "121" is never
- * mistaken for a direct child of "1".
+ * After 9 the slots continue with letters (…19, 1A, 1B). The next slot is the
+ * lowest unused direct-child slot, so an alias freed by a deleted system is
+ * filled before the sequence grows (1, 3, 4 suggests 2).
  *
  * Alphabetical (`opts.scheme`): children use letters instead of digits (see
  * `guessNextAlphabeticalAlias`).
@@ -155,25 +186,7 @@ export function guessNextAlias(parentAlias: string | null | undefined, aliases: 
         return guessNextAlphabeticalAlias(prefix, knownAliases, opts.targetKind);
     }
 
-    const numericChildren = knownAliases.filter((alias) => {
-        if (alias.length <= prefix.length) return false;
-        if (!alias.startsWith(prefix)) return false;
-        return /^\d+$/.test(alias.slice(prefix.length));
-    });
-
-    const directChildren = numericChildren.filter(
-        (alias) => !numericChildren.some((other) => other !== alias && other.length < alias.length && alias.startsWith(other)),
-    );
-
-    const used = new Set<number>();
-    for (const alias of directChildren) {
-        const index = Number.parseInt(alias.slice(prefix.length), 10);
-        if (!Number.isNaN(index)) {
-            used.add(index);
-        }
-    }
-
-    return `${prefix}${lowestFreeIndex(used)}`;
+    return `${prefix}${nextNumericSlot(prefix, knownAliases)}`;
 }
 
 /**

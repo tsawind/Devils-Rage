@@ -42,7 +42,15 @@ export type TBookmarkContext = {
  * The placeholder tokens that may appear in a bookmark format template. Kept in
  * sync with the `BookmarkToken` enum on the backend.
  */
-export const BOOKMARK_TOKENS = ['alias', 'sig', 'class', 'name', 'region', 'occupier', 'size', 'wh', 'mass', 'life'] as const;
+export const BOOKMARK_TOKENS = ['alias', 'here', 'sig', 'class', 'name', 'region', 'occupier', 'size', 'wh', 'mass', 'life', '_'] as const;
+
+/**
+ * Stand-in for the `{_}` token while a template renders. Ordinary whitespace is
+ * collapsed and trimmed so empty tokens don't leave gaps, but `{_}` is a space
+ * the user asked for on purpose (e.g. a leading " 1" so the bookmark sorts to
+ * the top in-game), so it is kept out of that cleanup and restored at the end.
+ */
+export const BOOKMARK_SPACE = '\uE000';
 
 export type TBookmarkToken = (typeof BOOKMARK_TOKENS)[number];
 
@@ -116,9 +124,10 @@ export function getSignatureIdShort(signatureId: string | null | undefined): str
  * dropped when the template renders. Mass and lifetime deliberately stay empty
  * while the hole is fresh/healthy, so they only surface once it degrades.
  */
-export function getBookmarkTokenValues(system: BookmarkSystem, context: TBookmarkContext): Record<TBookmarkToken, string> {
+export function getBookmarkTokenValues(system: BookmarkSystem, context: TBookmarkContext, hereAlias?: string | null): Record<TBookmarkToken, string> {
     return {
         alias: system.alias ?? '',
+        here: hereAlias ?? '',
         sig: getSignatureIdShort(context.signatureId),
         class: getBookmarkClassString(system.solarsystem),
         name: system.solarsystem.name,
@@ -128,6 +137,7 @@ export function getBookmarkTokenValues(system: BookmarkSystem, context: TBookmar
         wh: context.wormholeCode ?? '',
         mass: context.massStatus ? (MASS_STATUS_LABELS[context.massStatus] ?? '') : '',
         life: context.lifetime ? (LIFETIME_LABELS[context.lifetime] ?? '') : '',
+        _: BOOKMARK_SPACE,
     };
 }
 
@@ -137,10 +147,15 @@ export function getBookmarkTokenValues(system: BookmarkSystem, context: TBookmar
  * placeholders are left untouched.
  */
 export function renderBookmarkTemplate(template: string, values: Record<TBookmarkToken, string>): string {
-    return template
+    const rendered = template
         .replace(/\{(\w+)\}/g, (match, token: string) => (token in values ? values[token as TBookmarkToken] : match))
         .replace(/\s+/g, ' ')
         .trim();
+
+    // Nothing but explicit spaces left means every real token was empty.
+    if (rendered.split(BOOKMARK_SPACE).join('').trim() === '') return '';
+
+    return rendered.split(BOOKMARK_SPACE).join(' ');
 }
 
 /**
@@ -152,12 +167,17 @@ export function renderBookmarkTemplate(template: string, values: Record<TBookmar
  * `system` names the up-chain / return side of the connection (see
  * `isReturnBookmark`), the return template replaces the wormhole/k-space choice.
  * Omitting it (the default for existing callers) never selects the return format.
+ *
+ * `hereAlias` fills the `{here}` token: the alias of the system the bookmark is
+ * saved in (the system you are standing in). It defaults to `oppositeAlias`,
+ * which is the other endpoint of the connection, i.e. where you stand.
  */
 export function formatBookmarkName(
     system: BookmarkSystem,
     context: TBookmarkContext,
     formats?: TBookmarkFormats | null,
     oppositeAlias?: string | null,
+    hereAlias: string | null | undefined = oppositeAlias,
 ): string {
     const template = isReturnBookmark(system.alias, oppositeAlias, formats?.bookmark_ignored_alias)
         ? formats?.bookmark_format_return || DEFAULT_BOOKMARK_FORMAT_RETURN
@@ -165,7 +185,7 @@ export function formatBookmarkName(
           ? formats?.bookmark_format_wormhole || DEFAULT_BOOKMARK_FORMAT_WORMHOLE
           : formats?.bookmark_format_kspace || DEFAULT_BOOKMARK_FORMAT_KSPACE;
 
-    return renderBookmarkTemplate(template, getBookmarkTokenValues(system, context));
+    return renderBookmarkTemplate(template, getBookmarkTokenValues(system, context, hereAlias));
 }
 
 /**
@@ -245,7 +265,7 @@ export function buildSignatureBookmark(params: {
                   }),
               };
 
-        return formatBookmarkName(system, context, formats, detectReturn ? currentSystem.alias : undefined);
+        return formatBookmarkName(system, context, formats, detectReturn ? currentSystem.alias : undefined, currentSystem.alias);
     }
 
     const knownClass = knownTargetClass(signature.signature_type?.target_class);
@@ -262,6 +282,7 @@ export function buildSignatureBookmark(params: {
                 targetKind: aliasTargetKind(isTargetWormhole, knownClass),
                 ignoredAlias: formats.bookmark_ignored_alias,
             }) ?? '',
+        here: currentSystem.alias ?? '',
         sig: getSignatureIdShort(context.signatureId),
         class: knownClass ? getBookmarkClassString({ class: knownClass, name: '' }) : '',
         name: '',
@@ -271,6 +292,7 @@ export function buildSignatureBookmark(params: {
         wh: context.wormholeCode ?? '',
         mass: context.massStatus ? (MASS_STATUS_LABELS[context.massStatus] ?? '') : '',
         life: context.lifetime ? (LIFETIME_LABELS[context.lifetime] ?? '') : '',
+        _: BOOKMARK_SPACE,
     };
 
     const template = isTargetWormhole

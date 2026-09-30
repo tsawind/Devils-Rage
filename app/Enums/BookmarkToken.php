@@ -7,6 +7,7 @@ namespace App\Enums;
 enum BookmarkToken: string
 {
     case Alias = 'alias';
+    case Here = 'here';
     case Sig = 'sig';
     case SystemClass = 'class';
     case Name = 'name';
@@ -16,6 +17,7 @@ enum BookmarkToken: string
     case Wormhole = 'wh';
     case Mass = 'mass';
     case Life = 'life';
+    case Space = '_';
 
     /**
      * The default bookmark format for wormhole systems (e.g. "Home ABC C3").

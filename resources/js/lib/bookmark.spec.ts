@@ -408,3 +408,66 @@ describe('buildSignatureBookmark (detectReturn)', () => {
         expect(name).toBe('A ABC C3');
     });
 });
+
+describe("Devil's Rage scheme ({_} spaces and {here})", () => {
+    const formats: TBookmarkFormats = {
+        bookmark_format_wormhole: '{_}{alias}',
+        bookmark_format_kspace: '{_}{alias}',
+        bookmark_format_return: '{_}{_}*{_}{here}',
+        bookmark_ignored_alias: 'Daisy',
+    };
+    const context = { signatureId: 'ABC-123' };
+    const c5 = (alias: string | null) => ({ alias, solarsystem: { class: '5' as const, name: 'J145735' } });
+    const c6 = (alias: string | null) => ({ alias, solarsystem: { class: '6' as const, name: 'J100001' } });
+
+    it('keeps the leading space on an outbound bookmark', () => {
+        expect(formatBookmarkName(c6('1'), context, formats, 'Daisy')).toBe(' 1');
+        expect(formatBookmarkName(c6('12'), context, formats, '1')).toBe(' 12');
+    });
+
+    it('names the way home after the system you stand in', () => {
+        expect(formatBookmarkName(c5('Daisy'), context, formats, '1')).toBe('  * 1');
+        expect(formatBookmarkName(c6('1'), context, formats, '12')).toBe('  * 12');
+        expect(formatBookmarkName(c6('12'), context, formats, '122')).toBe('  * 122');
+    });
+
+    it('suggests the next outbound bookmark for an unconnected signature', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature(),
+            currentSystem: { alias: '12', class: '6' },
+            aliases: ['Daisy', '1', '12', '121'],
+            formats,
+        });
+        expect(name).toBe(' 122');
+    });
+
+    it('suggests " 1" for the first hole found in home', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature(),
+            currentSystem: { alias: 'Daisy', class: '5' },
+            aliases: ['Daisy'],
+            formats,
+        });
+        expect(name).toBe(' 1');
+    });
+
+    it('gives the return name for a connected signature leading back up-chain', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature(),
+            currentSystem: { alias: '12', class: '6' },
+            connectionTarget: c6('1'),
+            aliases: ['Daisy', '1', '12'],
+            formats,
+            detectReturn: true,
+        });
+        expect(name).toBe('  * 12');
+    });
+
+    it('drops to nothing when every real token is empty', () => {
+        expect(formatBookmarkName(c6(null), {}, { bookmark_format_wormhole: '{_}{alias}' })).toBe('');
+    });
+
+    it('leaves the stock templates unchanged', () => {
+        expect(formatBookmarkName(c6('A'), context, {})).toBe('A ABC C6');
+    });
+});
