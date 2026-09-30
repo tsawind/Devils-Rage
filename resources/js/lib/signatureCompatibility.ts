@@ -1,3 +1,4 @@
+import { signatureCategories } from '@/const/signatures';
 import type { TSignature, TStringedSolarsystemClass } from '@/types/models';
 
 /**
@@ -74,12 +75,21 @@ export function groupSignatureOptions(signatures: TSignature[], targetClass: TSt
  * then signatures not yet categorised. Ties keep their existing order.
  */
 function likelyRank(signature: TSignature, targetClass: TStringedSolarsystemClass | null | undefined): number {
-    const isWormhole = signature.signature_category?.code === 'wormhole';
     const destinationClass = signature.signature_type?.target_class;
+    const hasKnownDestination = Boolean(destinationClass) && destinationClass !== 'unknown';
 
-    if (isWormhole && targetClass && destinationClass && destinationClass !== 'unknown' && destinationClass === targetClass) {
+    if (hasKnownDestination && targetClass && String(destinationClass) === String(targetClass)) {
         return 0;
     }
 
-    return isWormhole ? 1 : 2;
+    return isWormholeSignature(signature) || hasKnownDestination || Boolean(signature.wormhole) ? 1 : 2;
+}
+
+/** Whether a signature is categorised as a wormhole, whichever shape the data arrived in. */
+function isWormholeSignature(signature: TSignature): boolean {
+    const category = signature.signature_category;
+    if (category?.code === 'wormhole' || category?.name === 'Wormhole') return true;
+
+    const wormholeCategoryId = signatureCategories.find((candidate) => candidate.code === 'wormhole')?.id;
+    return wormholeCategoryId !== undefined && signature.signature_category_id === wormholeCategoryId;
 }

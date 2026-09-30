@@ -110,3 +110,20 @@ describe('groupSignatureOptions (likely order)', () => {
         expect(groupSignatureOptions([a, b], '6').likely).toEqual([a, b]);
     });
 });
+
+describe('groupSignatureOptions (jump prompt data shape)', () => {
+    it('ranks by category id and destination class when the category object has no code', () => {
+        const uncategorised = { id: 1, signature_id: 'IQL-244', map_connection_id: null, signature_category: null, signature_type: null } as unknown as TSignature;
+        const untypedWormhole = { id: 2, signature_id: 'MWD-240', map_connection_id: null, signature_category: null, signature_category_id: 1, signature_type: null } as unknown as TSignature;
+        const staticHole = {
+            id: 3,
+            signature_id: 'SOF-078',
+            map_connection_id: null,
+            signature_category: { id: 1, name: 'Wormhole' },
+            signature_category_id: 1,
+            signature_type: { id: 9, name: 'V753', target_class: '6' },
+        } as unknown as TSignature;
+
+        expect(groupSignatureOptions([uncategorised, untypedWormhole, staticHole], '6').likely).toEqual([staticHole, untypedWormhole, uncategorised]);
+    });
+});

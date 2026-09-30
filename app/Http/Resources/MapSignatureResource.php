@@ -28,6 +28,11 @@ final class MapSignatureResource extends JsonResource
             'extra' => $this->signatureType?->extra,
             'wormhole' => $this->wormhole?->toResource(WormholeResource::class),
             'signature_category' => $this->getSignatureCategory(),
+            // The jump prompt reads these under the same names as the signature list.
+            'signature_category_id' => $this->signature_category_id,
+            'lifetime' => $this->lifetime,
+            'lifetime_updated_at' => $this->lifetime_updated_at,
+            'ship_size' => $this->ship_size,
             'signature_type' => $this->signatureType?->toResource(SignatureTypeResource::class),
             'raw_type_name' => $this->getRawTypeName(),
             'created_at' => $this->created_at,
