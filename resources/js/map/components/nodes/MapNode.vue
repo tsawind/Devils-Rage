@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useMinuteClock } from '@/composables/combat/useMinuteClock';
+import { isDeadEnd as isDeadEndSystem } from '@/lib/combat';
 import NodeCard from '@/map/components/nodes/NodeCard.vue';
 import SolarsystemConnectionHandle from '@/map/components/solarsystem/SolarsystemConnectionHandle.vue';
 import SolarsystemDragHandle from '@/map/components/solarsystem/SolarsystemDragHandle.vue';
@@ -74,6 +76,14 @@ const isHome = computed(() => {
 
 const isRally = computed(() => {
     return system.value !== null && store.meta.value?.rally_solarsystem_id === system.value.solarsystem_id;
+});
+
+// Fully scanned, every signature identified, and the only hole is the way in (see isDeadEnd).
+const minuteClock = useMinuteClock();
+const isDeadEnd = computed(() => {
+    const current = system.value;
+    if (!current) return false;
+    return isDeadEndSystem(current, store.connectionCounts.value.get(id) ?? 0, minuteClock.value, isHome.value);
 });
 
 const threatLevel = computed(() => {
@@ -154,6 +164,7 @@ onBeforeUnmount(() => {
                             :is-rally="isRally"
                             :fixed-width="fixedWidth"
                             :threat-level="threatLevel"
+                            :is-dead-end="isDeadEnd"
                         />
                     </Link>
                     <template v-if="canWrite">

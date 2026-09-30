@@ -86,15 +86,24 @@ final readonly class StoreTrackingAction
             * different connection), we link to that existing map solarsystem
             * instead of adding a duplicate. Otherwise we add it to the map.
             */
-            $target_map_solarsystem = $this->getMapSolarsystemOnMap($origin->map, $to_solarsystem)
-                ?? $this->addSolarsystemToMap($origin, $to_solarsystem);
+            $existing_map_solarsystem = $this->getMapSolarsystemOnMap($origin->map, $to_solarsystem);
+            $target_map_solarsystem = $existing_map_solarsystem ?? $this->addSolarsystemToMap($origin, $to_solarsystem);
 
             /* The alias goes through the update action so the broadcast payload
              * carries it — a raw update() here left other viewers (and the
              * originator's own echo) with an alias-less system.
+             *
+             * A system newly found from a combat chain joins that chain (its color).
              */
+            $system_update = [];
             if (filled($data->alias)) {
-                $this->updateMapSolarsystemAction->handle($target_map_solarsystem, ['alias' => $data->alias]);
+                $system_update['alias'] = $data->alias;
+            }
+            if (! $existing_map_solarsystem instanceof MapSolarsystem && filled($origin->combat_color)) {
+                $system_update['combat_color'] = $origin->combat_color;
+            }
+            if ($system_update !== []) {
+                $this->updateMapSolarsystemAction->handle($target_map_solarsystem, $system_update);
             }
 
             $signature = Signature::query()->find($data->signature_id);
@@ -204,6 +213,17 @@ final readonly class StoreTrackingAction
     private function guessGoodPositionForNewSolarsystem(
         MapSolarsystem $mapSolarsystem,
     ): array {
+
+        // Combat chains grow downwards: the next free spot below the system jumped from.
+        if (filled($mapSolarsystem->combat_color)) {
+            return $this->getNextFreePosition(
+                $mapSolarsystem->map,
+                $mapSolarsystem,
+                self::MINIMUM_DISTANCE_Y,
+                self::MINIMUM_DISTANCE_X,
+                self::MAXIMUM_TRIES
+            );
+        }
 
         /**
          * We want to get a good new position for the map solarsystem. Wormholes should be grouped

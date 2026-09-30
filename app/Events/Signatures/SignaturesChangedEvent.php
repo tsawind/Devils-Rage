@@ -15,7 +15,7 @@ final class SignaturesChangedEvent implements ShouldBroadcastNow, ShouldDispatch
     use BroadcastsToMap, Dispatchable, InteractsWithSockets;
 
     /**
-     * @param  array{signatures_count: int, wormhole_signatures_count: int, uncategorized_signatures_count: int}  $signature_counts
+     * @param  array{signatures_count: int, wormhole_signatures_count: int, uncategorized_signatures_count: int, scanned_at?: string|null}  $signature_counts
      */
     public function __construct(
         public readonly int $map_id,
@@ -24,7 +24,7 @@ final class SignaturesChangedEvent implements ShouldBroadcastNow, ShouldDispatch
     ) {}
 
     /**
-     * @return array{map_solarsystem_id: int, signature_counts: array{signatures_count: int, wormhole_signatures_count: int, uncategorized_signatures_count: int}}
+     * @return array{map_solarsystem_id: int, signature_counts: array{signatures_count: int, wormhole_signatures_count: int, uncategorized_signatures_count: int, scanned_at?: string|null}}
      */
     public function broadcastWith(): array
     {

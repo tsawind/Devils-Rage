@@ -12,6 +12,7 @@ import MapPanelHeader from '@/components/ui/map-panel/MapPanelHeader.vue';
 import MapPanelHeaderActionButton from '@/components/ui/map-panel/MapPanelHeaderActionButton.vue';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCombat } from '@/composables/combat/useCombat';
 import { recentJump } from '@/composables/signatures/recentJump';
 import { usePasteSignatures } from '@/composables/signatures/usePasteSignatures';
 import { useSignatures } from '@/composables/signatures/useSignatures';
@@ -22,6 +23,7 @@ import { useShowMap } from '@/composables/useShowMap';
 import usePermission from '@/composables/usePermission';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
+import { chainAliases } from '@/lib/combat';
 import { AUTO_LINK_WINDOW_MS, decideReturnHole, orderOpenConnections, type TReturnConnectionOption, type TReturnHoleOption, type TScanDistance } from '@/lib/returnHole';
 import type { TRawSignature } from '@/lib/SignatureParser';
 import { aliasedSolarsystemLabel } from '@/lib/solarsystem';
@@ -47,6 +49,8 @@ const map_user_settings = useMapUserSettings();
 
 const page = useShowMap();
 
+const { popup_seconds } = useCombat();
+
 function toggleCompactSignatureList() {
     updateMapUserSettings(page.props.map.slug, {
         compact_signature_list: !map_user_settings.value.compact_signature_list,
@@ -70,11 +74,19 @@ const { map_solarsystems } = useMapSolarsystems();
 // first), so e.g. the static suggests " 1" and the next hole " 2".
 const visible_signatures = computed(() => signatures.value.filter((signature) => !signature.deleted));
 
+// This system as the map knows it (combat chain color, combat home).
+const map_system = computed(() => map_solarsystems.value.find((solarsystem) => solarsystem.id === props.map_solarsystem?.id) ?? null);
+
+// Numbers already used in this system's chain (each combat chain numbers from 1 on its own).
+const chain_aliases = computed(() => chainAliases(map_solarsystems.value, map_system.value));
+
 const planned_aliases = computed(() =>
     planAliasesForSystem({
         signatures: visible_signatures.value,
-        system: props.map_solarsystem,
-        aliases: map_solarsystems.value.map((solarsystem) => solarsystem.alias).filter((alias): alias is string => Boolean(alias)),
+        system: props.map_solarsystem
+            ? { alias: props.map_solarsystem.alias, solarsystem: props.map_solarsystem.solarsystem, combat_home: map_system.value?.combat_home ?? false }
+            : null,
+        aliases: chain_aliases.value,
         formats: page.props.map,
     }),
 );
@@ -82,8 +94,8 @@ const planned_aliases = computed(() =>
 // Who holds each number in this system, for hand-set numbers ("already used by …").
 const number_owners = computed(() => {
     const owners = new Map<string, { signatureId: number | null; label: string }>();
-    for (const solarsystem of map_solarsystems.value) {
-        if (solarsystem.alias) owners.set(solarsystem.alias.toUpperCase(), { signatureId: null, label: `system ${solarsystem.alias} on the map` });
+    for (const alias of chain_aliases.value) {
+        owners.set(alias.toUpperCase(), { signatureId: null, label: `system ${alias} on the map` });
     }
     for (const signature of visible_signatures.value) {
         const alias = planned_aliases.value.get(signature.id);
@@ -189,6 +201,7 @@ function linkReturnHole(signature: TSignature, connection: TProcessedConnection,
         system.alias,
         system.alias,
         system.solarsystem.class,
+        map_system.value?.combat_color ?? null,
     );
     if (name) navigator.clipboard.writeText(name).catch(() => undefined);
 
@@ -438,6 +451,7 @@ function createNewSignature() {
             :options="return_options"
             :preselect-id="return_preselect"
             :connections="return_connections"
+            :countdown-seconds="popup_seconds"
             @confirm="handleReturnConfirm"
             @skip="handleReturnSkip"
         />

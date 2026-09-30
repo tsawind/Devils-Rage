@@ -14,6 +14,8 @@ export type SystemCounts = {
     signatures_count: number;
     wormhole_signatures_count: number;
     uncategorized_signatures_count: number;
+    /** Sent with a paste: when the system was last scanned. */
+    scanned_at?: string | null;
 };
 
 export type EntityState = ReturnType<typeof createEntityState>;

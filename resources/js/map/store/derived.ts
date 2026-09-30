@@ -74,6 +74,16 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         return { connection, source, target };
     }
 
+    /** How many map connections each system has (for spotting dead ends). */
+    const connectionCounts: ComputedRef<ReadonlyMap<number, number>> = computed(() => {
+        const counts = new Map<number, number>();
+        for (const connection of entities.connections.values()) {
+            counts.set(connection.from_map_solarsystem_id, (counts.get(connection.from_map_solarsystem_id) ?? 0) + 1);
+            counts.set(connection.to_map_solarsystem_id, (counts.get(connection.to_map_solarsystem_id) ?? 0) + 1);
+        }
+        return counts;
+    });
+
     /** Connections joining two adjacent systems on the active route. */
     const routeConnectionIds: ComputedRef<ReadonlySet<number>> = computed(() => {
         const path = routeDeps.path?.value;
@@ -118,6 +128,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         treePositions,
         renderPosition,
         resolveConnection,
+        connectionCounts,
         routeConnectionIds,
         rallyEdgeDirections,
     };

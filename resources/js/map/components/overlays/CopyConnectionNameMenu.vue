@@ -43,6 +43,7 @@ const source_name = computed(() =>
         map_connection.target.alias,
         map_connection.target.alias,
         map_connection.target.solarsystem.class,
+        map_connection.target.combat_color ?? null,
     ),
 );
 
@@ -65,6 +66,7 @@ const target_name = computed(() =>
         map_connection.source.alias,
         map_connection.source.alias,
         map_connection.source.solarsystem.class,
+        map_connection.source.combat_color ?? null,
     ),
 );
 

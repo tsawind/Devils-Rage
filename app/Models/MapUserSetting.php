@@ -35,6 +35,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $suggest_alias_enabled
  * @property bool $copy_bookmark_enabled
  * @property bool $follow_character_enabled
+ * @property bool $combat_mode
+ * @property string|null $combat_color
  * @property array|null $layout_breakpoints
  * @property array|null $hidden_cards
  * @property bool $show_threat_level
@@ -76,6 +78,7 @@ final class MapUserSetting extends Model
             'updated_at' => 'immutable_datetime',
             'tracking_allowed' => 'boolean',
             'is_tracking' => 'boolean',
+            'combat_mode' => 'boolean',
             'route_allow_lifetime_status' => LifetimeStatus::class,
             'route_allow_mass_status' => MassStatus::class,
             'route_preference' => RoutePreference::class,

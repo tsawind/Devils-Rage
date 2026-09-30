@@ -53,6 +53,8 @@ final class MapUserSettingResource extends JsonResource
                 : null,
             'background_image_mode' => $this->background_image_mode ?? MapBackgroundMode::Grid,
             'layout_override' => $this->layout_override,
+            'combat_mode' => $this->combat_mode ?? false,
+            'combat_color' => $this->combat_color ?? null,
         ];
     }
 }

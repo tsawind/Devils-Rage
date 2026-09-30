@@ -1,13 +1,17 @@
 <script setup lang="ts">
+import CountdownBar from '@/components/combat/CountdownBar.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog';
+import { usePopupCountdown } from '@/composables/combat/usePopupCountdown';
 import type { TReturnConnectionOption, TReturnHoleOption } from '@/lib/returnHole';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps<{
     options: TReturnHoleOption[];
     preselectId: number | null;
     connections: TReturnConnectionOption[];
+    /** Combat mode: link the selected hole (the on-grid one to start with), or skip, by itself after this many seconds. */
+    countdownSeconds?: number | null;
 }>();
 
 const open = defineModel<boolean>('open', { required: true });
@@ -43,6 +47,24 @@ function skip(): void {
 function handleOpenChange(isOpen: boolean): void {
     if (!isOpen) skip();
 }
+
+// Combat mode: when nobody answers, link the selected hole (preselected: the one on grid), or skip if none.
+const { remaining, fraction } = usePopupCountdown(
+    open,
+    () => props.countdownSeconds ?? null,
+    () => {
+        if (selectedId.value !== null && connectionId.value !== null) {
+            confirm();
+            return;
+        }
+        skip();
+    },
+);
+
+const countdownAction = computed(() => {
+    const selected = props.options.find((option) => option.id === selectedId.value);
+    return selected && connectionId.value !== null ? `Link ${selected.signatureId}` : 'Skip';
+});
 </script>
 
 <template>
@@ -52,6 +74,8 @@ function handleOpenChange(isOpen: boolean): void {
                 <DialogTitle>Which is your return hole?</DialogTitle>
                 <DialogDescription>Pick the wormhole you came through. It will be linked, set as a K162 and its return bookmark copied.</DialogDescription>
             </DialogHeader>
+
+            <CountdownBar :remaining="remaining" :fraction="fraction" :action="countdownAction" />
 
             <form class="grid gap-4 px-6 py-5" @submit.prevent="confirm">
                 <div v-if="connections.length > 1" class="grid gap-1.5 text-xs">

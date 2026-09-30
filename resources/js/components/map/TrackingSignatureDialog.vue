@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import CountdownBar from '@/components/combat/CountdownBar.vue';
 import WormholeOption from '@/components/signatures/WormholeOption.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog';
@@ -7,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { usePopupCountdown } from '@/composables/combat/usePopupCountdown';
 import { useShowMap } from '@/composables/useShowMap';
 import { Data } from '@/lib/data';
 import { SHIP_SIZE_OPTIONS, shipSizeFromJumpMass } from '@/lib/shipSize';
@@ -36,6 +38,8 @@ const props = defineProps<{
     mapSolarsystems?: TMapSolarsystem[];
     /** Pre-select the first likely signature on open so Enter confirms it immediately. */
     preselectFirstSignature?: boolean;
+    /** Combat mode: answer Unknown by itself after this many seconds (null = no countdown). */
+    countdownSeconds?: number | null;
 }>();
 
 const page = useShowMap();
@@ -230,6 +234,13 @@ function handleConfirm() {
     emit('selectSignature', buildSelection(selectedSignatureId.value));
 }
 
+// Combat mode: nobody answered in time, so it was an unknown hole (no signature assumed).
+const { remaining: countdownRemaining, fraction: countdownFraction } = usePopupCountdown(
+    open,
+    () => props.countdownSeconds ?? null,
+    () => emit('selectSignature', buildSelection(null)),
+);
+
 function handleOpenChange(isOpen: boolean) {
     if (!isOpen) {
         emit('selectSignature', buildSelection(null));
@@ -297,6 +308,7 @@ const selectedShipSizeOption = computed(() => shipSizeOptions.find((option) => o
                     >. Select the wormhole connection you used.
                 </DialogDescription>
             </DialogHeader>
+            <CountdownBar :remaining="countdownRemaining" :fraction="countdownFraction" action="Unknown" />
             <form @submit.prevent="handleConfirm" class="contents">
                 <!-- Connection details -->
                 <div class="grid gap-3 px-6 py-5">

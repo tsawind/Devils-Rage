@@ -307,6 +307,10 @@ export type TMapUserSetting = {
     background_image_url: string | null;
     background_image_mode: 'grid' | 'viewport';
     layout_override: 'manual' | 'tree' | null;
+    /** Your own combat mode (combat speed, 60 s popup countdowns). */
+    combat_mode?: boolean;
+    /** The combat chain you are working ("red", …), or null for combat speed without a chain. */
+    combat_color?: string | null;
 };
 
 export type TMapAlertType = 'proximity' | 'killmail' | 'jump_range';

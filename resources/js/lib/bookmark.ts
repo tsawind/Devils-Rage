@@ -23,6 +23,10 @@ export type BookmarkSystem = {
     alias?: string | null;
     occupier_alias?: string | null;
     solarsystem: BookmarkSolarsystem;
+    /** A combat home: its chain restarts at 1, so its holes back into it are returns. */
+    combat_home?: boolean | null;
+    /** The combat chain the system belongs to, if any. */
+    combat_color?: string | null;
 };
 
 /**
@@ -103,6 +107,33 @@ export function isReturnBookmark(
     if (!destination) return false;
 
     return opposite.toLowerCase().startsWith(destination.toLowerCase());
+}
+
+/**
+ * Whether a bookmark into a combat home is a return. A combat home's chain
+ * restarts at 1 ("1", "12" under home "A1"), so the prefix rule can't see it.
+ * When the other system's chain color is known, the hole is a return exactly
+ * when that system is in the combat home's chain. Otherwise any aliased
+ * neighbour that is not up-chain of the combat home (a prefix of its alias,
+ * or the map's home) counts as one of its chain.
+ */
+export function isCombatHomeReturn(
+    destination: { alias?: string | null; combat_home?: boolean | null; combat_color?: string | null },
+    oppositeAlias: string | null | undefined,
+    ignoredAlias: string | null | undefined,
+    oppositeCombatColor?: string | null,
+): boolean {
+    if (!destination.combat_home) return false;
+
+    const opposite = (oppositeAlias ?? '').trim();
+    if (!opposite || isIgnoredAlias(opposite, ignoredAlias)) return false;
+
+    if (oppositeCombatColor !== undefined && destination.combat_color) {
+        return oppositeCombatColor === destination.combat_color;
+    }
+
+    const destinationAlias = (destination.alias ?? '').trim().toLowerCase();
+    return !destinationAlias.startsWith(opposite.toLowerCase());
 }
 
 /**
@@ -206,6 +237,8 @@ export function visibleBookmarkName(name: string): string {
  * saved in (the system you are standing in). It defaults to `oppositeAlias`,
  * which is the other endpoint of the connection, i.e. where you stand.
  * `hereClass` fills `{hereclass}`: the class of that same system (e.g. "C6").
+ * `oppositeCombatColor` is the combat chain of the system you stand in (null
+ * for none; leave it out when unknown), used to spot returns into a combat home.
  */
 export function formatBookmarkName(
     system: BookmarkSystem,
@@ -214,8 +247,12 @@ export function formatBookmarkName(
     oppositeAlias?: string | null,
     hereAlias: string | null | undefined = oppositeAlias,
     hereClass?: TStringedSolarsystemClass | null,
+    oppositeCombatColor?: string | null,
 ): string {
-    const template = isReturnBookmark(system.alias, oppositeAlias, formats?.bookmark_ignored_alias)
+    const isReturn =
+        isReturnBookmark(system.alias, oppositeAlias, formats?.bookmark_ignored_alias) ||
+        isCombatHomeReturn(system, oppositeAlias, formats?.bookmark_ignored_alias, oppositeCombatColor);
+    const template = isReturn
         ? formats?.bookmark_format_return || DEFAULT_BOOKMARK_FORMAT_RETURN
         : isWormholeClass(system.solarsystem.class)
           ? formats?.bookmark_format_wormhole || DEFAULT_BOOKMARK_FORMAT_WORMHOLE
@@ -271,7 +308,7 @@ export function buildSignatureBookmark(params: {
         is_static?: boolean | null;
         is_wandering?: boolean | null;
     };
-    currentSystem: { alias?: string | null; class?: TStringedSolarsystemClass | null };
+    currentSystem: { alias?: string | null; class?: TStringedSolarsystemClass | null; combatHome?: boolean; combatColor?: string | null };
     connectionTarget?: BookmarkSystem | null;
     aliases: string[];
     formats: TBookmarkFormats & { bookmark_alias_scheme?: TAliasScheme };
@@ -304,6 +341,7 @@ export function buildSignatureBookmark(params: {
                       scheme: formats.bookmark_alias_scheme,
                       targetKind: aliasTargetKind(targetIsWormhole, connectionTarget.solarsystem.class),
                       ignoredAlias: formats.bookmark_ignored_alias,
+                      combatHome: currentSystem.combatHome,
                   }),
               };
 
@@ -314,6 +352,7 @@ export function buildSignatureBookmark(params: {
             detectReturn ? currentSystem.alias : undefined,
             currentSystem.alias,
             currentSystem.class,
+            currentSystem.combatColor,
         );
     }
 
@@ -332,6 +371,7 @@ export function buildSignatureBookmark(params: {
                     scheme: formats.bookmark_alias_scheme,
                     targetKind: aliasTargetKind(isTargetWormhole, knownClass),
                     ignoredAlias: formats.bookmark_ignored_alias,
+                    combatHome: currentSystem.combatHome,
                 }),
             useCallsigns,
         ),

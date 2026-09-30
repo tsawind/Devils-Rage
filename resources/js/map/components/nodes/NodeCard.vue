@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { isWormholeClass } from '@/const/solarsystemClasses';
+import { combatColorHex, combatColorLabel } from '@/lib/combat';
 import SolarsystemName from '@/map/components/solarsystem/SolarsystemName.vue';
 import SolarsystemPilots from '@/map/components/solarsystem/SolarsystemPilots.vue';
 import SolarsystemRegion from '@/map/components/solarsystem/SolarsystemRegion.vue';
@@ -31,6 +32,7 @@ const {
     system,
     pilots,
     threatLevel = null,
+    isDeadEnd = false,
 } = defineProps<{
     system: TMapSolarsystem;
     pilots: TCharacter[];
@@ -41,7 +43,27 @@ const {
     isRally: boolean;
     fixedWidth: boolean;
     threatLevel?: TThreatLevel | null;
+    /** Fully scanned with no way on: shown faded. */
+    isDeadEnd?: boolean;
 }>();
+
+// ---- Combat chains ------------------------------------------------------------
+const chainHex = computed(() => combatColorHex(system.combat_color));
+const chainLabel = computed(() => combatColorLabel(system.combat_color));
+const isCombatHome = computed(() => Boolean(system.combat_home && chainHex.value));
+const isCombatPulsing = computed(() => isCombatHome.value && Boolean(system.combat_active));
+
+/**
+ * Systems in a combat chain glow in its color, the combat home more strongly.
+ * A drop-shadow filter, so the selection / threat rings (box-shadow) still show.
+ */
+const chainStyle = computed(() => {
+    const hex = chainHex.value;
+    if (!hex) return undefined;
+    const glow = isCombatHome.value ? `drop-shadow(0 0 6px ${hex}) drop-shadow(0 0 2px ${hex})` : `drop-shadow(0 0 4px ${hex}aa)`;
+    // The inline filter replaces the dead-end saturate class, so fold it in here.
+    return { filter: isDeadEnd ? `${glow} saturate(0.5)` : glow };
+});
 
 const form = useForm<{
     alias: string;
@@ -123,11 +145,28 @@ function handleSubmit() {
         :data-has-pilots="pilots.length > 0"
         :data-is-active="isActive"
         :data-threat-level="threatLevel"
-        class="grid h-[40px] rounded border border-neutral-300 bg-white text-left text-xs ring-offset-2 ring-offset-neutral-50 transition-colors duration-200 ease-in-out select-none hover:bg-white focus:bg-white data-[has-pilots=true]:h-[60px] data-[hovered=true]:outline-2 data-[hovered=true]:outline-yellow-500 data-[is-active=true]:ring-2 data-[is-active=true]:ring-amber-500 data-[selected=true]:bg-amber-100 data-[status=active]:border-active data-[status=empty]:border-empty data-[status=friendly]:border-friendly data-[status=hostile]:border-hostile data-[status=unknown]:border-unknown data-[is-active=false]:data-[threat-level=critical]:ring-2 data-[is-active=false]:data-[threat-level=critical]:ring-threat-critical data-[is-active=false]:data-[threat-level=high]:ring-2 data-[is-active=false]:data-[threat-level=high]:ring-threat-high dark:border-neutral-700 dark:bg-neutral-900 dark:ring-offset-neutral-900 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800 dark:data-[is-active=true]:ring-2 dark:data-[is-active=true]:ring-amber-500 dark:data-[selected=true]:bg-amber-900 dark:data-[status=active]:border-active dark:data-[status=empty]:border-empty dark:data-[status=friendly]:border-friendly dark:data-[status=hostile]:border-hostile dark:data-[status=unscanned]:border-unscanned"
+        :data-dead-end="isDeadEnd"
+        :title="isDeadEnd ? 'Dead end: fully scanned, no other holes' : undefined"
+        :style="chainStyle"
+        class="relative grid h-[40px] rounded border border-neutral-300 bg-white text-left text-xs ring-offset-2 ring-offset-neutral-50 transition-colors duration-200 ease-in-out select-none hover:bg-white focus:bg-white data-[has-pilots=true]:h-[60px] data-[hovered=true]:outline-2 data-[hovered=true]:outline-yellow-500 data-[is-active=true]:ring-2 data-[is-active=true]:ring-amber-500 data-[selected=true]:bg-amber-100 data-[status=active]:border-active data-[status=empty]:border-empty data-[status=friendly]:border-friendly data-[status=hostile]:border-hostile data-[status=unknown]:border-unknown data-[is-active=false]:data-[threat-level=critical]:ring-2 data-[is-active=false]:data-[threat-level=critical]:ring-threat-critical data-[is-active=false]:data-[threat-level=high]:ring-2 data-[is-active=false]:data-[threat-level=high]:ring-threat-high dark:border-neutral-700 dark:bg-neutral-900 dark:ring-offset-neutral-900 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800 dark:data-[is-active=true]:ring-2 dark:data-[is-active=true]:ring-amber-500 dark:data-[selected=true]:bg-amber-900 dark:data-[status=active]:border-active dark:data-[status=empty]:border-empty dark:data-[status=friendly]:border-friendly dark:data-[status=hostile]:border-hostile dark:data-[status=unscanned]:border-unscanned data-[dead-end=true]:opacity-60 data-[dead-end=true]:saturate-50 data-[dead-end=true]:hover:opacity-100"
         :class="{ 'w-[180px]': fixedWidth }"
         @dblclick="openEditor()"
         @drag.prevent
     >
+        <!-- Combat chain: a border in the chain's color; the combat home's is thicker and pulses while someone works the chain -->
+        <div
+            v-if="chainHex"
+            class="pointer-events-none absolute rounded-md"
+            :class="[isCombatHome ? '-inset-1 border-2' : '-inset-[3px] border', { 'animate-pulse': isCombatPulsing }]"
+            :style="{ borderColor: chainHex ?? undefined }"
+        />
+        <div
+            v-if="isCombatHome"
+            class="pointer-events-none absolute -top-2.5 left-2 rounded px-1 text-[9px] leading-4 font-bold tracking-wide text-white uppercase"
+            :style="{ backgroundColor: chainHex ?? undefined }"
+        >
+            ⚔ Combat{{ chainLabel ? ` · ${chainLabel}` : '' }}
+        </div>
         <div class="row-start-1 grid grid-cols-[auto_1fr_auto] items-center justify-center gap-x-1 px-2">
             <SolarsystemClass :solarsystem_class="resolvedSolarsystem.class" />
             <Popover :open="open" @update:open="(value) => open && (open = value)">

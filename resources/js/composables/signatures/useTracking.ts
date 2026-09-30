@@ -1,3 +1,4 @@
+import { useCombat } from '@/composables/combat/useCombat';
 import { recordJump } from '@/composables/signatures/recentJump';
 import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
 import { useMapIgnoredSystems } from '@/composables/useMapIgnoredSystems';
@@ -6,8 +7,9 @@ import { useShowMap } from '@/composables/useShowMap';
 import { useStaticData } from '@/composables/useStaticData';
 import { useTrackingSystems } from '@/composables/useTrackingSystems';
 import { aliasTargetKind, staticSlotAlias, suggestAlias } from '@/lib/alias';
-import { planAliasesForSystem } from '@/lib/aliasPlan';
+import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
+import { chainAliases } from '@/lib/combat';
 import { groupSignatureOptions } from '@/lib/signatureCompatibility';
 import { isWormholeSystem } from '@/lib/solarsystem';
 import { createTracking, updateMapUserSettings, useMapSolarsystems } from '@/map/api';
@@ -24,6 +26,7 @@ export function useTracking() {
     const page = useShowMap();
     const { staticData } = useStaticData();
     const { map_solarsystems } = useMapSolarsystems();
+    const { is_combat } = useCombat();
 
     const is_tracking = computed(() => map_user_settings.value?.is_tracking && character.value && map_user_settings.value?.tracking_allowed);
     const is_tracking_allowed = computed(() => map_user_settings.value.tracking_allowed);
@@ -48,10 +51,17 @@ export function useTracking() {
         );
     });
 
-    const known_aliases = computed(() => map_solarsystems.value.map((s) => s.alias).filter((alias): alias is string => Boolean(alias)));
+    // The origin as the map knows it: its combat chain, and whether it is a combat home.
+    const origin_map_system = computed(() => map_solarsystems.value.find((s) => s.id === origin_map_solarsystem.value?.id) ?? null);
+    const origin_is_combat_home = computed(() => Boolean(origin_map_system.value?.combat_home));
+
+    // Numbers already used in the origin's chain (each combat chain numbers from 1 on its own).
+    const known_aliases = computed(() => chainAliases(map_solarsystems.value, origin_map_system.value));
 
     // The origin's reserved static slot and the hole already marked as its static.
-    const static_slot_alias = computed(() => staticSlotAlias(origin_map_solarsystem.value?.alias, page.props.map.bookmark_ignored_alias));
+    const static_slot_alias = computed(() =>
+        staticSlotAlias(origin_map_solarsystem.value?.alias, page.props.map.bookmark_ignored_alias, origin_is_combat_home.value),
+    );
     const static_owner_id = computed(() => signatures.value?.find((signature) => signature.is_static)?.id ?? null);
 
     // The alias each unjumped wormhole in the origin has reserved (statics
@@ -60,9 +70,10 @@ export function useTracking() {
     const planned_aliases = computed<Map<number, string>>(() => {
         if (existing_map_solarsystem.value?.alias || !map_user_settings.value.suggest_alias_enabled) return new Map();
 
+        const origin = origin_map_solarsystem.value;
         return planAliasesForSystem({
             signatures: signatures.value,
-            system: origin_map_solarsystem.value,
+            system: origin ? { alias: origin.alias, solarsystem: origin.solarsystem, combat_home: origin_is_combat_home.value } : null,
             aliases: known_aliases.value,
             formats: page.props.map,
         });
@@ -92,6 +103,7 @@ export function useTracking() {
             scheme: page.props.map.bookmark_alias_scheme,
             targetKind: aliasTargetKind(targetIsWormhole, target.class),
             ignoredAlias: page.props.map.bookmark_ignored_alias,
+            combatHome: origin_is_combat_home.value,
         });
     });
 
@@ -159,6 +171,12 @@ export function useTracking() {
         }
 
         const gate_connected = isGateConnected(origin_map_solarsystem.value?.solarsystem_id, target_solarsystem.value?.id);
+
+        // Combat mode: skip the prompt when it is certain which hole was jumped.
+        if (!gate_connected && is_combat.value && performCombatJump()) {
+            return;
+        }
+
         if (gate_connected || !possible_signatures.value.length || !map_user_settings.value.prompt_for_signature_enabled) {
             return createTracking(origin_map_solarsystem.value!.id, target_solarsystem_id, {}, () => followInto(target_solarsystem_id));
         }
@@ -166,6 +184,48 @@ export function useTracking() {
         // The dialog defers the tracking request until the scout picks a
         // signature, so following waits for that path instead.
         show_signature_modal.value = true;
+    }
+
+    /**
+     * Combat speed: when it is certain which hole was jumped, record the jump
+     * without asking. No wormhole left to jump in the origin means a hole that
+     * was never scanned (new system, next number, no signature); exactly one
+     * unjumped wormhole (and nothing unidentified) means that one. Returns
+     * false when it isn't certain, so the prompt shows.
+     */
+    function performCombatJump(): boolean {
+        const candidates = possible_signatures.value;
+        const unidentified = candidates.filter((signature) => !isWormholeSignature(signature));
+        const wormholes = candidates.filter((signature) => isWormholeSignature(signature));
+
+        if (candidates.length === 0) {
+            handleSelectSignature({
+                signatureId: null,
+                alias: suggested_alias.value,
+                lifetime: 'healthy',
+                massStatus: 'fresh',
+                shipSize: null,
+                isStatic: null,
+                isWandering: null,
+            });
+            return true;
+        }
+
+        if (wormholes.length === 1 && unidentified.length === 0) {
+            const signature = wormholes[0];
+            handleSelectSignature({
+                signatureId: signature.id,
+                alias: existing_map_solarsystem.value?.alias ? suggested_alias.value : (planned_aliases.value.get(signature.id) ?? suggested_alias.value),
+                lifetime: signature.lifetime ?? 'healthy',
+                massStatus: signature.mass_status ?? 'fresh',
+                shipSize: signature.ship_size ?? null,
+                isStatic: null,
+                isWandering: null,
+            });
+            return true;
+        }
+
+        return false;
     }
 
     function handleToggle() {
@@ -229,9 +289,19 @@ export function useTracking() {
 
         const signature = signatures.value?.find((s) => s.id === signatureId) ?? null;
         const here = alias || existing_map_solarsystem.value?.alias || null;
+        // The chain the system we jumped into belongs to; a new system joins the origin's chain.
+        const here_color = existing_map_solarsystem.value
+            ? (existing_map_solarsystem.value.combat_color ?? null)
+            : (origin_map_system.value?.combat_color ?? null);
 
         const name = formatBookmarkName(
-            { alias: origin.alias, occupier_alias: origin.occupier_alias, solarsystem: origin.solarsystem },
+            {
+                alias: origin.alias,
+                occupier_alias: origin.occupier_alias,
+                solarsystem: origin.solarsystem,
+                combat_home: origin_is_combat_home.value,
+                combat_color: origin_map_system.value?.combat_color ?? null,
+            },
             {
                 // The signature on this side of the hole isn't known yet.
                 signatureId: null,
@@ -244,6 +314,7 @@ export function useTracking() {
             here,
             here,
             target_solarsystem.value.class,
+            here_color,
         );
 
         if (!name) return;

@@ -32,6 +32,10 @@ use Staudenmeir\EloquentHasManyDeep\HasRelationships;
  * @property int $position_x
  * @property int $position_y
  * @property bool $pinned
+ * @property string|null $combat_color
+ * @property bool $combat_home
+ * @property bool $combat_active
+ * @property \Carbon\CarbonImmutable|null $scanned_at
  * @property-read int|null $signatures_count
  * @property-read int|null $uncategorized_signatures_count
  * @property-read int|null $wormhole_signatures_count
@@ -144,6 +148,9 @@ final class MapSolarsystem extends Model
         return [
             'created_at' => 'immutable_datetime',
             'updated_at' => 'immutable_datetime',
+            'combat_home' => 'boolean',
+            'combat_active' => 'boolean',
+            'scanned_at' => 'immutable_datetime',
         ];
     }
 }

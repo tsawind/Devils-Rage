@@ -19,13 +19,16 @@ import { useRallyPoint } from '@/composables/useRallyPoint';
 import useUser from '@/composables/useUser';
 import { useWaypoint } from '@/composables/useWaypoint';
 import { isWormholeClass } from '@/const/solarsystemClasses';
+import { combatColorLabel, describeChainRoute } from '@/lib/combat';
+import { clearCombatChain } from '@/map/actions/combat';
 import { deleteMapSolarsystem } from '@/map/actions/deleteMapSolarsystem';
 import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { useAddConnectionDialog } from '@/map/interactions/useAddConnectionDialog';
 import { TMapSolarsystem } from '@/pages/maps';
 import { TMapSolarsystemStatus } from '@/types/models';
-import { Compass, Flag, Home, Map, MapPin, Navigation, Pin, Route, Trash2, Users, Waypoints } from 'lucide-vue-next';
+import { ClipboardCopy, Compass, Eraser, Flag, Home, Map, MapPin, Navigation, Pin, Route, Trash2, Users, Waypoints } from 'lucide-vue-next';
 import type { AcceptableValue } from 'reka-ui';
+import { toast } from 'vue-sonner';
 
 /**
  * The per-node context menu, ported from the old tree as content-only: the new
@@ -69,6 +72,17 @@ function handleStatusChange(status: AcceptableValue) {
     updateMapSolarsystem(map_solarsystem, { status: status as string });
 }
 
+/** "Red route 1121 → highsec exit (Amarr, Domain)" for fleet chat. */
+function handleCopyRoute() {
+    const text = describeChainRoute(map_solarsystem);
+    navigator.clipboard.writeText(text).catch(() => undefined);
+    toast.success('Copied route', { description: text });
+}
+
+function handleClearCombatChain() {
+    clearCombatChain(map_solarsystem.id);
+}
+
 const options: TMapSolarsystemStatus[] = ['unknown', 'friendly', 'hostile', 'active', 'unscanned', 'empty'];
 </script>
 
@@ -96,6 +110,15 @@ const options: TMapSolarsystemStatus[] = ['unknown', 'friendly', 'hostile', 'act
                 </ContextMenuRadioGroup>
             </ContextMenuSubContent>
         </ContextMenuSub>
+
+        <ContextMenuItem @select="handleCopyRoute">
+            <ClipboardCopy class="size-4" />
+            Copy route
+        </ContextMenuItem>
+        <ContextMenuItem v-if="can_write && map_solarsystem.combat_color" @select="handleClearCombatChain">
+            <Eraser class="size-4" />
+            Clear {{ combatColorLabel(map_solarsystem.combat_color) ?? 'combat' }} chain
+        </ContextMenuItem>
 
         <ContextMenuSeparator />
 

@@ -15,6 +15,8 @@ type TGuessNextAliasOptions = {
     scheme?: TAliasScheme;
     targetKind?: TAliasTargetKind;
     ignoredAlias?: string;
+    /** The parent is a combat home: its holes start a fresh chain numbered 1, 2, 3 (static 0). */
+    combatHome?: boolean;
 };
 
 /**
@@ -180,6 +182,11 @@ function slotsFor(isHome: boolean): { staticSlot: string; slots: string } {
     return isHome ? { staticSlot: HOME_STATIC_SLOT, slots: HOME_SLOTS } : { staticSlot: STATIC_SLOT, slots: NUMERIC_SLOTS };
 }
 
+/** Whether a system uses home's military letters: the map's home alias, unless it is a combat home. */
+function usesHomeLetters(alias: string | null | undefined, ignoredAlias: string | null | undefined, combatHome: boolean): boolean {
+    return !combatHome && isIgnoredAlias(alias, ignoredAlias);
+}
+
 /**
  * The lowest unused numeric slot extending `prefix`, so a slot freed by a
  * deleted system is reused before the sequence grows. Only aliases exactly one
@@ -223,12 +230,9 @@ function nextNumericSlot(prefix: string, aliases: string[], slots: string = NUME
  * counts as a taken child and the chain stays visually consistent.
  */
 export function guessNextAlias(parentAlias: string | null | undefined, aliases: string[], opts?: TGuessNextAliasOptions): string {
-    let prefix = (parentAlias ?? '').trim().toUpperCase();
-
-    const isHome = isIgnoredAlias(prefix, opts?.ignoredAlias);
-    if (isHome) {
-        prefix = '';
-    }
+    const combatHome = Boolean(opts?.combatHome);
+    const isHome = usesHomeLetters(parentAlias, opts?.ignoredAlias, combatHome);
+    const prefix = isHome || combatHome ? '' : (parentAlias ?? '').trim().toUpperCase();
 
     const knownAliases = aliases.map((alias) => alias.trim().toUpperCase());
 
@@ -255,10 +259,12 @@ export function suggestAlias(params: {
     scheme?: TAliasScheme;
     targetKind?: TAliasTargetKind;
     ignoredAlias?: string;
+    /** The origin is a combat home (its holes number 1, 2, 3 with static 0). */
+    combatHome?: boolean;
 }): string | null {
     const originIsAliased = Boolean(params.parentAlias && params.parentAlias.trim());
 
-    if (!params.targetIsWormhole && !params.originIsWormhole && !originIsAliased) {
+    if (!params.targetIsWormhole && !params.originIsWormhole && !originIsAliased && !params.combatHome) {
         return null;
     }
 
@@ -266,6 +272,7 @@ export function suggestAlias(params: {
         scheme: params.scheme,
         targetKind: params.targetKind,
         ignoredAlias: params.ignoredAlias,
+        combatHome: params.combatHome,
     });
 }
 
@@ -286,16 +293,20 @@ export type TAliasPlanSignature = {
     targetClass?: string | null;
 };
 
-/** The chain prefix for a system: its alias, or "" for the ignored (home) alias. */
-export function chainPrefix(parentAlias: string | null | undefined, ignoredAlias?: string | null): string {
+/**
+ * The chain prefix for a system: its alias, or "" for the ignored (home) alias
+ * and for a combat home (whose chain starts again at 1, 2, 3).
+ */
+export function chainPrefix(parentAlias: string | null | undefined, ignoredAlias?: string | null, combatHome = false): string {
+    if (combatHome) return '';
     const prefix = (parentAlias ?? '').trim().toUpperCase();
     return isIgnoredAlias(prefix, ignoredAlias) ? '' : prefix;
 }
 
-/** The alias reserved for a system's static: "A" (Alpha) in home, otherwise slot 0, e.g. "A0", "10". */
-export function staticSlotAlias(parentAlias: string | null | undefined, ignoredAlias?: string | null): string {
-    const isHome = isIgnoredAlias(parentAlias, ignoredAlias);
-    return `${chainPrefix(parentAlias, ignoredAlias)}${slotsFor(isHome).staticSlot}`;
+/** The alias reserved for a system's static: "A" (Alpha) in home, "0" in a combat home, otherwise slot 0, e.g. "A0", "10". */
+export function staticSlotAlias(parentAlias: string | null | undefined, ignoredAlias?: string | null, combatHome = false): string {
+    const isHome = usesHomeLetters(parentAlias, ignoredAlias, combatHome);
+    return `${chainPrefix(parentAlias, ignoredAlias, combatHome)}${slotsFor(isHome).staticSlot}`;
 }
 
 /**
@@ -303,11 +314,11 @@ export function staticSlotAlias(parentAlias: string | null | undefined, ignoredA
  * invalid there: home takes its military letters (A, B, D, G…), everywhere
  * else 0 (the static) or 1-9 / A-Z.
  */
-export function aliasForSlot(parentAlias: string | null | undefined, slot: string, ignoredAlias?: string | null): string | null {
+export function aliasForSlot(parentAlias: string | null | undefined, slot: string, ignoredAlias?: string | null, combatHome = false): string | null {
     const normalized = slot.trim().toUpperCase();
-    const { staticSlot, slots } = slotsFor(isIgnoredAlias(parentAlias, ignoredAlias));
+    const { staticSlot, slots } = slotsFor(usesHomeLetters(parentAlias, ignoredAlias, combatHome));
     if (normalized.length !== 1 || !(staticSlot + slots).includes(normalized)) return null;
-    return `${chainPrefix(parentAlias, ignoredAlias)}${normalized}`;
+    return `${chainPrefix(parentAlias, ignoredAlias, combatHome)}${normalized}`;
 }
 
 /**
@@ -331,6 +342,8 @@ export function planSignatureAliases(params: {
     aliases: string[];
     scheme?: TAliasScheme;
     ignoredAlias?: string;
+    /** The system is a combat home: its holes start a fresh chain (1, 2, 3, static 0). */
+    combatHome?: boolean;
 }): Map<number, string> {
     const planned = new Map<number, string>();
     const wormholes = params.signatures.filter((signature) => signature.isWormhole).toSorted((a, b) => a.id - b.id);
@@ -339,8 +352,9 @@ export function planSignatureAliases(params: {
         return planAlphabetical(params, wormholes);
     }
 
-    const prefix = chainPrefix(params.parentAlias, params.ignoredAlias);
-    const { staticSlot: staticChar, slots } = slotsFor(isIgnoredAlias(params.parentAlias, params.ignoredAlias));
+    const combatHome = Boolean(params.combatHome);
+    const prefix = chainPrefix(params.parentAlias, params.ignoredAlias, combatHome);
+    const { staticSlot: staticChar, slots } = slotsFor(usesHomeLetters(params.parentAlias, params.ignoredAlias, combatHome));
     const staticSlot = `${prefix}${staticChar}`;
     const taken = new Set(params.aliases.map((alias) => alias.trim().toUpperCase()));
 
@@ -378,7 +392,7 @@ export function planSignatureAliases(params: {
 
 /** The alphabetical scheme keeps the stock behaviour: locked numbers first, then the next free letter. */
 function planAlphabetical(
-    params: { parentAlias: string | null | undefined; originIsWormhole: boolean; aliases: string[]; ignoredAlias?: string },
+    params: { parentAlias: string | null | undefined; originIsWormhole: boolean; aliases: string[]; ignoredAlias?: string; combatHome?: boolean },
     wormholes: TAliasPlanSignature[],
 ): Map<number, string> {
     const planned = new Map<number, string>();
@@ -404,6 +418,7 @@ function planAlphabetical(
             scheme: 'alphabetical',
             targetKind: aliasTargetKind(targetIsWormhole, targetClass),
             ignoredAlias: params.ignoredAlias,
+            combatHome: params.combatHome,
         });
 
         if (!alias) continue;

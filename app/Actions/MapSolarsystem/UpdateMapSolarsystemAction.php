@@ -17,7 +17,7 @@ final readonly class UpdateMapSolarsystemAction
      */
     public function handle(MapSolarsystem $mapSolarsystem, array $data): MapSolarsystem
     {
-        $placement_data = Arr::only($data, ['alias', 'position_x', 'position_y', 'pinned']);
+        $placement_data = Arr::only($data, ['alias', 'position_x', 'position_y', 'pinned', 'combat_color', 'combat_home', 'combat_active']);
         $details_data = Arr::only($data, ['occupier_alias', 'status', 'notes']);
 
         if ($placement_data !== []) {

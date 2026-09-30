@@ -20,6 +20,7 @@ use App\Http\Controllers\MapAlertController;
 use App\Http\Controllers\MapAlertStateController;
 use App\Http\Controllers\MapBackgroundImageController;
 use App\Http\Controllers\MapBookmarkFormatController;
+use App\Http\Controllers\MapCombatController;
 use App\Http\Controllers\MapConnectionController;
 use App\Http\Controllers\MapConnectionJumpController;
 use App\Http\Controllers\MapController;
@@ -111,6 +112,9 @@ Route::middleware('auth')->group(function () {
     Route::resource('map-connection-jumps', MapConnectionJumpController::class)->only(['store', 'update', 'destroy']);
     Route::delete('maps/{map}/stale-connections', [BulkMapConnectionController::class, 'destroy'])
         ->name('maps.stale-connections.destroy');
+    Route::post('maps/{map}/combat', [MapCombatController::class, 'store'])->name('maps.combat.store');
+    Route::delete('maps/{map}/combat', [MapCombatController::class, 'destroy'])->name('maps.combat.destroy');
+    Route::delete('map-solarsystems/{mapSolarsystem}/combat', [MapCombatController::class, 'clear'])->name('map-solarsystems.combat.clear');
     Route::put('map-selection', [MapSelectionController::class, 'update'])->name('map-selection.update');
     Route::delete('map-selection', [MapSelectionController::class, 'destroy'])->name('map-selection.destroy');
 

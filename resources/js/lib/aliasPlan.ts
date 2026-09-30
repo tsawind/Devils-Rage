@@ -23,6 +23,8 @@ export function planAliasesForSystem(params: {
         | {
               alias?: string | null;
               solarsystem?: { class?: TStringedSolarsystemClass | null } | null;
+              /** A combat home numbers its holes 1, 2, 3 (static 0). */
+              combat_home?: boolean | null;
           }
         | null
         | undefined;
@@ -38,6 +40,7 @@ export function planAliasesForSystem(params: {
         aliases,
         scheme: formats.bookmark_alias_scheme,
         ignoredAlias: formats.bookmark_ignored_alias,
+        combatHome: Boolean(system.combat_home),
         signatures: signatures.map((signature) => {
             const targetClass = signature.signature_type?.target_class ?? null;
             const knownClass = targetClass && targetClass !== 'unknown' ? targetClass : null;

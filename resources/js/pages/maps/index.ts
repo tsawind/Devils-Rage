@@ -101,6 +101,14 @@ export type TMapSolarsystemBase = {
     uncategorized_signatures_count: number;
     threat_level?: TThreatLevel | null;
     signatures?: TSignature[] | null;
+    /** Combat mode: the chain this system belongs to ("red", "blue", …). */
+    combat_color?: string | null;
+    /** Combat mode: the system a combat chain was started from. */
+    combat_home?: boolean;
+    /** Combat mode: someone is working this combat home's chain right now (it pulses). */
+    combat_active?: boolean;
+    /** When a scan was last pasted here (ISO), for greying out dead ends. */
+    scanned_at?: string | null;
 };
 
 export type TMapSolarsystem = TMapSolarsystemBase & {

@@ -15,7 +15,10 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import CountdownBar from '@/components/combat/CountdownBar.vue';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useCombat } from '@/composables/combat/useCombat';
+import { usePopupCountdown } from '@/composables/combat/usePopupCountdown';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import usePermission from '@/composables/usePermission';
 import { useShowMap } from '@/composables/useShowMap';
@@ -23,6 +26,7 @@ import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
 import { aliasForSlot, isIgnoredAlias, staticSlotAlias } from '@/lib/alias';
 import { buildSignatureBookmark, visibleBookmarkName } from '@/lib/bookmark';
+import { chainAliases } from '@/lib/combat';
 import { isK162, validateManualAlias } from '@/lib/chainNumbering';
 import { Data } from '@/lib/data';
 import { formatDateToISO } from '@/lib/utils';
@@ -202,10 +206,23 @@ function handleStaticChoiceOpenChange(isOpen: boolean): void {
     if (!isOpen) chooseStaticKind('unknown');
 }
 
+// Combat mode: no answer within 60 s counts as Unknown.
+const { popup_seconds } = useCombat();
+const { remaining: static_choice_remaining, fraction: static_choice_fraction } = usePopupCountdown(
+    static_choice_open,
+    () => popup_seconds.value,
+    () => chooseStaticKind('unknown'),
+);
+
 // ---- Chain numbering: Static / Wandering / hand-set number ----------------
 
 const is_k162 = computed(() => isK162(signature.wormhole?.name));
-const static_slot = computed(() => staticSlotAlias(selected_map_solarsystem.alias, page.props.map.bookmark_ignored_alias));
+
+// This system as the map knows it: a combat home numbers its holes 1, 2, 3 (static 0).
+const map_system = computed(() => map_solarsystems.value.find((solarsystem) => solarsystem.id === selected_map_solarsystem.id) ?? null);
+const is_combat_home = computed(() => Boolean(map_system.value?.combat_home));
+
+const static_slot = computed(() => staticSlotAlias(selected_map_solarsystem.alias, page.props.map.bookmark_ignored_alias, is_combat_home.value));
 const static_taken_by_other = computed(() => static_owner_id != null && static_owner_id !== signature.id);
 
 /**
@@ -243,13 +260,14 @@ function handleToggleWandering() {
 
 function handleSetNumber() {
     const current = signature.alias ?? planned_alias ?? '';
-    const allowed = isIgnoredAlias(selected_map_solarsystem.alias, page.props.map.bookmark_ignored_alias)
-        ? 'A (static), B, D, G, J, K, M, N, P … Z'
-        : '0 (static), 1-9 or A-Z';
+    const allowed =
+        !is_combat_home.value && isIgnoredAlias(selected_map_solarsystem.alias, page.props.map.bookmark_ignored_alias)
+            ? 'A (static), B, D, G, J, K, M, N, P … Z'
+            : '0 (static), 1-9 or A-Z';
     const input = window.prompt(`Number for ${signature.signature_id ?? 'this signature'} — enter one slot: ${allowed} (current: ${current || 'none'})`);
     if (input === null) return;
 
-    const alias = aliasForSlot(selected_map_solarsystem.alias, input, page.props.map.bookmark_ignored_alias);
+    const alias = aliasForSlot(selected_map_solarsystem.alias, input, page.props.map.bookmark_ignored_alias, is_combat_home.value);
 
     // Numbers held by this signature or by the system it already leads to aren't clashes.
     const others = new Map<string, string>();
@@ -343,9 +361,9 @@ const { map_solarsystems } = useMapSolarsystems();
 const bookmark_name = computed(() =>
     buildSignatureBookmark({
         signature,
-        currentSystem: { alias: selected_map_solarsystem.alias, class: selected_map_solarsystem.solarsystem.class },
+        currentSystem: { alias: selected_map_solarsystem.alias, class: selected_map_solarsystem.solarsystem.class, combatHome: is_combat_home.value, combatColor: map_system.value?.combat_color ?? null },
         connectionTarget: selected_connection.value?.target ?? null,
-        aliases: map_solarsystems.value.map((s) => s.alias).filter((alias): alias is string => Boolean(alias)),
+        aliases: chainAliases(map_solarsystems.value, map_system.value),
         formats: page.props.map,
         detectReturn: true,
         plannedAlias: planned_alias,
@@ -580,6 +598,7 @@ function copyBookmark() {
                         type.
                     </DialogDescription>
                 </DialogHeader>
+                <CountdownBar class="-mx-6" :remaining="static_choice_remaining" :fraction="static_choice_fraction" action="Unknown" />
                 <DialogFooter class="gap-2 sm:justify-start">
                     <Button autofocus @click="chooseStaticKind('unknown')">Unknown</Button>
                     <Button variant="outline" :disabled="static_taken_by_other" @click="chooseStaticKind('static')">Static</Button>

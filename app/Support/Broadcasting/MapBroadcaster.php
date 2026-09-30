@@ -102,14 +102,22 @@ final readonly class MapBroadcaster
     {
         $map_solarsystem->loadCount(['signatures', 'wormholeSignatures', 'uncategorizedSignatures']);
 
+        $counts = [
+            'signatures_count' => (int) $map_solarsystem->signatures_count,
+            'wormhole_signatures_count' => (int) $map_solarsystem->wormhole_signatures_count,
+            'uncategorized_signatures_count' => (int) $map_solarsystem->uncategorized_signatures_count,
+        ];
+
+        // When the system was last scanned, for greying out dead ends. Only
+        // sent when the model was loaded with that column.
+        if (array_key_exists('scanned_at', $map_solarsystem->getAttributes())) {
+            $counts['scanned_at'] = $map_solarsystem->scanned_at?->toISOString();
+        }
+
         broadcast(new SignaturesChangedEvent(
             $map_solarsystem->map_id,
             $map_solarsystem->id,
-            [
-                'signatures_count' => (int) $map_solarsystem->signatures_count,
-                'wormhole_signatures_count' => (int) $map_solarsystem->wormhole_signatures_count,
-                'uncategorized_signatures_count' => (int) $map_solarsystem->uncategorized_signatures_count,
-            ],
+            $counts,
         ));
     }
 

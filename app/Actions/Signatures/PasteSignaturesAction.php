@@ -87,6 +87,11 @@ final readonly class PasteSignaturesAction
                 $this->syncConnectionShipSizeAction->handle($existing_signature);
             });
 
+            // Remember when this system was last scanned (dead ends stop being
+            // trusted 4 hours after the last paste).
+            $map_solarsystem->scanned_at = now();
+            $map_solarsystem->save();
+
             // A paste of N signatures emits a single counts event for the system.
             if ($signatures->isNotEmpty()) {
                 $this->mapBroadcaster->signaturesChanged($map_solarsystem);
