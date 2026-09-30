@@ -217,3 +217,67 @@ export function suggestAlias(params: {
         ignoredAlias: params.ignoredAlias,
     });
 }
+
+/** The per-signature data `planSignatureAliases` needs. */
+export type TAliasPlanSignature = {
+    id: number;
+    /** Only unconnected wormhole signatures get a planned alias. */
+    isWormhole: boolean;
+    isConnected: boolean;
+    /** The identified wormhole type, e.g. "V753", used to put statics first. */
+    wormholeName?: string | null;
+    /** Whether the hole leads to wormhole space; unknown destinations count as wormhole space. */
+    targetIsWormhole?: boolean;
+    /** The known destination class, if identified ("unknown"/null otherwise). */
+    targetClass?: string | null;
+};
+
+/**
+ * Hand out the next chain aliases to every unjumped wormhole signature in one
+ * system, so two unscanned holes never both suggest "1". Aliases already on
+ * the map stay taken; the system's static holes get the lowest free slots,
+ * then the rest in the order they were added (signature id).
+ *
+ * Returns signature id → planned alias. Signatures that aren't eligible (not a
+ * wormhole, already connected, or no suggestion possible) are left out.
+ */
+export function planSignatureAliases(params: {
+    parentAlias: string | null | undefined;
+    originIsWormhole: boolean;
+    signatures: TAliasPlanSignature[];
+    staticNames?: string[];
+    aliases: string[];
+    scheme?: TAliasScheme;
+    ignoredAlias?: string;
+}): Map<number, string> {
+    const statics = new Set((params.staticNames ?? []).map((name) => name.toUpperCase()));
+    const isStatic = (signature: TAliasPlanSignature) => Boolean(signature.wormholeName && statics.has(signature.wormholeName.toUpperCase()));
+
+    const candidates = params.signatures
+        .filter((signature) => signature.isWormhole && !signature.isConnected)
+        .toSorted((a, b) => Number(isStatic(b)) - Number(isStatic(a)) || a.id - b.id);
+
+    const taken = [...params.aliases];
+    const planned = new Map<number, string>();
+
+    for (const signature of candidates) {
+        const targetClass = signature.targetClass && signature.targetClass !== 'unknown' ? signature.targetClass : null;
+        const targetIsWormhole = signature.targetIsWormhole ?? true;
+
+        const alias = suggestAlias({
+            parentAlias: params.parentAlias,
+            targetIsWormhole,
+            originIsWormhole: params.originIsWormhole,
+            aliases: taken,
+            scheme: params.scheme,
+            targetKind: aliasTargetKind(targetIsWormhole, targetClass),
+            ignoredAlias: params.ignoredAlias,
+        });
+
+        if (!alias) continue;
+        planned.set(signature.id, alias);
+        taken.push(alias);
+    }
+
+    return planned;
+}

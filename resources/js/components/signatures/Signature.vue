@@ -20,7 +20,7 @@ import usePermission from '@/composables/usePermission';
 import { useShowMap } from '@/composables/useShowMap';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
-import { buildSignatureBookmark } from '@/lib/bookmark';
+import { buildSignatureBookmark, visibleBookmarkName } from '@/lib/bookmark';
 import { Data } from '@/lib/data';
 import { formatDateToISO } from '@/lib/utils';
 import { deleteSignature, TProcessedConnection, updateMapConnection, updateSignature, useMapSolarsystems } from '@/map/api';
@@ -34,7 +34,7 @@ import { AcceptableValue } from 'reka-ui';
 import { type Component, computed, nextTick, ref, toRef } from 'vue';
 import { toast } from 'vue-sonner';
 
-const { signature, unconnected_connections, connected_connections, selected_map_solarsystem } = defineProps<{
+const { signature, unconnected_connections, connected_connections, selected_map_solarsystem, planned_alias } = defineProps<{
     signature: TSignature;
     is_deleted?: boolean;
     is_new?: boolean;
@@ -42,6 +42,8 @@ const { signature, unconnected_connections, connected_connections, selected_map_
     unconnected_connections: TProcessedConnection[];
     connected_connections: TProcessedConnection[];
     selected_map_solarsystem: TResolvedSelectedMapSolarsystem;
+    /** The chain alias reserved for this hole among the system's unjumped wormholes. */
+    planned_alias?: string | null;
 }>();
 
 const original = toRef(() => signature.signature_id || '');
@@ -218,12 +220,13 @@ const bookmark_name = computed(() =>
         aliases: map_solarsystems.value.map((s) => s.alias).filter((alias): alias is string => Boolean(alias)),
         formats: page.props.map,
         detectReturn: true,
+        plannedAlias: planned_alias,
     }),
 );
 
 function copyBookmark() {
     navigator.clipboard.writeText(bookmark_name.value);
-    toast.success('Copied bookmark to clipboard', { description: bookmark_name.value });
+    toast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(bookmark_name.value) });
 }
 </script>
 

@@ -5,7 +5,8 @@ import { useShowMap } from '@/composables/useShowMap';
 import { useStaticData } from '@/composables/useStaticData';
 import { useTrackingSystems } from '@/composables/useTrackingSystems';
 import { aliasTargetKind, suggestAlias } from '@/lib/alias';
-import { formatBookmarkName } from '@/lib/bookmark';
+import { planAliasesForSystem } from '@/lib/aliasPlan';
+import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { groupSignatureOptions } from '@/lib/signatureCompatibility';
 import { isWormholeSystem } from '@/lib/solarsystem';
 import { createTracking, updateMapUserSettings, useMapSolarsystems } from '@/map/api';
@@ -48,6 +49,20 @@ export function useTracking() {
 
     const known_aliases = computed(() => map_solarsystems.value.map((s) => s.alias).filter((alias): alias is string => Boolean(alias)));
 
+    // The alias each unjumped wormhole in the origin has reserved (statics
+    // first), so the jump dialog can prefill the one for the chosen signature.
+    // Empty when the target already carries an alias or suggestions are off.
+    const planned_aliases = computed<Map<number, string>>(() => {
+        if (existing_map_solarsystem.value?.alias || !map_user_settings.value.suggest_alias_enabled) return new Map();
+
+        return planAliasesForSystem({
+            signatures: signatures.value,
+            system: origin_map_solarsystem.value,
+            aliases: known_aliases.value,
+            formats: page.props.map,
+        });
+    });
+
     // Pre-fill the signature dialog's alias field. An alias the target already
     // carries on the map wins; otherwise we guess the next chain alias.
     const suggested_alias = computed(() => {
@@ -67,7 +82,8 @@ export function useTracking() {
             parentAlias: origin.alias,
             targetIsWormhole,
             originIsWormhole: isWormholeSystem(origin.solarsystem),
-            aliases: known_aliases.value,
+            // Skip slots already reserved by other unjumped holes.
+            aliases: [...known_aliases.value, ...planned_aliases.value.values()],
             scheme: page.props.map.bookmark_alias_scheme,
             targetKind: aliasTargetKind(targetIsWormhole, target.class),
             ignoredAlias: page.props.map.bookmark_ignored_alias,
@@ -223,7 +239,7 @@ export function useTracking() {
         if (!name) return;
 
         navigator.clipboard.writeText(name);
-        toast.success('Copied bookmark to clipboard', { description: name });
+        toast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(name) });
     }
 
     return {
@@ -240,5 +256,6 @@ export function useTracking() {
         target_solarsystem,
         existing_map_solarsystem,
         suggested_alias,
+        planned_aliases,
     };
 }

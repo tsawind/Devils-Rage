@@ -25,6 +25,8 @@ const props = defineProps<{
     targetSolarsystemClass?: TStringedSolarsystemClass | null;
     signatures: TSignature[] | null | undefined;
     suggestedAlias?: string | null;
+    /** Alias reserved for each unjumped wormhole signature (signature id → alias). */
+    plannedAliases?: Map<number, string>;
     /** The map's systems, used to name where already-connected signatures lead. */
     mapSolarsystems?: TMapSolarsystem[];
     /** Pre-select the first likely signature on open so Enter confirms it immediately. */
@@ -125,6 +127,8 @@ const emit = defineEmits<{
 
 const selectedSignatureId = ref<number | null>(null);
 const alias = ref('');
+/** The last alias filled in automatically; typing anything else keeps the user's value. */
+const autoAlias = ref('');
 const lifetime = ref<TLifetimeStatus>('healthy');
 const massStatus = ref<TMassStatus>('fresh');
 const shipSize = ref<TShipSize | 'auto'>('auto');
@@ -148,6 +152,7 @@ watch(open, (isOpen) => {
         search.value = '';
         selectedSignatureId.value = props.preselectFirstSignature ? (groups.value.likely[0]?.id ?? null) : null;
         alias.value = props.suggestedAlias ?? '';
+        autoAlias.value = alias.value;
         lifetime.value = 'healthy';
         massStatus.value = 'fresh';
         shipSize.value = 'auto';
@@ -158,6 +163,13 @@ watch(open, (isOpen) => {
 // meaningful value, otherwise keep whatever the user manually selected. A
 // wormhole type's size is not adopted here — it is derived as lockedShipSize.
 watch(selectedSignature, (signature) => {
+    // Swap in the alias this hole reserved, unless the user typed their own.
+    const planned = signature ? props.plannedAliases?.get(signature.id) : undefined;
+    if (alias.value === autoAlias.value) {
+        alias.value = planned ?? props.suggestedAlias ?? '';
+        autoAlias.value = alias.value;
+    }
+
     if (!signature) return;
     if (signature.lifetime && signature.lifetime !== 'healthy') {
         lifetime.value = signature.lifetime;

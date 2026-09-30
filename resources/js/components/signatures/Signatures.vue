@@ -18,7 +18,8 @@ import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { useShowMap } from '@/composables/useShowMap';
 import usePermission from '@/composables/usePermission';
-import { createSignature, updateMapUserSettings } from '@/map/api';
+import { planAliasesForSystem } from '@/lib/aliasPlan';
+import { createSignature, updateMapUserSettings, useMapSolarsystems } from '@/map/api';
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import { useLocalStorage } from '@vueuse/core';
 import { ArrowDown, ArrowUp, CircleHelp, Cloud, Database, Fan, Flag, Gem, Landmark, Rows2, Rows3, Shield, Swords } from 'lucide-vue-next';
@@ -54,6 +55,19 @@ const {
     confirmPasteInDifferentSystem,
     cancelPaste,
 } = usePasteSignatures(() => props.map_solarsystem);
+
+const { map_solarsystems } = useMapSolarsystems();
+
+// Reserve a chain alias for every unjumped wormhole in this system (statics
+// first), so e.g. the static suggests " 1" and the next hole " 2".
+const planned_aliases = computed(() =>
+    planAliasesForSystem({
+        signatures: signatures.value.filter((signature) => !signature.deleted),
+        system: props.map_solarsystem,
+        aliases: map_solarsystems.value.map((solarsystem) => solarsystem.alias).filter((alias): alias is string => Boolean(alias)),
+        formats: page.props.map,
+    }),
+);
 
 const UNCATEGORIZED_FILTER = '__uncategorized__';
 
@@ -235,6 +249,7 @@ function createNewSignature() {
                     :unconnected_connections="unconnected_connections"
                     :connected_connections="connected_connections"
                     :selected_map_solarsystem="map_solarsystem"
+                    :planned_alias="planned_aliases.get(signature.id) ?? null"
                 />
             </template>
             <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">

@@ -1,4 +1,4 @@
-import { buildSignatureBookmark, formatBookmarkName, isReturnBookmark, TBookmarkFormats } from '@/lib/bookmark';
+import { buildSignatureBookmark, formatBookmarkName, isReturnBookmark, TBookmarkFormats, visibleBookmarkName } from '@/lib/bookmark';
 import { describe, expect, it } from 'vitest';
 
 const NUMERIC_FORMATS: TBookmarkFormats = {};
@@ -514,5 +514,26 @@ describe("Devil's Rage full scheme (sig and class)", () => {
 
     it('jump copy before the return signature is scanned leaves the sig out', () => {
         expect(formatBookmarkName(daisy, { signatureId: null }, formats, '1', '1', '6')).toBe('  * 1 C6');
+    });
+});
+
+describe('planned alias and visible names', () => {
+    const formats: TBookmarkFormats = { bookmark_format_wormhole: '{_}{alias} {sig} {class}', bookmark_ignored_alias: 'Daisy' };
+
+    it('uses the planned alias for an unconnected signature', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'LNS-434' }),
+            currentSystem: { alias: 'Daisy', class: '5' },
+            aliases: ['Daisy'],
+            formats,
+            plannedAlias: '2',
+        });
+        expect(name).toBe(' 2 LNS');
+    });
+
+    it('shows leading spaces as dots for display only', () => {
+        expect(visibleBookmarkName(' 1 SOF C6')).toBe('·1 SOF C6');
+        expect(visibleBookmarkName('  * 1 KXR C6')).toBe('··* 1 KXR C6');
+        expect(visibleBookmarkName('A ABC C3')).toBe('A ABC C3');
     });
 });

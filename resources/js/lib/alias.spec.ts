@@ -1,4 +1,4 @@
-import { guessNextAlias, isIgnoredAlias, suggestAlias } from '@/lib/alias';
+import { guessNextAlias, isIgnoredAlias, planSignatureAliases, suggestAlias } from '@/lib/alias';
 import { describe, expect, it } from 'vitest';
 
 describe('guessNextAlias (numeric, default)', () => {
@@ -207,5 +207,39 @@ describe('guessNextAlias (numeric, more than nine holes)', () => {
     it('numbers the holes off an ignored home alias 1, 2, 3', () => {
         expect(guessNextAlias('Daisy', ['Daisy'], { ignoredAlias: 'Daisy' })).toBe('1');
         expect(guessNextAlias('Daisy', ['Daisy', '1'], { ignoredAlias: 'Daisy' })).toBe('2');
+    });
+});
+
+describe('planSignatureAliases', () => {
+    const base = { parentAlias: 'Daisy', originIsWormhole: true, ignoredAlias: 'Daisy', staticNames: ['V753'] };
+    const wh = (id: number, wormholeName: string | null = null, isConnected = false) => ({ id, isWormhole: true, isConnected, wormholeName });
+
+    it('gives two unjumped holes different numbers', () => {
+        const planned = planSignatureAliases({ ...base, aliases: ['Daisy'], signatures: [wh(10), wh(11)] });
+        expect(planned.get(10)).toBe('1');
+        expect(planned.get(11)).toBe('2');
+    });
+
+    it('puts the static first, even when it was added later', () => {
+        const planned = planSignatureAliases({ ...base, aliases: ['Daisy'], signatures: [wh(10), wh(11, 'V753')] });
+        expect(planned.get(11)).toBe('1');
+        expect(planned.get(10)).toBe('2');
+    });
+
+    it('skips aliases already on the map and ignores connected or non-wormhole signatures', () => {
+        const planned = planSignatureAliases({
+            ...base,
+            aliases: ['Daisy', '1'],
+            signatures: [wh(10, 'V753', true), { id: 11, isWormhole: false, isConnected: false }, wh(12)],
+        });
+        expect(planned.has(10)).toBe(false);
+        expect(planned.has(11)).toBe(false);
+        expect(planned.get(12)).toBe('2');
+    });
+
+    it('works deeper in the chain', () => {
+        const planned = planSignatureAliases({ ...base, parentAlias: '1', staticNames: [], aliases: ['Daisy', '1', '11'], signatures: [wh(20), wh(21)] });
+        expect(planned.get(20)).toBe('12');
+        expect(planned.get(21)).toBe('13');
     });
 });

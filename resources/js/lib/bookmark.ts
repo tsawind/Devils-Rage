@@ -165,6 +165,14 @@ export function renderBookmarkTemplate(template: string, values: Record<TBookmar
 }
 
 /**
+ * A bookmark name for display: leading spaces become "·" so they are visible
+ * (web pages don't show leading whitespace). Never use this for the clipboard.
+ */
+export function visibleBookmarkName(name: string): string {
+    return name.replace(/^ +/, (spaces) => '·'.repeat(spaces.length));
+}
+
+/**
  * Build the connection bookmark name for a system using the map's configured
  * templates (falling back to the defaults). `context` carries the connection
  * data the template can reference (signature id, size, mass, lifetime, code).
@@ -245,8 +253,10 @@ export function buildSignatureBookmark(params: {
     aliases: string[];
     formats: TBookmarkFormats & { bookmark_alias_scheme?: TAliasScheme };
     detectReturn?: boolean;
+    /** The alias reserved for this signature by `planSignatureAliases`; wins over a fresh guess when unconnected. */
+    plannedAlias?: string | null;
 }): string {
-    const { signature, currentSystem, connectionTarget, aliases, formats, detectReturn = false } = params;
+    const { signature, currentSystem, connectionTarget, aliases, formats, detectReturn = false, plannedAlias } = params;
 
     const context: TBookmarkContext = {
         signatureId: signature.signature_id,
@@ -288,6 +298,7 @@ export function buildSignatureBookmark(params: {
 
     const values: Record<TBookmarkToken, string> = {
         alias:
+            plannedAlias ??
             suggestAlias({
                 parentAlias: currentSystem.alias,
                 targetIsWormhole: isTargetWormhole,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ContextMenuItem, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger } from '@/components/ui/context-menu';
-import { formatBookmarkName } from '@/lib/bookmark';
+import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { useMapStore } from '@/map/store/mapStore';
 import { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { Copy } from 'lucide-vue-next';
@@ -71,10 +71,10 @@ function copyNameToClipboard(value: string) {
         </ContextMenuSubTrigger>
         <ContextMenuSubContent>
             <ContextMenuItem @select="copyNameToClipboard(source_name)">
-                {{ source_name }}
+                {{ visibleBookmarkName(source_name) }}
             </ContextMenuItem>
             <ContextMenuItem @select="copyNameToClipboard(target_name)">
-                {{ target_name }}
+                {{ visibleBookmarkName(target_name) }}
             </ContextMenuItem>
         </ContextMenuSubContent>
     </ContextMenuSub>

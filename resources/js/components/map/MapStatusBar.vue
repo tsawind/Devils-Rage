@@ -57,6 +57,7 @@ const {
     origin_map_solarsystem,
     target_solarsystem,
     suggested_alias,
+    planned_aliases,
 } = useTracking();
 
 const { map_solarsystems } = useMapSolarsystems();
@@ -354,6 +355,7 @@ const settingsUrl = computed(() => {
         :preselect-first-signature="map_user_settings.preselect_signature_enabled"
         :signatures="signatures"
         :suggested-alias="suggested_alias"
+        :planned-aliases="planned_aliases"
         @select-signature="handleSelectSignature"
     />
 
