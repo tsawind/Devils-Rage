@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useShowMap } from '@/composables/useShowMap';
 import { Data } from '@/lib/data';
 import { SHIP_SIZE_OPTIONS, shipSizeFromJumpMass } from '@/lib/shipSize';
+import { isK162 } from '@/lib/chainNumbering';
 import { groupSignatureOptions } from '@/lib/signatureCompatibility';
 import { aliasedSolarsystemLabel } from '@/lib/solarsystem';
 import { updateMapUserSettings } from '@/map/api';
@@ -27,6 +28,10 @@ const props = defineProps<{
     suggestedAlias?: string | null;
     /** Alias reserved for each unjumped wormhole signature (signature id → alias). */
     plannedAliases?: Map<number, string>;
+    /** The origin's reserved static slot, e.g. "1" in home, "11" in 1. */
+    staticSlotAlias?: string | null;
+    /** The origin signature already marked as the static, if any. */
+    staticOwnerId?: number | null;
     /** The map's systems, used to name where already-connected signatures lead. */
     mapSolarsystems?: TMapSolarsystem[];
     /** Pre-select the first likely signature on open so Enter confirms it immediately. */
@@ -121,6 +126,8 @@ const emit = defineEmits<{
             lifetime: TLifetimeStatus;
             massStatus: TMassStatus;
             shipSize: TShipSize | null;
+            isStatic: boolean | null;
+            isWandering: boolean | null;
         },
     ];
 }>();
@@ -129,6 +136,8 @@ const selectedSignatureId = ref<number | null>(null);
 const alias = ref('');
 /** The last alias filled in automatically; typing anything else keeps the user's value. */
 const autoAlias = ref('');
+const isStatic = ref(false);
+const isWandering = ref(false);
 const lifetime = ref<TLifetimeStatus>('healthy');
 const massStatus = ref<TMassStatus>('fresh');
 const shipSize = ref<TShipSize | 'auto'>('auto');
@@ -153,6 +162,8 @@ watch(open, (isOpen) => {
         selectedSignatureId.value = props.preselectFirstSignature ? (groups.value.likely[0]?.id ?? null) : null;
         alias.value = props.suggestedAlias ?? '';
         autoAlias.value = alias.value;
+        isStatic.value = false;
+        isWandering.value = false;
         lifetime.value = 'healthy';
         massStatus.value = 'fresh';
         shipSize.value = 'auto';
@@ -169,6 +180,9 @@ watch(selectedSignature, (signature) => {
         alias.value = planned ?? props.suggestedAlias ?? '';
         autoAlias.value = alias.value;
     }
+
+    isStatic.value = Boolean(signature?.is_static);
+    isWandering.value = Boolean(signature?.is_wandering);
 
     if (!signature) return;
     if (signature.lifetime && signature.lifetime !== 'healthy') {
@@ -189,7 +203,31 @@ function buildSelection(signatureId: number | null) {
         lifetime: lifetime.value,
         massStatus: massStatus.value,
         shipSize: lockedShipSize.value ?? (shipSize.value === 'auto' ? null : shipSize.value),
+        isStatic: signatureId ? isStatic.value : null,
+        isWandering: signatureId ? isWandering.value : null,
     };
+}
+
+// ---- Static / Wandering for the jumped hole --------------------------------
+
+const selectedIsK162 = computed(() => isK162(selectedSignature.value?.wormhole?.name));
+const staticTakenByOther = computed(() => props.staticOwnerId != null && props.staticOwnerId !== selectedSignatureId.value);
+
+function setStatic(checked: boolean): void {
+    isStatic.value = checked;
+    if (checked) isWandering.value = false;
+
+    // Ticking Static moves the hole to the reserved slot 1; unticking gives it back.
+    if (alias.value === autoAlias.value && props.staticSlotAlias) {
+        const planned = selectedSignature.value ? props.plannedAliases?.get(selectedSignature.value.id) : undefined;
+        alias.value = checked ? props.staticSlotAlias : planned && planned !== props.staticSlotAlias ? planned : (props.suggestedAlias ?? '');
+        autoAlias.value = alias.value;
+    }
+}
+
+function setWandering(checked: boolean): void {
+    if (checked && isStatic.value) setStatic(false);
+    isWandering.value = checked;
 }
 
 function handleConfirm() {
@@ -338,6 +376,30 @@ const selectedShipSizeOption = computed(() => shipSizeOptions.find((option) => o
                         </div>
                     </div>
                 </div>
+                <!-- Static / Wandering for the jumped hole -->
+                <div class="flex items-center gap-6 px-6 pb-4 text-xs">
+                    <label class="flex items-center gap-2" :class="{ 'opacity-50': !selectedSignature || selectedIsK162 || staticTakenByOther }">
+                        <input
+                            type="checkbox"
+                            class="size-4 accent-primary"
+                            :checked="isStatic"
+                            :disabled="!selectedSignature || selectedIsK162 || staticTakenByOther"
+                            @change="setStatic(($event.target as HTMLInputElement).checked)"
+                        />
+                        Static <span class="text-muted-foreground">(takes slot 1)</span>
+                    </label>
+                    <label class="flex items-center gap-2" :class="{ 'opacity-50': !selectedSignature || selectedIsK162 }">
+                        <input
+                            type="checkbox"
+                            class="size-4 accent-primary"
+                            :checked="isWandering"
+                            :disabled="!selectedSignature || selectedIsK162"
+                            @change="setWandering(($event.target as HTMLInputElement).checked)"
+                        />
+                        Wandering
+                    </label>
+                </div>
+
                 <!-- Signature list -->
                 <div class="flex flex-col gap-3 px-6 pb-5">
                     <div class="relative">

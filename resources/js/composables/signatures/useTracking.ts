@@ -4,7 +4,7 @@ import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { useShowMap } from '@/composables/useShowMap';
 import { useStaticData } from '@/composables/useStaticData';
 import { useTrackingSystems } from '@/composables/useTrackingSystems';
-import { aliasTargetKind, suggestAlias } from '@/lib/alias';
+import { aliasTargetKind, staticSlotAlias, suggestAlias } from '@/lib/alias';
 import { planAliasesForSystem } from '@/lib/aliasPlan';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { groupSignatureOptions } from '@/lib/signatureCompatibility';
@@ -49,6 +49,10 @@ export function useTracking() {
 
     const known_aliases = computed(() => map_solarsystems.value.map((s) => s.alias).filter((alias): alias is string => Boolean(alias)));
 
+    // The origin's reserved static slot and the hole already marked as its static.
+    const static_slot_alias = computed(() => staticSlotAlias(origin_map_solarsystem.value?.alias, page.props.map.bookmark_ignored_alias));
+    const static_owner_id = computed(() => signatures.value?.find((signature) => signature.is_static)?.id ?? null);
+
     // The alias each unjumped wormhole in the origin has reserved (statics
     // first), so the jump dialog can prefill the one for the chosen signature.
     // Empty when the target already carries an alias or suggestions are off.
@@ -82,8 +86,8 @@ export function useTracking() {
             parentAlias: origin.alias,
             targetIsWormhole,
             originIsWormhole: isWormholeSystem(origin.solarsystem),
-            // Skip slots already reserved by other unjumped holes.
-            aliases: [...known_aliases.value, ...planned_aliases.value.values()],
+            // Skip slots already reserved by other unjumped holes, and slot 1 (the static's).
+            aliases: [...known_aliases.value, ...planned_aliases.value.values(), static_slot_alias.value],
             scheme: page.props.map.bookmark_alias_scheme,
             targetKind: aliasTargetKind(targetIsWormhole, target.class),
             ignoredAlias: page.props.map.bookmark_ignored_alias,
@@ -184,6 +188,8 @@ export function useTracking() {
         lifetime: TLifetimeStatus;
         massStatus: TMassStatus;
         shipSize: TShipSize | null;
+        isStatic: boolean | null;
+        isWandering: boolean | null;
     }) {
         show_signature_modal.value = false;
         if (!origin_map_solarsystem.value || !target_solarsystem.value) return;
@@ -200,6 +206,8 @@ export function useTracking() {
                 lifetime: selection.lifetime,
                 mass_status: selection.massStatus,
                 ship_size: selection.shipSize,
+                is_static: selection.isStatic,
+                is_wandering: selection.isWandering,
             },
             () => followInto(target_solarsystem_id),
         );
@@ -257,5 +265,7 @@ export function useTracking() {
         existing_map_solarsystem,
         suggested_alias,
         planned_aliases,
+        static_slot_alias,
+        static_owner_id,
     };
 }

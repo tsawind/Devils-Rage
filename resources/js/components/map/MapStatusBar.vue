@@ -58,6 +58,8 @@ const {
     target_solarsystem,
     suggested_alias,
     planned_aliases,
+    static_slot_alias,
+    static_owner_id,
 } = useTracking();
 
 const { map_solarsystems } = useMapSolarsystems();
@@ -356,6 +358,8 @@ const settingsUrl = computed(() => {
         :signatures="signatures"
         :suggested-alias="suggested_alias"
         :planned-aliases="planned_aliases"
+        :static-slot-alias="static_slot_alias"
+        :static-owner-id="static_owner_id"
         @select-signature="handleSelectSignature"
     />
 

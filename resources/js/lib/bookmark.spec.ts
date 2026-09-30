@@ -537,3 +537,75 @@ describe('planned alias and visible names', () => {
         expect(visibleBookmarkName('A ABC C3')).toBe('A ABC C3');
     });
 });
+
+describe('class suffix: static s, wandering w, K162 k', () => {
+    const formats: TBookmarkFormats = { bookmark_format_wormhole: '{_}{alias} {sig} {class} {mass} {life}', bookmark_ignored_alias: 'Daisy' };
+
+    it('static: " 1 SOF C6s"', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'SOF-078', signature_type: { target_class: '6' }, wormhole: { name: 'V753' }, is_static: true }),
+            currentSystem: { alias: 'Daisy', class: '5' },
+            aliases: ['Daisy'],
+            formats,
+            plannedAlias: '1',
+        });
+        expect(name).toBe(' 1 SOF C6s');
+    });
+
+    it('wandering: " 2 ABC C6w reduced"', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'ABC-123', signature_type: { target_class: '6' }, wormhole: { name: 'V753' }, is_wandering: true, mass_status: 'reduced' }),
+            currentSystem: { alias: 'Daisy', class: '5' },
+            aliases: ['Daisy'],
+            formats,
+            plannedAlias: '2',
+        });
+        expect(name).toBe(' 2 ABC C6w reduced');
+    });
+
+    it('K162: " 12 DFD C5k", even if someone ticked Static by mistake', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'DFD-876', signature_type: { target_class: '5' }, wormhole: { name: 'K162' }, is_static: true }),
+            currentSystem: { alias: '1', class: '6' },
+            aliases: ['Daisy', '1'],
+            formats,
+            plannedAlias: '12',
+        });
+        expect(name).toBe(' 12 DFD C5k');
+    });
+
+    it('anything else stays plain: " 13 UAZ NS"', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'UAZ-576', signature_type: { target_class: 'n' }, wormhole: { name: 'C248' } }),
+            currentSystem: { alias: '1', class: '6' },
+            aliases: ['Daisy', '1'],
+            formats: { ...formats, bookmark_format_kspace: '{_}{alias} {sig} {class}' },
+            plannedAlias: '13',
+        });
+        expect(name).toBe(' 13 UAZ NS');
+    });
+
+    it('connected static hole keeps its suffix: " 1 SOF C6s"', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'SOF-078', wormhole: { name: 'V753' }, is_static: true }),
+            currentSystem: { alias: 'Daisy', class: '5' },
+            connectionTarget: { alias: '1', solarsystem: { class: '6' as const, name: 'J111918' } },
+            aliases: ['Daisy', '1'],
+            formats,
+            detectReturn: true,
+        });
+        expect(name).toBe(' 1 SOF C6s');
+    });
+
+    it('return bookmarks are unchanged: "  * 1 JOW C6"', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'JOW-849', wormhole: { name: 'K162' } }),
+            currentSystem: { alias: '1', class: '6' },
+            connectionTarget: { alias: 'Daisy', solarsystem: { class: '5' as const, name: 'J145735' } },
+            aliases: ['Daisy', '1'],
+            formats: { ...formats, bookmark_format_return: '{_}{_}*{_}{here} {sig} {hereclass}' },
+            detectReturn: true,
+        });
+        expect(name).toBe('  * 1 JOW C6');
+    });
+});

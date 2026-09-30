@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ContextMenuItem, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger } from '@/components/ui/context-menu';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
+import { connectionFlag } from '@/lib/chainNumbering';
 import { useMapStore } from '@/map/store/mapStore';
 import { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { Copy } from 'lucide-vue-next';
@@ -32,6 +33,11 @@ const source_name = computed(() =>
             massStatus: map_connection.mass_status,
             lifetime: map_connection.lifetime_status,
             wormholeCode: target_signature.value?.wormhole?.name,
+            classSuffix: connectionFlag({
+                is_static: target_signature.value?.is_static,
+                is_wandering: target_signature.value?.is_wandering,
+                wormholeName: target_signature.value?.wormhole?.name,
+            }),
         },
         store.meta.value,
         map_connection.target.alias,
@@ -49,6 +55,11 @@ const target_name = computed(() =>
             massStatus: map_connection.mass_status,
             lifetime: map_connection.lifetime_status,
             wormholeCode: source_signature.value?.wormhole?.name,
+            classSuffix: connectionFlag({
+                is_static: source_signature.value?.is_static,
+                is_wandering: source_signature.value?.is_wandering,
+                wormholeName: source_signature.value?.wormhole?.name,
+            }),
         },
         store.meta.value,
         map_connection.source.alias,

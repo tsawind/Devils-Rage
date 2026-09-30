@@ -23,6 +23,9 @@ final class MapSignatureResource extends JsonResource
         return [
             'id' => $this->id,
             'signature_id' => $this->signature_id,
+            'alias' => $this->alias,
+            'is_static' => (bool) $this->is_static,
+            'is_wandering' => (bool) $this->is_wandering,
             'map_solarsystem_id' => $this->map_solarsystem_id,
             'target_class' => $this->signatureType?->target_class,
             'extra' => $this->signatureType?->extra,

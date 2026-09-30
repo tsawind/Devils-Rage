@@ -60,14 +60,32 @@ const { map_solarsystems } = useMapSolarsystems();
 
 // Reserve a chain alias for every unjumped wormhole in this system (statics
 // first), so e.g. the static suggests " 1" and the next hole " 2".
+const visible_signatures = computed(() => signatures.value.filter((signature) => !signature.deleted));
+
 const planned_aliases = computed(() =>
     planAliasesForSystem({
-        signatures: signatures.value.filter((signature) => !signature.deleted),
+        signatures: visible_signatures.value,
         system: props.map_solarsystem,
         aliases: map_solarsystems.value.map((solarsystem) => solarsystem.alias).filter((alias): alias is string => Boolean(alias)),
         formats: page.props.map,
     }),
 );
+
+// Who holds each number in this system, for hand-set numbers ("already used by …").
+const number_owners = computed(() => {
+    const owners = new Map<string, { signatureId: number | null; label: string }>();
+    for (const solarsystem of map_solarsystems.value) {
+        if (solarsystem.alias) owners.set(solarsystem.alias.toUpperCase(), { signatureId: null, label: `system ${solarsystem.alias} on the map` });
+    }
+    for (const signature of visible_signatures.value) {
+        const alias = planned_aliases.value.get(signature.id);
+        if (alias) owners.set(alias.toUpperCase(), { signatureId: signature.id, label: signature.signature_id ?? 'another signature' });
+    }
+    return owners;
+});
+
+// The one hole in this system marked as the static, if any.
+const static_owner_id = computed(() => visible_signatures.value.find((signature) => signature.is_static)?.id ?? null);
 
 const UNCATEGORIZED_FILTER = '__uncategorized__';
 
@@ -250,6 +268,8 @@ function createNewSignature() {
                     :connected_connections="connected_connections"
                     :selected_map_solarsystem="map_solarsystem"
                     :planned_alias="planned_aliases.get(signature.id) ?? null"
+                    :number_owners="number_owners"
+                    :static_owner_id="static_owner_id"
                 />
             </template>
             <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">

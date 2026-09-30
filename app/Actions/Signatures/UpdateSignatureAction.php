@@ -5,14 +5,17 @@ declare(strict_types=1);
 namespace App\Actions\Signatures;
 
 use App\Actions\MapConnections\SyncConnectionShipSizeAction;
+use App\Actions\MapSolarsystem\UpdateMapSolarsystemAction;
 use App\Data\SignatureData;
 use App\Enums\LifetimeStatus;
 use App\Enums\MassStatus;
 use App\Events\Signatures\SignatureUpdatedEvent;
+use App\Models\MapSolarsystem;
 use App\Models\Signature;
 use App\Models\SignatureType;
 use App\Support\Broadcasting\MapBroadcaster;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Spatie\LaravelData\Optional;
 use Throwable;
 
@@ -21,6 +24,7 @@ final readonly class UpdateSignatureAction
     public function __construct(
         private MapBroadcaster $mapBroadcaster,
         private SyncConnectionShipSizeAction $syncConnectionShipSizeAction,
+        private UpdateMapSolarsystemAction $updateMapSolarsystemAction,
     ) {}
 
     /**
@@ -29,6 +33,9 @@ final readonly class UpdateSignatureAction
     public function handle(Signature $signature, SignatureData $data): Signature
     {
         return DB::transaction(function () use ($signature, $data): Signature {
+            $this->guardChainNumbering($signature, $data);
+            $previousAlias = $signature->alias;
+
             $updateData = $data->toArray();
 
             // Update wormhole_id if signature_type_id changed, resetting it when cleared
@@ -39,6 +46,7 @@ final readonly class UpdateSignatureAction
 
             $signature->update($updateData);
 
+            $this->syncConnectedSystemAlias($signature, $data, $previousAlias);
             $this->syncMassAndLifetime($signature, $data);
             $this->syncConnectionShipSizeAction->handle($signature);
 
@@ -48,6 +56,72 @@ final readonly class UpdateSignatureAction
 
             return $signature;
         });
+    }
+
+    /**
+     * A chain number may only be used once per system, and only one hole per
+     * system may be marked as the static.
+     *
+     * @throws ValidationException
+     */
+    private function guardChainNumbering(Signature $signature, SignatureData $data): void
+    {
+        if (! $data->alias instanceof Optional && filled($data->alias)) {
+            $clash = Signature::query()
+                ->where('map_solarsystem_id', $signature->map_solarsystem_id)
+                ->whereKeyNot($signature->id)
+                ->where('alias', $data->alias)
+                ->first();
+
+            if ($clash instanceof Signature) {
+                throw ValidationException::withMessages([
+                    'alias' => sprintf('Number %s is already used by signature %s.', $data->alias, $clash->signature_id ?? 'without an ID'),
+                ]);
+            }
+        }
+
+        if (! $data->is_static instanceof Optional && $data->is_static) {
+            $otherStatic = Signature::query()
+                ->where('map_solarsystem_id', $signature->map_solarsystem_id)
+                ->whereKeyNot($signature->id)
+                ->where('is_static', true)
+                ->first();
+
+            if ($otherStatic instanceof Signature) {
+                throw ValidationException::withMessages([
+                    'is_static' => sprintf('Signature %s is already marked as the static.', $otherStatic->signature_id ?? 'without an ID'),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * When a jumped hole's number changes (e.g. it was marked as the static),
+     * the system it leads to follows, unless someone renamed that system by hand.
+     */
+    private function syncConnectedSystemAlias(Signature $signature, SignatureData $data, ?string $previousAlias): void
+    {
+        if ($data->alias instanceof Optional || blank($data->alias) || $data->alias === $previousAlias) {
+            return;
+        }
+
+        $connection = $signature->mapConnection;
+        if ($connection === null) {
+            return;
+        }
+
+        $otherId = $connection->from_map_solarsystem_id === $signature->map_solarsystem_id
+            ? $connection->to_map_solarsystem_id
+            : $connection->from_map_solarsystem_id;
+
+        $other = MapSolarsystem::query()->find($otherId);
+        if (! $other instanceof MapSolarsystem) {
+            return;
+        }
+
+        if ($other->alias === null || $other->alias === $previousAlias) {
+            $this->updateMapSolarsystemAction->handle($other, ['alias' => $data->alias]);
+        }
     }
 
     private function syncMassAndLifetime(Signature $signature, SignatureData $data): void

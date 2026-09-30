@@ -31,6 +31,9 @@ final class TrackingData extends Data
         public ?LifetimeStatus $lifetime = null,
         public ?MassStatus $mass_status = null,
         public ?ShipSize $ship_size = null,
+        /** Chain numbering flags chosen in the jump prompt for the jumped signature. */
+        public ?bool $is_static = null,
+        public ?bool $is_wandering = null,
     ) {}
 
     /**

@@ -20,6 +20,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property string|null $signature_id
+ * @property string|null $alias Locked chain alias of the hole (e.g. "12")
+ * @property bool $is_static
+ * @property bool $is_wandering
  * @property int $map_solarsystem_id
  * @property int|null $map_connection_id
  * @property int|null $wormhole_id
@@ -51,6 +54,8 @@ final class Signature extends Model
         'ship_size' => ShipSize::class,
         'lifetime' => LifetimeStatus::class,
         'lifetime_updated_at' => 'immutable_datetime',
+        'is_static' => 'boolean',
+        'is_wandering' => 'boolean',
     ];
 
     /**

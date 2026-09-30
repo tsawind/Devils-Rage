@@ -20,7 +20,9 @@ import usePermission from '@/composables/usePermission';
 import { useShowMap } from '@/composables/useShowMap';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
+import { aliasForSlot, staticSlotAlias } from '@/lib/alias';
 import { buildSignatureBookmark, visibleBookmarkName } from '@/lib/bookmark';
+import { autoFlagsForType, isK162, validateManualAlias } from '@/lib/chainNumbering';
 import { Data } from '@/lib/data';
 import { formatDateToISO } from '@/lib/utils';
 import { deleteSignature, TProcessedConnection, updateMapConnection, updateSignature, useMapSolarsystems } from '@/map/api';
@@ -34,7 +36,7 @@ import { AcceptableValue } from 'reka-ui';
 import { type Component, computed, nextTick, ref, toRef } from 'vue';
 import { toast } from 'vue-sonner';
 
-const { signature, unconnected_connections, connected_connections, selected_map_solarsystem, planned_alias } = defineProps<{
+const { signature, unconnected_connections, connected_connections, selected_map_solarsystem, planned_alias, number_owners, static_owner_id } = defineProps<{
     signature: TSignature;
     is_deleted?: boolean;
     is_new?: boolean;
@@ -44,6 +46,10 @@ const { signature, unconnected_connections, connected_connections, selected_map_
     selected_map_solarsystem: TResolvedSelectedMapSolarsystem;
     /** The chain alias reserved for this hole among the system's unjumped wormholes. */
     planned_alias?: string | null;
+    /** Who holds each number in this system (alias → owner), for hand-set numbers. */
+    number_owners?: Map<string, { signatureId: number | null; label: string }>;
+    /** The signature marked as this system's static, if any. */
+    static_owner_id?: number | null;
 }>();
 
 const original = toRef(() => signature.signature_id || '');
@@ -151,7 +157,99 @@ function handleCategoryChange(value: AcceptableValue) {
 }
 
 function handleTypeChange(value: AcceptableValue) {
-    handleChange({ signature_type_id: value as number });
+    const typeId = value as number | null;
+    const wormholeName = typeId ? (availableTypes.value.find((type) => type.id === typeId)?.signature ?? null) : null;
+
+    if (!isWormhole.value) {
+        handleChange({ signature_type_id: typeId });
+        return;
+    }
+
+    // Setting the type to the system's static type ticks Static (or Wandering
+    // when another hole already is the static); any other type clears both.
+    const flags = autoFlagsForType({
+        wormholeName,
+        staticNames: (selected_map_solarsystem.solarsystem.statics ?? []).map((wormholeStatic) => wormholeStatic.name),
+        otherStaticExists: static_owner_id != null && static_owner_id !== signature.id,
+    });
+
+    handleChange({ signature_type_id: typeId, ...flagChanges(flags.is_static, flags.is_wandering) });
+}
+
+// ---- Chain numbering: Static / Wandering / hand-set number ----------------
+
+const is_k162 = computed(() => isK162(signature.wormhole?.name));
+const static_slot = computed(() => staticSlotAlias(selected_map_solarsystem.alias, page.props.map.bookmark_ignored_alias));
+const static_taken_by_other = computed(() => static_owner_id != null && static_owner_id !== signature.id);
+
+/**
+ * The fields to send when Static / Wandering change. A hole that becomes the
+ * static moves to slot 1 if it already had a locked number; a hole that stops
+ * being the static gives slot 1 back and gets a normal number again.
+ */
+function flagChanges(isStatic: boolean, isWandering: boolean): Record<string, FormDataConvertible> {
+    const changes: Record<string, FormDataConvertible> = { is_static: isStatic, is_wandering: isWandering };
+
+    if (isStatic && signature.alias && signature.alias !== static_slot.value) {
+        changes.alias = static_slot.value;
+    }
+    if (!isStatic && signature.alias === static_slot.value) {
+        changes.alias = null;
+    }
+
+    return changes;
+}
+
+function handleToggleStatic() {
+    if (is_k162.value) return;
+    if (!signature.is_static && static_taken_by_other.value) {
+        toast.error('Another signature in this system is already the static.');
+        return;
+    }
+    handleChange(flagChanges(!signature.is_static, false));
+}
+
+function handleToggleWandering() {
+    if (is_k162.value) return;
+    handleChange(flagChanges(false, !signature.is_wandering));
+}
+
+function handleSetNumber() {
+    const current = signature.alias ?? planned_alias ?? '';
+    const input = window.prompt(`Number for ${signature.signature_id ?? 'this signature'} — enter one slot, 1-9 or A-Z (current: ${current || 'none'})`);
+    if (input === null) return;
+
+    const alias = aliasForSlot(selected_map_solarsystem.alias, input, page.props.map.bookmark_ignored_alias);
+
+    // Numbers held by this signature or by the system it already leads to aren't clashes.
+    const others = new Map<string, string>();
+    for (const [takenAlias, owner] of number_owners ?? []) {
+        if (owner.signatureId === signature.id) continue;
+        if (selected_connection.value?.target.alias?.toUpperCase() === takenAlias) continue;
+        others.set(takenAlias, owner.label);
+    }
+
+    const result = validateManualAlias(alias, others);
+    if (!result.ok) {
+        toast.error(result.error);
+        return;
+    }
+
+    const makesStatic = result.alias === static_slot.value;
+    if (makesStatic && is_k162.value) {
+        toast.error('Slot 1 is for the static, and a K162 can never be the static.');
+        return;
+    }
+    if (makesStatic && static_taken_by_other.value) {
+        toast.error('Slot 1 is for the static, and another signature in this system is already the static.');
+        return;
+    }
+
+    handleChange({
+        alias: result.alias,
+        is_static: makesStatic,
+        ...(makesStatic ? { is_wandering: false } : {}),
+    });
 }
 
 function handleMapConnectionChange(value: AcceptableValue) {
@@ -226,6 +324,13 @@ const bookmark_name = computed(() =>
 
 function copyBookmark() {
     navigator.clipboard.writeText(bookmark_name.value);
+
+    // Copying an unjumped hole's bookmark locks its number, so it never shifts
+    // under a bookmark someone has saved in game.
+    if (isWormhole.value && !signature.alias && !signature.map_connection_id && planned_alias && can_write.value) {
+        handleChange({ alias: planned_alias });
+    }
+
     toast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(bookmark_name.value) });
 }
 </script>
@@ -393,6 +498,25 @@ function copyBookmark() {
                                 </span>
                             </DropdownMenuRadioItem>
                         </DropdownMenuRadioGroup>
+
+                        <DropdownMenuSeparator />
+
+                        <!-- Chain numbering -->
+                        <DropdownMenuItem :disabled="is_k162 || (!signature.is_static && static_taken_by_other)" @select.prevent="handleToggleStatic" class="text-xs">
+                            <span class="mr-2 inline-flex size-3.5 items-center justify-center font-mono text-[10px] font-bold">S</span>
+                            Static
+                            <Check v-if="signature.is_static" class="ml-auto size-3.5" />
+                        </DropdownMenuItem>
+                        <DropdownMenuItem :disabled="is_k162" @select.prevent="handleToggleWandering" class="text-xs">
+                            <span class="mr-2 inline-flex size-3.5 items-center justify-center font-mono text-[10px] font-bold">W</span>
+                            Wandering
+                            <Check v-if="signature.is_wandering" class="ml-auto size-3.5" />
+                        </DropdownMenuItem>
+                        <DropdownMenuItem @select="handleSetNumber" class="text-xs">
+                            <span class="mr-2 inline-flex size-3.5 items-center justify-center font-mono text-[10px] font-bold">#</span>
+                            Set number…
+                            <span class="ml-auto font-mono text-muted-foreground">{{ signature.alias ?? planned_alias ?? '' }}</span>
+                        </DropdownMenuItem>
 
                         <DropdownMenuSeparator />
 

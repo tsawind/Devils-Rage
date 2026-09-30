@@ -1,5 +1,6 @@
 import { isWormholeClass } from '@/const/solarsystemClasses';
 import { aliasTargetKind, isIgnoredAlias, suggestAlias, TAliasScheme } from '@/lib/alias';
+import { connectionFlag } from '@/lib/chainNumbering';
 import { TResolvedSolarsystem } from '@/pages/maps';
 import { TSignature, TStringedSolarsystemClass } from '@/types/models';
 
@@ -36,6 +37,8 @@ export type TBookmarkContext = {
     massStatus?: string | null;
     lifetime?: string | null;
     wormholeCode?: string | null;
+    /** Appended to `{class}`: "s" static, "w" wandering, "k" K162 (see `connectionFlag`). */
+    classSuffix?: string | null;
 };
 
 /**
@@ -135,7 +138,7 @@ export function getBookmarkTokenValues(
         here: hereAlias ?? '',
         hereclass: hereClass ? getBookmarkClassString({ class: hereClass, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
-        class: getBookmarkClassString(system.solarsystem),
+        class: `${getBookmarkClassString(system.solarsystem)}${context.classSuffix ?? ''}`,
         name: system.solarsystem.name,
         region: system.solarsystem.region?.name ?? '',
         occupier: system.occupier_alias ?? '',
@@ -247,6 +250,8 @@ export function buildSignatureBookmark(params: {
     signature: Pick<TSignature, 'signature_id' | 'ship_size' | 'mass_status' | 'lifetime'> & {
         wormhole?: { name?: string | null } | null;
         signature_type?: { target_class?: string | null } | null;
+        is_static?: boolean | null;
+        is_wandering?: boolean | null;
     };
     currentSystem: { alias?: string | null; class?: TStringedSolarsystemClass | null };
     connectionTarget?: BookmarkSystem | null;
@@ -264,6 +269,7 @@ export function buildSignatureBookmark(params: {
         massStatus: signature.mass_status,
         lifetime: signature.lifetime,
         wormholeCode: signature.wormhole?.name,
+        classSuffix: connectionFlag({ is_static: signature.is_static, is_wandering: signature.is_wandering, wormholeName: signature.wormhole?.name }),
     };
 
     if (connectionTarget) {
@@ -311,7 +317,7 @@ export function buildSignatureBookmark(params: {
         here: currentSystem.alias ?? '',
         hereclass: currentSystem.class ? getBookmarkClassString({ class: currentSystem.class, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
-        class: knownClass ? getBookmarkClassString({ class: knownClass, name: '' }) : '',
+        class: `${knownClass ? getBookmarkClassString({ class: knownClass, name: '' }) : ''}${context.classSuffix ?? ''}`,
         name: '',
         region: '',
         occupier: '',

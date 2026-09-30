@@ -113,7 +113,7 @@ final readonly class StoreTrackingAction
 
             // Link the signature to the connection if provided
             if ($data->signature_id) {
-                $signature_update = ['map_connection_id' => $connection->id];
+                $signature_update = ['map_connection_id' => $connection->id, ...$this->getChainNumberingUpdate($signature, $data)];
 
                 if ($signature instanceof Signature && $signature->signature_category_id === null) {
                     $signature_update['signature_category_id'] = $this->getWormholeCategoryId();
@@ -124,6 +124,36 @@ final readonly class StoreTrackingAction
             }
 
         }, 10);
+    }
+
+    /**
+     * Lock the jumped signature's chain number to the alias chosen in the jump
+     * prompt (unless it already has one), and store its Static / Wandering flags.
+     *
+     * @return array<string, mixed>
+     */
+    private function getChainNumberingUpdate(?Signature $signature, TrackingData $data): array
+    {
+        if (! $signature instanceof Signature) {
+            return [];
+        }
+
+        $update = [];
+
+        // A hole marked Static in the prompt moves to the static's slot even if it already had a number.
+        if (filled($data->alias) && ($signature->alias === null || $data->is_static === true)) {
+            $update['alias'] = $data->alias;
+        }
+
+        if ($data->is_static !== null) {
+            $update['is_static'] = $data->is_static;
+        }
+
+        if ($data->is_wandering !== null) {
+            $update['is_wandering'] = $data->is_wandering;
+        }
+
+        return $update;
     }
 
     private function getMapSolarsystemOnMap(Map $map, Solarsystem $solarsystem): ?MapSolarsystem

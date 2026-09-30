@@ -8,6 +8,8 @@ type TrackingOptions = {
     lifetime?: TLifetimeStatus | null;
     mass_status?: TMassStatus | null;
     ship_size?: TShipSize | null;
+    is_static?: boolean | null;
+    is_wandering?: boolean | null;
 };
 
 export function createTracking(

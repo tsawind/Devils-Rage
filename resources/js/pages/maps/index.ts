@@ -262,6 +262,9 @@ export type TTailoredSignature = {
     lifetime_status_updated_at: string | null;
     mass_status: TMassStatus | null;
     map_connection_id: number | null;
+    alias?: string | null;
+    is_static?: boolean;
+    is_wandering?: boolean;
 };
 
 export type TSelectedMapSolarsystemBase = Omit<TMapSolarsystemBase, 'signatures'> & {

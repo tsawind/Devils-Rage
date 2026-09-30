@@ -221,55 +221,128 @@ export function suggestAlias(params: {
 /** The per-signature data `planSignatureAliases` needs. */
 export type TAliasPlanSignature = {
     id: number;
-    /** Only unconnected wormhole signatures get a planned alias. */
+    /** Only wormhole signatures get a number. */
     isWormhole: boolean;
+    /** Connected holes without a locked number use the alias of the system they lead to. */
     isConnected: boolean;
-    /** The identified wormhole type, e.g. "V753", used to put statics first. */
-    wormholeName?: string | null;
+    /** The number stored on the signature once it was copied or jumped; never changes by itself. */
+    lockedAlias?: string | null;
+    /** Marked as the system's static: takes the reserved slot 1. */
+    isStatic?: boolean;
     /** Whether the hole leads to wormhole space; unknown destinations count as wormhole space. */
     targetIsWormhole?: boolean;
     /** The known destination class, if identified ("unknown"/null otherwise). */
     targetClass?: string | null;
 };
 
+/** The chain prefix for a system: its alias, or "" for the ignored (home) alias. */
+export function chainPrefix(parentAlias: string | null | undefined, ignoredAlias?: string | null): string {
+    const prefix = (parentAlias ?? '').trim().toUpperCase();
+    return isIgnoredAlias(prefix, ignoredAlias) ? '' : prefix;
+}
+
+/** The alias reserved for a system's static: slot 1, e.g. "1" in home, "11" in 1. */
+export function staticSlotAlias(parentAlias: string | null | undefined, ignoredAlias?: string | null): string {
+    return `${chainPrefix(parentAlias, ignoredAlias)}${NUMERIC_SLOTS[0]}`;
+}
+
+/** The alias for a single slot character (1-9, A-Z) in a system, or null when the slot is invalid. */
+export function aliasForSlot(parentAlias: string | null | undefined, slot: string, ignoredAlias?: string | null): string | null {
+    const normalized = slot.trim().toUpperCase();
+    if (normalized.length !== 1 || !NUMERIC_SLOTS.includes(normalized)) return null;
+    return `${chainPrefix(parentAlias, ignoredAlias)}${normalized}`;
+}
+
 /**
- * Hand out the next chain aliases to every unjumped wormhole signature in one
- * system, so two unscanned holes never both suggest "1". Aliases already on
- * the map stay taken; the system's static holes get the lowest free slots,
- * then the rest in the order they were added (signature id).
+ * Hand out chain numbers to the wormhole signatures of one system.
  *
- * Returns signature id → planned alias. Signatures that aren't eligible (not a
- * wormhole, already connected, or no suggestion possible) are left out.
+ * Numeric scheme (the Devil's Rage convention):
+ * - a number stored on a signature (locked on copy or jump) is always kept;
+ * - slot 1 is reserved for the hole marked as the static: only it can take it;
+ * - every other unjumped hole gets the lowest free slot from 2 up (then A-Z),
+ *   in the order the signatures were added;
+ * - numbers used by systems on the map or locked on other signatures are taken.
+ *
+ * Returns signature id → alias. Connected holes without a locked number are
+ * left out (their number is the alias of the system they lead to).
  */
 export function planSignatureAliases(params: {
     parentAlias: string | null | undefined;
     originIsWormhole: boolean;
     signatures: TAliasPlanSignature[];
-    staticNames?: string[];
     aliases: string[];
     scheme?: TAliasScheme;
     ignoredAlias?: string;
 }): Map<number, string> {
-    const statics = new Set((params.staticNames ?? []).map((name) => name.toUpperCase()));
-    const isStatic = (signature: TAliasPlanSignature) => Boolean(signature.wormholeName && statics.has(signature.wormholeName.toUpperCase()));
-
-    const candidates = params.signatures
-        .filter((signature) => signature.isWormhole && !signature.isConnected)
-        .toSorted((a, b) => Number(isStatic(b)) - Number(isStatic(a)) || a.id - b.id);
-
-    const taken = [...params.aliases];
     const planned = new Map<number, string>();
+    const wormholes = params.signatures.filter((signature) => signature.isWormhole).toSorted((a, b) => a.id - b.id);
 
-    for (const signature of candidates) {
+    if (params.scheme === 'alphabetical') {
+        return planAlphabetical(params, wormholes);
+    }
+
+    const prefix = chainPrefix(params.parentAlias, params.ignoredAlias);
+    const staticSlot = `${prefix}${NUMERIC_SLOTS[0]}`;
+    const taken = new Set(params.aliases.map((alias) => alias.trim().toUpperCase()));
+
+    for (const signature of wormholes) {
+        const locked = signature.lockedAlias?.trim().toUpperCase();
+        if (locked) {
+            planned.set(signature.id, locked);
+            taken.add(locked);
+        }
+    }
+
+    const unnumbered = wormholes.filter((signature) => !planned.has(signature.id) && !signature.isConnected);
+
+    const staticHole = unnumbered.find((signature) => signature.isStatic);
+    if (staticHole && !taken.has(staticSlot)) {
+        planned.set(staticHole.id, staticSlot);
+        taken.add(staticSlot);
+    }
+
+    for (const signature of unnumbered) {
+        if (planned.has(signature.id)) continue;
+
+        let index = 1;
+        while (index < NUMERIC_SLOTS.length - 1 && taken.has(`${prefix}${NUMERIC_SLOTS[index]}`)) {
+            index++;
+        }
+
+        const alias = `${prefix}${NUMERIC_SLOTS[index]}`;
+        planned.set(signature.id, alias);
+        taken.add(alias);
+    }
+
+    return planned;
+}
+
+/** The alphabetical scheme keeps the stock behaviour: locked numbers first, then the next free letter. */
+function planAlphabetical(
+    params: { parentAlias: string | null | undefined; originIsWormhole: boolean; aliases: string[]; ignoredAlias?: string },
+    wormholes: TAliasPlanSignature[],
+): Map<number, string> {
+    const planned = new Map<number, string>();
+    const taken = [...params.aliases];
+
+    for (const signature of wormholes) {
+        if (signature.lockedAlias) {
+            planned.set(signature.id, signature.lockedAlias);
+            taken.push(signature.lockedAlias);
+        }
+    }
+
+    for (const signature of wormholes) {
+        if (planned.has(signature.id) || signature.isConnected) continue;
+
         const targetClass = signature.targetClass && signature.targetClass !== 'unknown' ? signature.targetClass : null;
         const targetIsWormhole = signature.targetIsWormhole ?? true;
-
         const alias = suggestAlias({
             parentAlias: params.parentAlias,
             targetIsWormhole,
             originIsWormhole: params.originIsWormhole,
             aliases: taken,
-            scheme: params.scheme,
+            scheme: 'alphabetical',
             targetKind: aliasTargetKind(targetIsWormhole, targetClass),
             ignoredAlias: params.ignoredAlias,
         });

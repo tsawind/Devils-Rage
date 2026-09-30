@@ -178,6 +178,12 @@ export type TSignature = {
     map_solarsystem_id: number;
     map_connection_id: number | null;
     signature_id: string | null;
+    /** Locked chain number (e.g. "12"), set on first copy or jump. */
+    alias?: string | null;
+    /** Marked as the system's static (takes slot 1). */
+    is_static?: boolean;
+    /** Marked as a wandering hole (another hole of a static's type). */
+    is_wandering?: boolean;
     signature_type_id: number | null;
     signature_category_id: number | null;
     raw_type_name: string | null;
