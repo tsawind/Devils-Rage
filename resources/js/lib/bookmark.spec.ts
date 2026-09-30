@@ -323,7 +323,12 @@ describe('isReturnBookmark', () => {
 describe('formatBookmarkName (oppositeAlias / return format)', () => {
     const system = { alias: 'A', solarsystem: { class: '3' as const, name: 'J123456' } };
     const context = { signatureId: 'ABC-123', shipSize: null, massStatus: null, lifetime: 'healthy' as const, wormholeCode: null };
-    const formats: TBookmarkFormats = { bookmark_format_wormhole: '{alias} {sig} {class}', bookmark_format_return: '*{alias} {sig} {class}' };
+    // Alphabetical-style aliases ("A", "AB"): no home callsigns.
+    const formats: TBookmarkFormats = {
+        bookmark_format_wormhole: '{alias} {sig} {class}',
+        bookmark_format_return: '*{alias} {sig} {class}',
+        bookmark_alias_scheme: 'alphabetical',
+    };
 
     it('renders the return template when the destination is up-chain of the opposite alias', () => {
         expect(formatBookmarkName(system, context, formats, 'AB')).toBe('*A ABC C3');
@@ -350,7 +355,7 @@ describe('buildSignatureBookmark (detectReturn)', () => {
             currentSystem: { alias: 'AB' },
             connectionTarget: { alias: 'A', occupier_alias: null, solarsystem: { class: '3', name: 'J1' } },
             aliases: [],
-            formats: { ...NUMERIC_FORMATS, bookmark_format_return: '*{alias} {sig} {class}' },
+            formats: { ...ALPHABETICAL_FORMATS, bookmark_format_return: '*{alias} {sig} {class}' },
             detectReturn: true,
         });
 
@@ -363,7 +368,7 @@ describe('buildSignatureBookmark (detectReturn)', () => {
             currentSystem: { alias: 'AB' },
             connectionTarget: { alias: 'HOME', occupier_alias: null, solarsystem: { class: '3', name: 'J1' } },
             aliases: [],
-            formats: { ...NUMERIC_FORMATS, bookmark_format_return: '*{alias} {sig} {class}', bookmark_ignored_alias: 'HOME' },
+            formats: { ...ALPHABETICAL_FORMATS, bookmark_format_return: '*{alias} {sig} {class}', bookmark_ignored_alias: 'HOME' },
             detectReturn: true,
         });
 
@@ -376,7 +381,7 @@ describe('buildSignatureBookmark (detectReturn)', () => {
             currentSystem: { alias: 'A' },
             connectionTarget: { alias: 'AB', occupier_alias: null, solarsystem: { class: '3', name: 'J1' } },
             aliases: [],
-            formats: { ...NUMERIC_FORMATS, bookmark_format_return: '*{alias} {sig} {class}' },
+            formats: { ...ALPHABETICAL_FORMATS, bookmark_format_return: '*{alias} {sig} {class}' },
             detectReturn: true,
         });
 
@@ -389,7 +394,7 @@ describe('buildSignatureBookmark (detectReturn)', () => {
             currentSystem: { alias: 'AB' },
             connectionTarget: { alias: 'HOME', occupier_alias: null, solarsystem: { class: '3', name: 'J1' } },
             aliases: [],
-            formats: { ...NUMERIC_FORMATS, bookmark_format_return: '*{alias} {sig} {class}', bookmark_ignored_alias: 'HOME' },
+            formats: { ...ALPHABETICAL_FORMATS, bookmark_format_return: '*{alias} {sig} {class}', bookmark_ignored_alias: 'HOME' },
         });
 
         expect(name).toBe('HOME ABC C3');
@@ -401,7 +406,7 @@ describe('buildSignatureBookmark (detectReturn)', () => {
             currentSystem: { alias: 'AB' },
             connectionTarget: { alias: 'A', occupier_alias: null, solarsystem: { class: '3', name: 'J1' } },
             aliases: [],
-            formats: { ...NUMERIC_FORMATS, bookmark_format_return: '*{alias} {sig} {class}' },
+            formats: { ...ALPHABETICAL_FORMATS, bookmark_format_return: '*{alias} {sig} {class}' },
             detectReturn: false,
         });
 
@@ -441,14 +446,14 @@ describe("Devil's Rage scheme ({_} spaces and {here})", () => {
         expect(name).toBe(' 122');
     });
 
-    it('suggests " 1" for the first hole found in home', () => {
+    it('suggests "  Bravo" for the first non-static hole found in home', () => {
         const name = buildSignatureBookmark({
             signature: baseSignature(),
             currentSystem: { alias: 'Daisy', class: '5' },
             aliases: ['Daisy'],
             formats,
         });
-        expect(name).toBe(' 1');
+        expect(name).toBe('  Bravo');
     });
 
     it('gives the return name for a connected signature leading back up-chain', () => {
@@ -468,7 +473,7 @@ describe("Devil's Rage scheme ({_} spaces and {here})", () => {
     });
 
     it('leaves the stock templates unchanged', () => {
-        expect(formatBookmarkName(c6('A'), context, {})).toBe('A ABC C6');
+        expect(formatBookmarkName(c6('12'), context, {})).toBe('12 ABC C6');
     });
 });
 
@@ -502,14 +507,14 @@ describe("Devil's Rage full scheme (sig and class)", () => {
         expect(name).toBe('  * 1 KXR C6');
     });
 
-    it('unscanned outbound signature in Daisy identified as a C6 static', () => {
+    it('unscanned outbound signature in Daisy, not yet marked static: "  Bravo SOF C6"', () => {
         const name = buildSignatureBookmark({
             signature: baseSignature({ signature_id: 'SOF-123', signature_type: { target_class: '6' } }),
             currentSystem: { alias: 'Daisy', class: '5' },
             aliases: ['Daisy'],
             formats,
         });
-        expect(name).toBe(' 1 SOF C6');
+        expect(name).toBe('  Bravo SOF C6');
     });
 
     it('jump copy before the return signature is scanned leaves the sig out', () => {
@@ -607,5 +612,79 @@ describe('class suffix: static s, wandering w, K162 k', () => {
             detectReturn: true,
         });
         expect(name).toBe('  * 1 JOW C6');
+    });
+});
+
+describe('patch 9: Daisy callsigns and static 0', () => {
+    const formats: TBookmarkFormats = {
+        bookmark_format_wormhole: '{_}{alias} {sig} {class} {mass} {life}',
+        bookmark_format_kspace: '{_}{alias} {sig} {class} {mass} {life}',
+        bookmark_format_return: '{_}{_}*{_}{here} {sig} {hereclass}',
+        bookmark_ignored_alias: 'Daisy',
+    };
+    const daisy = { alias: 'Daisy', solarsystem: { class: '5' as const, name: 'J145735' } };
+    const alpha = { alias: 'A', solarsystem: { class: '6' as const, name: 'J111918' } };
+
+    it("Daisy's static: \"  Alpha ZGB C6s\"", () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'ZGB-111', signature_type: { target_class: '6' }, wormhole: { name: 'V753' }, is_static: true }),
+            currentSystem: { alias: 'Daisy', class: '5' },
+            aliases: ['Daisy'],
+            formats,
+            plannedAlias: 'A',
+        });
+        expect(name).toBe('  Alpha ZGB C6s');
+    });
+
+    it("Daisy's second hole: \"  Bravo KXR C3\"", () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'KXR-222', signature_type: { target_class: '3' } }),
+            currentSystem: { alias: 'Daisy', class: '5' },
+            aliases: ['Daisy', 'A'],
+            formats,
+            plannedAlias: 'B',
+        });
+        expect(name).toBe('  Bravo KXR C3');
+    });
+
+    it('connected Daisy static keeps the callsign: "  Alpha ZGB C6s"', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'ZGB-111', wormhole: { name: 'V753' }, is_static: true }),
+            currentSystem: { alias: 'Daisy', class: '5' },
+            connectionTarget: alpha,
+            aliases: ['Daisy', 'A'],
+            formats,
+            detectReturn: true,
+        });
+        expect(name).toBe('  Alpha ZGB C6s');
+    });
+
+    it('return directly into Daisy uses the name: "  * Alpha JOW C6"', () => {
+        expect(formatBookmarkName(daisy, { signatureId: 'JOW-849' }, formats, 'A', 'A', '6')).toBe('  * Alpha JOW C6');
+    });
+
+    it('in system A: static "A0", others "A1", returns use the plain alias', () => {
+        const staticInA = buildSignatureBookmark({
+            signature: baseSignature({ signature_id: 'OPP-952', signature_type: { target_class: '3' }, is_static: true }),
+            currentSystem: { alias: 'A', class: '6' },
+            aliases: ['Daisy', 'A'],
+            formats,
+            plannedAlias: 'A0',
+        });
+        expect(staticInA).toBe(' A0 OPP C3s');
+
+        const returnIntoA = formatBookmarkName(alpha, { signatureId: 'QRS-123' }, formats, 'A1', 'A1', '4');
+        expect(returnIntoA).toBe('  * A1 QRS C4');
+    });
+
+    it('numbers outside the home chain are never callsigns: " 1 ABC C3"', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature({ signature_type: { target_class: '3' } }),
+            currentSystem: { alias: null, class: '6' },
+            aliases: [],
+            formats,
+            plannedAlias: '1',
+        });
+        expect(name).toBe(' 1 ABC C3');
     });
 });

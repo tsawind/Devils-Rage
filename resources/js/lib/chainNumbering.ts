@@ -53,7 +53,7 @@ export function autoFlagsForType(params: {
  */
 export function validateManualAlias(alias: string | null, usedBy: Map<string, string>): { ok: true; alias: string } | { ok: false; error: string } {
     if (!alias) {
-        return { ok: false, error: 'Enter a single slot: 1-9 or A-Z.' };
+        return { ok: false, error: 'That slot is not valid here. Home uses A, B, D, G…; elsewhere 0 or 1-9 / A-Z.' };
     }
 
     const owner = usedBy.get(alias.toUpperCase());

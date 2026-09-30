@@ -21,7 +21,7 @@ import usePermission from '@/composables/usePermission';
 import { useShowMap } from '@/composables/useShowMap';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
-import { aliasForSlot, staticSlotAlias } from '@/lib/alias';
+import { aliasForSlot, isIgnoredAlias, staticSlotAlias } from '@/lib/alias';
 import { buildSignatureBookmark, visibleBookmarkName } from '@/lib/bookmark';
 import { isK162, validateManualAlias } from '@/lib/chainNumbering';
 import { Data } from '@/lib/data';
@@ -210,8 +210,9 @@ const static_taken_by_other = computed(() => static_owner_id != null && static_o
 
 /**
  * The fields to send when Static / Wandering change. A hole that becomes the
- * static moves to slot 1 if it already had a locked number; a hole that stops
- * being the static gives slot 1 back and gets a normal number again.
+ * static moves to the static slot (A in home, 0 elsewhere) if it already had
+ * a locked number; a hole that stops being the static gives the slot back and
+ * gets a normal number again.
  */
 function flagChanges(isStatic: boolean, isWandering: boolean): Record<string, FormDataConvertible> {
     const changes: Record<string, FormDataConvertible> = { is_static: isStatic, is_wandering: isWandering };
@@ -242,7 +243,10 @@ function handleToggleWandering() {
 
 function handleSetNumber() {
     const current = signature.alias ?? planned_alias ?? '';
-    const input = window.prompt(`Number for ${signature.signature_id ?? 'this signature'} — enter one slot, 1-9 or A-Z (current: ${current || 'none'})`);
+    const allowed = isIgnoredAlias(selected_map_solarsystem.alias, page.props.map.bookmark_ignored_alias)
+        ? 'A (static), B, D, G, J, K, M, N, P … Z'
+        : '0 (static), 1-9 or A-Z';
+    const input = window.prompt(`Number for ${signature.signature_id ?? 'this signature'} — enter one slot: ${allowed} (current: ${current || 'none'})`);
     if (input === null) return;
 
     const alias = aliasForSlot(selected_map_solarsystem.alias, input, page.props.map.bookmark_ignored_alias);
@@ -263,11 +267,11 @@ function handleSetNumber() {
 
     const makesStatic = result.alias === static_slot.value;
     if (makesStatic && is_k162.value) {
-        toast.error('Slot 1 is for the static, and a K162 can never be the static.');
+        toast.error(`${static_slot.value} is the static's slot, and a K162 can never be the static.`);
         return;
     }
     if (makesStatic && static_taken_by_other.value) {
-        toast.error('Slot 1 is for the static, and another signature in this system is already the static.');
+        toast.error(`${static_slot.value} is the static's slot, and another signature in this system is already the static.`);
         return;
     }
 
@@ -572,7 +576,7 @@ function copyBookmark() {
                 <DialogHeader>
                     <DialogTitle>{{ pending_type_name }} — which is it?</DialogTitle>
                     <DialogDescription>
-                        {{ signature.signature_id ?? 'This signature' }} has this system's static type. Static takes slot 1; wandering is another hole of the same
+                        {{ signature.signature_id ?? 'This signature' }} has this system's static type. Static takes {{ static_slot }}; wandering is another hole of the same
                         type.
                     </DialogDescription>
                 </DialogHeader>

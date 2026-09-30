@@ -131,8 +131,17 @@ const dirty = computed(
         ignoredAlias.value !== map.bookmark_ignored_alias,
 );
 
+/**
+ * Spaces typed at the very start of a format are real, wanted spaces (a
+ * leading " " sorts bookmarks to the top in game), but they would be trimmed
+ * when saved. Turn them into {_} tokens, which always survive.
+ */
+function keepLeadingSpaces(template: string): string {
+    return template.replace(/^ +/, (spaces) => '{_}'.repeat(spaces.length));
+}
+
 function preview(field: Field): string {
-    const rendered = renderBookmarkTemplate(drafts[field.key], field.sample);
+    const rendered = renderBookmarkTemplate(keepLeadingSpaces(drafts[field.key]), field.sample);
     // Spaces are shown as "·" so leading/explicit spaces are visible.
     return rendered ? rendered.replace(/ /g, '·') : '—';
 }
@@ -147,9 +156,9 @@ function save(): void {
     router.put(
         MapBookmarkFormatController.update(map.slug).url,
         {
-            bookmark_format_wormhole: drafts.wormhole,
-            bookmark_format_kspace: drafts.kspace,
-            bookmark_format_return: drafts.return,
+            bookmark_format_wormhole: keepLeadingSpaces(drafts.wormhole),
+            bookmark_format_kspace: keepLeadingSpaces(drafts.kspace),
+            bookmark_format_return: keepLeadingSpaces(drafts.return),
             bookmark_alias_scheme: aliasScheme.value,
             bookmark_ignored_alias: ignoredAlias.value,
         },
@@ -158,6 +167,10 @@ function save(): void {
             preserveScroll: true,
             only: ['map'],
             onSuccess: () => {
+                // Show what was saved: typed leading spaces are now {_} tokens.
+                drafts.wormhole = keepLeadingSpaces(drafts.wormhole);
+                drafts.kspace = keepLeadingSpaces(drafts.kspace);
+                drafts.return = keepLeadingSpaces(drafts.return);
                 errors.wormhole = null;
                 errors.kspace = null;
                 errors.return = null;

@@ -14,7 +14,7 @@ export function isWormholeSignature(signature: Pick<TSignature, 'signature_categ
 
 /**
  * Chain numbers for every wormhole signature in one system (signature id →
- * alias): locked numbers are kept, the hole marked Static takes slot 1, the
+ * alias): locked numbers are kept, the hole marked Static takes the static slot, the
  * rest get the lowest free slot from 2 up. See `planSignatureAliases`.
  */
 export function planAliasesForSystem(params: {

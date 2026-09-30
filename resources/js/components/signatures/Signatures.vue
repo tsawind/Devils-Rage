@@ -22,13 +22,13 @@ import { useShowMap } from '@/composables/useShowMap';
 import usePermission from '@/composables/usePermission';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
-import { decideReturnHole, orderOpenConnections, type TReturnConnectionOption, type TReturnHoleOption, type TScanDistance } from '@/lib/returnHole';
+import { AUTO_LINK_WINDOW_MS, decideReturnHole, orderOpenConnections, type TReturnConnectionOption, type TReturnHoleOption, type TScanDistance } from '@/lib/returnHole';
 import type { TRawSignature } from '@/lib/SignatureParser';
 import { aliasedSolarsystemLabel } from '@/lib/solarsystem';
 import { createSignature, TProcessedConnection, updateMapUserSettings, updateSignature, useMapSolarsystems } from '@/map/api';
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TSignature } from '@/types/models';
-import { useLocalStorage } from '@vueuse/core';
+import { useLocalStorage, useNow } from '@vueuse/core';
 import { ArrowDown, ArrowUp, CircleHelp, Cloud, Database, Fan, Flag, Gem, Landmark, Rows2, Rows3, Shield, Swords } from 'lucide-vue-next';
 import { type Component, computed, nextTick, ref } from 'vue';
 import { toast } from 'vue-sonner';
@@ -208,6 +208,26 @@ function handleReturnConfirm(selection: { signatureId: number; connectionId: num
     pending_return = null;
 }
 
+// Seconds left to paste a scan and have the return hole linked automatically:
+// shown while you are in the system you just jumped into and its connection
+// back still has no signature on this side.
+const now = useNow({ interval: 1000 });
+const auto_link_seconds = computed(() => {
+    const system = props.map_solarsystem;
+    const jump = recentJump.value;
+    if (!system || !jump || jump.toSolarsystemId !== system.solarsystem_id) return 0;
+
+    const waiting = connections.value.some(
+        (connection) =>
+            connection.type !== 'stargate' &&
+            !dismissed_connections.has(connection.id) &&
+            !(connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === system.id),
+    );
+    if (!waiting) return 0;
+
+    return Math.max(0, Math.ceil((AUTO_LINK_WINDOW_MS - (now.value.getTime() - jump.at)) / 1000));
+});
+
 function handleReturnSkip(connectionIds: number[]): void {
     for (const id of connectionIds) dismissed_connections.add(id);
     pending_return = null;
@@ -379,6 +399,15 @@ function createNewSignature() {
                     <ArrowDown v-if="sortPreferences.column === 'age' && sortPreferences.direction === 'desc'" class="size-3" />
                 </button>
                 <span class="w-14 shrink-0"></span>
+            </div>
+
+            <!-- Auto-link countdown -->
+            <div
+                v-if="auto_link_seconds > 0"
+                class="flex items-center justify-between border-b border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300"
+            >
+                <span>Paste your scan to auto-link the return hole</span>
+                <span class="font-mono font-medium">{{ auto_link_seconds }}s</span>
             </div>
 
             <!-- Signature rows -->

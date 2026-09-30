@@ -1,5 +1,5 @@
 import { isWormholeClass } from '@/const/solarsystemClasses';
-import { aliasTargetKind, isIgnoredAlias, suggestAlias, TAliasScheme } from '@/lib/alias';
+import { aliasTargetKind, homeCallsign, isIgnoredAlias, suggestAlias, TAliasScheme } from '@/lib/alias';
 import { connectionFlag } from '@/lib/chainNumbering';
 import { TResolvedSolarsystem } from '@/pages/maps';
 import { TSignature, TStringedSolarsystemClass } from '@/types/models';
@@ -74,6 +74,7 @@ export type TBookmarkFormats = {
     bookmark_format_kspace?: string | null;
     bookmark_format_return?: string | null;
     bookmark_ignored_alias?: string;
+    bookmark_alias_scheme?: TAliasScheme;
 };
 
 /**
@@ -122,6 +123,21 @@ export function getSignatureIdShort(signatureId: string | null | undefined): str
 }
 
 /**
+ * `{alias}` for a hole: home's holes use their callsign with an extra leading
+ * space ("A" → "  Alpha" once the template's own `{_}` is added), every other
+ * alias as is.
+ */
+function aliasTokenValue(alias: string | null | undefined, useCallsigns: boolean): string {
+    const callsign = useCallsigns ? homeCallsign(alias) : null;
+    return callsign ? `${BOOKMARK_SPACE}${callsign}` : (alias ?? '');
+}
+
+/** `{here}`: a system directly off home is named by its callsign ("A" → "Alpha"). */
+function hereTokenValue(alias: string | null | undefined, useCallsigns: boolean): string {
+    return (useCallsigns ? homeCallsign(alias) : null) ?? alias ?? '';
+}
+
+/**
  * Resolve the value for every bookmark token for a given system and the
  * connection signature. Tokens with no value resolve to an empty string and are
  * dropped when the template renders. Mass and lifetime deliberately stay empty
@@ -132,10 +148,11 @@ export function getBookmarkTokenValues(
     context: TBookmarkContext,
     hereAlias?: string | null,
     hereClass?: TStringedSolarsystemClass | null,
+    useCallsigns = true,
 ): Record<TBookmarkToken, string> {
     return {
-        alias: system.alias ?? '',
-        here: hereAlias ?? '',
+        alias: aliasTokenValue(system.alias, useCallsigns),
+        here: hereTokenValue(hereAlias, useCallsigns),
         hereclass: hereClass ? getBookmarkClassString({ class: hereClass, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
         class: `${getBookmarkClassString(system.solarsystem)}${context.classSuffix ?? ''}`,
@@ -204,7 +221,8 @@ export function formatBookmarkName(
           ? formats?.bookmark_format_wormhole || DEFAULT_BOOKMARK_FORMAT_WORMHOLE
           : formats?.bookmark_format_kspace || DEFAULT_BOOKMARK_FORMAT_KSPACE;
 
-    return renderBookmarkTemplate(template, getBookmarkTokenValues(system, context, hereAlias, hereClass));
+    const useCallsigns = formats?.bookmark_alias_scheme !== 'alphabetical';
+    return renderBookmarkTemplate(template, getBookmarkTokenValues(system, context, hereAlias, hereClass, useCallsigns));
 }
 
 /**
@@ -302,19 +320,22 @@ export function buildSignatureBookmark(params: {
     const knownClass = knownTargetClass(signature.signature_type?.target_class);
     const isTargetWormhole = !knownClass || isWormholeClass(knownClass);
 
+    const useCallsigns = formats.bookmark_alias_scheme !== 'alphabetical';
     const values: Record<TBookmarkToken, string> = {
-        alias:
+        alias: aliasTokenValue(
             plannedAlias ??
-            suggestAlias({
-                parentAlias: currentSystem.alias,
-                targetIsWormhole: isTargetWormhole,
-                originIsWormhole: isWormholeClass(currentSystem.class),
-                aliases,
-                scheme: formats.bookmark_alias_scheme,
-                targetKind: aliasTargetKind(isTargetWormhole, knownClass),
-                ignoredAlias: formats.bookmark_ignored_alias,
-            }) ?? '',
-        here: currentSystem.alias ?? '',
+                suggestAlias({
+                    parentAlias: currentSystem.alias,
+                    targetIsWormhole: isTargetWormhole,
+                    originIsWormhole: isWormholeClass(currentSystem.class),
+                    aliases,
+                    scheme: formats.bookmark_alias_scheme,
+                    targetKind: aliasTargetKind(isTargetWormhole, knownClass),
+                    ignoredAlias: formats.bookmark_ignored_alias,
+                }),
+            useCallsigns,
+        ),
+        here: hereTokenValue(currentSystem.alias, useCallsigns),
         hereclass: currentSystem.class ? getBookmarkClassString({ class: currentSystem.class, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
         class: `${knownClass ? getBookmarkClassString({ class: knownClass, name: '' }) : ''}${context.classSuffix ?? ''}`,

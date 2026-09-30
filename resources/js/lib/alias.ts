@@ -124,12 +124,61 @@ function guessNextAlphabeticalAlias(prefix: string, aliases: string[], targetKin
 }
 
 /**
- * The numeric scheme's slots: 1-9, then A-Z once a system has more than nine
- * children. Every slot is a single character, so "110" can never be confused
- * between "the tenth hole off 1" and "the first hole off 11" — the tenth hole
- * off 1 is "1A".
+ * The numeric scheme's slots for holes that aren't the static: 1-9, then A-Z
+ * once a system has more than nine. Every slot is a single character, so "110"
+ * can never be confused between "the tenth hole off 1" and "the first hole off
+ * 11" — the tenth hole off 1 is "1A". Slot 0 is the static's (see STATIC_SLOT).
  */
 const NUMERIC_SLOTS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/** Outside home, the hole marked as the system's static is always slot 0. */
+const STATIC_SLOT = '0';
+
+/**
+ * Home (the map's ignored alias, e.g. Daisy) uses the US military alphabet:
+ * the static is always A / Alpha, other holes take the letters below in order.
+ * C, E, F, H, I, L and O are skipped (hostile group name, k-space letters, and
+ * letters that read like 1 / 0 inside a chain such as "A101242").
+ */
+const HOME_STATIC_SLOT = 'A';
+const HOME_SLOTS = 'BDGJKMNPQRSTUVWXYZ';
+
+/** The spoken name for each of home's letters, used in home's bookmarks. */
+export const HOME_CALLSIGNS: Readonly<Record<string, string>> = {
+    A: 'Alpha',
+    B: 'Bravo',
+    D: 'Delta',
+    G: 'Golf',
+    J: 'Juliett',
+    K: 'Kilo',
+    M: 'Mike',
+    N: 'November',
+    P: 'Papa',
+    Q: 'Quebec',
+    R: 'Romeo',
+    S: 'Sierra',
+    T: 'Tango',
+    U: 'Uniform',
+    V: 'Victor',
+    W: 'Whiskey',
+    X: 'X-ray',
+    Y: 'Yankee',
+    Z: 'Zulu',
+};
+
+/**
+ * The callsign for a hole directly off home ("A" → "Alpha"), or null for any
+ * other alias. Only single-letter aliases can be home's holes.
+ */
+export function homeCallsign(alias: string | null | undefined): string | null {
+    const normalized = (alias ?? '').trim().toUpperCase();
+    return normalized.length === 1 ? (HOME_CALLSIGNS[normalized] ?? null) : null;
+}
+
+/** The static slot and the other slots for a system, depending on whether it is home. */
+function slotsFor(isHome: boolean): { staticSlot: string; slots: string } {
+    return isHome ? { staticSlot: HOME_STATIC_SLOT, slots: HOME_SLOTS } : { staticSlot: STATIC_SLOT, slots: NUMERIC_SLOTS };
+}
 
 /**
  * The lowest unused numeric slot extending `prefix`, so a slot freed by a
@@ -138,12 +187,12 @@ const NUMERIC_SLOTS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
  * descendants ("121" under "1") are never mistaken for a direct child.
  * Expects `prefix` and `aliases` already upper-cased by `guessNextAlias`.
  */
-function nextNumericSlot(prefix: string, aliases: string[]): string {
+function nextNumericSlot(prefix: string, aliases: string[], slots: string = NUMERIC_SLOTS): string {
     const used = new Set<number>();
     for (const alias of aliases) {
         if (alias.length !== prefix.length + 1 || !alias.startsWith(prefix)) continue;
 
-        const index = NUMERIC_SLOTS.indexOf(alias.slice(prefix.length));
+        const index = slots.indexOf(alias.slice(prefix.length));
         if (index !== -1) {
             used.add(index);
         }
@@ -153,7 +202,7 @@ function nextNumericSlot(prefix: string, aliases: string[]): string {
     while (used.has(index)) {
         index++;
     }
-    return NUMERIC_SLOTS[Math.min(index, NUMERIC_SLOTS.length - 1)];
+    return slots[Math.min(index, slots.length - 1)];
 }
 
 /**
@@ -176,7 +225,8 @@ function nextNumericSlot(prefix: string, aliases: string[]): string {
 export function guessNextAlias(parentAlias: string | null | undefined, aliases: string[], opts?: TGuessNextAliasOptions): string {
     let prefix = (parentAlias ?? '').trim().toUpperCase();
 
-    if (isIgnoredAlias(prefix, opts?.ignoredAlias)) {
+    const isHome = isIgnoredAlias(prefix, opts?.ignoredAlias);
+    if (isHome) {
         prefix = '';
     }
 
@@ -186,7 +236,8 @@ export function guessNextAlias(parentAlias: string | null | undefined, aliases: 
         return guessNextAlphabeticalAlias(prefix, knownAliases, opts.targetKind);
     }
 
-    return `${prefix}${nextNumericSlot(prefix, knownAliases)}`;
+    // A guess is never the static: home's holes start at B, others at 1.
+    return `${prefix}${nextNumericSlot(prefix, knownAliases, slotsFor(isHome).slots)}`;
 }
 
 /**
@@ -227,7 +278,7 @@ export type TAliasPlanSignature = {
     isConnected: boolean;
     /** The number stored on the signature once it was copied or jumped; never changes by itself. */
     lockedAlias?: string | null;
-    /** Marked as the system's static: takes the reserved slot 1. */
+    /** Marked as the system's static: takes the reserved static slot (A in home, 0 elsewhere). */
     isStatic?: boolean;
     /** Whether the hole leads to wormhole space; unknown destinations count as wormhole space. */
     targetIsWormhole?: boolean;
@@ -241,15 +292,21 @@ export function chainPrefix(parentAlias: string | null | undefined, ignoredAlias
     return isIgnoredAlias(prefix, ignoredAlias) ? '' : prefix;
 }
 
-/** The alias reserved for a system's static: slot 1, e.g. "1" in home, "11" in 1. */
+/** The alias reserved for a system's static: "A" (Alpha) in home, otherwise slot 0, e.g. "A0", "10". */
 export function staticSlotAlias(parentAlias: string | null | undefined, ignoredAlias?: string | null): string {
-    return `${chainPrefix(parentAlias, ignoredAlias)}${NUMERIC_SLOTS[0]}`;
+    const isHome = isIgnoredAlias(parentAlias, ignoredAlias);
+    return `${chainPrefix(parentAlias, ignoredAlias)}${slotsFor(isHome).staticSlot}`;
 }
 
-/** The alias for a single slot character (1-9, A-Z) in a system, or null when the slot is invalid. */
+/**
+ * The alias for a single slot character in a system, or null when the slot is
+ * invalid there: home takes its military letters (A, B, D, G…), everywhere
+ * else 0 (the static) or 1-9 / A-Z.
+ */
 export function aliasForSlot(parentAlias: string | null | undefined, slot: string, ignoredAlias?: string | null): string | null {
     const normalized = slot.trim().toUpperCase();
-    if (normalized.length !== 1 || !NUMERIC_SLOTS.includes(normalized)) return null;
+    const { staticSlot, slots } = slotsFor(isIgnoredAlias(parentAlias, ignoredAlias));
+    if (normalized.length !== 1 || !(staticSlot + slots).includes(normalized)) return null;
     return `${chainPrefix(parentAlias, ignoredAlias)}${normalized}`;
 }
 
@@ -258,9 +315,10 @@ export function aliasForSlot(parentAlias: string | null | undefined, slot: strin
  *
  * Numeric scheme (the Devil's Rage convention):
  * - a number stored on a signature (locked on copy or jump) is always kept;
- * - slot 1 is reserved for the hole marked as the static: only it can take it;
- * - every other unjumped hole gets the lowest free slot from 2 up (then A-Z),
- *   in the order the signatures were added;
+ * - the static slot is reserved for the hole marked as the static: only it
+ *   can take it (A / Alpha in home, 0 everywhere else);
+ * - every other unjumped hole gets the lowest free slot (home: B, D, G…;
+ *   elsewhere 1-9 then A-Z), in the order the signatures were added;
  * - numbers used by systems on the map or locked on other signatures are taken.
  *
  * Returns signature id → alias. Connected holes without a locked number are
@@ -282,7 +340,8 @@ export function planSignatureAliases(params: {
     }
 
     const prefix = chainPrefix(params.parentAlias, params.ignoredAlias);
-    const staticSlot = `${prefix}${NUMERIC_SLOTS[0]}`;
+    const { staticSlot: staticChar, slots } = slotsFor(isIgnoredAlias(params.parentAlias, params.ignoredAlias));
+    const staticSlot = `${prefix}${staticChar}`;
     const taken = new Set(params.aliases.map((alias) => alias.trim().toUpperCase()));
 
     for (const signature of wormholes) {
@@ -304,12 +363,12 @@ export function planSignatureAliases(params: {
     for (const signature of unnumbered) {
         if (planned.has(signature.id)) continue;
 
-        let index = 1;
-        while (index < NUMERIC_SLOTS.length - 1 && taken.has(`${prefix}${NUMERIC_SLOTS[index]}`)) {
+        let index = 0;
+        while (index < slots.length - 1 && taken.has(`${prefix}${slots[index]}`)) {
             index++;
         }
 
-        const alias = `${prefix}${NUMERIC_SLOTS[index]}`;
+        const alias = `${prefix}${slots[index]}`;
         planned.set(signature.id, alias);
         taken.add(alias);
     }

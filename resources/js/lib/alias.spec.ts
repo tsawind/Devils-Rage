@@ -1,4 +1,4 @@
-import { aliasForSlot, guessNextAlias, isIgnoredAlias, planSignatureAliases, staticSlotAlias, suggestAlias } from '@/lib/alias';
+import { aliasForSlot, guessNextAlias, homeCallsign, isIgnoredAlias, planSignatureAliases, staticSlotAlias, suggestAlias } from '@/lib/alias';
 import { describe, expect, it } from 'vitest';
 
 describe('guessNextAlias (numeric, default)', () => {
@@ -94,9 +94,9 @@ describe('guessNextAlias (ignoredAlias)', () => {
         expect(guessNextAlias('HOME', ['A'], { scheme: 'alphabetical', ignoredAlias: 'HOME' })).toBe('B');
     });
 
-    it('resets the prefix when the parent is the ignored alias, numeric scheme', () => {
-        expect(guessNextAlias('HOME', [], { ignoredAlias: 'HOME' })).toBe('1');
-        expect(guessNextAlias('HOME', ['1'], { ignoredAlias: 'HOME' })).toBe('2');
+    it('resets the prefix when the parent is the ignored alias, numeric scheme (home letters)', () => {
+        expect(guessNextAlias('HOME', [], { ignoredAlias: 'HOME' })).toBe('B');
+        expect(guessNextAlias('HOME', ['B'], { ignoredAlias: 'HOME' })).toBe('D');
     });
 
     it('matches the ignored alias case-insensitively', () => {
@@ -204,14 +204,16 @@ describe('guessNextAlias (numeric, more than nine holes)', () => {
         expect(guessNextAlias('1', [...nine.filter((a) => a !== '12'), '1A'])).toBe('12');
     });
 
-    it('numbers the holes off an ignored home alias 1, 2, 3', () => {
-        expect(guessNextAlias('Daisy', ['Daisy'], { ignoredAlias: 'Daisy' })).toBe('1');
-        expect(guessNextAlias('Daisy', ['Daisy', '1'], { ignoredAlias: 'Daisy' })).toBe('2');
+    it("names home's non-static holes with the military letters B, D, G", () => {
+        expect(guessNextAlias('Daisy', ['Daisy'], { ignoredAlias: 'Daisy' })).toBe('B');
+        expect(guessNextAlias('Daisy', ['Daisy', 'B'], { ignoredAlias: 'Daisy' })).toBe('D');
+        expect(guessNextAlias('Daisy', ['Daisy', 'A', 'B', 'D'], { ignoredAlias: 'Daisy' })).toBe('G');
     });
 });
 
-describe('planSignatureAliases (reserved static slot, locked numbers)', () => {
+describe('planSignatureAliases (patch 9: home letters, static 0, locked numbers)', () => {
     const home = { parentAlias: 'Daisy', originIsWormhole: true, ignoredAlias: 'Daisy' };
+    const inA = { parentAlias: 'A', originIsWormhole: true, ignoredAlias: 'Daisy' };
     const wh = (id: number, extra: Partial<{ isConnected: boolean; lockedAlias: string | null; isStatic: boolean }> = {}) => ({
         id,
         isWormhole: true,
@@ -219,89 +221,119 @@ describe('planSignatureAliases (reserved static slot, locked numbers)', () => {
         ...extra,
     });
 
-    it('keeps slot 1 for the static and numbers other holes from 2', () => {
-        const planned = planSignatureAliases({ ...home, aliases: ['Daisy'], signatures: [wh(10), wh(11)] });
-        expect(planned.get(10)).toBe('2');
-        expect(planned.get(11)).toBe('3');
+    it("home: keeps A for the static and names other holes B, D, G", () => {
+        const planned = planSignatureAliases({ ...home, aliases: ['Daisy'], signatures: [wh(10), wh(11), wh(12)] });
+        expect(planned.get(10)).toBe('B');
+        expect(planned.get(11)).toBe('D');
+        expect(planned.get(12)).toBe('G');
     });
 
-    it('gives the hole marked Static slot 1, even when it was added later', () => {
+    it('home: the hole marked Static is always A, even when added later', () => {
         const planned = planSignatureAliases({ ...home, aliases: ['Daisy'], signatures: [wh(10), wh(11, { isStatic: true })] });
-        expect(planned.get(11)).toBe('1');
-        expect(planned.get(10)).toBe('2');
+        expect(planned.get(11)).toBe('A');
+        expect(planned.get(10)).toBe('B');
     });
 
-    it('J111918: a hole numbered before the static was found keeps its number (no two 11s)', () => {
-        const inOne = { parentAlias: '1', originIsWormhole: true, ignoredAlias: 'Daisy' };
-        // UAZ was the only hole known when its bookmark was copied: it got 12 and locked it.
-        const first = planSignatureAliases({ ...inOne, aliases: ['Daisy', '1'], signatures: [wh(5, {})] });
-        expect(first.get(5)).toBe('12');
+    it('elsewhere: static is 0, the first other hole is 1', () => {
+        const planned = planSignatureAliases({ ...inA, aliases: ['Daisy', 'A'], signatures: [wh(1), wh(2, { isStatic: true }), wh(3)] });
+        expect(planned.get(2)).toBe('A0');
+        expect(planned.get(1)).toBe('A1');
+        expect(planned.get(3)).toBe('A2');
+    });
 
-        // Later OPP (the static), DFD and HZD are found; UAZ stays 12.
+    it('a hole numbered before the static was found keeps its number (no clashes)', () => {
+        const first = planSignatureAliases({ ...inA, aliases: ['Daisy', 'A'], signatures: [wh(5)] });
+        expect(first.get(5)).toBe('A1');
+
         const later = planSignatureAliases({
-            ...inOne,
-            aliases: ['Daisy', '1'],
-            signatures: [wh(1), wh(2), wh(4, { isStatic: true }), wh(5, { lockedAlias: '12' })],
+            ...inA,
+            aliases: ['Daisy', 'A'],
+            signatures: [wh(1), wh(2), wh(4, { isStatic: true }), wh(5, { lockedAlias: 'A1' })],
         });
-        expect(later.get(4)).toBe('11');
-        expect(later.get(5)).toBe('12');
-        expect(later.get(1)).toBe('13');
-        expect(later.get(2)).toBe('14');
+        expect(later.get(4)).toBe('A0');
+        expect(later.get(5)).toBe('A1');
+        expect(later.get(1)).toBe('A2');
+        expect(later.get(2)).toBe('A3');
         expect(new Set(later.values()).size).toBe(later.size);
     });
 
-    it('never gives slot 1 to a hole that is not marked Static', () => {
-        const planned = planSignatureAliases({ ...home, aliases: ['Daisy'], signatures: [wh(10)] });
-        expect(planned.get(10)).toBe('2');
+    it('never gives the static slot to a hole that is not marked Static', () => {
+        expect(planSignatureAliases({ ...home, aliases: ['Daisy'], signatures: [wh(10)] }).get(10)).toBe('B');
+        expect(planSignatureAliases({ ...inA, aliases: ['Daisy', 'A'], signatures: [wh(10)] }).get(10)).toBe('A1');
     });
 
     it('reuses the lowest free number after a signature is deleted', () => {
         const planned = planSignatureAliases({
-            ...home,
-            aliases: ['Daisy'],
-            signatures: [wh(10, { lockedAlias: '1', isStatic: true }), wh(12, { lockedAlias: '3' }), wh(13)],
+            ...inA,
+            aliases: ['Daisy', 'A'],
+            signatures: [wh(10, { lockedAlias: 'A0', isStatic: true }), wh(12, { lockedAlias: 'A2' }), wh(13)],
         });
-        expect(planned.get(13)).toBe('2');
+        expect(planned.get(13)).toBe('A1');
     });
 
     it('skips numbers used by systems on the map and leaves connected holes without a locked number out', () => {
         const planned = planSignatureAliases({
             ...home,
-            aliases: ['Daisy', '1', '2'],
+            aliases: ['Daisy', 'A', 'B'],
             signatures: [wh(10, { isConnected: true }), { id: 11, isWormhole: false, isConnected: false }, wh(12)],
         });
         expect(planned.has(10)).toBe(false);
         expect(planned.has(11)).toBe(false);
-        expect(planned.get(12)).toBe('3');
+        expect(planned.get(12)).toBe('D');
     });
 
-    it('a second hole marked Static does not steal slot 1', () => {
+    it('a second hole marked Static does not steal the static slot', () => {
         const planned = planSignatureAliases({
             ...home,
             aliases: ['Daisy'],
-            signatures: [wh(10, { lockedAlias: '1', isStatic: true }), wh(11, { isStatic: true })],
+            signatures: [wh(10, { lockedAlias: 'A', isStatic: true }), wh(11, { isStatic: true })],
         });
-        expect(planned.get(11)).toBe('2');
+        expect(planned.get(11)).toBe('B');
     });
 
-    it('continues with letters after 9', () => {
-        const locked = ['2', '3', '4', '5', '6', '7', '8', '9'].map((alias, index) => wh(index + 1, { lockedAlias: alias }));
-        const planned = planSignatureAliases({ ...home, aliases: ['Daisy'], signatures: [...locked, wh(50)] });
-        expect(planned.get(50)).toBe('A');
+    it('elsewhere continues with letters after 9', () => {
+        const locked = ['11', '12', '13', '14', '15', '16', '17', '18', '19'].map((alias, index) => wh(index + 1, { lockedAlias: alias }));
+        const planned = planSignatureAliases({ parentAlias: '1', originIsWormhole: true, ignoredAlias: 'Daisy', aliases: ['1'], signatures: [...locked, wh(50)] });
+        expect(planned.get(50)).toBe('1A');
+    });
+
+    it('a chain started outside home numbers from 1 with static 0', () => {
+        const planned = planSignatureAliases({
+            parentAlias: null,
+            originIsWormhole: true,
+            ignoredAlias: 'Daisy',
+            aliases: [],
+            signatures: [wh(1), wh(2, { isStatic: true })],
+        });
+        expect(planned.get(1)).toBe('1');
+        expect(planned.get(2)).toBe('0');
     });
 });
 
-describe('static slot and hand-set numbers', () => {
-    it('reserves 1 in home and 11 in system 1', () => {
-        expect(staticSlotAlias('Daisy', 'Daisy')).toBe('1');
-        expect(staticSlotAlias('1', 'Daisy')).toBe('11');
-        expect(staticSlotAlias('12', 'Daisy')).toBe('121');
+describe('static slot, callsigns and hand-set numbers', () => {
+    it('reserves A in home and 0 elsewhere', () => {
+        expect(staticSlotAlias('Daisy', 'Daisy')).toBe('A');
+        expect(staticSlotAlias('A', 'Daisy')).toBe('A0');
+        expect(staticSlotAlias('A1', 'Daisy')).toBe('A10');
     });
 
-    it('builds an alias from a single slot, rejecting anything else', () => {
-        expect(aliasForSlot('1', '4', 'Daisy')).toBe('14');
+    it('builds an alias from a single slot valid for that system', () => {
+        expect(aliasForSlot('A', '4', 'Daisy')).toBe('A4');
+        expect(aliasForSlot('A', '0', 'Daisy')).toBe('A0');
         expect(aliasForSlot('Daisy', 'b', 'Daisy')).toBe('B');
-        expect(aliasForSlot('1', '10', 'Daisy')).toBeNull();
-        expect(aliasForSlot('1', '0', 'Daisy')).toBeNull();
+        expect(aliasForSlot('Daisy', 'A', 'Daisy')).toBe('A');
+        expect(aliasForSlot('Daisy', 'C', 'Daisy')).toBeNull();
+        expect(aliasForSlot('Daisy', 'E', 'Daisy')).toBeNull();
+        expect(aliasForSlot('Daisy', '1', 'Daisy')).toBeNull();
+        expect(aliasForSlot('A', '10', 'Daisy')).toBeNull();
+    });
+
+    it('names home letters with the military alphabet', () => {
+        expect(homeCallsign('A')).toBe('Alpha');
+        expect(homeCallsign('b')).toBe('Bravo');
+        expect(homeCallsign('X')).toBe('X-ray');
+        expect(homeCallsign('E')).toBeNull();
+        expect(homeCallsign('A1')).toBeNull();
+        expect(homeCallsign('1')).toBeNull();
     });
 });

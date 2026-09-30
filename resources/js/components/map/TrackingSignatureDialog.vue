@@ -184,16 +184,12 @@ watch(selectedSignature, (signature) => {
     isStatic.value = Boolean(signature?.is_static);
     isWandering.value = Boolean(signature?.is_wandering);
 
-    if (!signature) return;
-    if (signature.lifetime && signature.lifetime !== 'healthy') {
-        lifetime.value = signature.lifetime;
-    }
-    if (signature.mass_status) {
-        massStatus.value = signature.mass_status;
-    }
-    if (!lockedShipSize.value && signature.ship_size) {
-        shipSize.value = signature.ship_size;
-    }
+    // Show the chosen signature's own lifetime / mass / ship size, resetting to
+    // Healthy / Fresh / Auto when it has none, so values from a previously
+    // clicked signature never carry over.
+    lifetime.value = signature?.lifetime ?? 'healthy';
+    massStatus.value = signature?.mass_status ?? 'fresh';
+    shipSize.value = !lockedShipSize.value && signature?.ship_size ? signature.ship_size : 'auto';
 });
 
 function buildSelection(signatureId: number | null) {
@@ -217,7 +213,7 @@ function setStatic(checked: boolean): void {
     isStatic.value = checked;
     if (checked) isWandering.value = false;
 
-    // Ticking Static moves the hole to the reserved slot 1; unticking gives it back.
+    // Ticking Static moves the hole to the reserved static slot; unticking gives it back.
     if (alias.value === autoAlias.value && props.staticSlotAlias) {
         const planned = selectedSignature.value ? props.plannedAliases?.get(selectedSignature.value.id) : undefined;
         alias.value = checked ? props.staticSlotAlias : planned && planned !== props.staticSlotAlias ? planned : (props.suggestedAlias ?? '');
@@ -386,7 +382,7 @@ const selectedShipSizeOption = computed(() => shipSizeOptions.find((option) => o
                             :disabled="!selectedSignature || selectedIsK162 || staticTakenByOther"
                             @change="setStatic(($event.target as HTMLInputElement).checked)"
                         />
-                        Static <span class="text-muted-foreground">(takes slot 1)</span>
+                        Static <span class="text-muted-foreground">(takes {{ staticSlotAlias ?? 'the static slot' }})</span>
                     </label>
                     <label class="flex items-center gap-2" :class="{ 'opacity-50': !selectedSignature || selectedIsK162 }">
                         <input

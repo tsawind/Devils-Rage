@@ -87,7 +87,7 @@ export function useTracking() {
             parentAlias: origin.alias,
             targetIsWormhole,
             originIsWormhole: isWormholeSystem(origin.solarsystem),
-            // Skip slots already reserved by other unjumped holes, and slot 1 (the static's).
+            // Skip slots already reserved by other unjumped holes, and the static's slot.
             aliases: [...known_aliases.value, ...planned_aliases.value.values(), static_slot_alias.value],
             scheme: page.props.map.bookmark_alias_scheme,
             targetKind: aliasTargetKind(targetIsWormhole, target.class),
