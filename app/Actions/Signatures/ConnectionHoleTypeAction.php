@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Signatures;
 
 use App\Actions\MapConnections\SyncConnectionShipSizeAction;
+use App\Enums\ConnectionType;
 use App\Events\Signatures\SignatureUpdatedEvent;
 use App\Models\MapConnection;
 use App\Models\MapSolarsystem;
@@ -128,6 +129,9 @@ final readonly class ConnectionHoleTypeAction
         if (! in_array($sideId, [$connection->from_map_solarsystem_id, $connection->to_map_solarsystem_id], true)) {
             throw ValidationException::withMessages(['signature' => 'That signature is not on either end of this connection.']);
         }
+        if ($connection->type === ConnectionType::Stargate) {
+            throw ValidationException::withMessages(['signature' => 'A stargate has no signature to link.']);
+        }
         if ($target->map_connection_id !== null) {
             throw ValidationException::withMessages(['signature' => 'That hole is already linked to a connection.']);
         }
@@ -150,6 +154,8 @@ final readonly class ConnectionHoleTypeAction
                         ]);
                     }
                     $current->delete();
+                    // A stand-in typed from the map has no number of its own: the target keeps its locked one.
+                    $currentAlias ??= $targetAlias;
                 } else {
                     // Free the number first (one number per system), then swap.
                     $current->update(['map_connection_id' => null, 'alias' => null]);

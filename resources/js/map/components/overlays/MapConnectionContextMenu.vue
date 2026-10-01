@@ -124,6 +124,14 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
                         <span class="text-muted-foreground">&lt; 1h</span>
                     </ContextMenuRadioItem>
                 </ContextMenuRadioGroup>
+                <!-- Patch 16: re-confirm a healthy hole (clears the faint "likely EOL by age" clock). -->
+                <template v-if="map_connection.lifetime_status === 'healthy'">
+                    <ContextMenuSeparator />
+                    <ContextMenuItem class="text-xs" @select="handleLifetimeChange('healthy')">
+                        <Check class="size-4" />
+                        Checked: still healthy
+                    </ContextMenuItem>
+                </template>
             </ContextMenuSubContent>
         </ContextMenuSub>
         <ContextMenuSub>

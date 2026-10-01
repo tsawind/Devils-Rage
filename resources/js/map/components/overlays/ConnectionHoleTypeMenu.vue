@@ -90,10 +90,13 @@ function pick(entry: { type: TSignatureType; sideId: number }): void {
         const there = here === connection.source.id ? connection.target : connection.source;
         const system = store.systems.get(here);
         const name = system ? linkedForwardBookmark(store, system, there.id, there.alias ?? '') : '';
-        if (name) navigator.clipboard.writeText(name).catch(() => undefined);
-        toast.success(`${entry.type.signature} from ${sideName(entry.sideId)}`, {
-            description: name ? `${sideName(other)}'s side is its K162 · copied ${visibleBookmarkName(name)}` : `${sideName(other)}'s side is its K162.`,
-        });
+        const say = (copied: boolean) =>
+            toast.success(`${entry.type.signature} from ${sideName(entry.sideId)}`, {
+                description: copied ? `${sideName(other)}'s side is its K162 · copied ${visibleBookmarkName(name)}` : `${sideName(other)}'s side is its K162.`,
+            });
+        // Only say "copied" when the browser let us (after the round trip it may not).
+        if (name) navigator.clipboard.writeText(name).then(() => say(true), () => say(false));
+        else say(false);
     });
 }
 </script>

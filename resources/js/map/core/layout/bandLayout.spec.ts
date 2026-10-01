@@ -350,7 +350,7 @@ describe('computeBandLayout', () => {
         const one = p.get(6)!;
         // Holes beside system 1, stacked down; none takes a new column.
         const holes = [-1, -2, -3, -4].map((id) => p.get(id)!);
-        expect(holes.every((point) => point.x === one.x + 194)).toBe(true);
+        expect(holes.every((point) => point.x === one.x + 190)).toBe(true);
         expect(holes.map((point) => point.y - one.y).toSorted((a, b) => a - b)).toEqual([0, 34, 68, 102]);
         // 11 stays in the same column, below the stack of four holes.
         expect(p.get(7)!.x).toBe(one.x);
@@ -388,10 +388,12 @@ describe('computeBandLayout', () => {
         expect(p.get(-1)!.x).toBe(one.x);
         expect(p.get(-1)!.y).toBeGreaterThan(one.y);
         // The unarmed one still sits beside it.
-        expect(p.get(-2)!.x).toBe(one.x + 194);
+        expect(p.get(-2)!.x).toBe(one.x + 190);
         // The home already goes on to 1: its armed hole is the next branch to the right.
         expect(p.get(-3)!.x).toBeGreaterThan(one.x);
-        expect(p.get(-3)!.x).not.toBe(p.get(5)!.x + 194);
+        expect(p.get(-3)!.x).not.toBe(p.get(5)!.x + 190);
+        // The compact boxes beside 1 stay clear of the next column's card.
+        expect(p.get(-2)!.x + 100).toBeLessThanOrEqual(p.get(-3)!.x - 10);
     });
 
     it('patch 13: sorts a branch leading to a lane after its siblings', () => {

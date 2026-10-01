@@ -533,9 +533,9 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
     return { positions, ghosts, lanes, mainBand, sideBand, combatBand, parentOf, bandOf, sideChains };
 }
 
-/** Patch 15: unjumped holes beside a rage-lane system (compact 80×26, stacked down). */
-const LANE_HOLE_GAP = 14;
-const LANE_HOLE_WIDTH = 110;
+/** Patch 15: unjumped holes beside a rage-lane system (compact 100×26, stacked down; patch 16: 10 px clear of the next column). */
+const LANE_HOLE_GAP = 10;
+const LANE_HOLE_WIDTH = 100;
 const LANE_HOLE_STEP = 34;
 
 /** Every system reachable from `start` through systems that pass `allowed`. */

@@ -36,7 +36,9 @@ final readonly class UpdateMapConnectionAction
                 $data_array['ship_size'] = $locked_ship_size;
             }
 
-            if (! $data->lifetime instanceof Optional && $mapConnection->lifetime !== $data->lifetime) {
+            // Patch 16: any lifetime someone sets counts as a fresh look (re-confirming "healthy"
+            // clears the map's "likely EOL by age" mark).
+            if (! $data->lifetime instanceof Optional) {
                 $data_array['lifetime_updated_at'] = now();
             }
 

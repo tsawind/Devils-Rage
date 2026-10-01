@@ -20,7 +20,7 @@ const user = useUser();
 
 const FULL_WIDTH = 180;
 /** Patch 16: wider small boxes in rage lanes, so the note fits inside. */
-const COMPACT_WIDTH = 110;
+const COMPACT_WIDTH = 100;
 const FULL_HEIGHT = 40;
 
 const items = computed(() => {
@@ -118,7 +118,7 @@ const chips = computed(() => {
     const place = (parentId: number, label: string, open: boolean) => {
         const position = store.renderPosition(parentId);
         if (!position) return;
-        const left = position.x - ANCHOR_OFFSET.x + FULL_WIDTH + 14;
+        const left = position.x - ANCHOR_OFFSET.x + FULL_WIDTH + 10;
         const top = position.y - ANCHOR_OFFSET.y + (visibleCount.get(parentId) ?? 0) * 34 + 4;
         result.push({
             parentId,
