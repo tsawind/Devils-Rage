@@ -60,6 +60,8 @@ const chainColor = computed<string | null>(() => {
     if (!source?.combat_color || source.combat_color !== target?.combat_color) return null;
     return combatColorHex(source.combat_color);
 });
+/** Not how either end was found (patch 12): a loop, drawn dashed amber. */
+const isLoop = computed(() => store.isTreeLayout.value && store.loopConnectionIds.value.has(id));
 const rallyDirection = computed<'forward' | 'reverse' | null>(() => store.rallyEdgeDirections.value.get(id) ?? null);
 
 function handleConnectionClick(event: MouseEvent): void {
@@ -83,6 +85,7 @@ function handleConnectionContextMenu(event: MouseEvent): void {
         :is-on-route="isOnRoute"
         :rally-direction="rallyDirection"
         :chain-color="chainColor"
+        :is-loop="isLoop"
         :scale="store.scale.value"
         @connection-click="handleConnectionClick"
         @connection-context-menu="handleConnectionContextMenu"

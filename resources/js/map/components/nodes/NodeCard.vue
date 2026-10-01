@@ -52,6 +52,9 @@ const chainHex = computed(() => combatColorHex(system.combat_color));
 const chainLabel = computed(() => combatColorLabel(system.combat_color));
 const isCombatHome = computed(() => Boolean(system.combat_home && chainHex.value));
 const isCombatPulsing = computed(() => isCombatHome.value && Boolean(system.combat_active));
+/** Kept when its chain was cleared (patch 12): "was Red". */
+const previousChain = computed(() => combatColorLabel(system.combat_previous_color));
+const previousHex = computed(() => combatColorHex(system.combat_previous_color));
 
 /**
  * Systems in a combat chain glow in its color, the combat home more strongly.
@@ -166,6 +169,14 @@ function handleSubmit() {
             :style="{ backgroundColor: chainHex ?? undefined }"
         >
             ⚔ Combat{{ chainLabel ? ` · ${chainLabel}` : '' }}
+        </div>
+        <div
+            v-else-if="previousChain"
+            class="pointer-events-none absolute -top-2 right-2 rounded bg-card px-1 text-[9px] leading-3 opacity-70"
+            :style="{ color: previousHex ?? undefined }"
+            :title="`Kept when the ${previousChain} chain was cleared`"
+        >
+            was {{ previousChain }}
         </div>
         <div class="row-start-1 grid grid-cols-[auto_1fr_auto] items-center justify-center gap-x-1 px-2">
             <SolarsystemClass :solarsystem_class="resolvedSolarsystem.class" />

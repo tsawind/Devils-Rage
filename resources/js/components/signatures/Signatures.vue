@@ -4,6 +4,7 @@ import PlusIcon from '@/components/icons/PlusIcon.vue';
 import TrashIcon from '@/components/icons/TrashIcon.vue';
 import PasteSignatureWarningDialog from '@/components/signatures/PasteSignatureWarningDialog.vue';
 import ReturnHoleDialog from '@/components/signatures/ReturnHoleDialog.vue';
+import SideChainLetterDialog from '@/components/signatures/SideChainLetterDialog.vue';
 import CombatControls from '@/components/combat/CombatControls.vue';
 import Signature from '@/components/signatures/Signature.vue';
 import SignaturesEmptyState from '@/components/signatures/SignaturesEmptyState.vue';
@@ -23,19 +24,21 @@ import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { useShowMap } from '@/composables/useShowMap';
 import usePermission from '@/composables/usePermission';
 import { signatureCategories } from '@/const/signatures';
-import { suggestAlias } from '@/lib/alias';
+import { displayAlias, suggestAlias } from '@/lib/alias';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
 import { AUTO_LINK_WINDOW_MS, decideReturnHole, orderOpenConnections, type TReturnConnectionOption, type TReturnHoleOption, type TScanDistance } from '@/lib/returnHole';
 import type { TRawSignature } from '@/lib/SignatureParser';
+import { needsSideChainLetter, suggestSideChainLetter, takenLetters } from '@/lib/sideChain';
 import { aliasedSolarsystemLabel } from '@/lib/solarsystem';
-import { createSignature, TProcessedConnection, updateMapUserSettings, updateSignature, useMapSolarsystems } from '@/map/api';
+import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
+import { createSignature, TProcessedConnection, updateMapUserSettings, updateSignature, useMapSolarsystems, useMapStore } from '@/map/api';
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TSignature } from '@/types/models';
 import { useLocalStorage, useNow } from '@vueuse/core';
 import { ArrowDown, ArrowUp, CircleHelp, Cloud, Database, Fan, Flag, Gem, Landmark, Rows2, Rows3, Shield, Swords } from 'lucide-vue-next';
-import { type Component, computed, nextTick, ref } from 'vue';
+import { type Component, computed, nextTick, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
 const props = defineProps<{
@@ -130,6 +133,55 @@ const claim_alias = computed<string | null>(() => {
         combatHome: Boolean(map_system.value.combat_home),
     });
 });
+
+// ---- Side chain letters (patch 12) ------------------------------------------
+// A chain not linked to Daisy numbers its holes plainly (1, 11, 111) when it is
+// the only one; from the second such chain on, its start takes a letter
+// (Z, Y, X…) before its holes are numbered.
+
+const side_chains = computed(() => {
+    try {
+        return useMapStore().bandLayout.value?.sideChains ?? [];
+    } catch {
+        return [];
+    }
+});
+
+const letter_taken = computed(() => takenLetters(map_solarsystems.value.map((system) => system.alias)));
+const letter_suggested = computed(() => suggestSideChainLetter(letter_taken.value));
+
+const needs_letter = computed(() => {
+    const system = map_system.value;
+    if (!system || system.combat_color || !can_write.value || !letter_suggested.value) return false;
+    if (!signatures.value.some((signature) => isWormholeSignature(signature))) return false;
+    const aliasOf = new Map(map_solarsystems.value.map((candidate) => [candidate.id, candidate.alias]));
+    const chains = side_chains.value.map((chain) => ({
+        rootId: chain.rootId,
+        rootAlias: aliasOf.get(chain.rootId) ?? null,
+        memberAliases: chain.memberIds.map((id) => aliasOf.get(id) ?? null),
+    }));
+    return needsSideChainLetter(system.id, chains);
+});
+
+const letter_open = ref(false);
+const letter_asked = new Set<number>();
+watch(
+    needs_letter,
+    (needed) => {
+        const system = map_system.value;
+        if (!needed || !system || letter_asked.has(system.id)) return;
+        letter_asked.add(system.id);
+        letter_open.value = true;
+    },
+    { immediate: true },
+);
+
+function handleLetterChoice(letter: string): void {
+    const system = map_system.value;
+    if (!system || system.alias || letter_taken.value.has(letter)) return;
+    updateMapSolarsystem(system, { alias: letter });
+    toast.success(`Side chain ${letter} (${displayAlias(letter)})`, { description: `Holes here are numbered ${letter}1, ${letter}2…` });
+}
 
 // ---- Return hole after a paste ---------------------------------------------
 // After a jump the connection back has no signature on this side yet. When a
@@ -490,6 +542,14 @@ function createNewSignature() {
                 </p>
             </div>
         </MapPanelContent>
+        <SideChainLetterDialog
+            v-if="letter_suggested"
+            v-model:open="letter_open"
+            :system-name="map_solarsystem.solarsystem.name"
+            :suggested="letter_suggested"
+            :taken="letter_taken"
+            @choose="handleLetterChoice"
+        />
         <ReturnHoleDialog
             v-model:open="return_dialog_open"
             :options="return_options"

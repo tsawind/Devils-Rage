@@ -115,6 +115,7 @@ Route::middleware('auth')->group(function () {
     Route::post('maps/{map}/combat', [MapCombatController::class, 'store'])->name('maps.combat.store');
     Route::delete('maps/{map}/combat', [MapCombatController::class, 'destroy'])->name('maps.combat.destroy');
     Route::delete('map-solarsystems/{mapSolarsystem}/combat', [MapCombatController::class, 'clear'])->name('map-solarsystems.combat.clear');
+    Route::delete('maps/{map}/combat-chains/{color}', [MapCombatController::class, 'clearChain'])->name('maps.combat-chains.destroy');
     Route::put('map-selection', [MapSelectionController::class, 'update'])->name('map-selection.update');
     Route::delete('map-selection', [MapSelectionController::class, 'destroy'])->name('map-selection.destroy');
 

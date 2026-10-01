@@ -107,6 +107,12 @@ export type TMapSolarsystemBase = {
     combat_home?: boolean;
     /** Combat mode: someone is working this combat home's chain right now (it pulses). */
     combat_active?: boolean;
+    /** Combat mode: when this combat home's chain was started (lane order, patch 12). */
+    combat_started_at?: string | null;
+    /** Kept when its chain was cleared: the chain it came from ("was Red", patch 12). */
+    combat_previous_color?: string | null;
+    /** Combat homes: who is working the chain (names). */
+    combat_workers?: string[];
     /** When a scan was last pasted here (ISO), for greying out dead ends. */
     scanned_at?: string | null;
 };

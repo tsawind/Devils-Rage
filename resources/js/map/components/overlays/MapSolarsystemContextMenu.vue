@@ -20,7 +20,7 @@ import useUser from '@/composables/useUser';
 import { useWaypoint } from '@/composables/useWaypoint';
 import { isWormholeClass } from '@/const/solarsystemClasses';
 import { combatColorLabel, describeChainRoute } from '@/lib/combat';
-import { clearCombatChain } from '@/map/actions/combat';
+import { openClearChain } from '@/map/actions/clearChain';
 import { deleteMapSolarsystem } from '@/map/actions/deleteMapSolarsystem';
 import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { useAddConnectionDialog } from '@/map/interactions/useAddConnectionDialog';
@@ -80,7 +80,7 @@ function handleCopyRoute() {
 }
 
 function handleClearCombatChain() {
-    clearCombatChain(map_solarsystem.id);
+    if (map_solarsystem.combat_color) openClearChain(map_solarsystem.combat_color);
 }
 
 const options: TMapSolarsystemStatus[] = ['unknown', 'friendly', 'hostile', 'active', 'unscanned', 'empty'];
@@ -117,7 +117,7 @@ const options: TMapSolarsystemStatus[] = ['unknown', 'friendly', 'hostile', 'act
         </ContextMenuItem>
         <ContextMenuItem v-if="can_write && map_solarsystem.combat_color" @select="handleClearCombatChain">
             <Eraser class="size-4" />
-            Clear {{ combatColorLabel(map_solarsystem.combat_color) ?? 'combat' }} chain
+            Clear {{ combatColorLabel(map_solarsystem.combat_color) ?? 'combat' }} chain…
         </ContextMenuItem>
 
         <ContextMenuSeparator />

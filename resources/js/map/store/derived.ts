@@ -1,4 +1,4 @@
-import { computeTreeLayout, type TreeLayoutInput } from '@/map/core/layout/treeLayout';
+import { computeBandLayout, isLoopEdge, type BandLayoutInput, type BandLayoutResult } from '@/map/core/layout/bandLayout';
 import { compareSystems } from '@/map/core/sorting';
 import type { Vec2 } from '@/map/core/types';
 import { TMap, TMapConnection, TMapSolarsystem, TSolarsystem } from '@/pages/maps';
@@ -49,15 +49,36 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
     const isConstantWidthEnabled = computed(() => meta.value?.constant_width_enabled ?? false);
 
     /**
-     * Base-unit tree positions, recomputed only when the structure changes
-     * (systems, connections, pins, home, the effective mode) — live drag
+     * The band layout (patch 12): main band, side chains, combat lanes. Always
+     * computed (cheap) since the side chains also drive the side-chain letters;
+     * its positions are only used in the tree layout. Recomputed only when the
+     * structure changes (systems, connections, pins, home, colors) — live drag
      * positions and node sizes don't feed in, so it stays out of hot paths.
      */
-    const treePositions: ComputedRef<Map<number, Vec2> | null> = computed(() => {
-        if (!isTreeLayout.value || !meta.value) return null;
-        return computeTreeLayout(toTreeInput(entities, meta.value.home_solarsystem_id), {
+    const bandLayout: ComputedRef<BandLayoutResult | null> = computed(() => {
+        if (!meta.value) return null;
+        return computeBandLayout(toBandInput(entities, meta.value), {
             gridSize: view.config.value.grid_size,
+            nodeWidth: meta.value.constant_width_enabled ? 180 : 160,
         });
+    });
+
+    /** Base-unit tree positions: the band layout's, when the tree layout is active. */
+    const treePositions: ComputedRef<Map<number, Vec2> | null> = computed(() => {
+        if (!isTreeLayout.value) return null;
+        return bandLayout.value?.positions ?? null;
+    });
+
+    /** Connections that aren't how either end was found: drawn as dashed loop lines (patch 12). */
+    const loopConnectionIds: ComputedRef<ReadonlySet<number>> = computed(() => {
+        const ids = new Set<number>();
+        const layout = bandLayout.value;
+        if (!layout) return ids;
+        for (const connection of entities.connections.values()) {
+            if (connection.type === 'stargate') continue;
+            if (isLoopEdge(layout.parentOf, connection.from_map_solarsystem_id, connection.to_map_solarsystem_id)) ids.add(connection.id);
+        }
+        return ids;
     });
 
     /** The anchor a node renders at: the auto layout when active, else the live position. */
@@ -125,6 +146,8 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         isTreeLayout,
         isLayoutLocked,
         isConstantWidthEnabled,
+        bandLayout,
+        loopConnectionIds,
         treePositions,
         renderPosition,
         resolveConnection,
@@ -134,34 +157,39 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
     };
 }
 
-/** Translates the entity maps into the structural input the tree layout needs. */
-function toTreeInput(entities: EntityState, homeSolarsystemId: number | null): TreeLayoutInput {
+/** Translates the entity maps into the structural input the band layout needs. */
+function toBandInput(entities: EntityState, metaValue: TMapMeta): BandLayoutInput {
     const systems = [...entities.systems.values()];
     const systemsById = entities.systems;
+    const homeSolarsystemId = metaValue.home_solarsystem_id;
+    const homeId = homeSolarsystemId !== null ? (systems.find((system) => system.solarsystem_id === homeSolarsystemId)?.id ?? null) : null;
 
-    let fallbackRootId: number | null = null;
-    if (homeSolarsystemId !== null) {
-        fallbackRootId = systems.find((system) => system.solarsystem_id === homeSolarsystemId)?.id ?? null;
-    }
+    // Lanes in the order the chains were started.
+    const laneOrder = systems
+        .filter((system) => system.combat_home && system.combat_color)
+        .toSorted((a, b) => (a.combat_started_at ?? '').localeCompare(b.combat_started_at ?? '') || a.id - b.id)
+        .map((system) => system.combat_color as string);
 
     return {
-        nodeIds: systems.map((system) => system.id),
+        nodes: systems.map((system) => ({
+            id: system.id,
+            alias: system.alias,
+            color: system.combat_color ?? null,
+            home: Boolean(system.combat_home),
+            pinned: Boolean(system.pinned),
+        })),
         edges: [...entities.connections.values()].map((connection) => ({
             from: connection.from_map_solarsystem_id,
             to: connection.to_map_solarsystem_id,
         })),
-        rootIds: systems.filter((system) => system.pinned).map((system) => system.id),
-        fallbackRootId,
-        // Combat chains grow straight down from their combat home.
-        verticalRootIds: systems.filter((system) => system.combat_home && system.combat_color).map((system) => system.id),
+        homeId,
+        laneOrder,
+        // Daisy's static is Alpha: its row is kept free (numeric scheme only).
+        reservedAlias: metaValue.bookmark_alias_scheme === 'alphabetical' ? null : 'A',
         compareNodes: (a: number, b: number): number => {
             const systemA = systemsById.get(a);
             const systemB = systemsById.get(b);
             if (!systemA || !systemB) return 0;
-            // The home system always sorts to the top of its level (normally the roots).
-            const aHome = systemA.solarsystem_id === homeSolarsystemId;
-            const bHome = systemB.solarsystem_id === homeSolarsystemId;
-            if (aHome !== bHome) return aHome ? -1 : 1;
             return compareSystems(systemA, systemB);
         },
     };

@@ -7,9 +7,11 @@ import { useRallyRoute } from '@/composables/useRallyRoute';
 import { useUserEvents } from '@/composables/useUserEvents';
 import { deleteSelectedMapSolarsystems } from '@/map/actions/deleteSelectedMapSolarsystems';
 import EdgeLayer from '@/map/components/edges/EdgeLayer.vue';
+import LayoutDecorations from '@/map/components/LayoutDecorations.vue';
 import MapViewport from '@/map/components/MapViewport.vue';
 import MapNode from '@/map/components/nodes/MapNode.vue';
 import ConnectionPopover from '@/map/components/overlays/ConnectionPopover.vue';
+import ClearChainDialog from '@/map/components/overlays/ClearChainDialog.vue';
 import MapAddConnectionDialog from '@/map/components/overlays/MapAddConnectionDialog.vue';
 import MapConnectionContextMenu from '@/map/components/overlays/MapConnectionContextMenu.vue';
 import MapContextMenu from '@/map/components/overlays/MapContextMenu.vue';
@@ -187,6 +189,7 @@ whenever(Delete, () => {
         @context-menu-open-change="handleContextMenuOpenChange"
         @surface-context-menu="handleSurfaceContextMenu"
     >
+        <LayoutDecorations />
         <EdgeLayer
             :pending-from="pendingFrom"
             :pending-to="pendingTo"
@@ -215,6 +218,7 @@ whenever(Delete, () => {
         :reference="connectionPopoverReference"
     />
     <MapAddConnectionDialog />
+    <ClearChainDialog />
 </template>
 
 <style scoped></style>

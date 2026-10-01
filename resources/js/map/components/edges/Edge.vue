@@ -20,10 +20,12 @@ type Props = {
     rallyDirection?: 'forward' | 'reverse' | null;
     /** Combat chain color: a glowing band behind the line in that color. */
     chainColor?: string | null;
+    /** A loop (patch 12): not how either end was found, drawn dashed amber. */
+    isLoop?: boolean;
     scale: number;
 };
 
-const { geometry, connection = null, isOnRoute = false, rallyDirection = null, chainColor = null, scale } = defineProps<Props>();
+const { geometry, connection = null, isOnRoute = false, rallyDirection = null, chainColor = null, isLoop = false, scale } = defineProps<Props>();
 
 const emit = defineEmits<{
     (e: 'connectionContextMenu', event: MouseEvent): void;
@@ -154,6 +156,19 @@ function getDashArray(): string | undefined {
             :data-connection-status="massStatus"
             :data-highlighted="isOnRoute"
             class="cursor-pointer transition-colors duration-200 ease-in-out"
+        />
+        <!-- Loop: this connection isn't how either system was found -->
+        <path
+            v-if="isLoop"
+            :d="path.d"
+            stroke="#f59e0b"
+            fill="none"
+            :stroke-width="isOrthogonal ? 2 : 3"
+            stroke-opacity="0.85"
+            stroke-dasharray="6,5"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+            class="pointer-events-none"
         />
         <!-- Rally route animated overlay -->
         <template v-if="rallyDirection">

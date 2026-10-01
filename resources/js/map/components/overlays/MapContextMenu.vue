@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { NumberField, NumberFieldContent, NumberFieldDecrement, NumberFieldIncrement, NumberFieldInput } from '@/components/ui/number-field';
 import { type TComboboxSection } from '@/lib/comboboxSections';
+import { combatColorHex, combatColorLabel } from '@/lib/combat';
+import { openClearChain } from '@/map/actions/clearChain';
 import { cleanMapSolarsystems } from '@/map/actions/cleanMapSolarsystems';
 import { getClearableMapSolarsystems } from '@/map/actions/clearableMapSolarsystems';
 import { createMapSolarsystem } from '@/map/actions/createMapSolarsystem';
@@ -45,6 +47,20 @@ const hasSelection = computed(() => getSelectedMapSolarsystems(store).length > 0
 
 const clearable_count = computed(() => getClearableMapSolarsystems(store).length);
 const orphaned_count = computed(() => getOrphanedMapSolarsystems(store).length);
+
+/** One "Clear <color> chain" entry per combat chain on the map (patch 12). */
+const combat_chains = computed(() => {
+    const counts = new Map<string, number>();
+    for (const system of store.systems.values()) {
+        if (system.combat_color) counts.set(system.combat_color, (counts.get(system.combat_color) ?? 0) + 1);
+    }
+    return [...counts.entries()].map(([color, count]) => ({
+        color,
+        count,
+        label: combatColorLabel(color) ?? color,
+        hex: combatColorHex(color) ?? '#888888',
+    }));
+});
 
 const is_clearing_map = ref(false);
 const is_cleaning_map = ref(false);
@@ -118,6 +134,11 @@ function handleConfirmClean() {
         <ContextMenuItem @select="is_cleaning_map = true" :disabled="orphaned_count === 0">
             <Eraser class="size-4" />
             Clean map
+        </ContextMenuItem>
+        <ContextMenuItem v-for="chain in combat_chains" :key="chain.color" @select="openClearChain(chain.color)">
+            <span class="inline-block size-2.5 rounded-full" :style="{ backgroundColor: chain.hex }" />
+            Clear {{ chain.label }} chain
+            <span class="ml-auto pl-3 text-xs text-muted-foreground">{{ chain.count }}</span>
         </ContextMenuItem>
         <ContextMenuItem @select="is_clearing_map = true" :disabled="clearable_count === 0" class="text-destructive focus:text-destructive">
             <Trash2 class="size-4" />

@@ -36,17 +36,21 @@ export function stopCombat(mapSlug: string): void {
     });
 }
 
-/** Take a chain's colors off the map (its systems and numbers stay). */
-export function clearCombatChain(mapSolarsystemId: number): void {
-    router.delete(MapCombatController.clear(mapSolarsystemId).url, {
+/**
+ * Clear a combat chain from the map (patch 12): its systems are removed, a
+ * system still attached elsewhere stays, and Combat turns off for everyone
+ * working it. Confirmed first (see ClearChainDialog).
+ */
+export function clearCombatChain(mapSlug: string, color: string, label: string): void {
+    router.delete(MapCombatController.clearChain({ map: mapSlug, color }).url, {
         preserveScroll: true,
         preserveState: true,
         only: ['map_user_settings', 'map'],
         onSuccess: () => {
-            toast.success('Combat chain cleared');
+            toast.success(`${label} chain cleared`);
         },
-        onError: () => {
-            toast.error('Could not clear the combat chain.');
+        onError: (errors) => {
+            toast.error(errors.combat ?? 'Could not clear the combat chain.');
         },
     });
 }

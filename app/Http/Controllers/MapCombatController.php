@@ -77,11 +77,30 @@ final class MapCombatController extends Controller
     /**
      * @throws Throwable
      */
-    public function clear(MapSolarsystem $mapSolarsystem, CombatModeAction $action): RedirectResponse
+    public function clear(MapSolarsystem $mapSolarsystem, CombatModeAction $action, #[CurrentUser] User $user): RedirectResponse
     {
         Gate::authorize('update', $mapSolarsystem);
 
-        $action->clear($mapSolarsystem);
+        $action->clear($mapSolarsystem, $user);
+
+        return back();
+    }
+
+    /**
+     * Right-click the map → "Clear Red chain" (patch 12).
+     *
+     * @throws Throwable
+     */
+    public function clearChain(Map $map, string $color, CombatModeAction $action, #[CurrentUser] User $user): RedirectResponse
+    {
+        Gate::authorize('update', $map);
+
+        if (! in_array($color, CombatModeAction::COLORS, true)) {
+            throw ValidationException::withMessages(['combat' => 'Unknown chain color.']);
+        }
+
+        $action->clearChain($map, $color, $user);
+        $this->refreshSessionSettings($user, $map);
 
         return back();
     }

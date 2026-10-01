@@ -27,7 +27,7 @@ import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
 import { aliasForSlot, displayAlias, isIgnoredAlias, staticSlotAlias } from '@/lib/alias';
 import { buildSignatureBookmark, formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
-import { chainAliases } from '@/lib/combat';
+import { chainAliases, combatColorLabel } from '@/lib/combat';
 import { isK162, validateManualAlias } from '@/lib/chainNumbering';
 import { Data } from '@/lib/data';
 import { formatDateToISO } from '@/lib/utils';
@@ -550,7 +550,12 @@ const { map_solarsystems } = useMapSolarsystems();
 const name_label = computed(() => {
     if (!isWormhole.value) return '';
     const target = selected_connection.value?.target;
-    if (target) return displayAlias(target.alias) || '—';
+    if (target) {
+        // A loop into another combat chain's system carries that chain's color ("111-2Red").
+        const otherChain = target.combat_color && !target.combat_home && target.combat_color !== (map_system.value?.combat_color ?? null);
+        const name = displayAlias(target.alias) || '—';
+        return otherChain && target.alias ? `${name}${combatColorLabel(target.combat_color) ?? ''}` : name;
+    }
     const alias = signature.alias ?? planned_alias;
     return alias ? displayAlias(alias) : '·';
 });

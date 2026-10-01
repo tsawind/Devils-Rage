@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace App\Actions\Combat;
 
+use App\Actions\MapSolarsystem\DeleteMapSolarsystemAction;
 use App\Actions\MapSolarsystem\StoreMapSolarsystemAction;
 use App\Actions\MapSolarsystem\UpdateMapSolarsystemAction;
+use App\Events\Maps\CombatModeTurnedOffEvent;
 use App\Models\Map;
+use App\Models\MapConnection;
 use App\Models\MapSolarsystem;
 use App\Models\MapUserSetting;
+use App\Models\Signature;
 use App\Models\User;
 use App\Support\Broadcasting\MapBroadcaster;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +41,7 @@ final readonly class CombatModeAction
     public function __construct(
         private UpdateMapSolarsystemAction $updateMapSolarsystemAction,
         private StoreMapSolarsystemAction $storeMapSolarsystemAction,
+        private DeleteMapSolarsystemAction $deleteMapSolarsystemAction,
         private MapBroadcaster $mapBroadcaster,
     ) {}
 
@@ -141,40 +146,170 @@ final readonly class CombatModeAction
     }
 
     /**
-     * Remove a chain's color from every system in it (the systems and their
-     * numbers stay on the map), and move anyone working it to plain combat speed.
+     * Clear a combat chain from the map (patch 12), by any system in it.
+     *
+     * @return array{removed: int, kept: int, turned_off: int}
      *
      * @throws Throwable
      */
-    public function clear(MapSolarsystem $system): void
+    public function clear(MapSolarsystem $system, ?User $by = null): array
     {
-        DB::transaction(function () use ($system): void {
-            $color = $system->combat_color;
-            if (blank($color)) {
-                return;
+        if (blank($system->combat_color)) {
+            return ['removed' => 0, 'kept' => 0, 'turned_off' => 0];
+        }
+
+        return $this->clearChain(Map::query()->findOrFail($system->map_id), (string) $system->combat_color, $by);
+    }
+
+    /**
+     * Clear a combat chain from the map (patch 12):
+     *
+     * - its systems and their connections are removed, like Clear map does;
+     * - a system still attached to something outside the chain stays: it moves
+     *   to where it is attached (a main-chain system → no color; another
+     *   chain's system → that chain's color), keeps its name and remembers the
+     *   chain it came from ("was Red");
+     * - the combat home stays (back in the main chain, no color) when it is
+     *   still linked to anything outside the chain, else it is removed too;
+     * - pinned systems and the map's home are never removed;
+     * - signatures elsewhere that led into a removed system go back to
+     *   unlinked, and their number is freed;
+     * - Combat turns off for everyone working the chain, and for everyone on
+     *   the map once no combat chain is left. Each of them gets a notice.
+     *
+     * @return array{removed: int, kept: int, turned_off: int}
+     *
+     * @throws Throwable
+     */
+    public function clearChain(Map $map, string $color, ?User $by = null): array
+    {
+        $result = DB::transaction(function () use ($map, $color): array {
+            /** @var \Illuminate\Database\Eloquent\Collection<int, MapSolarsystem> $chain */
+            $chain = MapSolarsystem::query()
+                ->where('map_id', $map->id)
+                ->where('combat_color', $color)
+                ->lockForUpdate()
+                ->get();
+
+            if ($chain->isEmpty()) {
+                return ['removed' => 0, 'kept' => 0, 'turned_off_users' => []];
             }
 
-            $ids = MapSolarsystem::query()
-                ->where('map_id', $system->map_id)
-                ->where('combat_color', $color)
-                ->pluck('id')
+            $chain_ids = $chain->pluck('id')->all();
+            $connections = MapConnection::query()
+                ->where('map_id', $map->id)
+                ->where(fn ($query) => $query
+                    ->whereIn('from_map_solarsystem_id', $chain_ids)
+                    ->orWhereIn('to_map_solarsystem_id', $chain_ids))
+                ->get(['id', 'from_map_solarsystem_id', 'to_map_solarsystem_id']);
+
+            // The systems outside the chain each chain system is still attached to.
+            $outside = [];
+            foreach ($connections as $connection) {
+                $from = (int) $connection->from_map_solarsystem_id;
+                $to = (int) $connection->to_map_solarsystem_id;
+                $from_in = in_array($from, $chain_ids, true);
+                $to_in = in_array($to, $chain_ids, true);
+                if ($from_in && ! $to_in) {
+                    $outside[$from][] = $to;
+                }
+                if ($to_in && ! $from_in) {
+                    $outside[$to][] = $from;
+                }
+            }
+
+            $outside_colors = MapSolarsystem::query()
+                ->whereKey(array_unique(array_merge([], ...array_values($outside))))
+                ->pluck('combat_color', 'id')
                 ->all();
 
-            MapSolarsystem::query()
-                ->whereKey($ids)
-                ->update(['combat_color' => null, 'combat_home' => false, 'combat_active' => false]);
+            $removed = [];
+            $kept = [];
+            foreach ($chain as $system) {
+                $attached = $outside[$system->id] ?? [];
+                $is_map_home = $map->home_solarsystem_id === $system->solarsystem_id;
 
-            MapUserSetting::query()
-                ->where('map_id', $system->map_id)
-                ->where('combat_color', $color)
-                ->update(['combat_color' => null]);
+                if ($attached === [] && ! $system->pinned && ! $is_map_home) {
+                    $removed[] = $system;
 
-            $this->mapBroadcaster->systemsUpserted($system->map_id, MapSolarsystem::query()
-                ->whereKey($ids)
-                ->with('details')
-                ->withCount('signatures', 'wormholeSignatures', 'mapConnections', 'uncategorizedSignatures')
-                ->get());
+                    continue;
+                }
+
+                // Where it is still attached: the main chain wins over another combat chain.
+                $colors = array_map(fn (int $id): ?string => $outside_colors[$id] ?? null, $attached);
+                $new_color = in_array(null, $colors, true) || $colors === [] ? null : $colors[0];
+
+                $this->updateMapSolarsystemAction->handle($system, [
+                    'combat_color' => $new_color,
+                    'combat_home' => false,
+                    'combat_active' => false,
+                    'combat_started_at' => null,
+                    'combat_previous_color' => $system->combat_home ? null : $color,
+                ]);
+                $kept[] = $system->id;
+            }
+
+            // Signatures outside the chain that led into a removed system go back to unlinked.
+            $removed_ids = array_map(fn (MapSolarsystem $system): int => $system->id, $removed);
+            $dropped_connection_ids = $connections
+                ->filter(fn (MapConnection $connection): bool => in_array((int) $connection->from_map_solarsystem_id, $removed_ids, true)
+                    || in_array((int) $connection->to_map_solarsystem_id, $removed_ids, true))
+                ->pluck('id')
+                ->all();
+            if ($dropped_connection_ids !== []) {
+                $unlinked = Signature::query()
+                    ->whereIn('map_connection_id', $dropped_connection_ids)
+                    ->whereNotIn('map_solarsystem_id', $removed_ids)
+                    ->get();
+                foreach ($unlinked as $signature) {
+                    $signature->update(['map_connection_id' => null, 'alias' => null]);
+                }
+                foreach ($unlinked->pluck('map_solarsystem_id')->unique() as $map_solarsystem_id) {
+                    $owner = MapSolarsystem::query()->find($map_solarsystem_id);
+                    if ($owner instanceof MapSolarsystem) {
+                        $this->mapBroadcaster->signaturesChanged($owner);
+                    }
+                }
+            }
+
+            foreach ($removed as $system) {
+                $this->deleteMapSolarsystemAction->handle($system);
+            }
+
+            // Combat off for everyone on this chain; for everyone once no chain is left.
+            $chains_left = MapSolarsystem::query()->where('map_id', $map->id)->whereNotNull('combat_color')->exists();
+            $settings = MapUserSetting::query()
+                ->where('map_id', $map->id)
+                ->where('combat_mode', true)
+                ->when($chains_left, fn ($query) => $query->where('combat_color', $color))
+                ->get();
+            foreach ($settings as $setting) {
+                $setting->update(['combat_mode' => false, 'combat_color' => null]);
+            }
+
+            $this->refreshActiveChains($map);
+
+            return [
+                'removed' => count($removed),
+                'kept' => count($kept),
+                'turned_off_users' => $settings->pluck('user_id')->all(),
+                'chains_left' => $chains_left,
+            ];
         });
+
+        $label = ucfirst($color);
+        $who = $by instanceof User ? $by->name : 'Someone';
+        foreach ($result['turned_off_users'] as $user_id) {
+            if ($by instanceof User && $by->id === (int) $user_id) {
+                continue;
+            }
+            $message = ($result['chains_left'] ?? true)
+                ? sprintf('Combat off: %s cleared the %s chain', $who, $label)
+                : 'Combat off: no combat chains left';
+            broadcast(new CombatModeTurnedOffEvent((int) $user_id, $map->id, $message, sprintf('%s cleared the %s chain.', $who, $label)));
+        }
+
+        return ['removed' => $result['removed'], 'kept' => $result['kept'], 'turned_off' => count($result['turned_off_users'])];
     }
 
     /**
@@ -194,13 +329,15 @@ final readonly class CombatModeAction
 
         if ($color === null) {
             throw ValidationException::withMessages([
-                'combat' => 'All 6 chain colors are in use. Right-click an old chain and choose "Clear combat chain" first.',
+                'combat' => 'All 6 chain colors are in use. Right-click the map and clear an old chain first.',
             ]);
         }
 
         $this->updateMapSolarsystemAction->handle($home, [
             'combat_color' => $color,
             'combat_home' => true,
+            'combat_started_at' => now(),
+            'combat_previous_color' => null,
         ]);
 
         return $color;
@@ -230,11 +367,10 @@ final readonly class CombatModeAction
             ->where('combat_home', true)
             ->get();
 
+        // Every home is re-sent, so everyone sees who is working each chain.
         foreach ($homes as $home) {
             $shouldPulse = in_array($home->combat_color, $active, true);
-            if ($home->combat_active !== $shouldPulse) {
-                $this->updateMapSolarsystemAction->handle($home, ['combat_active' => $shouldPulse]);
-            }
+            $this->updateMapSolarsystemAction->handle($home, ['combat_active' => $shouldPulse]);
         }
     }
 }
