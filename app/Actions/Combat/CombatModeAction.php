@@ -56,7 +56,7 @@ final readonly class CombatModeAction
         return DB::transaction(function () use ($user, $map, $solarsystemId): string {
             if ($map->home_solarsystem_id === $solarsystemId) {
                 throw ValidationException::withMessages([
-                    'combat' => 'The home system cannot be a combat home. Start the chain from the next system out.',
+                    'combat' => 'The home system cannot be a rage home. Start the chain from the next system out.',
                 ]);
             }
 
@@ -86,7 +86,7 @@ final readonly class CombatModeAction
         return DB::transaction(function () use ($user, $map, $home): string {
             if ($map->home_solarsystem_id === $home->solarsystem_id) {
                 throw ValidationException::withMessages([
-                    'combat' => 'The home system cannot be a combat home. Start the chain from the next system out.',
+                    'combat' => 'The home system cannot be a rage home. Start the chain from the next system out.',
                 ]);
             }
 

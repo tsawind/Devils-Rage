@@ -392,7 +392,9 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
                 positions.set(hole, { x: x + laneNodeWidth + LANE_HOLE_GAP, y: y + index * LANE_HOLE_STEP });
                 maxRight = Math.max(maxRight, x + laneNodeWidth + LANE_HOLE_GAP + LANE_HOLE_WIDTH);
             });
-            const holeRows = holes.length * LANE_HOLE_STEP > laneRowGap ? Math.ceil((holes.length * LANE_HOLE_STEP) / laneRowGap) - 1 : 0;
+            // The holes plus the fold chip under them (patch 15) push the next row down when they don't fit.
+            const stack = holes.length > 0 ? (holes.length + 1) * LANE_HOLE_STEP : 0;
+            const holeRows = stack > laneRowGap ? Math.ceil(stack / laneRowGap) - 1 : 0;
             maxRow = Math.max(maxRow, row + holeRows);
             children
                 .filter((child) => !isPlaceholder(child))

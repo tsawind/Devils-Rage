@@ -7,7 +7,7 @@ import type { Vec2 } from '@/map/core/types';
 import { resolveNodeId, usePointerGestures, type Gesture } from '@/map/interactions/gestures';
 import { useMapScrollbars } from '@/map/interactions/useMapScrollbars';
 import { useMapStore } from '@/map/store/mapStore';
-import { computed, useTemplateRef, watch } from 'vue';
+import { computed, onMounted, useTemplateRef, watch } from 'vue';
 
 /**
  * The scroll container plus its visual chrome (grid, background image modes,
@@ -38,19 +38,22 @@ defineExpose({ surface });
 usePointerGestures(surface, gestures, store);
 
 // Patch 15: Center: scroll so the requested base point sits in the middle of the view.
+function scrollToCenter(request: { x: number; y: number } | null, behavior: ScrollBehavior): void {
+    const element = surface.value;
+    if (!request || !element) return;
+    const scale = store.scale.value;
+    element.scrollTo({
+        left: Math.max(0, request.x * scale - element.clientWidth / 2),
+        top: Math.max(0, request.y * scale - element.clientHeight / 2),
+        behavior,
+    });
+}
 watch(
     () => store.centerRequest.value,
-    (request) => {
-        const element = surface.value;
-        if (!request || !element) return;
-        const scale = store.scale.value;
-        element.scrollTo({
-            left: Math.max(0, request.x * scale - element.clientWidth / 2),
-            top: Math.max(0, request.y * scale - element.clientHeight / 2),
-            behavior: 'smooth',
-        });
-    },
+    (request) => scrollToCenter(request, 'smooth'),
 );
+// A request made before the map was on screen (page load with Center on).
+onMounted(() => scrollToCenter(store.centerRequest.value, 'auto'));
 
 const { backgroundImageUrl, backgroundMode } = useMapBackground();
 

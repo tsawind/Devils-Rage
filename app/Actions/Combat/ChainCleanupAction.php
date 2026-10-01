@@ -43,7 +43,7 @@ final readonly class ChainCleanupAction
     public function start(MapSolarsystem $home, User $by): void
     {
         if (! $home->combat_home || blank($home->combat_color)) {
-            throw ValidationException::withMessages(['combat' => 'Only a combat home starts a cleanup.']);
+            throw ValidationException::withMessages(['combat' => 'Only a rage home starts a cleanup.']);
         }
         $color = (string) $home->combat_color;
 
