@@ -1,4 +1,4 @@
-import { armAsOptions, armedSummary, jumpMatchesArm, matchesQuickKey, myArmedHole, nextQuickKey, pickGridHole } from '@/lib/arming';
+import { armAsOptions, armedSummary, jumpMatchesArm, matchesQuickKey, myArmedHole, nextQuickKey, pickGridHole, typeSearchMatches } from '@/lib/arming';
 import { describe, expect, it } from 'vitest';
 
 describe('patch 13: arming', () => {
@@ -79,5 +79,30 @@ describe('patch 13: quick keys in the Type lists', () => {
         expect(nextQuickKey('5', 'h')).toBe('h');
         expect(nextQuickKey('5', 'Backspace')).toBeNull();
         expect(nextQuickKey(null, 'x')).toBeUndefined();
+    });
+});
+
+describe('patch 14: Type list search', () => {
+    const F135 = { name: 'F135 - C12 Thera', signature: 'F135', target_class: '12' };
+    const C140 = { name: 'C140 - L Lowsec', signature: 'C140', target_class: 'l' };
+    const E004 = { name: 'E004 - C1', signature: 'E004', target_class: '1' };
+    const H296 = { name: 'H296 - C5', signature: 'H296', target_class: '5' };
+
+    it('one key matches names and its class', () => {
+        // "f": every name with an F, plus frigate holes.
+        expect(typeSearchMatches('f', F135)).toBe(true);
+        expect(typeSearchMatches('f', E004)).toBe(true);
+        expect(typeSearchMatches('f', H296)).toBe(false);
+        // "1": every name with a 1, plus holes to C1.
+        expect(typeSearchMatches('1', C140)).toBe(true);
+        expect(typeSearchMatches('1', F135)).toBe(true);
+        expect(typeSearchMatches('1', H296)).toBe(false);
+    });
+
+    it('more keys search names only', () => {
+        expect(typeSearchMatches('F1', F135)).toBe(true);
+        expect(typeSearchMatches('F1', E004)).toBe(false);
+        expect(typeSearchMatches('', H296)).toBe(true);
+        expect(typeSearchMatches('thera', F135)).toBe(true);
     });
 });

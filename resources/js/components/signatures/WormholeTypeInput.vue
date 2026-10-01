@@ -3,18 +3,21 @@ import UnknownTypeOption from '@/components/signatures/UnknownTypeOption.vue';
 import WormholeOption from '@/components/signatures/WormholeOption.vue';
 import { Combobox, ComboboxAnchor, ComboboxInput, ComboboxItem, ComboboxTrigger, ComboboxVirtualList } from '@/components/ui/combobox';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
-import { matchesQuickKey, nextQuickKey, quickKeyLabel } from '@/lib/arming';
+import { typeSearchMatches } from '@/lib/arming';
 import { comboboxRowText, flattenComboboxSections, type TComboboxRow } from '@/lib/comboboxSections';
 import type { TSignatureType } from '@/types/models';
 import { computed, ref, watch } from 'vue';
 
 const {
     wormhole_options,
+    other_options = [],
     current_class,
     static_signatures = [],
 } = defineProps<{
     can_write: boolean;
     wormhole_options: TSignatureType[];
+    /** Patch 14: every other wormhole type (the data doesn't list it for this class), so a hole seen in space is always pickable. */
+    other_options?: TSignatureType[];
     current_class: string | number | null;
     static_signatures?: string[];
 }>();
@@ -27,24 +30,12 @@ const map_user_settings = useMapUserSettings();
 
 const open = ref(false);
 const search = ref('');
-/** Patch 13: quick key filter (1-6 = leads to C1-C6, h / l / n = high, low, null, f = frigate holes). */
-const quick = ref<string | null>(null);
 
 watch(open, (isOpen) => {
     if (isOpen) {
         search.value = '';
-        quick.value = null;
     }
 });
-
-/** A quick key on an empty search sets (or clears) the filter instead of typing. */
-function handleSearchKeydown(event: KeyboardEvent): void {
-    if (search.value !== '' || event.ctrlKey || event.metaKey || event.altKey) return;
-    const next = nextQuickKey(quick.value, event.key);
-    if (next === undefined) return;
-    event.preventDefault();
-    quick.value = next;
-}
 
 const statics = computed<TSignatureType[]>(() => {
     if (static_signatures.length === 0) {
@@ -66,22 +57,20 @@ const wormholes = computed<TSignatureType[]>(() => {
 // A pinned null row lets a wormhole signature be reset to an unknown type.
 const rows = computed<TComboboxRow<TSignatureType | null>[]>(() => {
     const needle = search.value.trim().toLowerCase();
-    const text = (option: TSignatureType, value: string) =>
-        value === '' || option.name.toLowerCase().includes(value) || (option.extra ?? '').toLowerCase().includes(value);
-    // Typing on after a quick letter also finds names starting with it ("h" then "296" finds H296).
-    const matches = (option: TSignatureType) =>
-        (matchesQuickKey(quick.value, option) && text(option, needle)) || (quick.value !== null && needle !== '' && text(option, quick.value + needle));
+    // Patch 14: names first ("F1" finds F135); one quick key also matches its class ("f" adds frigate holes).
+    const matches = (option: TSignatureType) => typeSearchMatches(needle, option);
 
     return flattenComboboxSections<TSignatureType | null>([
-        { key: 'unknown', heading: '', items: quick.value === null && (needle === '' || 'unknown'.includes(needle)) ? [null] : [] },
+        { key: 'unknown', heading: '', items: needle === '' || 'unknown'.includes(needle) ? [null] : [] },
         { key: 'statics', heading: 'Statics', items: statics.value.filter(matches) },
         { key: 'k162', heading: 'K162', items: k162_options.value.filter(matches) },
         { key: 'wormholes', heading: 'Wormholes', items: wormholes.value.filter(matches) },
+        { key: 'other', heading: 'Other wormholes (not listed for this class)', items: other_options.filter(filterByCurrentClass).filter(matches) },
     ]);
 });
 
 const selected_signature = computed(() => {
-    return wormhole_options.find((option: TSignatureType) => option.id === model.value) || null;
+    return [...wormhole_options, ...other_options].find((option: TSignatureType) => option.id === model.value) || null;
 });
 
 function handleSelect(row: TComboboxRow<TSignatureType | null>) {
@@ -116,10 +105,9 @@ function filterByCurrentClass(option: TSignatureType) {
             <template #header>
                 <ComboboxInput
                     v-model="search"
-                    :placeholder="quick ? `${quickKeyLabel(quick)} only · ${quick} again to clear` : 'Search · 1-6, h, l, n, f to filter'"
+                    placeholder="Search · 1-6, h, l, n, f also match class"
                     class="h-8 border-b text-xs"
                     auto-focus
-                    @keydown="handleSearchKeydown"
                 />
             </template>
             <template #default="{ option }">

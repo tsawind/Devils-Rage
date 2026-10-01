@@ -112,6 +112,18 @@ const availableTypes = computed(() => {
     return getTypesByCategory(signature.signature_category_id).filter((type) => type.spawn_areas?.includes(solarsystem_class.value));
 });
 
+/** Patch 14: every type of this category, for lookups (a hole may be typed outside the spawn data). */
+const allCategoryTypes = computed(() => (signature.signature_category_id ? getTypesByCategory(signature.signature_category_id) : []));
+
+/** Patch 14: wormhole types the data doesn't list for this class: still pickable, under "Other wormholes". */
+const otherWormholeTypes = computed(() => {
+    if (!isWormhole.value) return [];
+    const here = new Set(availableTypes.value.map((type) => type.id));
+    return allCategoryTypes.value
+        .filter((type) => !here.has(type.id))
+        .toSorted((a, b) => classSortWeight(a.target_class) - classSortWeight(b.target_class) || a.signature.localeCompare(b.signature));
+});
+
 const sortedAvailableTypes = computed(() => {
     return availableTypes.value.toSorted((a, b) => classSortWeight(a.target_class) - classSortWeight(b.target_class));
 });
@@ -193,7 +205,7 @@ function handleCategoryChange(value: AcceptableValue) {
 
 function handleTypeChange(value: AcceptableValue) {
     const typeId = value as number | null;
-    const wormholeName = typeId ? (availableTypes.value.find((type) => type.id === typeId)?.signature ?? null) : null;
+    const wormholeName = typeId ? (allCategoryTypes.value.find((type) => type.id === typeId)?.signature ?? null) : null;
 
     if (!isWormhole.value) {
         handleChange({ signature_type_id: typeId });
@@ -321,7 +333,7 @@ function openStaticRename(base: Record<string, FormDataConvertible>): void {
 }
 
 /** The type picked for the pending static, to name the bookmarks it will get. */
-const pending_type = computed(() => availableTypes.value.find((type) => type.id === pending_type_id.value) ?? null);
+const pending_type = computed(() => allCategoryTypes.value.find((type) => type.id === pending_type_id.value) ?? null);
 
 /** The bookmark this hole gets as the static, named `alias`. */
 function staticBookmarkName(alias: string): string {
@@ -856,6 +868,7 @@ function copyBookmark() {
                 @update:model-value="handleTypeChange"
                 :can_write="can_write"
                 :wormhole_options="sortedAvailableTypes"
+                :other_options="otherWormholeTypes"
                 :current_class="current_class"
                 :static_signatures="static_signatures"
             />

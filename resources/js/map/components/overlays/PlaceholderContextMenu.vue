@@ -16,7 +16,7 @@ import useUser from '@/composables/useUser';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
 import { displayAlias } from '@/lib/alias';
-import { armAsOptions, matchesQuickKey, myArmedHole, nextQuickKey, quickKeyLabel } from '@/lib/arming';
+import { armAsOptions, myArmedHole, typeSearchMatches } from '@/lib/arming';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
 import type { TPlaceholder } from '@/lib/placeholders';
@@ -31,7 +31,7 @@ import { formatDateToISO } from '@/lib/utils';
 import { UTCDate } from '@date-fns/utc';
 import { router } from '@inertiajs/vue3';
 import { Check, ClipboardCopy, Crosshair, Fan, Hourglass, ListTree, Scale, Trash2 } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
 /**
@@ -124,17 +124,28 @@ function disarm(): void {
 
 // ---- Type --------------------------------------------------------------------
 
-const quick = ref<string | null>(null);
+/** Patch 14: what you typed in the Type menu ("f", "F1"…). */
+const typed = ref('');
+watch(
+    () => placeholder.signatureId,
+    () => (typed.value = ''),
+);
 const wormholeCategoryId = signatureCategories.find((category) => category.code === 'wormhole')?.id ?? null;
 
-/** The wormhole types that spawn in the parent's class: statics first, then by where they lead. */
-const types = computed(() => {
+/**
+ * The wormhole types: the ones that spawn in the parent's class first (statics
+ * on top), then every other type under "Other wormholes" (the data may miss
+ * one you can see in space).
+ */
+const typeGroups = computed(() => {
     const system = parent.value;
-    if (!system || wormholeCategoryId === null) return [];
+    if (!system || wormholeCategoryId === null) return { here: [], other: [] };
     const statics = (system.solarsystem.statics ?? []).map((candidate) => candidate.name.toUpperCase());
-    return getTypesByCategory(wormholeCategoryId)
-        .filter((type) => type.spawn_areas?.includes(system.solarsystem.class) || type.signature === 'K162')
-        .filter((type) => matchesQuickKey(quick.value, type))
+    const matching = getTypesByCategory(wormholeCategoryId).filter((type) => typeSearchMatches(typed.value, type));
+    const spawnsHere = (type: { spawn_areas?: string[] | null; signature: string }) =>
+        Boolean(type.spawn_areas?.includes(system.solarsystem.class)) || type.signature === 'K162';
+    const here = matching
+        .filter(spawnsHere)
         .toSorted(
             (a, b) =>
                 Number(statics.includes(b.signature.toUpperCase())) - Number(statics.includes(a.signature.toUpperCase())) ||
@@ -142,15 +153,25 @@ const types = computed(() => {
                 classSortWeight(a.target_class) - classSortWeight(b.target_class) ||
                 a.signature.localeCompare(b.signature),
         );
+    const other = matching
+        .filter((type) => !spawnsHere(type))
+        .toSorted((a, b) => classSortWeight(a.target_class) - classSortWeight(b.target_class) || a.signature.localeCompare(b.signature));
+    return { here, other };
 });
 
+/** Typing in the Type menu searches (letters, digits); Backspace deletes, Escape still closes. */
 function handleTypeKeydown(event: KeyboardEvent): void {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
-    const next = nextQuickKey(quick.value, event.key);
-    if (next === undefined) return;
+    if (event.key === 'Backspace') {
+        if (!typed.value) return;
+        typed.value = typed.value.slice(0, -1);
+    } else if (/^[a-z0-9]$/i.test(event.key)) {
+        typed.value += event.key;
+    } else {
+        return;
+    }
     event.preventDefault();
     event.stopPropagation();
-    quick.value = next;
 }
 
 function setType(typeId: number): void {
@@ -251,12 +272,18 @@ function removeSignature(): void {
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent class="max-h-80 w-56 overflow-y-auto" @keydown.capture="handleTypeKeydown">
                     <ContextMenuLabel class="text-[10px] font-normal text-muted-foreground">
-                        {{ quick ? `${quickKeyLabel(quick)} only · ${quick} again to clear` : 'Keys: 1-6, h, l, n, f to filter' }}
+                        {{ typed ? `Search: ${typed.toUpperCase()} · Backspace to edit` : 'Type to search · 1-6, h, l, n, f also match class' }}
                     </ContextMenuLabel>
-                    <ContextMenuItem v-for="type in types" :key="type.id" class="text-xs" @select="setType(type.id)">
+                    <ContextMenuItem v-for="type in typeGroups.here" :key="type.id" class="text-xs" @select="setType(type.id)">
                         <WormholeOption :wormhole="type" />
                     </ContextMenuItem>
-                    <ContextMenuItem v-if="types.length === 0" disabled class="text-xs">No types match</ContextMenuItem>
+                    <template v-if="typeGroups.other.length">
+                        <ContextMenuLabel class="text-[10px] font-normal text-muted-foreground">Other wormholes (not listed for this class)</ContextMenuLabel>
+                        <ContextMenuItem v-for="type in typeGroups.other" :key="type.id" class="text-xs" @select="setType(type.id)">
+                            <WormholeOption :wormhole="type" />
+                        </ContextMenuItem>
+                    </template>
+                    <ContextMenuItem v-if="typeGroups.here.length + typeGroups.other.length === 0" disabled class="text-xs">No types match</ContextMenuItem>
                 </ContextMenuSubContent>
             </ContextMenuSub>
             <ContextMenuSub>

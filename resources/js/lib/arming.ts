@@ -136,6 +136,19 @@ export function matchesQuickKey(key: string | null, type: { signature?: string |
     return (type.target_class ?? '').toLowerCase() === normalized;
 }
 
+/**
+ * Patch 14: the Type lists' search. Text matches names ("F1" finds F135); a
+ * single quick key also matches its class: "f" = every name with an F plus
+ * the frigate holes, "1" = every name with a 1 plus the holes to C1.
+ */
+export function typeSearchMatches(query: string, type: { name?: string | null; signature?: string | null; extra?: string | null; target_class?: string | null }): boolean {
+    const needle = query.trim().toLowerCase();
+    if (needle === '') return true;
+    const text = [type.name, type.signature, type.extra].some((value) => (value ?? '').toLowerCase().includes(needle));
+    if (text) return true;
+    return needle.length === 1 && needle in QUICK_KEYS && matchesQuickKey(needle, type);
+}
+
 /** A key press in a Type list: toggles the filter (same key again, or Backspace, clears it). */
 export function nextQuickKey(current: string | null, pressed: string): string | null | undefined {
     if (pressed === 'Backspace') return current ? null : undefined;
