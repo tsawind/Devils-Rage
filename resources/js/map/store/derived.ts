@@ -259,6 +259,7 @@ function toBandInput(entities: EntityState, metaValue: TMapMeta, placeholders: r
                 alias: placeholder.alias,
                 color: placeholder.color,
                 placeholder: true,
+                armed: Boolean(placeholder.armedBy),
             })),
         ],
         edges: [

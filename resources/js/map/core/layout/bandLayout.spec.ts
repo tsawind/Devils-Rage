@@ -351,10 +351,47 @@ describe('computeBandLayout', () => {
         // Holes beside system 1, stacked down; none takes a new column.
         const holes = [-1, -2, -3, -4].map((id) => p.get(id)!);
         expect(holes.every((point) => point.x === one.x + 194)).toBe(true);
-        expect(holes.map((point) => point.y - one.y).toSorted((a, b) => a - b)).toEqual([0, 30, 60, 90]);
-        // 11 stays in the same column, below the stack of four holes (120 px).
+        expect(holes.map((point) => point.y - one.y).toSorted((a, b) => a - b)).toEqual([0, 34, 68, 102]);
+        // 11 stays in the same column, below the stack of four holes.
         expect(p.get(7)!.x).toBe(one.x);
-        expect(p.get(7)!.y).toBeGreaterThanOrEqual(one.y + 120);
+        expect(p.get(7)!.y).toBeGreaterThanOrEqual(one.y + 136);
+    });
+
+    it('patch 16: an armed hole in a lane sits straight below its system, or as the next branch', () => {
+        const nodes = [
+            sys(DAISY, 'Daisy'),
+            sys(5, 'B', { color: 'red', home: true }),
+            sys(6, '1', { color: 'red' }),
+            sys(-1, null, { color: 'red', placeholder: true, armed: true }),
+            sys(-2, null, { color: 'red', placeholder: true }),
+            sys(-3, null, { color: 'red', placeholder: true, armed: true }),
+        ];
+        const result = computeBandLayout(
+            {
+                nodes,
+                edges: [
+                    { from: 1, to: 5 },
+                    { from: 5, to: 6 },
+                    { from: 6, to: -1 },
+                    { from: 6, to: -2 },
+                    { from: 5, to: -3 },
+                ],
+                homeId: DAISY,
+                laneOrder: ['red'],
+                compareNodes: byAlias(nodes),
+            },
+            { laneNodeWidth: 180, laneNodeHeight: 60, laneColumnGap: 300, laneRowGap: 80 },
+        );
+        const p = result.positions;
+        const one = p.get(6)!;
+        // System 1 has no jumped child: its armed hole is straight below it.
+        expect(p.get(-1)!.x).toBe(one.x);
+        expect(p.get(-1)!.y).toBeGreaterThan(one.y);
+        // The unarmed one still sits beside it.
+        expect(p.get(-2)!.x).toBe(one.x + 194);
+        // The home already goes on to 1: its armed hole is the next branch to the right.
+        expect(p.get(-3)!.x).toBeGreaterThan(one.x);
+        expect(p.get(-3)!.x).not.toBe(p.get(5)!.x + 194);
     });
 
     it('patch 13: sorts a branch leading to a lane after its siblings', () => {

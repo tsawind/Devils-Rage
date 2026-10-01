@@ -2,12 +2,15 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useMapBackground } from '@/composables/useMapBackground';
 import MapScrollbar from '@/map/components/MapScrollbar.vue';
+import { useCombat } from '@/composables/combat/useCombat';
+import { centerScroll, RAGE_ROOM_SCREENS } from '@/map/core/centerScroll';
 import { clientToBase } from '@/map/core/coords';
 import type { Vec2 } from '@/map/core/types';
 import { resolveNodeId, usePointerGestures, type Gesture } from '@/map/interactions/gestures';
 import { useMapScrollbars } from '@/map/interactions/useMapScrollbars';
 import { useMapStore } from '@/map/store/mapStore';
-import { computed, onMounted, useTemplateRef, watch } from 'vue';
+import { useElementSize } from '@vueuse/core';
+import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue';
 
 /**
  * The scroll container plus its visual chrome (grid, background image modes,
@@ -37,23 +40,29 @@ defineExpose({ surface });
 
 usePointerGestures(surface, gestures, store);
 
-// Patch 15: Center: scroll so the requested base point sits in the middle of the view.
-function scrollToCenter(request: { x: number; y: number } | null, behavior: ScrollBehavior): void {
+const { is_combat } = useCombat();
+const { width: viewWidth, height: viewHeight } = useElementSize(surface);
+
+// Patch 15/16: Center: only moves the map when your system nears an edge (or a forced
+// request), then puts it a third in from the left (upper-left third while rage scanning).
+function scrollToCenter(request: { x: number; y: number; force?: boolean } | null, behavior: ScrollBehavior, force = false): void {
     const element = surface.value;
     if (!request || !element) return;
     const scale = store.scale.value;
-    element.scrollTo({
-        left: Math.max(0, request.x * scale - element.clientWidth / 2),
-        top: Math.max(0, request.y * scale - element.clientHeight / 2),
-        behavior,
-    });
+    const target = centerScroll(
+        { scrollLeft: element.scrollLeft, scrollTop: element.scrollTop, width: element.clientWidth, height: element.clientHeight },
+        { x: request.x * scale, y: request.y * scale },
+        { rage: is_combat.value, force: force || Boolean(request.force) },
+    );
+    if (target) element.scrollTo({ ...target, behavior });
 }
+// After the canvas grows (rage room), so the scroll isn't clamped short.
 watch(
     () => store.centerRequest.value,
-    (request) => scrollToCenter(request, 'smooth'),
+    (request) => nextTick(() => scrollToCenter(request, 'smooth')),
 );
 // A request made before the map was on screen (page load with Center on).
-onMounted(() => scrollToCenter(store.centerRequest.value, 'auto'));
+onMounted(() => nextTick(() => scrollToCenter(store.centerRequest.value, 'auto', true)));
 
 const { backgroundImageUrl, backgroundMode } = useMapBackground();
 
@@ -95,6 +104,11 @@ const contentSize = computed(() => {
             maxX = Math.max(maxX, lane.maxX * scale);
             maxY = Math.max(maxY, lane.maxY * scale);
         }
+    }
+    // Patch 16: rage scanning keeps 1.5 screens of empty room down and right of the
+    // last system, so Center can keep you up and left and the map rarely has to move.
+    if (is_combat.value) {
+        return { x: maxX + Math.max(padding, viewWidth.value * RAGE_ROOM_SCREENS), y: maxY + Math.max(padding, viewHeight.value * RAGE_ROOM_SCREENS) };
     }
     return { x: maxX + padding, y: maxY + padding };
 });

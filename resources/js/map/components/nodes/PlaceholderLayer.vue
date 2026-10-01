@@ -19,6 +19,8 @@ const store = useMapStore();
 const user = useUser();
 
 const FULL_WIDTH = 180;
+/** Patch 16: wider small boxes in rage lanes, so the note fits inside. */
+const COMPACT_WIDTH = 110;
 const FULL_HEIGHT = 40;
 
 const items = computed(() => {
@@ -34,9 +36,9 @@ const items = computed(() => {
         if (!position || !parentPosition || !parent) return [];
 
         const hex = combatColorHex(placeholder.color);
-        // Patch 13: compact in a combat lane, like the systems there.
-        const compact = layout.bandOf.get(placeholder.nodeId) === 'lane';
-        const NODE_WIDTH = compact ? 80 : FULL_WIDTH;
+        // Small beside a rage-lane system; an armed one is full size, right below (patch 16).
+        const compact = layout.bandOf.get(placeholder.nodeId) === 'lane' && !placeholder.armedBy;
+        const NODE_WIDTH = compact ? COMPACT_WIDTH : FULL_WIDTH;
         const NODE_HEIGHT = compact ? 26 : FULL_HEIGHT;
         const parentSize = store.nodeSizes.get(placeholder.parentId) ?? { width: FULL_WIDTH, height: FULL_HEIGHT };
         const parentLeft = parentPosition.x - ANCHOR_OFFSET.x;
@@ -110,13 +112,14 @@ const chips = computed(() => {
     if (!store.isTreeLayout.value) return [];
     const scale = store.scale.value;
     const visibleCount = new Map<number, number>();
-    for (const placeholder of store.placeholders.value) visibleCount.set(placeholder.parentId, (visibleCount.get(placeholder.parentId) ?? 0) + 1);
+    // Patch 16: armed holes sit below their system, not in the stack beside it.
+    for (const placeholder of store.placeholders.value) if (!placeholder.armedBy) visibleCount.set(placeholder.parentId, (visibleCount.get(placeholder.parentId) ?? 0) + 1);
     const result: { parentId: number; label: string; open: boolean; style: Record<string, string> }[] = [];
     const place = (parentId: number, label: string, open: boolean) => {
         const position = store.renderPosition(parentId);
         if (!position) return;
         const left = position.x - ANCHOR_OFFSET.x + FULL_WIDTH + 14;
-        const top = position.y - ANCHOR_OFFSET.y + (visibleCount.get(parentId) ?? 0) * 30 + 4;
+        const top = position.y - ANCHOR_OFFSET.y + (visibleCount.get(parentId) ?? 0) * 34 + 4;
         result.push({
             parentId,
             label,
@@ -192,9 +195,13 @@ const chips = computed(() => {
             :style="item.style"
         >
             <template v-if="item.compact">
-                <span class="flex w-full items-center justify-between px-1.5">
-                    <span class="font-bold" :style="{ fontSize: `${15 * item.fontScale}px` }">{{ item.label || '\u00a0' }}</span>
-                    <span class="font-mono text-muted-foreground" :style="{ fontSize: `${8 * item.fontScale}px` }">{{ item.detail }}</span>
+                <span class="flex w-full items-center justify-between gap-1 px-1.5">
+                    <span class="truncate font-bold" :style="{ fontSize: `${13 * item.fontScale}px` }">{{ item.label || '\u00a0' }}</span>
+                    <!-- Patch 16: the note sits inside the small box (it overlapped the box above) -->
+                    <span v-if="item.note" class="truncate font-medium text-amber-600 dark:text-amber-400" :style="{ fontSize: `${8 * item.fontScale}px` }">
+                        {{ item.note.replace(/^maybe /, '') }}
+                    </span>
+                    <span v-else class="truncate font-mono text-muted-foreground" :style="{ fontSize: `${8 * item.fontScale}px` }">{{ item.detail }}</span>
                 </span>
             </template>
             <template v-else>
@@ -209,11 +216,11 @@ const chips = computed(() => {
                 {{ item.armed }}
             </span>
             <span
-                v-if="item.note"
+                v-if="item.note && !item.compact"
                 class="absolute -top-2 right-1 rounded-full border border-amber-500/60 bg-amber-100 px-1.5 leading-tight font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                 :style="{ fontSize: `${9 * item.fontScale}px` }"
             >
-                {{ item.compact ? item.note.replace(/^maybe /, '') : item.note }}
+                {{ item.note }}
             </span>
         </Link>
     </div>

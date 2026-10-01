@@ -52,7 +52,7 @@ export function createViewState() {
     /** Patch 15: the map system you are in (its holes stay open; Center follows it). */
     const currentSystemId: Ref<number | null> = ref(null);
     /** Patch 15: ask the viewport to center on a base point (bumped on every request). */
-    const centerRequest: ShallowRef<{ x: number; y: number; at: number } | null> = shallowRef(null);
+    const centerRequest: ShallowRef<{ x: number; y: number; at: number; force: boolean } | null> = shallowRef(null);
 
     function toggleHoleParent(id: number): void {
         const next = new Set(openedHoleParents.value);
@@ -61,8 +61,9 @@ export function createViewState() {
         openedHoleParents.value = next;
     }
 
-    function requestCenter(point: { x: number; y: number }): void {
-        centerRequest.value = { x: point.x, y: point.y, at: Date.now() };
+    /** Patch 16: force re-centers even while your system is comfortably on screen. */
+    function requestCenter(point: { x: number; y: number }, force = false): void {
+        centerRequest.value = { x: point.x, y: point.y, at: Date.now(), force };
     }
 
     function setSelection(ids: Iterable<number>): void {

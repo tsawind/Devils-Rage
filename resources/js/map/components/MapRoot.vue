@@ -8,6 +8,7 @@ import StaticCertainDialog from '@/components/signatures/StaticCertainDialog.vue
 import WayBackPopup from '@/components/signatures/WayBackPopup.vue';
 import { useStaticCertainty } from '@/composables/signatures/useStaticCertainty';
 import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
+import { useCombat } from '@/composables/combat/useCombat';
 import { centerOnMe } from '@/composables/useCenterOnMe';
 import { useUserEvents } from '@/composables/useUserEvents';
 import { deleteSelectedMapSolarsystems } from '@/map/actions/deleteSelectedMapSolarsystems';
@@ -103,19 +104,23 @@ const locationMapSystemId = computed(() => {
     return null;
 });
 watch(locationMapSystemId, (id) => (store.currentSystemId.value = id), { immediate: true });
+// Patch 16: the map only moves when you near an edge (MapViewport decides); switching
+// Center on, loading the page or switching Rage Scanning always re-centers.
+const { is_combat } = useCombat();
 watch(
     () => {
         const id = locationMapSystemId.value;
         if (!centerOnMe.value || id === null) return null;
         const point = store.renderPosition(id);
-        return point ? `${id}:${Math.round(point.x)}:${Math.round(point.y)}` : null;
+        return point ? `${is_combat.value ? 'rage' : 'map'}:${id}:${Math.round(point.x)}:${Math.round(point.y)}` : null;
     },
-    (key) => {
+    (key, previous) => {
         const id = locationMapSystemId.value;
         if (!key || id === null) return;
         const point = store.renderPosition(id);
+        const force = !previous || previous.split(':')[0] !== key.split(':')[0];
         // The anchor is the card's top-left plus ANCHOR_OFFSET; aim at the card's middle.
-        if (point) store.requestCenter({ x: point.x + 50, y: point.y });
+        if (point) store.requestCenter({ x: point.x + 50, y: point.y }, force);
     },
     { immediate: true },
 );

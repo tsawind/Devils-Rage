@@ -269,20 +269,16 @@ function handleSubmit() {
 <style scoped>
 /* The combat home while someone works its chain: a bright glow that swells in and out. */
 .combat-pulse {
-    animation: combat-pulse 1.4s ease-in-out infinite;
+    animation: combat-pulse 2.4s ease-in-out infinite;
 }
-
+/* Patch 16: a gentle border pulse; the big halo hid the card. */
 @keyframes combat-pulse {
     0%,
     100% {
-        box-shadow:
-            0 0 0 0 var(--chain),
-            0 0 6px 1px var(--chain);
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--chain) 0%, transparent);
     }
     50% {
-        box-shadow:
-            0 0 0 4px color-mix(in srgb, var(--chain) 45%, transparent),
-            0 0 24px 8px var(--chain);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--chain) 45%, transparent);
     }
 }
 </style>

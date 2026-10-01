@@ -37,6 +37,8 @@ export type BandLayoutNode = {
      * straight down through its real systems; in the bands it sits by number.
      */
     placeholder?: boolean | null;
+    /** Patch 16: an armed placeholder: in a lane it's laid out like the next system (below its parent, full size). */
+    armed?: boolean | null;
 };
 
 export type BandLayoutInput = {
@@ -387,7 +389,11 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
             maxRight = Math.max(maxRight, x + laneNodeWidth);
             const children = lane.childrenOf.get(id) ?? [];
             // Patch 15: unjumped holes stack down beside their system instead of taking columns.
-            const holes = children.filter((child) => isPlaceholder(child));
+            // Patch 16: an armed hole is laid out like the next system: straight below when the
+            // system has no jumped child yet, else as the next branch.
+            const isArmed = (child: number): boolean => Boolean(byId.get(child)?.armed);
+            const holes = children.filter((child) => isPlaceholder(child) && !isArmed(child));
+            const armed = children.filter((child) => isPlaceholder(child) && isArmed(child));
             holes.forEach((hole, index) => {
                 positions.set(hole, { x: x + laneNodeWidth + LANE_HOLE_GAP, y: y + index * LANE_HOLE_STEP });
                 maxRight = Math.max(maxRight, x + laneNodeWidth + LANE_HOLE_GAP + LANE_HOLE_WIDTH);
@@ -396,8 +402,8 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
             const stack = holes.length > 0 ? (holes.length + 1) * LANE_HOLE_STEP : 0;
             const holeRows = stack > laneRowGap ? Math.ceil(stack / laneRowGap) - 1 : 0;
             maxRow = Math.max(maxRow, row + holeRows);
-            children
-                .filter((child) => !isPlaceholder(child))
+            const jumped = children.filter((child) => !isPlaceholder(child));
+            (jumped.length > 0 ? [...jumped, ...armed] : armed)
                 .forEach((child, index) => {
                     if (index === 0) {
                         place(child, column, row + 1 + holeRows);
@@ -529,8 +535,8 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
 
 /** Patch 15: unjumped holes beside a rage-lane system (compact 80×26, stacked down). */
 const LANE_HOLE_GAP = 14;
-const LANE_HOLE_WIDTH = 80;
-const LANE_HOLE_STEP = 30;
+const LANE_HOLE_WIDTH = 110;
+const LANE_HOLE_STEP = 34;
 
 /** Every system reachable from `start` through systems that pass `allowed`. */
 function collectComponent(start: number, adjacency: Map<number, number[]>, allowed: (id: number) => boolean): number[] {
