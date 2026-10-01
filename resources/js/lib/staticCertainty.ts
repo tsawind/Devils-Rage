@@ -19,6 +19,8 @@ export type TCertaintyHole = {
     isStatic: boolean;
     /** Linked to a connection (jumped). */
     linked: boolean;
+    /** Linked holes: the class code of the system it leads to ("c5"). */
+    leadsTo?: string | null;
 };
 
 export type TCertaintyStatic = {
@@ -44,6 +46,8 @@ export type TCertaintyInput = {
     /** Signatures not categorised yet (any kind). */
     uncategorized: number;
     wayBack: TCertaintyWayBack | null;
+    /** Connections from this system (not the way back) whose hole here was never pasted: where they lead. */
+    unpastedLeadsTo?: string[];
 };
 
 export type TCertaintyResult = {
@@ -94,10 +98,19 @@ export function decideStatic(input: TCertaintyInput): TCertaintyResult {
         if (seen.has(name)) continue;
         seen.add(name);
 
-        const candidates = input.holes.filter((hole) => (hole.typeName ?? '').toUpperCase() === name && !isK162(hole.typeName)).map((hole) => hole.signatureId);
+        const candidates = input.holes
+            .filter((hole) =>
+                hole.typeName
+                    ? hole.typeName.toUpperCase() === name && !isK162(hole.typeName)
+                    : // A jumped hole with no type could be it when it leads to the static's class.
+                      hole.linked && Boolean(hole.leadsTo) && hole.leadsTo === staticHole.leadsTo,
+            )
+            .map((hole) => hole.signatureId);
         const backIsCandidate = maybeBack.some((candidate) => candidate.toUpperCase() === name);
         // The way back could be it: a candidate too, even before its signature is pasted (-1 then).
         if (backIsCandidate && !candidates.includes(wayBackId ?? -1)) candidates.push(wayBackId ?? -1);
+        // So could a hole jumped from here whose signature was never pasted.
+        if ((input.unpastedLeadsTo ?? []).includes(staticHole.leadsTo)) candidates.push(-1);
 
         if (candidates.length === 1 && candidates[0] !== -1) {
             const signatureId = candidates[0];

@@ -217,7 +217,8 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
                 visited.add(neighbour);
                 parentOf.set(neighbour, realId);
                 if (isHome(neighbour)) {
-                    laneLinks.set(neighbour, { parent: realId, band });
+                    // Hangs under the band system it was reached from (also when found through another combat home).
+                    laneLinks.set(neighbour, { parent: layoutId, band });
                     queue.push([layoutId, neighbour]);
                     continue;
                 }
@@ -472,6 +473,17 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         sideBand = bandRect(sideTop, sideBottom, sideRight);
         cursorY = sideBottom + bandGap + anchorY;
     }
+
+    // A lane that should have hung off a band but found no place there: below everything, on its own.
+    let strayLeft = marginX;
+    let strayBottom = -Infinity;
+    for (const color of laneColors) {
+        if (lanes.some((lane) => lane.color === color)) continue;
+        const placed = placeLane(color, strayLeft, cursorY + 20, null);
+        strayLeft = snap(placed.right + anchorX + laneGap / 2);
+        strayBottom = Math.max(strayBottom, placed.bottom);
+    }
+    if (strayBottom > -Infinity) cursorY = strayBottom + bandGap + anchorY;
 
     // Anything left (a placeholder without a placed parent): park it below everything.
     let parkX = marginX;

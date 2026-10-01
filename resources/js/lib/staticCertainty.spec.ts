@@ -86,4 +86,40 @@ describe('patch 13: the static only when it is certain', () => {
         expect(classCode('5')).toBe('c5');
         expect(classCode('h')).toBe('hs');
     });
+
+    it('a jumped hole with no type could be the static when it leads to the static class', () => {
+        const typedAndUntyped = decideStatic({
+            statics: V753,
+            holes: [
+                { signatureId: 8, typeName: 'V753', isStatic: false, linked: false },
+                { signatureId: 9, typeName: null, isStatic: false, linked: true, leadsTo: 'c6' },
+            ],
+            uncategorized: 0,
+            wayBack: null,
+        });
+        expect(typedAndUntyped.mark).toBe(null);
+        expect(typedAndUntyped.ambiguous).toEqual({ staticName: 'V753', signatureIds: [8, 9] });
+
+        const otherClass = decideStatic({
+            statics: V753,
+            holes: [
+                { signatureId: 8, typeName: 'V753', isStatic: false, linked: false },
+                { signatureId: 9, typeName: null, isStatic: false, linked: true, leadsTo: 'c3' },
+            ],
+            uncategorized: 0,
+            wayBack: null,
+        });
+        expect(otherClass.mark?.signatureId).toBe(8);
+    });
+
+    it('a hole jumped from here but never pasted could be the static', () => {
+        const result = decideStatic({
+            statics: V753,
+            holes: [{ signatureId: 8, typeName: 'V753', isStatic: false, linked: false }],
+            uncategorized: 0,
+            wayBack: null,
+            unpastedLeadsTo: ['c6'],
+        });
+        expect(result.mark).toBe(null);
+    });
 });

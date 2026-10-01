@@ -156,7 +156,7 @@ function armRow(signature: TSignature, asAlias: string | null = null, swap = fal
     const limbo = Boolean(map_system.value?.combat_color);
     // Re-arming another hole in this combat system keeps your number.
     const mine = myArmedHole(signatures.value, user_id.value);
-    const reuse = limbo && mine && mine.id !== signature.id && mine.alias ? mine.alias : null;
+    const reuse = limbo && mine && mine.id !== signature.id && mine.alias && mine.armed_claimed ? mine.alias : null;
     const own = signature.alias ?? reuse ?? planned_aliases.value.get(signature.id) ?? claim_alias.value;
     const alias = asAlias ?? own;
     if (!alias) {

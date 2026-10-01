@@ -91,7 +91,7 @@ final class Signature extends Model
     /**
      * The arm as the map shows it, or nulls when not armed.
      *
-     * @return array{armed_by_user_id: int|null, armed_by_name: string|null, armed_at: string|null}
+     * @return array{armed_by_user_id: int|null, armed_by_name: string|null, armed_at: string|null, armed_claimed: bool}
      */
     public function armedPayload(): array
     {
@@ -101,6 +101,8 @@ final class Signature extends Model
             'armed_by_user_id' => $armed ? $this->armed_by_user_id : null,
             'armed_by_name' => $armed ? $this->armed_by_name : null,
             'armed_at' => $armed ? $this->armed_at?->toISOString() : null,
+            // Arming gave it its number: re-arming another hole can take that number along.
+            'armed_claimed' => $armed && $this->armed_claimed_alias,
         ];
     }
 

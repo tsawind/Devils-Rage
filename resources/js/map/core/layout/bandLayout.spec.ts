@@ -233,6 +233,36 @@ describe('computeBandLayout', () => {
         expect(result.mainBand!.maxY).toBeGreaterThanOrEqual(result.lanes[0].maxY);
     });
 
+    it('patch 13: a combat home found through another combat home still gets its lane', () => {
+        const nodes = [
+            sys(DAISY, 'Daisy'),
+            sys(2, 'A'),
+            sys(4, 'D'),
+            sys(5, 'D1', { color: 'red', home: true }),
+            sys(6, 'X', { color: 'blue', home: true }),
+            sys(7, '1', { color: 'blue' }),
+        ];
+        const result = computeBandLayout({
+            nodes,
+            edges: [
+                { from: 1, to: 2 },
+                { from: 1, to: 4 },
+                { from: 4, to: 5 },
+                { from: 5, to: 6 },
+                { from: 6, to: 7 },
+            ],
+            homeId: DAISY,
+            laneOrder: ['red', 'blue'],
+            compareNodes: byAlias(nodes),
+            reservedAlias: 'A',
+        });
+        expect(result.lanes.map((lane) => lane.color).sort()).toEqual(['blue', 'red']);
+        // Blue hangs under Delta too, beside Red, inside the main band.
+        expect(result.positions.get(6)!.y).toBe(result.positions.get(5)!.y);
+        expect(result.positions.get(6)!.x).toBeGreaterThan(result.positions.get(5)!.x);
+        expect(result.combatBand).toBeNull();
+    });
+
     it('patch 13: sorts a branch leading to a lane after its siblings', () => {
         const nodes = [sys(DAISY, 'Daisy'), sys(2, 'A'), sys(3, 'B'), sys(5, 'A1', { color: 'red', home: true })];
         const result = computeBandLayout({

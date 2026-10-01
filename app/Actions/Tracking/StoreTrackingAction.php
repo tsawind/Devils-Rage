@@ -126,7 +126,15 @@ final readonly class StoreTrackingAction
 
             // Link the signature to the connection if provided
             if ($data->signature_id) {
-                $signature_update = ['map_connection_id' => $connection->id, ...$this->getChainNumberingUpdate($signature, $data)];
+                $signature_update = [
+                    'map_connection_id' => $connection->id,
+                    ...$this->getChainNumberingUpdate($signature, $data),
+                    // Patch 13: jumping the hole uses up its arm (the number stays).
+                    'armed_by_user_id' => null,
+                    'armed_by_name' => null,
+                    'armed_at' => null,
+                    'armed_claimed_alias' => false,
+                ];
 
                 if ($signature instanceof Signature && $signature->signature_category_id === null) {
                     $signature_update['signature_category_id'] = $this->getWormholeCategoryId();

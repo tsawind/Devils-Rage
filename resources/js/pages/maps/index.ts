@@ -134,6 +134,7 @@ export type TPendingHole = {
     /** Patch 13: armed as someone's next jump. */
     armed_by_user_id?: number | null;
     armed_by_name?: string | null;
+    armed_claimed?: boolean;
 };
 
 export type TMapSolarsystem = TMapSolarsystemBase & {

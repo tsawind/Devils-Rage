@@ -19,6 +19,8 @@ export type TArmable = {
     map_connection_id?: number | null;
     armed_by_user_id?: number | null;
     armed_by_name?: string | null;
+    /** Arming gave it its number. */
+    armed_claimed?: boolean;
 };
 
 export type TGridCandidate = { id: number; meters: number | null; isWormhole: boolean; linked: boolean };

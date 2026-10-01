@@ -45,16 +45,23 @@ export function certaintyInputFor(store: MapStore, system: TMapSolarsystem) {
     }));
 
     let wayBack: TCertaintyWayBack | null = null;
+    const unpastedLeadsTo: string[] = [];
     const parentId = store.bandLayout.value?.parentOf.get(system.id) ?? null;
     for (const connection of store.connections.values()) {
         const ends = [connection.from_map_solarsystem_id, connection.to_map_solarsystem_id];
         if (!ends.includes(system.id)) continue;
         const thisSide = (connection.signatures ?? []).find((signature) => signature.map_solarsystem_id === system.id) ?? null;
         const farSide = (connection.signatures ?? []).find((signature) => signature.map_solarsystem_id !== system.id) ?? null;
-        if (thisSide) {
-            holes.push({ signatureId: thisSide.id, typeName: thisSide.wormhole?.name ?? null, isStatic: Boolean(thisSide.is_static), linked: true });
-        }
         const otherId = ends[0] === system.id ? ends[1] : ends[0];
+        const leadsTo = classCode(store.systems.get(otherId)?.solarsystem.class ?? null);
+        if (thisSide) {
+            // A known non-K162 type on the far side: the hole opened there, so this side is its K162.
+            const farType = farSide?.wormhole?.name ?? null;
+            const typeName = thisSide.wormhole?.name ?? (farType && !farType.toUpperCase().startsWith('K162') ? 'K162' : null);
+            holes.push({ signatureId: thisSide.id, typeName, isStatic: Boolean(thisSide.is_static), linked: true, leadsTo });
+        } else if (connection.type !== 'stargate' && otherId !== parentId && leadsTo) {
+            unpastedLeadsTo.push(leadsTo);
+        }
         if (parentId !== null && otherId === parentId && connection.type !== 'stargate') {
             const parent = store.systems.get(parentId);
             wayBack = {
@@ -66,7 +73,7 @@ export function certaintyInputFor(store: MapStore, system: TMapSolarsystem) {
         }
     }
 
-    return { statics, holes, uncategorized: system.uncategorized_signatures_count ?? 0, wayBack };
+    return { statics, holes, uncategorized: system.uncategorized_signatures_count ?? 0, wayBack, unpastedLeadsTo };
 }
 
 /** Mounted once with the map: runs the requested checks as the updates arrive. */

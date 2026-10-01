@@ -184,6 +184,8 @@ export type TSignature = {
     armed_by_user_id?: number | null;
     armed_by_name?: string | null;
     armed_at?: string | null;
+    /** Arming gave the hole its number (re-arming another hole takes it along). */
+    armed_claimed?: boolean;
     /** Marked as the system's static (takes the static slot: A / Alpha in home, 0 elsewhere). */
     is_static?: boolean;
     /** Marked as a wandering hole (another hole of a static's type). */

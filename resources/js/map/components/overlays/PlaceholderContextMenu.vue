@@ -74,7 +74,7 @@ const limbo = computed(() => Boolean(parent.value?.combat_color));
 const armAlias = computed(() => {
     if (hole.value?.alias) return hole.value.alias;
     const mine = limbo.value ? myArmedHole(parent.value?.pending_holes, userId.value) : null;
-    return mine && mine.id !== placeholder.signatureId && mine.alias ? mine.alias : claim.value;
+    return mine && mine.id !== placeholder.signatureId && mine.alias && mine.armed_claimed ? mine.alias : claim.value;
 });
 
 const armAs = computed(() => {

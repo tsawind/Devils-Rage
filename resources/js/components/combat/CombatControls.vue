@@ -96,7 +96,6 @@ function handleChooseCombat(choice: TCombatStart): void {
                     </p>
                 </div>
             </TooltipContent>
-            </TooltipContent>
         </Tooltip>
 
         <NearestHighsecButton v-if="is_combat" :map="page.props.map" :from-solarsystem-id="location_id" />
