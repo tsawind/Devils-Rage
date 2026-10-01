@@ -191,8 +191,18 @@ function handleChange(data: Record<string, FormDataConvertible>) {
     updateSignature(signature, data);
 }
 
+/**
+ * Patch 14: any change that can finish the picture (a type, a category, a
+ * link, a deleted signature) re-runs the certain-static check, e.g. the last
+ * unknown hole typed as a K162 leaves only one hole that can be the static.
+ */
+function recheckStatic(): void {
+    requestStaticCheck(selected_map_solarsystem.id, map_system.value);
+}
+
 function handleDelete() {
     deleteSignature(signature);
+    recheckStatic();
 }
 
 function handleCategoryChange(value: AcceptableValue) {
@@ -201,6 +211,7 @@ function handleCategoryChange(value: AcceptableValue) {
         signature_type_id: null,
         map_connection_id: null,
     });
+    recheckStatic();
 }
 
 function handleTypeChange(value: AcceptableValue) {
@@ -222,7 +233,7 @@ function handleTypeChange(value: AcceptableValue) {
     // let the check decide when the update is back.
     const clearFlags = !isStaticType && (signature.is_static || signature.is_wandering) ? flagChanges(false, false) : {};
     handleChange({ signature_type_id: typeId, ...clearFlags });
-    if (isStaticType) requestStaticCheck(selected_map_solarsystem.id, map_system.value);
+    recheckStatic();
 }
 
 // ---- "Static, wandering or unknown?" when a static type is picked ---------
@@ -673,6 +684,7 @@ function nextFreeNumber(): string | null {
 
 function handleMapConnectionChange(value: AcceptableValue) {
     handleChange({ map_connection_id: value as number | null });
+    recheckStatic();
 }
 
 function startEditId() {

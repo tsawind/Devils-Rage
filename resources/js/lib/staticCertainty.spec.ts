@@ -122,4 +122,17 @@ describe('patch 13: the static only when it is certain', () => {
         });
         expect(result.mark).toBe(null);
     });
+
+    it('marks the way back once the last other hole turns out to be a K162 (D2 → Delta)', () => {
+        const result = decideStatic({
+            statics: [{ name: 'H296', leadsTo: 'c5' }],
+            holes: [
+                { signatureId: 1, typeName: 'H296', isStatic: false, linked: true, leadsTo: 'c5' },
+                { signatureId: 2, typeName: 'K162', isStatic: false, linked: false },
+            ],
+            uncategorized: 0,
+            wayBack: { signatureId: 1, thisSideType: 'H296', farSideType: null, leadsTo: 'c5' },
+        });
+        expect(result.mark).toEqual({ signatureId: 1, staticName: 'H296', setType: false });
+    });
 });

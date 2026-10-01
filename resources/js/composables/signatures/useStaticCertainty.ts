@@ -100,6 +100,8 @@ export function useStaticCertainty(store: MapStore): void {
     const { is_combat } = useCombat();
     const wormholeCategoryId = signatureCategories.find((category) => category.code === 'wormhole')?.id ?? null;
 
+    const toldAmbiguous = new Map<number, string>();
+
     function run(mapSolarsystemId: number): void {
         requested.delete(mapSolarsystemId);
         const system = store.systems.get(mapSolarsystemId);
@@ -158,6 +160,10 @@ export function useStaticCertainty(store: MapStore): void {
                 },
             };
         } else if (result.ambiguous) {
+            // Said once per system and set of holes, not again on every change.
+            const key = `${result.ambiguous.staticName}:${result.ambiguous.signatureIds.toSorted((a, b) => a - b).join(',')}`;
+            if (toldAmbiguous.get(mapSolarsystemId) === key) return;
+            toldAmbiguous.set(mapSolarsystemId, key);
             const where = displayAlias(system.alias) || system.solarsystem.name;
             toast.info(`${result.ambiguous.staticName} in ${where}: more than one hole could be the static`, {
                 description: 'Mark the right one by hand (signature row menu → Static).',

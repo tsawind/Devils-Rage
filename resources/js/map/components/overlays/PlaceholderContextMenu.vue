@@ -221,6 +221,8 @@ function openInList(): void {
 
 function removeSignature(): void {
     deleteSignature({ id: placeholder.signatureId } as TSignature);
+    // One hole fewer may leave only one that can be the static.
+    if (parent.value) requestStaticCheck(parent.value.id, parent.value);
 }
 </script>
 
