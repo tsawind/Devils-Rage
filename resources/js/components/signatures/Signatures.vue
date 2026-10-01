@@ -18,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useCombat } from '@/composables/combat/useCombat';
 import { recentJump } from '@/composables/signatures/recentJump';
 import { armHole } from '@/composables/signatures/armHole';
-import { clearHeldWayBack, copyHeldWayBack, heldWayBack } from '@/composables/signatures/wayBack';
+import { clearHeldWayBack, copyHeldWayBack, heldWayBack, PASTE_SIGNATURES_EVENT } from '@/composables/signatures/wayBack';
 import { requestStaticCheck } from '@/composables/signatures/useStaticCertainty';
 import { usePasteSignatures } from '@/composables/signatures/usePasteSignatures';
 import { useSignatures } from '@/composables/signatures/useSignatures';
@@ -43,7 +43,7 @@ import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { createSignature, TProcessedConnection, updateMapUserSettings, updateSignature, useMapSolarsystems, useMapStore } from '@/map/api';
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TSignature } from '@/types/models';
-import { useLocalStorage, useNow } from '@vueuse/core';
+import { useEventListener, useLocalStorage, useNow } from '@vueuse/core';
 import { ArrowDown, ArrowUp, CircleHelp, Cloud, Database, Fan, Flag, Gem, Landmark, Rows2, Rows3, Shield, Swords } from 'lucide-vue-next';
 import { type Component, computed, nextTick, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -299,11 +299,15 @@ const return_connections = ref<TReturnConnectionOption[]>([]);
 let pending_return: { candidates: TReturnCandidate[]; connections: TProcessedConnection[] } | null = null;
 
 async function handlePasted(pasted: TRawSignature[]): Promise<void> {
+    // Patch 14: when the return signature is in the paste, the better way back is copied
+    // (and the held one dropped); otherwise the held one waits for a click on its red area.
     await handlePastedScan(pasted);
-    // Patch 14: a paste gives the mapper focus: copy a held way back now, unless a better
-    // one was just copied (the return signature linked). Combat keeps it in the chip.
-    if (!is_combat.value && heldWayBack.value) await copyHeldWayBack();
 }
+
+// The way-back popup's green area: paste, same as the paste button.
+useEventListener(window, PASTE_SIGNATURES_EVENT, () => {
+    if (can_write.value) pasteSignatures();
+});
 
 async function handlePastedScan(pasted: TRawSignature[]): Promise<void> {
     // The map's copy of this system before the server's update, for the static check.

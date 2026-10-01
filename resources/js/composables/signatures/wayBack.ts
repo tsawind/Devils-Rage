@@ -43,6 +43,13 @@ export async function copyHeldWayBack(): Promise<boolean> {
     return true;
 }
 
+/** The way-back popup's green area asks the signature panel to paste (same as its paste button). */
+export const PASTE_SIGNATURES_EVENT = 'wormhole:paste-signatures';
+
+export function requestSignaturePaste(): void {
+    window.dispatchEvent(new CustomEvent(PASTE_SIGNATURES_EVENT));
+}
+
 /** A better way back was copied (the return signature was pasted and linked): drop the held one. */
 export function clearHeldWayBack(): void {
     heldWayBack.value = null;
