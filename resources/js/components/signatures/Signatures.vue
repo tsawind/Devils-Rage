@@ -17,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useCombat } from '@/composables/combat/useCombat';
 import { recentJump } from '@/composables/signatures/recentJump';
 import { armHole } from '@/composables/signatures/armHole';
+import { clearHeldWayBack, copyHeldWayBack, heldWayBack } from '@/composables/signatures/wayBack';
 import { requestStaticCheck } from '@/composables/signatures/useStaticCertainty';
 import { usePasteSignatures } from '@/composables/signatures/usePasteSignatures';
 import { useSignatures } from '@/composables/signatures/useSignatures';
@@ -297,6 +298,13 @@ const return_connections = ref<TReturnConnectionOption[]>([]);
 let pending_return: { candidates: TReturnCandidate[]; connections: TProcessedConnection[] } | null = null;
 
 async function handlePasted(pasted: TRawSignature[]): Promise<void> {
+    await handlePastedScan(pasted);
+    // Patch 14: a paste gives the mapper focus: copy a held way back now, unless a better
+    // one was just copied (the return signature linked). Combat keeps it in the chip.
+    if (!is_combat.value && heldWayBack.value) await copyHeldWayBack();
+}
+
+async function handlePastedScan(pasted: TRawSignature[]): Promise<void> {
     // The map's copy of this system before the server's update, for the static check.
     const before = map_system.value;
 
@@ -414,7 +422,11 @@ function linkReturnHole(signature: TSignature, connection: TProcessedConnection,
         map_system.value?.combat_color ?? null,
         Boolean(map_system.value?.combat_home),
     );
-    if (name) navigator.clipboard.writeText(name).catch(() => undefined);
+    if (name) {
+        navigator.clipboard.writeText(name).catch(() => undefined);
+        // This is the better way back (with the return signature): drop the held one.
+        clearHeldWayBack();
+    }
 
     toast.success(automatic ? `Linked ${signature.signature_id} as your return hole` : `Return hole ${signature.signature_id} linked`, {
         description: name ? `Copied ${visibleBookmarkName(name)}` : undefined,
@@ -538,6 +550,15 @@ function createNewSignature() {
             Signatures
             <span v-if="filteredSignatures.length" class="ml-1 text-amber-400">{{ filteredSignatures.length }}</span>
             <span v-if="hiddenSignaturesCount > 0" class="ml-1 text-muted-foreground/70">{{ hiddenSignaturesCount }} hidden</span>
+            <button
+                v-if="heldWayBack && is_combat"
+                type="button"
+                class="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 font-sans text-[10px] tracking-normal text-amber-300 normal-case hover:bg-amber-500/30"
+                :title="`Copies ${heldWayBack.name}`"
+                @click="copyHeldWayBack"
+            >
+                Way back ready · click to copy
+            </button>
             <span v-if="armed_text" class="ml-2 truncate font-sans text-[10px] tracking-normal text-red-400 normal-case" :title="`Armed holes: ${armed_text}`">
                 Armed: {{ armed_text }}
             </span>

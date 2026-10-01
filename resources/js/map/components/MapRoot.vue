@@ -5,6 +5,7 @@ import { usePath } from '@/composables/usePath';
 import usePermission from '@/composables/usePermission';
 import { useRallyRoute } from '@/composables/useRallyRoute';
 import StaticCertainDialog from '@/components/signatures/StaticCertainDialog.vue';
+import WayBackPopup from '@/components/signatures/WayBackPopup.vue';
 import { useStaticCertainty } from '@/composables/signatures/useStaticCertainty';
 import { useUserEvents } from '@/composables/useUserEvents';
 import { deleteSelectedMapSolarsystems } from '@/map/actions/deleteSelectedMapSolarsystems';
@@ -226,6 +227,7 @@ whenever(Delete, () => {
         <template #overlays>
             <MapRallyBadge />
             <MapOptions />
+            <WayBackPopup />
         </template>
     </MapViewport>
     <ConnectionPopover

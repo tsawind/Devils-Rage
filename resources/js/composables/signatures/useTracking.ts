@@ -5,11 +5,13 @@ import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { useShowMap } from '@/composables/useShowMap';
 import { useStaticData } from '@/composables/useStaticData';
 import { useTrackingSystems } from '@/composables/useTrackingSystems';
+import { useCombat } from '@/composables/combat/useCombat';
+import { offerWayBack } from '@/composables/signatures/wayBack';
 import useUser from '@/composables/useUser';
 import { aliasTargetKind, displayAlias, staticSlotAlias, suggestAlias } from '@/lib/alias';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
 import { jumpMatchesArm, myArmedHole } from '@/lib/arming';
-import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
+import { formatBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
 import { groupSignatureOptions } from '@/lib/signatureCompatibility';
 import { isWormholeSystem } from '@/lib/solarsystem';
@@ -29,6 +31,7 @@ export function useTracking() {
     const { staticData } = useStaticData();
     const { map_solarsystems } = useMapSolarsystems();
     const user = useUser();
+    const { is_combat } = useCombat();
 
     const is_tracking = computed(() => map_user_settings.value?.is_tracking && character.value && map_user_settings.value?.tracking_allowed);
     const is_tracking_allowed = computed(() => map_user_settings.value.tracking_allowed);
@@ -191,6 +194,23 @@ export function useTracking() {
 
         // Skip the prompt when it is certain which hole was jumped (everyone, not just combat mode).
         if (!gate_connected && performCertainJump()) {
+            return;
+        }
+
+        // Patch 14: combat mode never asks. The jump takes the next jump-order number with no
+        // signature (sig IDs fill in when someone pastes a scan), so the scanner runs full speed.
+        if (!gate_connected && is_combat.value) {
+            const alias = suggested_alias.value;
+            toast.info(`New system ${alias ? displayAlias(alias) : ''}`.trim(), { description: 'Combat mode: no prompt, numbered in jump order.' });
+            handleSelectSignature({
+                signatureId: null,
+                alias,
+                lifetime: 'healthy',
+                massStatus: 'fresh',
+                shipSize: null,
+                isStatic: null,
+                isWandering: null,
+            });
             return;
         }
 
@@ -383,8 +403,8 @@ export function useTracking() {
 
         if (!name) return;
 
-        navigator.clipboard.writeText(name);
-        toast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(name) });
+        // Patch 14: EVE has focus right after a jump, so the mapper may have to hold it (see wayBack).
+        offerWayBack(name);
     }
 
     return {
