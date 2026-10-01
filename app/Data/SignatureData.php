@@ -35,6 +35,8 @@ final class SignatureData extends Data
         public string|Optional|null $alias = new Optional,
         public bool|Optional $is_static = new Optional,
         public bool|Optional $is_wandering = new Optional,
+        /** Patch 14: the scanner confirmed renaming the system this hole leads to (rename popup). */
+        public bool|Optional $rename_system = new Optional,
     ) {}
 
     public static function rules(): array
@@ -52,6 +54,7 @@ final class SignatureData extends Data
             'alias' => ['nullable', 'sometimes', 'string', 'max:32'],
             'is_static' => ['sometimes', 'boolean'],
             'is_wandering' => ['sometimes', 'boolean'],
+            'rename_system' => ['sometimes', 'boolean'],
         ];
     }
 

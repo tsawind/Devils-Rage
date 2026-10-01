@@ -68,13 +68,22 @@ describe('patch 12: placeholder systems', () => {
         expect(expected[0].note).toBe('maybe *return?');
     });
 
-    it('patch 13: a scanned hole of the static type accounts for it; unlinked systems get none', () => {
+    it('patch 14: a hole of the static type is only a candidate until it is marked; unlinked systems get none', () => {
         const systems: Parameters<typeof buildPlaceholders>[0] = [
             { id: 3, alias: 'A1', solarsystem: { class: '5', statics: [{ name: 'V753', leads_to: 'c6' }] }, pending_holes: [{ id: 50, signature_id: 'QRT-111', alias: null, is_static: false, target_class: '6', wormhole: 'V753' }] },
             { id: 4, alias: null, solarsystem: { class: '3', statics: [{ name: 'D845', leads_to: 'hs' }] }, pending_holes: [] },
         ];
         const connections = [{ from_map_solarsystem_id: 2, to_map_solarsystem_id: 3, signatures: [] }];
         const expected = buildPlaceholders(systems, FORMATS, new Set(), { connections, parentOf: new Map(), homeId: null }).filter((placeholder) => placeholder.expected);
-        expect(expected).toHaveLength(0);
+        expect(expected).toHaveLength(1);
+        expect(expected[0].parentId).toBe(3);
+        expect(expected[0].note).toBe('maybe QRT?');
+        expect(expected[0].detail).toBe('V753 → C6 static · not identified');
+
+        // Marked static: accounted for.
+        const markedSystems = systems.map((system) =>
+            system.id === 3 ? { ...system, pending_holes: system.pending_holes!.map((hole) => ({ ...hole, is_static: true })) } : system,
+        );
+        expect(buildPlaceholders(markedSystems, FORMATS, new Set(), { connections, parentOf: new Map(), homeId: null }).filter((placeholder) => placeholder.expected)).toHaveLength(0);
     });
 });

@@ -4,6 +4,7 @@ import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { usePath } from '@/composables/usePath';
 import usePermission from '@/composables/usePermission';
 import { useRallyRoute } from '@/composables/useRallyRoute';
+import StaticCertainDialog from '@/components/signatures/StaticCertainDialog.vue';
 import { useStaticCertainty } from '@/composables/signatures/useStaticCertainty';
 import { useUserEvents } from '@/composables/useUserEvents';
 import { deleteSelectedMapSolarsystems } from '@/map/actions/deleteSelectedMapSolarsystems';
@@ -236,6 +237,7 @@ whenever(Delete, () => {
     />
     <MapAddConnectionDialog />
     <ClearChainDialog />
+    <StaticCertainDialog />
 </template>
 
 <style scoped></style>

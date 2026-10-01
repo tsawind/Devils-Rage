@@ -1,5 +1,5 @@
 import { suggestAlias } from '@/lib/alias';
-import { buildSignatureBookmark } from '@/lib/bookmark';
+import { buildSignatureBookmark, formatBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
 import type { MapStore } from '@/map/store/mapStore';
 import type { TMapSolarsystem, TPendingHole } from '@/pages/maps';
@@ -31,12 +31,12 @@ export function claimFor(store: MapStore, system: TMapSolarsystem, hole: TPendin
     });
 }
 
-/** The bookmark name of an unjumped hole, as it would be numbered `alias`. */
-export function pendingHoleBookmark(store: MapStore, system: TMapSolarsystem, hole: TPendingHole, alias: string | null): string {
+/** The bookmark name of an unjumped hole, as it would be numbered `alias` (and flagged static or not). */
+export function pendingHoleBookmark(store: MapStore, system: TMapSolarsystem, hole: TPendingHole, alias: string | null, isStatic?: boolean): string {
     const meta = store.meta.value;
     if (!meta) return '';
     return buildSignatureBookmark({
-        signature: holeAsSignature(hole),
+        signature: { ...holeAsSignature(hole), ...(isStatic !== undefined ? { is_static: isStatic, is_wandering: false } : {}) },
         currentSystem: {
             alias: system.alias,
             class: system.solarsystem.class,
@@ -62,4 +62,80 @@ export function holeAsSignature(hole: TPendingHole) {
         is_static: hole.is_static,
         is_wandering: hole.is_wandering,
     };
+}
+
+/**
+ * Patch 14: the in-game bookmarks that change when the hole `signatureId` in
+ * `system` is renamed from → to (an unjumped hole, or a jumped one: then also
+ * the far side's way back). Shown in the rename popups.
+ */
+export function renameChanges(
+    store: MapStore,
+    system: TMapSolarsystem,
+    signatureId: number,
+    fromAlias: string,
+    toAlias: string,
+    isStatic: boolean,
+): { label: string; from: string; to: string }[] {
+    const meta = store.meta.value;
+    if (!meta) return [];
+    const hole = system.pending_holes?.find((candidate) => candidate.id === signatureId);
+    if (hole) {
+        return [{ label: 'In this system', from: pendingHoleBookmark(store, system, hole, fromAlias), to: pendingHoleBookmark(store, system, hole, toAlias, isStatic) }];
+    }
+
+    for (const connection of store.connections.values()) {
+        const signature = (connection.signatures ?? []).find((candidate) => candidate.id === signatureId && candidate.map_solarsystem_id === system.id);
+        if (!signature) continue;
+        const otherId = connection.from_map_solarsystem_id === system.id ? connection.to_map_solarsystem_id : connection.from_map_solarsystem_id;
+        const target = store.systems.get(otherId);
+        if (!target) return [];
+        const farSignature = (connection.signatures ?? []).find((candidate) => candidate.map_solarsystem_id !== system.id) ?? null;
+        const forward = (alias: string, flag: boolean): string =>
+            buildSignatureBookmark({
+                signature: {
+                    signature_id: signature.signature_id,
+                    ship_size: connection.ship_size,
+                    mass_status: connection.mass_status,
+                    lifetime: connection.lifetime_status,
+                    wormhole: signature.wormhole,
+                    signature_type: signature.signature_type,
+                    is_static: flag,
+                    is_wandering: false,
+                },
+                currentSystem: {
+                    alias: system.alias,
+                    class: system.solarsystem.class,
+                    combatHome: Boolean(system.combat_home),
+                    combatColor: system.combat_color ?? null,
+                },
+                connectionTarget: { ...target, alias },
+                aliases: chainAliases([...store.systems.values()], system),
+                formats: meta,
+                detectReturn: true,
+            });
+        const back = (alias: string): string =>
+            formatBookmarkName(
+                { alias: system.alias, occupier_alias: system.occupier_alias, solarsystem: system.solarsystem, combat_home: system.combat_home, combat_color: system.combat_color },
+                { signatureId: farSignature?.signature_id ?? null },
+                meta,
+                alias,
+                alias,
+                target.solarsystem.class,
+                target.combat_color ?? null,
+                Boolean(target.combat_home),
+            );
+        return [
+            { label: 'In this system', from: forward(fromAlias, Boolean(signature.is_static)), to: forward(toAlias, isStatic) },
+            { label: 'On the far side (way back)', from: back(fromAlias), to: back(toAlias) },
+        ];
+    }
+    return [];
+}
+
+/** Systems already mapped further down a name in the chain ("A21" under "A2"): renaming it is blocked then. */
+export function mappedBelow(store: MapStore, system: TMapSolarsystem, alias: string): string[] {
+    const from = alias.toUpperCase();
+    if (!from) return [];
+    return chainAliases([...store.systems.values()], system).filter((candidate) => candidate.toUpperCase().startsWith(from) && candidate.length > from.length);
 }

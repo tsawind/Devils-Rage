@@ -38,6 +38,8 @@ final readonly class UpdateSignatureAction
             $previousAlias = $signature->alias;
 
             $updateData = $data->toArray();
+            // Not a column: whether the linked system follows a confirmed rename.
+            unset($updateData['rename_system']);
 
             // Update wormhole_id if signature_type_id changed, resetting it when cleared
             if (! $data->signature_type_id instanceof Optional) {
@@ -125,7 +127,8 @@ final readonly class UpdateSignatureAction
             return;
         }
 
-        if ($other->alias === null || $other->alias === $previousAlias) {
+        $confirmed = ! $data->rename_system instanceof Optional && $data->rename_system;
+        if ($confirmed || $other->alias === null || $other->alias === $previousAlias) {
             $this->updateMapSolarsystemAction->handle($other, ['alias' => $data->alias]);
         }
     }

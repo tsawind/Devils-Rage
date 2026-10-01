@@ -27,8 +27,10 @@ import { claimFor, holeAsSignature, pendingHoleBookmark } from '@/map/holeBookma
 import { useMapStore } from '@/map/store/mapStore';
 import { show } from '@/routes/maps';
 import type { TSignature } from '@/types/models';
+import { formatDateToISO } from '@/lib/utils';
+import { UTCDate } from '@date-fns/utc';
 import { router } from '@inertiajs/vue3';
-import { ClipboardCopy, Crosshair, Fan, ListTree, Trash2 } from 'lucide-vue-next';
+import { Check, ClipboardCopy, Crosshair, Fan, Hourglass, ListTree, Scale, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -159,6 +161,30 @@ function setType(typeId: number): void {
     requestStaticCheck(system.id, system);
 }
 
+// ---- Mass and life (patch 14) ---------------------------------------------------
+
+const massOptions = [
+    { value: 'fresh', label: 'Fresh mass', dot: 'bg-neutral-500' },
+    { value: 'reduced', label: 'Reduced mass', dot: 'bg-amber-500' },
+    { value: 'critical', label: 'Critical mass', dot: 'bg-red-500' },
+] as const;
+const lifeOptions = [
+    { value: 'healthy', label: 'Healthy', dot: 'bg-neutral-500' },
+    { value: 'eol', label: 'End of life', dot: 'bg-purple-500' },
+    { value: 'critical', label: 'Critical (under 1 h)', dot: 'bg-red-500' },
+] as const;
+
+const massLabel = computed(() => massOptions.find((option) => option.value === hole.value?.mass_status)?.label.replace(' mass', '') ?? 'Unknown');
+const lifeLabel = computed(() => lifeOptions.find((option) => option.value === hole.value?.lifetime)?.label ?? 'Healthy');
+
+function setMass(value: string): void {
+    updateSignature({ id: placeholder.signatureId } as TSignature, { mass_status: value });
+}
+
+function setLife(value: string): void {
+    updateSignature({ id: placeholder.signatureId } as TSignature, { lifetime: value, lifetime_updated_at: formatDateToISO(new UTCDate()) });
+}
+
 // ---- Other -------------------------------------------------------------------
 
 function openInList(): void {
@@ -231,6 +257,34 @@ function removeSignature(): void {
                         <WormholeOption :wormhole="type" />
                     </ContextMenuItem>
                     <ContextMenuItem v-if="types.length === 0" disabled class="text-xs">No types match</ContextMenuItem>
+                </ContextMenuSubContent>
+            </ContextMenuSub>
+            <ContextMenuSub>
+                <ContextMenuSubTrigger>
+                    <Scale class="size-4" />
+                    Mass
+                    <span class="ml-auto pl-3 text-xs text-muted-foreground">{{ massLabel }}</span>
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent class="w-44">
+                    <ContextMenuItem v-for="option in massOptions" :key="option.value" class="text-xs" @select="setMass(option.value)">
+                        <span class="inline-block size-2 rounded-full" :class="option.dot" />
+                        {{ option.label }}
+                        <Check v-if="hole?.mass_status === option.value" class="ml-auto size-3.5" />
+                    </ContextMenuItem>
+                </ContextMenuSubContent>
+            </ContextMenuSub>
+            <ContextMenuSub>
+                <ContextMenuSubTrigger>
+                    <Hourglass class="size-4" />
+                    Life
+                    <span class="ml-auto pl-3 text-xs text-muted-foreground">{{ lifeLabel }}</span>
+                </ContextMenuSubTrigger>
+                <ContextMenuSubContent class="w-48">
+                    <ContextMenuItem v-for="option in lifeOptions" :key="option.value" class="text-xs" @select="setLife(option.value)">
+                        <span class="inline-block size-2 rounded-full" :class="option.dot" />
+                        {{ option.label }}
+                        <Check v-if="(hole?.lifetime ?? 'healthy') === option.value" class="ml-auto size-3.5" />
+                    </ContextMenuItem>
                 </ContextMenuSubContent>
             </ContextMenuSub>
         </template>

@@ -41,7 +41,9 @@ type TPlaceholderConnection = {
     from_map_solarsystem_id: number;
     to_map_solarsystem_id: number;
     type?: string | null;
-    signatures?: { id: number; map_solarsystem_id: number; is_static?: boolean | null; wormhole?: { name: string } | null }[] | null;
+    signatures?:
+        | { id: number; map_solarsystem_id: number; signature_id?: string | null; is_static?: boolean | null; wormhole?: { name: string } | null }[]
+        | null;
 };
 
 /** Ids for expected statics (no signature yet): far below any signature's placeholder id. */
@@ -170,17 +172,33 @@ function expectedStatics(
         // Only systems that are part of a chain (linked to something, or home).
         if (touching.length === 0 && system.id !== context.homeId) continue;
 
-        // Types already seen in this system: unjumped holes and the linked ones on this side.
-        const seen: string[] = (system.pending_holes ?? []).map((hole) => (hole.wormhole ?? '').toUpperCase());
-        let markedStatics = (system.pending_holes ?? []).filter((hole) => hole.is_static && !hole.wormhole).length;
+        // Patch 14: nothing is assumed. A static is only accounted for by a hole MARKED static
+        // (by hand, or by the certain-static check); a hole of the static's type is just a candidate.
+        // A hole already named for the static's slot (A0, Alpha off Daisy) is the static by our naming.
+        const slot = staticSlotAlias(system.alias, formats.bookmark_ignored_alias, Boolean(system.combat_home)).toUpperCase();
+        const marked: (string | null)[] = [];
+        const candidates: { name: string; sig: string }[] = [];
+        const consider = (hole: { is_static?: boolean | null; wormhole?: string | null; signature_id?: string | null; alias?: string | null }): void => {
+            const name = (hole.wormhole ?? '').toUpperCase() || null;
+            if (hole.is_static || (hole.alias ?? '').toUpperCase() === slot) marked.push(name);
+            else if (name) candidates.push({ name, sig: (hole.signature_id ?? '???').slice(0, 3) });
+        };
+        for (const hole of system.pending_holes ?? []) consider(hole);
         let wayBack: { thisSideType: string | null; farSideType: string | null; leadsTo: string | null; signatureId: number | null } | null = null;
         const parentId = context.parentOf.get(system.id) ?? null;
         for (const connection of touching) {
             const thisSide = (connection.signatures ?? []).find((signature) => signature.map_solarsystem_id === system.id) ?? null;
             const farSide = (connection.signatures ?? []).find((signature) => signature.map_solarsystem_id !== system.id) ?? null;
-            if (thisSide?.wormhole?.name) seen.push(thisSide.wormhole.name.toUpperCase());
-            else if (thisSide?.is_static) markedStatics++;
             const otherId = connection.from_map_solarsystem_id === system.id ? connection.to_map_solarsystem_id : connection.from_map_solarsystem_id;
+            // The hole leads on to a system named for the static's slot: that's the static.
+            const leadsToSlot = otherId !== parentId && (byId.get(otherId)?.alias ?? '').toUpperCase() === slot;
+            if (thisSide || leadsToSlot) {
+                consider({
+                    is_static: thisSide?.is_static || leadsToSlot,
+                    wormhole: thisSide?.wormhole?.name ?? null,
+                    signature_id: thisSide?.signature_id ?? null,
+                });
+            }
             if (otherId === parentId && connection.type !== 'stargate') {
                 wayBack = {
                     signatureId: thisSide?.id ?? null,
@@ -194,15 +212,25 @@ function expectedStatics(
         const staticList = statics.map((candidate) => ({ name: candidate.name, leadsTo: candidate.leads_to }));
         const maybeBack = wayBackCouldBe(staticList, wayBack);
 
+        // Marked holes account for their own type first; a marked hole with no type accounts for any one static.
+        const untypedMarked = marked.filter((name) => name === null).length;
+        const typedMarked = marked.filter((name): name is string => name !== null);
         const missing = statics.filter((candidate) => {
-            const index = seen.indexOf(candidate.name.toUpperCase());
+            const index = typedMarked.indexOf(candidate.name.toUpperCase());
             if (index === -1) return true;
-            seen.splice(index, 1);
+            typedMarked.splice(index, 1);
             return false;
         });
-        // A hole marked static without a type accounts for one static.
-        const unscanned = missing.slice(Math.min(markedStatics, missing.length));
+        const unscanned = missing.slice(Math.min(untypedMarked, missing.length));
         if (unscanned.length === 0) continue;
+
+        /** "maybe SUE / *return?": the holes that could be this static (none is assumed). */
+        const noteFor = (name: string): string | null => {
+            const upper = name.toUpperCase();
+            const parts = candidates.filter((candidate) => candidate.name === upper).map((candidate) => candidate.sig);
+            if (maybeBack.some((back) => back.toUpperCase() === upper)) parts.push('*return');
+            return parts.length ? `maybe ${parts.join(' / ')}?` : null;
+        };
 
         const limbo = Boolean(system.combat_color);
         const taken = [
@@ -235,13 +263,13 @@ function expectedStatics(
                 color: system.combat_color ?? null,
                 alias,
                 label: alias ? displayAlias(alias, formats.bookmark_alias_scheme) : limbo ? `static ${leadsTo}` : '—',
-                detail: `${candidate.name} → ${leadsTo} static · not scanned`,
+                detail: `${candidate.name} → ${leadsTo} static · ${noteFor(candidate.name) ? 'not identified' : 'not scanned'}`,
                 isStatic: true,
                 wormhole: candidate.name,
                 massStatus: null,
                 lifetime: null,
                 expected: true,
-                note: maybeBack.some((name) => name.toUpperCase() === candidate.name.toUpperCase()) ? 'maybe *return?' : null,
+                note: noteFor(candidate.name),
             });
         });
     }

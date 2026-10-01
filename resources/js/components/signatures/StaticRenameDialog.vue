@@ -22,6 +22,11 @@ const props = defineProps<{
     /** Systems already mapped further down: renaming is blocked when there are any. */
     beyond: string[];
     countdownSeconds?: number | null;
+    /** Patch 14: the same popup for other renames (Set number, unticking the static). */
+    title?: string | null;
+    description?: string | null;
+    keepLabel?: string | null;
+    renameLabel?: string | null;
 }>();
 
 const open = defineModel<boolean>('open', { required: true });
@@ -54,14 +59,17 @@ const { remaining, fraction } = usePopupCountdown(
         <DialogScrollContent class="max-w-md gap-0 overflow-hidden p-0">
             <DialogHeader class="gap-1.5 border-b border-border/50 bg-muted/30 px-6 py-4 text-left">
                 <DialogTitle v-if="blocked">{{ signatureLabel }} is the static</DialogTitle>
-                <DialogTitle v-else>{{ signatureLabel }} is the static: rename {{ fromAlias }} → {{ toAlias }}?</DialogTitle>
-                <DialogDescription v-if="blocked">Marked as the static. It keeps the name {{ fromAlias }}.</DialogDescription>
+                <DialogTitle v-else>{{ title ?? `${signatureLabel} is the static: rename ${fromAlias} → ${toAlias}?` }}</DialogTitle>
+                <DialogDescription v-if="blocked">{{ title ? 'Nothing was changed.' : 'Marked as the static.' }} It keeps the name {{ fromAlias }}.</DialogDescription>
                 <DialogDescription v-else>
-                    It is marked as the static either way. Renaming means you change these bookmarks in game; keeping leaves every name as it is.
+                    {{
+                        description ??
+                        'It is marked as the static either way. Renaming means you change these bookmarks in game; keeping leaves every name as it is.'
+                    }}
                 </DialogDescription>
             </DialogHeader>
 
-            <CountdownBar :remaining="remaining" :fraction="fraction" :action="blocked ? 'OK' : `Keep ${fromAlias}`" />
+            <CountdownBar :remaining="remaining" :fraction="fraction" :action="blocked ? 'OK' : (keepLabel ?? `Keep ${fromAlias}`)" />
 
             <div v-if="blocked" class="px-6 py-4 text-xs">
                 <p class="rounded-md bg-amber-500/15 px-3 py-2 text-amber-300">
@@ -81,8 +89,8 @@ const { remaining, fraction } = usePopupCountdown(
             <DialogFooter class="gap-2 border-t border-border/50 bg-muted/30 px-6 py-3 sm:justify-between">
                 <Button v-if="blocked" autofocus @click="choose('keep')">OK</Button>
                 <template v-else>
-                    <Button variant="outline" autofocus @click="choose('keep')">Keep {{ fromAlias }}</Button>
-                    <Button @click="choose('rename')">Rename to {{ toAlias }}</Button>
+                    <Button variant="outline" autofocus @click="choose('keep')">{{ keepLabel ?? `Keep ${fromAlias}` }}</Button>
+                    <Button @click="choose('rename')">{{ renameLabel ?? `Rename to ${toAlias}` }}</Button>
                 </template>
             </DialogFooter>
         </DialogScrollContent>

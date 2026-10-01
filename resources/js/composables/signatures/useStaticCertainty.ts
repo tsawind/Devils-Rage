@@ -1,5 +1,7 @@
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
-import { displayAlias } from '@/lib/alias';
+import { displayAlias, staticSlotAlias } from '@/lib/alias';
+import { visibleBookmarkName } from '@/lib/bookmark';
+import { mappedBelow, pendingHoleBookmark, renameChanges } from '@/map/holeBookmark';
 import { classCode, decideStatic, type TCertaintyHole, type TCertaintyWayBack } from '@/lib/staticCertainty';
 import { updateSignature } from '@/map/actions/updateSignature';
 import type { MapStore } from '@/map/store/mapStore';
@@ -18,6 +20,20 @@ import { toast } from 'vue-sonner';
 type TPending = { reference: TMapSolarsystem | undefined; at: number };
 
 const requested = new Map<number, TPending>();
+
+/**
+ * Patch 14: the certain static would change a name used on the map (A2 → A0):
+ * the popup (StaticCertainDialog, mounted with the map) asks first.
+ */
+export type TCertainAsk = {
+    signatureLabel: string;
+    from: string;
+    to: string;
+    changes: { label: string; from: string; to: string }[];
+    beyond: string[];
+    choose: (choice: 'rename' | 'keep') => void;
+};
+export const certainAsk = ref<TCertainAsk | null>(null);
 /** Bumped on every request, so the watcher picks up new systems to follow. */
 const requestedVersion = ref(0);
 let notify: (() => void) | null = null;
@@ -94,19 +110,62 @@ export function useStaticCertainty(store: MapStore): void {
                           (candidate) => candidate.signature === staticName && candidate.spawn_areas?.includes(system.solarsystem.class),
                       )
                     : undefined;
-            updateSignature({ id: signatureId } as TSignature, {
-                is_static: true,
-                is_wandering: false,
-                ...(type ? { signature_type_id: type.id } : {}),
-            });
+            const payload = { is_static: true, is_wandering: false, ...(type ? { signature_type_id: type.id } : {}) };
             const where = displayAlias(system.alias) || system.solarsystem.name;
-            toast.success(`${staticName} is ${where}'s static`, { description: 'Every signature is scanned and nothing else can be it.' });
+            const meta = store.meta.value;
+            const slot = staticSlotAlias(system.alias, meta?.bookmark_ignored_alias, Boolean(system.combat_home));
+            const name = currentName(system, signatureId);
+
+            // Combat chains keep their jump-order numbers; a hole already named for the slot (or unnamed) changes nothing.
+            if (system.combat_color || !name || name.toUpperCase() === slot.toUpperCase()) {
+                updateSignature({ id: signatureId } as TSignature, payload);
+                toast.success(`${staticName} is ${where}'s static`, { description: 'Every signature is scanned and nothing else can be it.' });
+                return;
+            }
+
+            const hole = system.pending_holes?.find((candidate) => candidate.id === signatureId);
+            const linked = !hole;
+            const beyond = mappedBelow(store, system, name).map((alias) => displayAlias(alias));
+            certainAsk.value = {
+                signatureLabel: hole ? (hole.signature_id ?? 'This hole') : `The hole to ${displayAlias(name)}`,
+                from: name,
+                to: slot,
+                changes: renameChanges(store, system, signatureId, name, slot, true),
+                beyond,
+                choose: (choice) => {
+                    certainAsk.value = null;
+                    if (choice === 'rename' && beyond.length === 0) {
+                        updateSignature({ id: signatureId } as TSignature, { ...payload, alias: slot, ...(linked ? { rename_system: true } : {}) });
+                        const copy = hole ? pendingHoleBookmark(store, system, hole, slot, true) : '';
+                        if (copy) navigator.clipboard.writeText(copy).catch(() => undefined);
+                        toast.success(`Renamed to ${displayAlias(slot)}`, { description: copy ? `Copied ${visibleBookmarkName(copy)}` : undefined });
+                        return;
+                    }
+                    // Keep: lock the name it has, or the static would take the slot on its own.
+                    updateSignature({ id: signatureId } as TSignature, { ...payload, alias: name });
+                    toast.success(`${staticName} is ${where}'s static`, { description: `Keeps the name ${displayAlias(name)}.` });
+                },
+            };
         } else if (result.ambiguous) {
             const where = displayAlias(system.alias) || system.solarsystem.name;
             toast.info(`${result.ambiguous.staticName} in ${where}: more than one hole could be the static`, {
                 description: 'Mark the right one by hand (signature row menu → Static).',
             });
         }
+    }
+
+    /** The name a hole has on the map: its number (locked or planned), or the system it leads to. */
+    function currentName(system: TMapSolarsystem, signatureId: number): string | null {
+        const hole = system.pending_holes?.find((candidate) => candidate.id === signatureId);
+        if (hole) return hole.alias ?? store.placeholders.value.find((placeholder) => placeholder.signatureId === signatureId)?.alias ?? null;
+        for (const connection of store.connections.values()) {
+            const signature = (connection.signatures ?? []).find((candidate) => candidate.id === signatureId);
+            if (!signature) continue;
+            if (signature.alias) return signature.alias;
+            const otherId = connection.from_map_solarsystem_id === system.id ? connection.to_map_solarsystem_id : connection.from_map_solarsystem_id;
+            return store.systems.get(otherId)?.alias ?? null;
+        }
+        return null;
     }
 
     function check(): void {
