@@ -7,6 +7,8 @@ import { useRallyRoute } from '@/composables/useRallyRoute';
 import StaticCertainDialog from '@/components/signatures/StaticCertainDialog.vue';
 import WayBackPopup from '@/components/signatures/WayBackPopup.vue';
 import { useStaticCertainty } from '@/composables/signatures/useStaticCertainty';
+import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
+import { centerOnMe } from '@/composables/useCenterOnMe';
 import { useUserEvents } from '@/composables/useUserEvents';
 import { deleteSelectedMapSolarsystems } from '@/map/actions/deleteSelectedMapSolarsystems';
 import EdgeLayer from '@/map/components/edges/EdgeLayer.vue';
@@ -90,6 +92,33 @@ useMapSync(store, () => map.id);
 // Patch 13: mark a static once it is certain, after your own paste / type change.
 useStaticCertainty(store);
 useUserEvents();
+
+// Patch 15: the system you're in (its rage-lane holes stay open), and Center:
+// keep the map on it after every jump and whenever it moves on the map.
+const activeCharacter = useActiveMapCharacter();
+const locationMapSystemId = computed(() => {
+    const solarsystemId = activeCharacter.value?.status?.solarsystem_id ?? null;
+    if (!solarsystemId) return null;
+    for (const system of store.systems.values()) if (system.solarsystem_id === solarsystemId) return system.id;
+    return null;
+});
+watch(locationMapSystemId, (id) => (store.currentSystemId.value = id), { immediate: true });
+watch(
+    () => {
+        const id = locationMapSystemId.value;
+        if (!centerOnMe.value || id === null) return null;
+        const point = store.renderPosition(id);
+        return point ? `${id}:${Math.round(point.x)}:${Math.round(point.y)}` : null;
+    },
+    (key) => {
+        const id = locationMapSystemId.value;
+        if (!key || id === null) return;
+        const point = store.renderPosition(id);
+        // The anchor is the card's top-left plus ANCHOR_OFFSET; aim at the card's middle.
+        if (point) store.requestCenter({ x: point.x + 50, y: point.y });
+    },
+    { immediate: true },
+);
 
 const { canEdit: canWrite } = usePermission();
 

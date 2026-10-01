@@ -1,4 +1,4 @@
-import { buildPlaceholders, holeDestination, placeholderNodeId } from '@/lib/placeholders';
+import { buildPlaceholders, foldLaneHoles, holeDestination, placeholderNodeId } from '@/lib/placeholders';
 import { describe, expect, it } from 'vitest';
 
 const FORMATS = { bookmark_alias_scheme: 'numeric' as const, bookmark_ignored_alias: 'Daisy' };
@@ -85,5 +85,17 @@ describe('patch 12: placeholder systems', () => {
             system.id === 3 ? { ...system, pending_holes: system.pending_holes!.map((hole) => ({ ...hole, is_static: true })) } : system,
         );
         expect(buildPlaceholders(markedSystems, FORMATS, new Set(), { connections, parentOf: new Map(), homeId: null }).filter((placeholder) => placeholder.expected)).toHaveLength(0);
+    });
+});
+
+describe('patch 15: folding unjumped holes in rage lanes', () => {
+    const hole = (nodeId: number, parentId: number, armedBy: number | null = null) =>
+        ({ nodeId, signatureId: -nodeId, parentId, color: 'red', alias: null, label: '', detail: '', isStatic: false, wormhole: null, massStatus: null, lifetime: null, armedBy }) as const;
+
+    it('folds lane holes into a count, keeps armed ones, opened systems and where you are', () => {
+        const all = [hole(-1, 10), hole(-2, 10), hole(-3, 10, 7), hole(-4, 20), hole(-5, 30), hole(-6, 99)];
+        const { visible, folded } = foldLaneHoles(all, (id) => id !== 99, new Set([20]), 30);
+        expect(visible.map((placeholder) => placeholder.nodeId)).toEqual([-3, -4, -5, -6]);
+        expect([...folded]).toEqual([[10, 2]]);
     });
 });

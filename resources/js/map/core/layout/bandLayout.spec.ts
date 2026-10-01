@@ -317,6 +317,46 @@ describe('computeBandLayout', () => {
         for (const id of [6, 7, 8]) expect(result.positions.has(id)).toBe(true);
     });
 
+    it('patch 15: unjumped holes in a lane stack beside their system, the chain keeps going down', () => {
+        const nodes = [
+            sys(DAISY, 'Daisy'),
+            sys(5, 'B', { color: 'red', home: true }),
+            sys(6, '1', { color: 'red' }),
+            sys(-1, null, { color: 'red', placeholder: true }),
+            sys(-2, null, { color: 'red', placeholder: true }),
+            sys(-3, null, { color: 'red', placeholder: true }),
+            sys(-4, null, { color: 'red', placeholder: true }),
+            sys(7, '11', { color: 'red' }),
+        ];
+        const result = computeBandLayout(
+            {
+                nodes,
+                edges: [
+                    { from: 1, to: 5 },
+                    { from: 5, to: 6 },
+                    { from: 6, to: -1 },
+                    { from: 6, to: -2 },
+                    { from: 6, to: -3 },
+                    { from: 6, to: -4 },
+                    { from: 6, to: 7 },
+                ],
+                homeId: DAISY,
+                laneOrder: ['red'],
+                compareNodes: byAlias(nodes),
+            },
+            { laneNodeWidth: 180, laneNodeHeight: 60, laneColumnGap: 300, laneRowGap: 80 },
+        );
+        const p = result.positions;
+        const one = p.get(6)!;
+        // Holes beside system 1, stacked down; none takes a new column.
+        const holes = [-1, -2, -3, -4].map((id) => p.get(id)!);
+        expect(holes.every((point) => point.x === one.x + 194)).toBe(true);
+        expect(holes.map((point) => point.y - one.y).toSorted((a, b) => a - b)).toEqual([0, 30, 60, 90]);
+        // 11 stays in the same column, below the stack of four holes (120 px).
+        expect(p.get(7)!.x).toBe(one.x);
+        expect(p.get(7)!.y).toBeGreaterThanOrEqual(one.y + 120);
+    });
+
     it('patch 13: sorts a branch leading to a lane after its siblings', () => {
         const nodes = [sys(DAISY, 'Daisy'), sys(2, 'A'), sys(3, 'B'), sys(5, 'A1', { color: 'red', home: true })];
         const result = computeBandLayout({

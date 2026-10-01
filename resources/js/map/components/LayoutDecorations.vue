@@ -47,7 +47,7 @@ const lanes = computed(() =>
         return {
             key: lane.color,
             hex,
-            label: `${combatColorLabel(lane.color) ?? lane.color}${workers.length ? ` · ${workers.join(', ')}` : ''}`,
+            label: `Rage · ${combatColorLabel(lane.color) ?? lane.color}${workers.length ? ` · ${workers.join(', ')}` : ''}`,
             style: { ...boxStyle(lane), borderColor: `${hex}80`, backgroundColor: `${hex}0f` },
         };
     }),

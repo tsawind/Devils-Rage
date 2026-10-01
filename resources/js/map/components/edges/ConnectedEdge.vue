@@ -62,13 +62,13 @@ const chainColor = computed<string | null>(() => {
 });
 /** Not how either end was found (patch 12): a loop, drawn dashed amber. */
 const isLoop = computed(() => store.isTreeLayout.value && store.loopConnectionIds.value.has(id));
-/** Patch 13: inside a combat lane (both ends compact) the pipe is drawn thinner. */
+/** Inside a rage lane the pipe is drawn a bit thinner (patch 15: 0.75, the cards are full size again). */
 const pipeScale = computed(() => {
     const resolved = connection.value;
     const layout = store.isTreeLayout.value ? store.bandLayout.value : null;
     if (!resolved || !layout) return 1;
     const inLane = (id: number) => layout.bandOf.get(id) === 'lane';
-    return inLane(resolved.from_map_solarsystem_id) && inLane(resolved.to_map_solarsystem_id) ? 0.5 : 1;
+    return inLane(resolved.from_map_solarsystem_id) && inLane(resolved.to_map_solarsystem_id) ? 0.75 : 1;
 });
 const rallyDirection = computed<'forward' | 'reverse' | null>(() => store.rallyEdgeDirections.value.get(id) ?? null);
 

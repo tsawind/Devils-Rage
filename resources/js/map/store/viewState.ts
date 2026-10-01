@@ -47,6 +47,24 @@ export function createViewState() {
         }
     }
 
+    /** Patch 15: rage-lane systems whose unjumped holes are opened (folded into a chip otherwise). */
+    const openedHoleParents: ShallowRef<ReadonlySet<number>> = shallowRef(new Set<number>());
+    /** Patch 15: the map system you are in (its holes stay open; Center follows it). */
+    const currentSystemId: Ref<number | null> = ref(null);
+    /** Patch 15: ask the viewport to center on a base point (bumped on every request). */
+    const centerRequest: ShallowRef<{ x: number; y: number; at: number } | null> = shallowRef(null);
+
+    function toggleHoleParent(id: number): void {
+        const next = new Set(openedHoleParents.value);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        openedHoleParents.value = next;
+    }
+
+    function requestCenter(point: { x: number; y: number }): void {
+        centerRequest.value = { x: point.x, y: point.y, at: Date.now() };
+    }
+
     function setSelection(ids: Iterable<number>): void {
         selectedIds.value = new Set(ids);
     }
@@ -82,6 +100,11 @@ export function createViewState() {
         userLayoutOverride,
         showPlaceholders,
         setShowPlaceholders,
+        openedHoleParents,
+        toggleHoleParent,
+        currentSystemId,
+        centerRequest,
+        requestCenter,
         setSelection,
         clearSelection,
         pruneSelection,

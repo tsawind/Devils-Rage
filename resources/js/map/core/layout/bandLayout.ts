@@ -378,17 +378,32 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         const lane = laneTrees.get(color)!;
         let lastColumn = -1;
         let maxRow = 0;
+        let maxRight = 0;
         const place = (id: number, column: number, row: number): void => {
-            positions.set(id, { x: snap(left + column * laneColumnGap), y: snap(top + row * laneRowGap) });
+            const x = snap(left + column * laneColumnGap);
+            const y = snap(top + row * laneRowGap);
+            positions.set(id, { x, y });
             maxRow = Math.max(maxRow, row);
-            (lane.childrenOf.get(id) ?? []).forEach((child, index) => {
-                if (index === 0) {
-                    place(child, column, row + 1);
-                } else {
-                    lastColumn += 1;
-                    place(child, lastColumn, row + 1);
-                }
+            maxRight = Math.max(maxRight, x + laneNodeWidth);
+            const children = lane.childrenOf.get(id) ?? [];
+            // Patch 15: unjumped holes stack down beside their system instead of taking columns.
+            const holes = children.filter((child) => isPlaceholder(child));
+            holes.forEach((hole, index) => {
+                positions.set(hole, { x: x + laneNodeWidth + LANE_HOLE_GAP, y: y + index * LANE_HOLE_STEP });
+                maxRight = Math.max(maxRight, x + laneNodeWidth + LANE_HOLE_GAP + LANE_HOLE_WIDTH);
             });
+            const holeRows = holes.length * LANE_HOLE_STEP > laneRowGap ? Math.ceil((holes.length * LANE_HOLE_STEP) / laneRowGap) - 1 : 0;
+            maxRow = Math.max(maxRow, row + holeRows);
+            children
+                .filter((child) => !isPlaceholder(child))
+                .forEach((child, index) => {
+                    if (index === 0) {
+                        place(child, column, row + 1 + holeRows);
+                    } else {
+                        lastColumn += 1;
+                        place(child, lastColumn, row + 1 + holeRows);
+                    }
+                });
         };
         for (const root of lane.roots) {
             lastColumn += 1;
@@ -399,8 +414,8 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
             homeId: lane.homeId,
             parentId,
             minX: left - anchorX - 14,
-            minY: top - anchorY - 26,
-            maxX: left + Math.max(0, lastColumn) * laneColumnGap - anchorX + laneNodeWidth + 14,
+            minY: top - anchorY - 34,
+            maxX: Math.max(left + Math.max(0, lastColumn) * laneColumnGap + laneNodeWidth, maxRight) - anchorX + 14,
             maxY: top + maxRow * laneRowGap - anchorY + laneNodeHeight + 14,
         };
         lanes.push(rect);
@@ -509,6 +524,11 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
 
     return { positions, ghosts, lanes, mainBand, sideBand, combatBand, parentOf, bandOf, sideChains };
 }
+
+/** Patch 15: unjumped holes beside a rage-lane system (compact 80×26, stacked down). */
+const LANE_HOLE_GAP = 14;
+const LANE_HOLE_WIDTH = 80;
+const LANE_HOLE_STEP = 30;
 
 /** Every system reachable from `start` through systems that pass `allowed`. */
 function collectComponent(start: number, adjacency: Map<number, number[]>, allowed: (id: number) => boolean): number[] {

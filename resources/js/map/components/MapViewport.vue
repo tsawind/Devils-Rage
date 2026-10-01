@@ -7,7 +7,7 @@ import type { Vec2 } from '@/map/core/types';
 import { resolveNodeId, usePointerGestures, type Gesture } from '@/map/interactions/gestures';
 import { useMapScrollbars } from '@/map/interactions/useMapScrollbars';
 import { useMapStore } from '@/map/store/mapStore';
-import { computed, useTemplateRef } from 'vue';
+import { computed, useTemplateRef, watch } from 'vue';
 
 /**
  * The scroll container plus its visual chrome (grid, background image modes,
@@ -36,6 +36,21 @@ const surface = useTemplateRef<HTMLElement>('surface');
 defineExpose({ surface });
 
 usePointerGestures(surface, gestures, store);
+
+// Patch 15: Center: scroll so the requested base point sits in the middle of the view.
+watch(
+    () => store.centerRequest.value,
+    (request) => {
+        const element = surface.value;
+        if (!request || !element) return;
+        const scale = store.scale.value;
+        element.scrollTo({
+            left: Math.max(0, request.x * scale - element.clientWidth / 2),
+            top: Math.max(0, request.y * scale - element.clientHeight / 2),
+            behavior: 'smooth',
+        });
+    },
+);
 
 const { backgroundImageUrl, backgroundMode } = useMapBackground();
 

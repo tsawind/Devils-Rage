@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { centerOnMe, setCenterOnMe } from '@/composables/useCenterOnMe';
 import MapAccessController from '@/actions/App/Http/Controllers/MapAccessController';
 import MapPreferencesController from '@/actions/App/Http/Controllers/MapPreferencesController';
 import MapSettingsController from '@/actions/App/Http/Controllers/MapSettingsController';
@@ -289,6 +290,25 @@ const settingsUrl = computed(() => {
                 <p class="text-xs font-medium">Follow Pilot</p>
                 <p class="text-xs text-muted-foreground">
                     {{ follow_enabled ? 'Enabled' : 'Disabled' }} - Select the system your character jumps into
+                </p>
+            </TooltipContent>
+        </Tooltip>
+
+        <!-- Patch 15: Center: keep the map on your system -->
+        <Tooltip>
+            <TooltipTrigger as-child>
+                <label
+                    class="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors select-none sm:px-2"
+                    :class="centerOnMe ? 'bg-sky-500/20 text-sky-400 hover:bg-sky-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
+                >
+                    <input type="checkbox" class="size-3 accent-sky-500" :checked="centerOnMe" @change="setCenterOnMe(!centerOnMe)" />
+                    <span class="hidden md:inline">Center</span>
+                </label>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+                <p class="text-xs font-medium">Center on me</p>
+                <p class="text-xs text-muted-foreground">
+                    {{ centerOnMe ? 'On' : 'Off' }} - Center the map on your system after every jump, and when it moves on the map (this browser)
                 </p>
             </TooltipContent>
         </Tooltip>

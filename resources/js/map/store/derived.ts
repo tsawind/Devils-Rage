@@ -1,5 +1,5 @@
 import { computeBandLayout, isLoopEdge, type BandLayoutInput, type BandLayoutResult } from '@/map/core/layout/bandLayout';
-import { buildPlaceholders, type TPlaceholder } from '@/lib/placeholders';
+import { buildPlaceholders, foldLaneHoles, type TPlaceholder } from '@/lib/placeholders';
 import { compareSystems } from '@/map/core/sorting';
 import type { Vec2 } from '@/map/core/types';
 import { TMap, TMapConnection, TMapSolarsystem, TSolarsystem } from '@/pages/maps';
@@ -50,7 +50,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
     const isConstantWidthEnabled = computed(() => meta.value?.constant_width_enabled ?? false);
 
     /** Unjumped wormhole signatures shown as placeholder systems (tree layout, when switched on). */
-    const placeholders: ComputedRef<TPlaceholder[]> = computed(() => {
+    const allPlaceholders: ComputedRef<TPlaceholder[]> = computed(() => {
         if (!meta.value || !isTreeLayout.value || !view.showPlaceholders.value) return [];
         const linked = new Set<number>();
         for (const connection of entities.connections.values()) {
@@ -62,6 +62,22 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         const homeId = homeSolarsystemId !== null ? (systems.find((system) => system.solarsystem_id === homeSolarsystemId)?.id ?? null) : null;
         return buildPlaceholders(systems, meta.value, linked, { connections, parentOf: chainParents(systems, connections, homeId), homeId });
     });
+
+    /**
+     * Patch 15: in rage lanes a system's unjumped holes fold into a chip;
+     * armed ones, the system you're in and opened systems keep theirs.
+     */
+    const foldedPlaceholders = computed(() =>
+        foldLaneHoles(
+            allPlaceholders.value,
+            (parentId) => Boolean(entities.systems.get(parentId)?.combat_color),
+            view.openedHoleParents.value,
+            view.currentSystemId.value,
+        ),
+    );
+    const placeholders: ComputedRef<TPlaceholder[]> = computed(() => foldedPlaceholders.value.visible);
+    /** Rage-lane system id → how many unjumped holes are folded into its chip. */
+    const foldedHoles: ComputedRef<Map<number, number>> = computed(() => foldedPlaceholders.value.folded);
 
     /**
      * The band layout (patch 12): main band, side chains, combat lanes. Always
@@ -76,6 +92,11 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
             gridSize: view.config.value.grid_size,
             // The tree layout always draws nodes at the fixed 180 width (see MapNode).
             nodeWidth: 180,
+            // Patch 15: rage lanes use readable full cards (alias, class, statics, a pilot).
+            laneNodeWidth: 180,
+            laneNodeHeight: 60,
+            laneColumnGap: 300,
+            laneRowGap: 80,
         });
     });
 
@@ -164,6 +185,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         isConstantWidthEnabled,
         bandLayout,
         placeholders,
+        foldedHoles,
         loopConnectionIds,
         treePositions,
         renderPosition,

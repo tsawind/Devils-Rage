@@ -104,6 +104,32 @@ const items = computed(() => {
         ];
     });
 });
+
+/** Patch 15: one chip per rage-lane system with folded holes, and a fold chip under opened ones. */
+const chips = computed(() => {
+    if (!store.isTreeLayout.value) return [];
+    const scale = store.scale.value;
+    const visibleCount = new Map<number, number>();
+    for (const placeholder of store.placeholders.value) visibleCount.set(placeholder.parentId, (visibleCount.get(placeholder.parentId) ?? 0) + 1);
+    const result: { parentId: number; label: string; open: boolean; style: Record<string, string> }[] = [];
+    const place = (parentId: number, label: string, open: boolean) => {
+        const position = store.renderPosition(parentId);
+        if (!position) return;
+        const left = position.x - ANCHOR_OFFSET.x + FULL_WIDTH + 14;
+        const top = position.y - ANCHOR_OFFSET.y + (visibleCount.get(parentId) ?? 0) * 30 + 4;
+        result.push({
+            parentId,
+            label,
+            open,
+            style: { transform: `translate(${left * scale}px, ${top * scale}px)`, fontSize: `${10 * Math.min(scale, 1.5)}px` },
+        });
+    };
+    for (const [parentId, count] of store.foldedHoles.value) place(parentId, `+${count} hole${count === 1 ? '' : 's'} ▸`, false);
+    for (const parentId of store.openedHoleParents.value) {
+        if (!store.foldedHoles.value.has(parentId) && (visibleCount.get(parentId) ?? 0) > 0 && store.systems.get(parentId)?.combat_color) place(parentId, 'fold ▴', true);
+    }
+    return result;
+});
 </script>
 
 <template>
@@ -187,8 +213,22 @@ const items = computed(() => {
                 class="absolute -top-2 right-1 rounded-full border border-amber-500/60 bg-amber-100 px-1.5 leading-tight font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                 :style="{ fontSize: `${9 * item.fontScale}px` }"
             >
-                {{ item.note }}
+                {{ item.compact ? item.note.replace(/^maybe /, '') : item.note }}
             </span>
         </Link>
+    </div>
+    <!-- Patch 15: folded holes of a rage-lane system ("+3 holes ▸"), and the fold button of an opened one -->
+    <div v-if="chips.length" class="pointer-events-none absolute inset-0">
+        <button
+            v-for="chip in chips"
+            :key="`chip-${chip.parentId}`"
+            type="button"
+            class="pointer-events-auto absolute top-0 left-0 rounded-full border border-neutral-400/60 bg-neutral-100/90 px-2 leading-tight font-medium text-neutral-700 hover:bg-white dark:border-neutral-600 dark:bg-neutral-900/90 dark:text-neutral-300 dark:hover:bg-neutral-800"
+            :style="chip.style"
+            :title="chip.open ? 'Fold these unjumped holes back into one chip' : 'Show the unjumped holes of this system'"
+            @click.stop="store.toggleHoleParent(chip.parentId)"
+        >
+            {{ chip.label }}
+        </button>
     </div>
 </template>

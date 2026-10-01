@@ -67,7 +67,8 @@ const previousHex = computed(() => combatColorHex(system.combat_previous_color))
 const chainStyle = computed(() => {
     const hex = chainHex.value;
     if (!hex) return undefined;
-    const glow = isCombatHome.value ? `drop-shadow(0 0 6px ${hex}) drop-shadow(0 0 2px ${hex})` : `drop-shadow(0 0 4px ${hex}aa)`;
+    // Patch 15: a soft glow only; the home's thicker border carries it (the big glow hid the card).
+    const glow = isCombatHome.value ? `drop-shadow(0 0 3px ${hex}99)` : `drop-shadow(0 0 3px ${hex}77)`;
     // The inline filter replaces the dead-end saturate class, so fold it in here.
     return { filter: isDeadEnd ? `${glow} saturate(0.5)` : glow };
 });

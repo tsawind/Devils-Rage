@@ -92,8 +92,8 @@ const threatLevel = computed(() => {
 
 const fixedWidth = computed(() => store.isTreeLayout.value || store.isConstantWidthEnabled.value);
 
-/** Patch 13: combat lane systems are drawn small for rage scanning. */
-const compact = computed(() => store.isTreeLayout.value && store.bandLayout.value?.bandOf.get(id) === 'lane');
+/** Patch 15: rage-lane systems are full readable cards again (patch 13 drew them small). */
+const compact = computed(() => false);
 
 const canWrite = computed(() => page.props.permission === 'member' || page.props.permission === 'manager');
 
