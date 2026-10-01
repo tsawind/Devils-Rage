@@ -107,23 +107,39 @@ watch(locationMapSystemId, (id) => (store.currentSystemId.value = id), { immedia
 // Patch 16: the map only moves when you near an edge (MapViewport decides); switching
 // Center on, loading the page or switching Rage Scanning always re-centers.
 const { is_combat } = useCombat();
+// Forced only on page load, switching Center on, or switching Rage Scanning; a jump never
+// forces (your location briefly drops out mid-jump, which used to count as "just switched on").
+let centerMode: string | null = null;
 watch(
     () => {
         const id = locationMapSystemId.value;
         if (!centerOnMe.value || id === null) return null;
         const point = store.renderPosition(id);
-        return point ? `${is_combat.value ? 'rage' : 'map'}:${id}:${Math.round(point.x)}:${Math.round(point.y)}` : null;
+        return point ? `${id}:${Math.round(point.x)}:${Math.round(point.y)}` : null;
     },
-    (key, previous) => {
+    (key) => {
         const id = locationMapSystemId.value;
         if (!key || id === null) return;
         const point = store.renderPosition(id);
-        const force = !previous || previous.split(':')[0] !== key.split(':')[0];
+        const mode = is_combat.value ? 'rage' : 'map';
+        const force = centerMode !== mode;
+        centerMode = mode;
         // The anchor is the card's top-left plus ANCHOR_OFFSET; aim at the card's middle.
         if (point) store.requestCenter({ x: point.x + 50, y: point.y }, force);
     },
     { immediate: true },
 );
+// Center switched off: the next switch-on re-centers. Rage Scanning switched: re-center now.
+watch(centerOnMe, (on) => {
+    if (!on) centerMode = null;
+});
+watch(is_combat, () => {
+    const id = locationMapSystemId.value;
+    const point = id === null ? null : store.renderPosition(id);
+    if (!centerOnMe.value || !point) return;
+    centerMode = is_combat.value ? 'rage' : 'map';
+    store.requestCenter({ x: point.x + 50, y: point.y }, true);
+});
 
 const { canEdit: canWrite } = usePermission();
 

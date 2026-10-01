@@ -1,9 +1,8 @@
 /**
  * Patch 16: where Center scrolls the map. The map only moves when your system
  * gets within a fifth of the view from an edge (or leaves it); then it puts
- * you a third in from the left, at middle height while mapping, or in the
- * upper-left third while rage scanning so the chain has room to grow
- * down and right.
+ * you a third in from the left, at middle height while mapping, or 30% in
+ * and 40% down while rage scanning so the chain has room to grow down and right.
  */
 
 /** How close to an edge (share of the view) your system may get before the map moves. */
@@ -18,7 +17,7 @@ export type TCenterView = {
 
 /** Where your system lands after a re-center, as a share of the view. */
 export function centerAnchor(rage: boolean): { x: number; y: number } {
-    return rage ? { x: 1 / 3, y: 1 / 3 } : { x: 1 / 3, y: 1 / 2 };
+    return rage ? { x: 0.3, y: 0.4 } : { x: 1 / 3, y: 1 / 2 };
 }
 
 /** Is a point (screen px within the canvas) comfortably inside the view? */

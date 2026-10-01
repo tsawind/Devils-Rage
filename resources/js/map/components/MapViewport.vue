@@ -10,7 +10,7 @@ import { resolveNodeId, usePointerGestures, type Gesture } from '@/map/interacti
 import { useMapScrollbars } from '@/map/interactions/useMapScrollbars';
 import { useMapStore } from '@/map/store/mapStore';
 import { useElementSize } from '@vueuse/core';
-import { computed, nextTick, onMounted, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, useTemplateRef, watch } from 'vue';
 
 /**
  * The scroll container plus its visual chrome (grid, background image modes,
@@ -43,26 +43,74 @@ usePointerGestures(surface, gestures, store);
 const { is_combat } = useCombat();
 const { width: viewWidth, height: viewHeight } = useElementSize(surface);
 
-// Patch 15/16: Center: only moves the map when your system nears an edge (or a forced
-// request), then puts it a third in from the left (upper-left third while rage scanning).
-function scrollToCenter(request: { x: number; y: number; force?: boolean } | null, behavior: ScrollBehavior, force = false): void {
-    const element = surface.value;
-    if (!request || !element) return;
+// Patch 15/16: Center. Only moves the map when your system nears an edge (or a forced
+// request), then puts it a third in from the left (rage scanning: 30% in, 40% down).
+// Patch 16 fix: requests settle first (a new system is drawn once before its link lands,
+// then slides into its lane), and your system is measured where it's really drawn.
+const SETTLE_MS = 300;
+let settleTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingForce = false;
+/** Where a smooth scroll we started is heading (judged against instead of mid-animation). */
+let heading: { left: number; top: number; until: number } | null = null;
+
+/** Your system's card centre in canvas pixels: from the DOM when it's drawn, else the layout. */
+function currentPoint(element: HTMLElement, fallback: { x: number; y: number } | null): { x: number; y: number } | null {
+    const id = store.currentSystemId.value;
+    const node = id === null ? null : element.querySelector<HTMLElement>(`[data-node-id="${id}"]`);
     const scale = store.scale.value;
-    const target = centerScroll(
-        { scrollLeft: element.scrollLeft, scrollTop: element.scrollTop, width: element.clientWidth, height: element.clientHeight },
-        { x: request.x * scale, y: request.y * scale },
-        { rage: is_combat.value, force: force || Boolean(request.force) },
-    );
-    if (target) element.scrollTo({ ...target, behavior });
+    if (node) {
+        const box = element.getBoundingClientRect();
+        const rect = node.getBoundingClientRect();
+        return {
+            x: rect.left - box.left + element.scrollLeft + 90 * scale,
+            y: rect.top - box.top + element.scrollTop + 20 * scale,
+        };
+    }
+    return fallback ? { x: fallback.x * scale, y: fallback.y * scale } : null;
 }
-// After the canvas grows (rage room), so the scroll isn't clamped short.
+
+function scrollToCenter(behavior: ScrollBehavior, force: boolean): void {
+    const element = surface.value;
+    const request = store.centerRequest.value;
+    if (!element || !request) return;
+    const point = currentPoint(element, request);
+    if (!point) return;
+    const moving = heading && heading.until > Date.now() ? heading : null;
+    const view = {
+        scrollLeft: moving?.left ?? element.scrollLeft,
+        scrollTop: moving?.top ?? element.scrollTop,
+        width: element.clientWidth,
+        height: element.clientHeight,
+    };
+    const target = centerScroll(view, point, { rage: is_combat.value, force });
+    const maxTop = element.scrollHeight - element.clientHeight;
+    const maxLeft = element.scrollWidth - element.clientWidth;
+    console.debug('[center]', { rage: is_combat.value, force, point, view, target, maxLeft, maxTop });
+    if (!target) return;
+    const clamped = { left: Math.min(target.left, Math.max(0, maxLeft)), top: Math.min(target.top, Math.max(0, maxTop)) };
+    heading = behavior === 'smooth' ? { ...clamped, until: Date.now() + 700 } : null;
+    element.scrollTo({ ...clamped, behavior });
+}
+
 watch(
     () => store.centerRequest.value,
-    (request) => nextTick(() => scrollToCenter(request, 'smooth')),
+    (request) => {
+        if (!request) return;
+        pendingForce ||= request.force;
+        if (settleTimer) clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => {
+            settleTimer = null;
+            const force = pendingForce;
+            pendingForce = false;
+            scrollToCenter('smooth', force);
+        }, SETTLE_MS);
+    },
 );
 // A request made before the map was on screen (page load with Center on).
-onMounted(() => nextTick(() => scrollToCenter(store.centerRequest.value, 'auto', true)));
+onMounted(() => nextTick(() => scrollToCenter('auto', true)));
+onBeforeUnmount(() => {
+    if (settleTimer) clearTimeout(settleTimer);
+});
 
 const { backgroundImageUrl, backgroundMode } = useMapBackground();
 

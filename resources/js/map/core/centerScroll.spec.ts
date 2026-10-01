@@ -21,8 +21,8 @@ describe('centerScroll', () => {
         expect(centerScroll(view, { x: 3000, y: 2000 }, { rage: false, force: true })).toEqual({ left: 2500, top: 1550 });
     });
 
-    it('rage scanning: the upper-left third', () => {
-        expect(centerScroll(view, { x: 3000, y: 2000 }, { rage: true, force: true })).toEqual({ left: 2500, top: 1700 });
+    it('rage scanning: 30% in from the left, 40% down', () => {
+        expect(centerScroll(view, { x: 3000, y: 2000 }, { rage: true, force: true })).toEqual({ left: 2550, top: 1640 });
     });
 
     it('re-centers when your system is off screen, never scrolling past the start', () => {
