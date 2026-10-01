@@ -153,7 +153,8 @@ export function planPendingHoles(
             lockedAlias: hole.alias,
             isStatic: hole.is_static,
             targetIsWormhole: !hole.target_class || hole.target_class === 'unknown' || isWormholeClass(hole.target_class),
-            targetClass: hole.target_class,
+            // Same as the signature list's planner: an unknown class counts as not known.
+            targetClass: hole.target_class && hole.target_class !== 'unknown' ? hole.target_class : null,
         })),
     });
 }

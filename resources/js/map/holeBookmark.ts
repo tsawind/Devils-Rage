@@ -54,9 +54,10 @@ export function holeAsSignature(hole: TPendingHole) {
     return {
         id: hole.id,
         signature_id: hole.signature_id,
-        ship_size: null,
-        mass_status: null,
-        lifetime: 'healthy' as const,
+        // The same details the signature list builds its bookmark from (size, mass, EOL markers).
+        ship_size: hole.ship_size ?? null,
+        mass_status: hole.mass_status ?? null,
+        lifetime: hole.lifetime ?? 'healthy',
         wormhole: { name: hole.wormhole },
         signature_type: { target_class: hole.target_class },
         is_static: hole.is_static,
