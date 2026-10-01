@@ -56,7 +56,8 @@ export function cleanupRows(params: {
         if (otherId === null) continue;
         const other = byId.get(otherId);
         if (!other?.combat_color || other.combat_home || colorsWithHome.has(other.combat_color)) continue;
-        if (params.parentOf.get(otherId) !== here.id) continue;
+        // Every chain system hanging straight off here is a row (not the one here hangs off).
+        if (params.parentOf.get(here.id) === otherId) continue;
         if (!children.some((child) => child.id === otherId)) children.push(other);
     }
 

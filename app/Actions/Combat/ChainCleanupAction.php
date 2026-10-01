@@ -119,6 +119,16 @@ final readonly class ChainCleanupAction
                 throw ValidationException::withMessages(['combat' => 'That system is not connected to this one.']);
             }
 
+            // A hole in the parent already holds that number (copied or armed, not jumped yet).
+            $numberTaken = Signature::query()
+                ->where('map_solarsystem_id', $parent->id)
+                ->where('alias', $alias)
+                ->where(fn ($query) => $query->whereNull('map_connection_id')->orWhere('map_connection_id', '!=', $connection->id))
+                ->exists();
+            if ($numberTaken) {
+                throw ValidationException::withMessages(['alias' => sprintf('%s is already used by a hole here.', $alias)]);
+            }
+
             $this->updateMapSolarsystemAction->handle($system, [
                 'alias' => $alias,
                 'combat_color' => null,

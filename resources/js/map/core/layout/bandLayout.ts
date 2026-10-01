@@ -219,9 +219,10 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
             for (const neighbour of adjacency.get(realId) ?? []) {
                 if (!visited.has(neighbour) && isMember(neighbour) && !isPlaceholder(neighbour)) {
                     const color = colorOf(neighbour)!;
-                    if (!colorsWithHome.has(color) && !laneEntries.has(color)) {
-                        laneEntries.set(color, { id: neighbour, parent: layoutId, band });
-                        parentOf.set(neighbour, realId);
+                    if (!colorsWithHome.has(color)) {
+                        if (!laneEntries.has(color)) laneEntries.set(color, { id: neighbour, parent: layoutId, band });
+                        // Every member hanging off a band system knows it (the cleanup rows read this).
+                        if (!parentOf.has(neighbour)) parentOf.set(neighbour, realId);
                     }
                 }
                 if (visited.has(neighbour) || isMember(neighbour)) continue;

@@ -296,6 +296,27 @@ describe('computeBandLayout', () => {
         expect(result.lanes.map((lane) => lane.parentId)).toEqual([8]);
     });
 
+    it('patch 14: a chain being cleaned up knows every member hanging off the band', () => {
+        const nodes = [sys(DAISY, 'Daisy'), sys(4, 'D'), sys(5, 'D1'), sys(6, '1', { color: 'red' }), sys(7, '2', { color: 'red' }), sys(8, '11', { color: 'red' })];
+        const result = computeBandLayout({
+            nodes,
+            edges: [
+                { from: 1, to: 4 },
+                { from: 4, to: 5 },
+                { from: 5, to: 6 },
+                { from: 5, to: 7 },
+                { from: 6, to: 8 },
+            ],
+            homeId: DAISY,
+            laneOrder: ['red'],
+            compareNodes: byAlias(nodes),
+        });
+        expect(result.parentOf.get(6)).toBe(5);
+        expect(result.parentOf.get(7)).toBe(5);
+        expect(result.parentOf.get(8)).toBe(6);
+        for (const id of [6, 7, 8]) expect(result.positions.has(id)).toBe(true);
+    });
+
     it('patch 13: sorts a branch leading to a lane after its siblings', () => {
         const nodes = [sys(DAISY, 'Daisy'), sys(2, 'A'), sys(3, 'B'), sys(5, 'A1', { color: 'red', home: true })];
         const result = computeBandLayout({

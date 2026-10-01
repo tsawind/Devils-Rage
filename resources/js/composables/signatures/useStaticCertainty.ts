@@ -1,3 +1,4 @@
+import { useCombat } from '@/composables/combat/useCombat';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { displayAlias, staticSlotAlias } from '@/lib/alias';
 import { visibleBookmarkName } from '@/lib/bookmark';
@@ -94,6 +95,8 @@ export function certaintyInputFor(store: MapStore, system: TMapSolarsystem) {
 
 /** Mounted once with the map: runs the requested checks as the updates arrive. */
 export function useStaticCertainty(store: MapStore): void {
+    // Combat mode never stops you with a popup: the static is marked and keeps its name.
+    const { is_combat } = useCombat();
     const wormholeCategoryId = signatureCategories.find((category) => category.code === 'wormhole')?.id ?? null;
 
     function run(mapSolarsystemId: number): void {
@@ -117,7 +120,7 @@ export function useStaticCertainty(store: MapStore): void {
             const name = currentName(system, signatureId);
 
             // Combat chains keep their jump-order numbers; a hole already named for the slot (or unnamed) changes nothing.
-            if (system.combat_color || !name || name.toUpperCase() === slot.toUpperCase()) {
+            if (system.combat_color || is_combat.value || !name || name.toUpperCase() === slot.toUpperCase()) {
                 updateSignature({ id: signatureId } as TSignature, payload);
                 toast.success(`${staticName} is ${where}'s static`, { description: 'Every signature is scanned and nothing else can be it.' });
                 return;
@@ -126,6 +129,8 @@ export function useStaticCertainty(store: MapStore): void {
             const hole = system.pending_holes?.find((candidate) => candidate.id === signatureId);
             const linked = !hole;
             const beyond = mappedBelow(store, system, name).map((alias) => displayAlias(alias));
+            // One question at a time: an unanswered earlier one is answered Keep (marked, name kept).
+            certainAsk.value?.choose('keep');
             certainAsk.value = {
                 signatureLabel: hole ? (hole.signature_id ?? 'This hole') : `The hole to ${displayAlias(name)}`,
                 from: name,
@@ -154,15 +159,18 @@ export function useStaticCertainty(store: MapStore): void {
         }
     }
 
-    /** The name a hole has on the map: its number (locked or planned), or the system it leads to. */
+    /** The name a hole has in game: its locked number, or the system it leads to. */
     function currentName(system: TMapSolarsystem, signatureId: number): string | null {
         const hole = system.pending_holes?.find((candidate) => candidate.id === signatureId);
-        if (hole) return hole.alias ?? store.placeholders.value.find((placeholder) => placeholder.signatureId === signatureId)?.alias ?? null;
+        // Only a locked number counts: a planned one nobody copied, armed or jumped shifts on its own.
+        if (hole) return hole.alias ?? null;
         for (const connection of store.connections.values()) {
             const signature = (connection.signatures ?? []).find((candidate) => candidate.id === signatureId);
             if (!signature) continue;
             if (signature.alias) return signature.alias;
             const otherId = connection.from_map_solarsystem_id === system.id ? connection.to_map_solarsystem_id : connection.from_map_solarsystem_id;
+            // The way back leads to the parent: its name isn't this hole's name, nothing gets renamed.
+            if (store.bandLayout.value?.parentOf.get(system.id) === otherId) return null;
             return store.systems.get(otherId)?.alias ?? null;
         }
         return null;

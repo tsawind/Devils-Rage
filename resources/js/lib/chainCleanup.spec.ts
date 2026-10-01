@@ -44,4 +44,14 @@ describe('patch 14: cleaning a combat chain up, one system at a time', () => {
         const withHome = [...systems.map((system) => (system.id === 4 ? { ...system, combat_color: 'red', combat_home: true } : system))];
         expect(cleanupRows({ here: { id: 9, alias: 'D' }, systems: withHome, connections, parentOf, taken: [] })).toEqual([]);
     });
+
+    it('offers every chain system hanging straight off where you stand', () => {
+        const twoOff = [...systems, { id: 10, alias: '2', combat_color: 'red' }];
+        const links = [...connections, { from_map_solarsystem_id: 4, to_map_solarsystem_id: 10 }];
+        const rows = cleanupRows({ here: twoOff[0], systems: twoOff, connections: links, parentOf: new Map([...parentOf, [10, 4]]), taken: ['D1', 'D11'], ignoredAlias: 'Daisy' });
+        expect(rows.map((row) => [row.from, row.to])).toEqual([
+            ['1', 'D12'],
+            ['2', 'D13'],
+        ]);
+    });
 });

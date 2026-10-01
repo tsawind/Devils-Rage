@@ -36,7 +36,7 @@ import { chainAliases, combatColorLabel } from '@/lib/combat';
 import { isK162, validateManualAlias } from '@/lib/chainNumbering';
 import { Data } from '@/lib/data';
 import { formatDateToISO } from '@/lib/utils';
-import { deleteSignature, TProcessedConnection, updateMapConnection, updateSignature, useMapSolarsystems } from '@/map/api';
+import { deleteSignature, TProcessedConnection, updateMapConnection, updateSignature, useMapSolarsystems, useMapStore } from '@/map/api';
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import { TSignature } from '@/types/models';
 import { UTCDate } from '@date-fns/utc';
@@ -237,7 +237,7 @@ function handleStaticChoiceOpenChange(isOpen: boolean): void {
 }
 
 // Combat mode: no answer within 60 s counts as Unknown.
-const { popup_seconds } = useCombat();
+const { popup_seconds, is_combat } = useCombat();
 const { remaining: static_choice_remaining, fraction: static_choice_fraction } = usePopupCountdown(
     static_choice_open,
     () => popup_seconds.value,
@@ -270,8 +270,9 @@ function makeStatic(typeId: number | null | undefined, manual: boolean): void {
     };
     const current = signature.alias ?? null;
 
-    // Patch 14: only silent when the name doesn't change (already the static's slot, or no name at all).
-    const name = current ?? (rename_from_alias.value || null);
+    // Patch 14: ask when a name used in game would change (a locked number, or the jumped system's name).
+    // A planned number nobody copied, armed or jumped just shifts on its own.
+    const name = current ?? forward_target_alias.value;
     if (name === static_slot.value || (!is_limbo.value && !name)) {
         const previous: Record<string, FormDataConvertible> = {
             signature_type_id: signature.signature_type_id,
@@ -285,6 +286,13 @@ function makeStatic(typeId: number | null | undefined, manual: boolean): void {
                 action: { label: 'Undo', onClick: () => handleChange(previous) },
             });
         }
+        return;
+    }
+
+    // Combat mode (outside combat chains): no popup, it keeps its name.
+    if (!is_limbo.value && is_combat.value) {
+        handleChange({ ...base, ...(!current && name ? { alias: name } : {}) });
+        toast.success(`${signature.signature_id ?? 'Signature'} marked as the static`, { description: `Keeps ${displayAlias(name)} (combat mode).` });
         return;
     }
 
@@ -372,7 +380,7 @@ const rename_changes = computed(() => {
 });
 
 /** The name the hole has now: its locked number, or the one it would get (planned, or the next in a combat chain). */
-const rename_from_alias = computed(() => signature.alias ?? selected_connection.value?.target.alias ?? planned_alias ?? claim_alias ?? '');
+const rename_from_alias = computed(() => signature.alias ?? forward_target_alias.value ?? planned_alias ?? claim_alias ?? '');
 
 /**
  * Systems already mapped further down this hole: renaming it is blocked then
@@ -392,7 +400,7 @@ function handleRenameChoice(choice: 'rename' | 'keep'): void {
     const base = pending_static.value;
     if (choice === 'keep' || rename_beyond.value.length > 0) {
         // Keep its name: lock it, or the static would take the static's slot on its own.
-        const keep = rename_from_alias.value;
+        const keep = forward_target_alias.value;
         handleChange({ ...base, ...(!is_limbo.value && !signature.alias && keep && keep !== static_slot.value ? { alias: keep } : {}) });
         return;
     }
@@ -412,6 +420,24 @@ const map_system = computed(() => map_solarsystems.value.find((solarsystem) => s
 const is_combat_home = computed(() => Boolean(map_system.value?.combat_home));
 /** In a combat chain (home included): holes are numbered in jump order and never switch to 0 on their own. */
 const is_limbo = computed(() => Boolean(map_system.value?.combat_color));
+/** Combat chains and combat mode never stop you with a rename popup: the change just happens (or the name is kept). */
+const quiet = computed(() => is_limbo.value || is_combat.value);
+
+const map_store = (() => {
+    try {
+        return useMapStore();
+    } catch {
+        return null;
+    }
+})();
+
+/** The system this hole leads on to, unless it is the way back (the parent's name is not this hole's name). */
+const forward_target_alias = computed(() => {
+    const target = selected_connection.value?.target ?? null;
+    if (!target) return null;
+    const parentId = map_store?.bandLayout.value?.parentOf.get(selected_map_solarsystem.id);
+    return parentId === target.id ? null : (target.alias ?? null);
+});
 
 const static_slot = computed(() => staticSlotAlias(selected_map_solarsystem.alias, page.props.map.bookmark_ignored_alias, is_combat_home.value));
 const static_taken_by_other = computed(() => static_owner_id != null && static_owner_id !== signature.id);
@@ -437,6 +463,10 @@ function handleToggleStatic() {
         // Patch 14: an unjumped hole bookmarked as the static's slot gets a new number: ask first.
         if (!is_limbo.value && !selected_connection.value && signature.alias && signature.alias === static_slot.value) {
             const next = nextFreeNumber();
+            if (next && is_combat.value) {
+                handleChange({ is_static: false, is_wandering: false, alias: next });
+                return;
+            }
             if (next) {
                 askRename({
                     title: `${signature.signature_id ?? 'This hole'} is not the static: rename ${displayAlias(signature.alias)} → ${displayAlias(next)}?`,
@@ -513,11 +543,12 @@ function handleSetNumber() {
         ...(makesStatic ? { is_wandering: false } : {}),
     };
     // Patch 14: a name already used in game (jumped, or locked by a copy or arm) changes: ask first.
-    const before = selected_connection.value?.target.alias ?? signature.alias ?? null;
-    if (!is_limbo.value && before && before.toUpperCase() !== result.alias.toUpperCase()) {
+    const before = signature.alias ?? forward_target_alias.value ?? null;
+    const renamesSystem = Boolean(forward_target_alias.value);
+    if (!quiet.value && before && before.toUpperCase() !== result.alias.toUpperCase()) {
         askRename({
             title: `Rename ${displayAlias(before)} → ${displayAlias(result.alias)}?`,
-            description: selected_connection.value
+            description: renamesSystem
                 ? `The system ${displayAlias(before)} on the map becomes ${displayAlias(result.alias)}. Change these bookmarks in game.`
                 : 'Change this bookmark in game.',
             from: before,
@@ -525,11 +556,11 @@ function handleSetNumber() {
             isStatic: makesStatic,
             keepLabel: `Keep ${displayAlias(before)}`,
             renameLabel: `Rename to ${displayAlias(result.alias)}`,
-            onRename: () => handleChange({ ...payload, ...(selected_connection.value ? { rename_system: true } : {}) }),
+            onRename: () => handleChange({ ...payload, ...(renamesSystem ? { rename_system: true } : {}) }),
         });
         return;
     }
-    handleChange(payload);
+    handleChange({ ...payload, ...(renamesSystem && quiet.value ? { rename_system: true } : {}) });
 }
 
 // ---- Rename popups (patch 14) -------------------------------------------------
@@ -1003,6 +1034,7 @@ function copyBookmark() {
             :description="rename_ask.description"
             :keep-label="rename_ask.keepLabel"
             :rename-label="rename_ask.renameLabel"
+            :countdown-seconds="popup_seconds"
             @choose="handleRenameAsk"
         />
 

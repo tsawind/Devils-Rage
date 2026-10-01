@@ -53,7 +53,12 @@ const rows = computed(() => {
         systems,
         connections: [...store.connections.values()],
         parentOf: store.bandLayout.value?.parentOf ?? new Map(),
-        taken: [...chainAliases(systems, system), ...systems.map((candidate) => candidate.alias).filter((alias): alias is string => Boolean(alias))],
+        taken: [
+            ...chainAliases(systems, system),
+            ...systems.map((candidate) => candidate.alias).filter((alias): alias is string => Boolean(alias)),
+            // Numbers locked on this system's unjumped holes (copied or armed) are taken too.
+            ...(system.pending_holes ?? []).map((hole) => hole.alias).filter((alias): alias is string => Boolean(alias)),
+        ],
         scheme: meta?.bookmark_alias_scheme,
         ignoredAlias: meta?.bookmark_ignored_alias,
     }).map((row) => {
