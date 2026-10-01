@@ -263,6 +263,39 @@ describe('computeBandLayout', () => {
         expect(result.combatBand).toBeNull();
     });
 
+    it('patch 14: a chain being cleaned up (no home) hangs off the converted system', () => {
+        const nodes = [
+            sys(DAISY, 'Daisy'),
+            sys(4, 'D'),
+            sys(5, 'D1'),
+            sys(8, 'D12'),
+            sys(6, '11', { color: 'red' }),
+            sys(7, '12', { color: 'red' }),
+        ];
+        const result = computeBandLayout({
+            nodes,
+            edges: [
+                { from: 1, to: 4 },
+                { from: 4, to: 5 },
+                { from: 5, to: 8 },
+                { from: 8, to: 6 },
+                { from: 8, to: 7 },
+            ],
+            homeId: DAISY,
+            laneOrder: ['red'],
+            compareNodes: byAlias(nodes),
+            reservedAlias: null,
+        });
+        expect(result.bandOf.get(8)).toBe('main');
+        expect(result.bandOf.get(6)).toBe('lane');
+        expect(result.parentOf.get(6)).toBe(8);
+        // The lane sits under D12, inside the main band; no "not linked" combat area.
+        expect(result.positions.get(6)!.y).toBeGreaterThan(result.positions.get(8)!.y);
+        expect(result.positions.get(6)!.x).toBeGreaterThan(result.positions.get(8)!.x);
+        expect(result.combatBand).toBeNull();
+        expect(result.lanes.map((lane) => lane.parentId)).toEqual([8]);
+    });
+
     it('patch 13: sorts a branch leading to a lane after its siblings', () => {
         const nodes = [sys(DAISY, 'Daisy'), sys(2, 'A'), sys(3, 'B'), sys(5, 'A1', { color: 'red', home: true })];
         const result = computeBandLayout({

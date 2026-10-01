@@ -37,6 +37,8 @@ final class MapSolarsystemResource extends JsonResource
             'combat_active' => (bool) $this->combat_active,
             'combat_started_at' => $this->combat_started_at?->toISOString(),
             'combat_previous_color' => $this->combat_previous_color,
+            // Patch 14: converted during cleanup, way back not re-bookmarked yet.
+            'cleanup_return_pending' => (bool) $this->cleanup_return_pending,
             // Who is working this combat home's chain (patch 12: named in the Clear chain warning).
             'combat_workers' => $this->when(
                 (bool) $this->combat_home && filled($this->combat_color),

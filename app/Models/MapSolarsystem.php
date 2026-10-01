@@ -37,6 +37,7 @@ use Staudenmeir\EloquentHasManyDeep\HasRelationships;
  * @property bool $combat_active
  * @property \Carbon\CarbonImmutable|null $combat_started_at
  * @property string|null $combat_previous_color
+ * @property bool $cleanup_return_pending
  * @property \Carbon\CarbonImmutable|null $scanned_at
  * @property-read int|null $signatures_count
  * @property-read int|null $uncategorized_signatures_count
@@ -199,6 +200,7 @@ final class MapSolarsystem extends Model
             'combat_active' => 'boolean',
             'scanned_at' => 'immutable_datetime',
             'combat_started_at' => 'immutable_datetime',
+            'cleanup_return_pending' => 'boolean',
         ];
     }
 }

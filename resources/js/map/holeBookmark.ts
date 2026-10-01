@@ -139,3 +139,60 @@ export function mappedBelow(store: MapStore, system: TMapSolarsystem, alias: str
     if (!from) return [];
     return chainAliases([...store.systems.values()], system).filter((candidate) => candidate.toUpperCase().startsWith(from) && candidate.length > from.length);
 }
+
+/** Patch 14: the forward bookmark of a jumped hole from `system`, if the system it leads to were named `alias`. */
+export function linkedForwardBookmark(store: MapStore, system: TMapSolarsystem, targetId: number, alias: string): string {
+    const meta = store.meta.value;
+    const target = store.systems.get(targetId);
+    if (!meta || !target) return '';
+    const connection = [...store.connections.values()].find(
+        (candidate) =>
+            (candidate.from_map_solarsystem_id === system.id && candidate.to_map_solarsystem_id === targetId) ||
+            (candidate.to_map_solarsystem_id === system.id && candidate.from_map_solarsystem_id === targetId),
+    );
+    const signature = (connection?.signatures ?? []).find((candidate) => candidate.map_solarsystem_id === system.id) ?? null;
+    return buildSignatureBookmark({
+        signature: {
+            signature_id: signature?.signature_id ?? null,
+            ship_size: connection?.ship_size ?? null,
+            mass_status: connection?.mass_status ?? null,
+            lifetime: connection?.lifetime_status ?? 'healthy',
+            wormhole: signature?.wormhole ?? null,
+            signature_type: signature?.signature_type ?? null,
+            is_static: Boolean(signature?.is_static),
+            is_wandering: Boolean(signature?.is_wandering),
+        },
+        currentSystem: { alias: system.alias, class: system.solarsystem.class, combatHome: Boolean(system.combat_home), combatColor: system.combat_color ?? null },
+        connectionTarget: { ...target, alias, combat_color: null, combat_home: false },
+        aliases: chainAliases([...store.systems.values()], system),
+        formats: meta,
+        detectReturn: true,
+    });
+}
+
+/** Patch 14: the way back ("*") from `system` to `parent`, with this side's return signature if pasted. */
+export function wayBackBookmark(store: MapStore, system: TMapSolarsystem, parent: TMapSolarsystem): string {
+    const meta = store.meta.value;
+    if (!meta) return '';
+    const connection = [...store.connections.values()].find(
+        (candidate) =>
+            (candidate.from_map_solarsystem_id === system.id && candidate.to_map_solarsystem_id === parent.id) ||
+            (candidate.to_map_solarsystem_id === system.id && candidate.from_map_solarsystem_id === parent.id),
+    );
+    const signature = (connection?.signatures ?? []).find((candidate) => candidate.map_solarsystem_id === system.id) ?? null;
+    return formatBookmarkName(
+        { alias: parent.alias, occupier_alias: parent.occupier_alias, solarsystem: parent.solarsystem, combat_home: parent.combat_home, combat_color: parent.combat_color },
+        {
+            signatureId: signature?.signature_id ?? null,
+            shipSize: connection?.ship_size ?? null,
+            massStatus: connection?.mass_status ?? null,
+            lifetime: connection?.lifetime_status ?? 'healthy',
+        },
+        meta,
+        system.alias,
+        system.alias,
+        system.solarsystem.class,
+        system.combat_color ?? null,
+        Boolean(system.combat_home),
+    );
+}

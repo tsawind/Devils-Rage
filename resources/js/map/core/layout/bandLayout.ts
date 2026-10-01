@@ -161,6 +161,8 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
     const isHome = (id: number): boolean => Boolean(byId.get(id)?.home) && colorOf(id) !== null;
     const isMember = (id: number): boolean => colorOf(id) !== null && !isHome(id);
     const isPlaceholder = (id: number): boolean => Boolean(byId.get(id)?.placeholder);
+    /** Patch 14: chains with a home; a chain without one is being cleaned up into a band. */
+    const colorsWithHome = new Set(input.nodes.filter((node) => node.home && node.color).map((node) => node.color as string));
 
     const reservedGhostId = GHOST_BASE * 2;
     const ghostInfo = new Map<number, { label: string; note: string; color: string | null; alias: string | null; realId: number | null }>();
@@ -194,6 +196,8 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
 
     /** Combat homes found from a band system: their lane sits inside that band, under it (patch 13). */
     const laneLinks = new Map<number, { parent: number; band: 'main' | 'side' }>();
+    /** Patch 14: a chain without a home (being cleaned up) hangs off the band system its first member was found from. */
+    const laneEntries = new Map<string, { id: number; parent: number; band: 'main' | 'side' }>();
 
     /**
      * Breadth-first tree of one band from `root`: steps through uncolored
@@ -213,6 +217,13 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         while (queue.length > 0) {
             const [layoutId, realId] = queue.shift()!;
             for (const neighbour of adjacency.get(realId) ?? []) {
+                if (!visited.has(neighbour) && isMember(neighbour) && !isPlaceholder(neighbour)) {
+                    const color = colorOf(neighbour)!;
+                    if (!colorsWithHome.has(color) && !laneEntries.has(color)) {
+                        laneEntries.set(color, { id: neighbour, parent: layoutId, band });
+                        parentOf.set(neighbour, realId);
+                    }
+                }
                 if (visited.has(neighbour) || isMember(neighbour)) continue;
                 visited.add(neighbour);
                 parentOf.set(neighbour, realId);
@@ -232,7 +243,7 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         const layoutParent = new Map<number, number>();
         for (const [id, children] of childrenOf) for (const child of children) layoutParent.set(child, id);
         const towardLane = new Set<number>();
-        for (const link of laneLinks.values()) {
+        for (const link of [...laneLinks.values(), ...laneEntries.values()]) {
             if (link.band !== band) continue;
             let id: number | undefined = link.parent;
             while (id !== undefined && !towardLane.has(id)) {
@@ -313,6 +324,7 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
             }
         };
         if (homeOfLane !== null) grow(homeOfLane);
+        else if (laneEntries.has(color)) grow(laneEntries.get(color)!.id);
         for (const id of laneIds.toSorted(compareLane)) {
             if (!placed.has(id) && !isPlaceholder(id)) grow(id);
         }
@@ -401,7 +413,7 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         let bottom = top;
         for (const color of laneColors) {
             const lane = laneTrees.get(color)!;
-            const link = lane.homeId !== null ? laneLinks.get(lane.homeId) : undefined;
+            const link = lane.homeId !== null ? laneLinks.get(lane.homeId) : laneEntries.get(color);
             if (!link || link.band !== band || !members.has(link.parent)) continue;
             const parentPosition = positions.get(link.parent);
             const desired = parentPosition ? parentPosition.x + Math.round(levelGap / 2) : marginX;
@@ -437,7 +449,7 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
     const linkedToSide = new Set(
         laneColors.filter((color) => {
             const home = laneTrees.get(color)!.homeId;
-            return home !== null && laneLinks.get(home)?.band === 'side';
+            return home !== null ? laneLinks.get(home)?.band === 'side' : laneEntries.get(color)?.band === 'side';
         }),
     );
     const standalone = unlinked.filter((color) => !linkedToSide.has(color));

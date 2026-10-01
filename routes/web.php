@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BulkMapConnectionController;
 use App\Http\Controllers\BulkSignatureController;
 use App\Http\Controllers\BulkWaypointController;
+use App\Http\Controllers\ChainCleanupController;
 use App\Http\Controllers\DiscordAccountController;
 use App\Http\Controllers\DocumentationController;
 use App\Http\Controllers\EveController;
@@ -117,6 +118,9 @@ Route::middleware('auth')->group(function () {
     Route::delete('maps/{map}/combat', [MapCombatController::class, 'destroy'])->name('maps.combat.destroy');
     Route::delete('map-solarsystems/{mapSolarsystem}/combat', [MapCombatController::class, 'clear'])->name('map-solarsystems.combat.clear');
     Route::delete('maps/{map}/combat-chains/{color}', [MapCombatController::class, 'clearChain'])->name('maps.combat-chains.destroy');
+    Route::post('map-solarsystems/{mapSolarsystem}/cleanup', [ChainCleanupController::class, 'store'])->name('map-solarsystems.cleanup.store');
+    Route::post('map-solarsystems/{mapSolarsystem}/cleanup-convert', [ChainCleanupController::class, 'convert'])->name('map-solarsystems.cleanup.convert');
+    Route::delete('map-solarsystems/{mapSolarsystem}/cleanup-return', [ChainCleanupController::class, 'returnDone'])->name('map-solarsystems.cleanup.return');
     Route::put('map-selection', [MapSelectionController::class, 'update'])->name('map-selection.update');
     Route::delete('map-selection', [MapSelectionController::class, 'destroy'])->name('map-selection.destroy');
 

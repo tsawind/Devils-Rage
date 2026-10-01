@@ -6,6 +6,7 @@ import PasteSignatureWarningDialog from '@/components/signatures/PasteSignatureW
 import ReturnHoleDialog from '@/components/signatures/ReturnHoleDialog.vue';
 import SideChainLetterDialog from '@/components/signatures/SideChainLetterDialog.vue';
 import CombatControls from '@/components/combat/CombatControls.vue';
+import ChainCleanupRows from '@/components/signatures/ChainCleanupRows.vue';
 import Signature from '@/components/signatures/Signature.vue';
 import SignaturesEmptyState from '@/components/signatures/SignaturesEmptyState.vue';
 import MapPanel from '@/components/ui/map-panel/MapPanel.vue';
@@ -652,6 +653,9 @@ function createNewSignature() {
                     <ArrowDown v-if="sortPreferences.column === 'age' && sortPreferences.direction === 'desc'" class="size-3" />
                 </button>
             </div>
+
+            <!-- Patch 14: cleanup rows (a combat chain being converted, one system at a time) -->
+            <ChainCleanupRows :map-solarsystem-id="map_solarsystem.id" />
 
             <!-- Auto-link countdown -->
             <div

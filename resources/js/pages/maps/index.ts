@@ -111,6 +111,8 @@ export type TMapSolarsystemBase = {
     combat_started_at?: string | null;
     /** Kept when its chain was cleared: the chain it came from ("was Red", patch 12). */
     combat_previous_color?: string | null;
+    /** Patch 14: converted during cleanup, way back ("*") not re-bookmarked yet. */
+    cleanup_return_pending?: boolean;
     /** Combat homes: who is working the chain (names). */
     combat_workers?: string[];
     /** Wormhole signatures nobody has jumped yet: placeholder systems on the map (patch 12). */

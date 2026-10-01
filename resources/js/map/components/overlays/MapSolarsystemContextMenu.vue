@@ -20,13 +20,14 @@ import useUser from '@/composables/useUser';
 import { useWaypoint } from '@/composables/useWaypoint';
 import { isWormholeClass } from '@/const/solarsystemClasses';
 import { combatColorLabel, describeChainRoute } from '@/lib/combat';
+import { startChainCleanup } from '@/map/actions/chainCleanup';
 import { openClearChain } from '@/map/actions/clearChain';
 import { deleteMapSolarsystem } from '@/map/actions/deleteMapSolarsystem';
 import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { useAddConnectionDialog } from '@/map/interactions/useAddConnectionDialog';
 import { TMapSolarsystem } from '@/pages/maps';
 import { TMapSolarsystemStatus } from '@/types/models';
-import { ClipboardCopy, Compass, Eraser, Flag, Home, Map, MapPin, Navigation, Pin, Route, Trash2, Users, Waypoints } from 'lucide-vue-next';
+import { Brush, ClipboardCopy, Compass, Eraser, Flag, Home, Map, MapPin, Navigation, Pin, Route, Trash2, Users, Waypoints } from 'lucide-vue-next';
 import type { AcceptableValue } from 'reka-ui';
 import { toast } from 'vue-sonner';
 
@@ -79,6 +80,16 @@ function handleCopyRoute() {
     toast.success('Copied route', { description: text });
 }
 
+/** Patch 14: offer the cleanup with a confirming toast (nothing is renamed when it starts). */
+function handleStartCleanup() {
+    const label = combatColorLabel(map_solarsystem.combat_color) ?? 'combat';
+    toast(`Clean up the ${label} chain?`, {
+        description: 'The home loses its color and Combat turns off for whoever works the chain. Nothing is renamed: each system converts when a scanner standing next to it presses Done.',
+        duration: 15_000,
+        action: { label: 'Start cleanup', onClick: () => startChainCleanup(map_solarsystem.id, label) },
+    });
+}
+
 function handleClearCombatChain() {
     if (map_solarsystem.combat_color) openClearChain(map_solarsystem.combat_color);
 }
@@ -114,6 +125,10 @@ const options: TMapSolarsystemStatus[] = ['unknown', 'friendly', 'hostile', 'act
         <ContextMenuItem @select="handleCopyRoute">
             <ClipboardCopy class="size-4" />
             Copy route
+        </ContextMenuItem>
+        <ContextMenuItem v-if="can_write && map_solarsystem.combat_home && map_solarsystem.combat_color" @select="handleStartCleanup">
+            <Brush class="size-4" />
+            Clean up {{ combatColorLabel(map_solarsystem.combat_color) ?? 'combat' }} chain…
         </ContextMenuItem>
         <ContextMenuItem v-if="can_write && map_solarsystem.combat_color" @select="handleClearCombatChain">
             <Eraser class="size-4" />
