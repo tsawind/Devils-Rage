@@ -36,8 +36,8 @@ final readonly class MapBroadcaster
      */
     private const int MAX_IDS_PER_EVENT = 40;
 
-    /** Under Reverb's 10KB message limit, with room for the event envelope. */
-    private const int MAX_PAYLOAD_BYTES = 9_000;
+    /** Under Reverb's 10KB limit once the payload is encoded again inside the request (escaping adds 10-20%) plus the envelope. */
+    private const int MAX_PAYLOAD_BYTES = 7_000;
 
     /**
      * @param  Collection<int, MapSolarsystem>  $map_solarsystems
