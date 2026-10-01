@@ -1,6 +1,7 @@
 import { isWormholeClass } from '@/const/solarsystemClasses';
 import { displayAlias, planSignatureAliases, type TAliasScheme } from '@/lib/alias';
 import { chainAliases } from '@/lib/combat';
+import type { TStringedSolarsystemClass } from '@/types/models';
 
 /**
  * Placeholder systems (patch 12): every wormhole signature nobody has jumped
@@ -17,7 +18,7 @@ type TPlaceholderHole = {
     signature_id: string | null;
     alias: string | null;
     is_static: boolean;
-    target_class: string | null;
+    target_class: TStringedSolarsystemClass | null;
     wormhole: string | null;
 };
 
@@ -26,7 +27,7 @@ type TPlaceholderSystem = {
     alias?: string | null;
     combat_color?: string | null;
     combat_home?: boolean | null;
-    solarsystem?: { class?: string | null } | null;
+    solarsystem?: { class?: TStringedSolarsystemClass | null } | null;
     pending_holes?: TPlaceholderHole[] | null;
 };
 
@@ -49,19 +50,25 @@ export type TPlaceholder = {
 const KSPACE: Record<string, string> = { h: 'HS', l: 'LS', n: 'NS', p: 'Pochven' };
 
 /** Where a hole leads: "C3", "HS", or "?" when the type isn't known. */
-export function holeDestination(targetClass: string | null | undefined): string {
+export function holeDestination(targetClass: TStringedSolarsystemClass | null | undefined): string {
     if (!targetClass || targetClass === 'unknown') return '?';
     if (isWormholeClass(targetClass)) return `C${targetClass}`;
     return KSPACE[targetClass] ?? targetClass.toUpperCase();
 }
 
+/**
+ * `linkedSignatureIds`: signatures already linked to a connection (as the
+ * connections know them). A hole jumped a moment ago can still be in its
+ * system's list until that system's signatures are re-sent; it is skipped.
+ */
 export function buildPlaceholders(
     systems: readonly TPlaceholderSystem[],
     formats: { bookmark_alias_scheme?: TAliasScheme; bookmark_ignored_alias?: string },
+    linkedSignatureIds: ReadonlySet<number> = new Set(),
 ): TPlaceholder[] {
     const result: TPlaceholder[] = [];
     for (const system of systems) {
-        const holes = system.pending_holes ?? [];
+        const holes = (system.pending_holes ?? []).filter((hole) => !linkedSignatureIds.has(hole.id));
         if (holes.length === 0) continue;
 
         const limbo = Boolean(system.combat_color);

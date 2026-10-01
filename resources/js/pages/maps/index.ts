@@ -126,7 +126,7 @@ export type TPendingHole = {
     alias: string | null;
     is_static: boolean;
     is_wandering: boolean;
-    target_class: string | null;
+    target_class: TStringedSolarsystemClass | null;
     wormhole: string | null;
 };
 

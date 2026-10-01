@@ -5,7 +5,7 @@ const FORMATS = { bookmark_alias_scheme: 'numeric' as const, bookmark_ignored_al
 
 describe('patch 12: placeholder systems', () => {
     it('names main-chain holes by the number they have or will get', () => {
-        const systems = [
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
             { id: 1, alias: 'Daisy', solarsystem: { class: '5' }, pending_holes: [{ id: 50, signature_id: 'KXR-123', alias: null, is_static: false, target_class: '3', wormhole: 'X877' }] },
             { id: 2, alias: 'A', solarsystem: { class: '6' }, pending_holes: [
                 { id: 60, signature_id: 'JOW-111', alias: 'A1', is_static: false, target_class: '4', wormhole: null },
@@ -21,7 +21,7 @@ describe('patch 12: placeholder systems', () => {
     });
 
     it('leaves combat chain holes blank until they are numbered', () => {
-        const systems = [
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
             { id: 3, alias: '11', combat_color: 'red', solarsystem: { class: '4' }, pending_holes: [
                 { id: 70, signature_id: 'MVD-333', alias: null, is_static: true, target_class: 'h', wormhole: null },
                 { id: 71, signature_id: 'KLR-444', alias: '112', is_static: false, target_class: '3', wormhole: null },

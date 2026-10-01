@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import CombatControls from '@/components/combat/CombatControls.vue';
+
+/** The Signatures panel shows the combat buttons here too; other cards reusing this empty state don't. */
+const { showCombat = false } = defineProps<{ showCombat?: boolean }>();
 import MapPanel from '@/components/ui/map-panel/MapPanel.vue';
 import MapPanelContent from '@/components/ui/map-panel/MapPanelContent.vue';
 import MapPanelHeader from '@/components/ui/map-panel/MapPanelHeader.vue';
@@ -8,7 +11,7 @@ import MapPanelHeader from '@/components/ui/map-panel/MapPanelHeader.vue';
 <template>
     <MapPanel>
         <MapPanelHeader>
-            <CombatControls class="mr-2" />
+            <CombatControls v-if="showCombat" class="mr-2" />
             Signatures
         </MapPanelHeader>
         <MapPanelContent>

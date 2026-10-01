@@ -52,7 +52,11 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
     /** Unjumped wormhole signatures shown as placeholder systems (tree layout, when switched on). */
     const placeholders: ComputedRef<TPlaceholder[]> = computed(() => {
         if (!meta.value || !isTreeLayout.value || !view.showPlaceholders.value) return [];
-        return buildPlaceholders([...entities.systems.values()], meta.value);
+        const linked = new Set<number>();
+        for (const connection of entities.connections.values()) {
+            for (const signature of connection.signatures ?? []) linked.add(signature.id);
+        }
+        return buildPlaceholders([...entities.systems.values()], meta.value, linked);
     });
 
     /**
@@ -66,7 +70,8 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         if (!meta.value) return null;
         return computeBandLayout(toBandInput(entities, meta.value, placeholders.value), {
             gridSize: view.config.value.grid_size,
-            nodeWidth: meta.value.constant_width_enabled ? 180 : 160,
+            // The tree layout always draws nodes at the fixed 180 width (see MapNode).
+            nodeWidth: 180,
         });
     });
 

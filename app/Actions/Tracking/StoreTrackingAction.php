@@ -22,6 +22,7 @@ use App\Models\Signature;
 use App\Models\SignatureCategory;
 use App\Models\Solarsystem;
 use App\Traits\PositionsMapSolarsystems;
+use App\Support\Broadcasting\MapBroadcaster;
 use App\Utilities\StargatePairDetector;
 use App\Utilities\WormholeConnectionClassifier;
 use Illuminate\Container\Attributes\Config;
@@ -47,6 +48,7 @@ final readonly class StoreTrackingAction
         private CreateMapConnectionAction $storeMapConnectionRequest,
         private UpdateSignatureAction $updateSignatureAction,
         private FillFarSideK162Action $fillFarSideK162Action,
+        private MapBroadcaster $mapBroadcaster,
         #[Config('map.max_size.x')]
         private int $max_x,
         #[Config('map.max_size.y')]
@@ -134,6 +136,9 @@ final readonly class StoreTrackingAction
                     ->update($signature_update);
 
                 $this->fillFarSideK162Action->handle($connection->id);
+
+                // The hole is jumped: everyone's map drops its placeholder (patch 12).
+                $this->mapBroadcaster->signaturesChanged($origin);
             }
 
         }, 10);

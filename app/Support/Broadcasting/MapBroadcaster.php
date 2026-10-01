@@ -36,6 +36,9 @@ final readonly class MapBroadcaster
      */
     private const int MAX_IDS_PER_EVENT = 40;
 
+    /** Under Reverb's 10KB message limit, with room for the event envelope. */
+    private const int MAX_PAYLOAD_BYTES = 9_000;
+
     /**
      * @param  Collection<int, MapSolarsystem>  $map_solarsystems
      */
@@ -47,7 +50,19 @@ final readonly class MapBroadcaster
             return;
         }
 
-        broadcast(new MapSolarsystemsUpsertedEvent($map_id, $map_solarsystems));
+        // Each system carries its unjumped holes (patch 12 placeholders): load them in one go.
+        $map_solarsystems->loadMissing(['pendingHoles.signatureType', 'pendingHoles.wormhole']);
+
+        $event = new MapSolarsystemsUpsertedEvent($map_id, $map_solarsystems);
+
+        // Reverb drops anything over 10KB: send a resync ping instead.
+        if (mb_strlen((string) json_encode($event->broadcastWith()), '8bit') > self::MAX_PAYLOAD_BYTES) {
+            $this->resync($map_id);
+
+            return;
+        }
+
+        broadcast($event);
     }
 
     /**
@@ -116,11 +131,19 @@ final readonly class MapBroadcaster
             $counts['scanned_at'] = $map_solarsystem->scanned_at?->toISOString();
         }
 
-        broadcast(new SignaturesChangedEvent(
+        $event = new SignaturesChangedEvent(
             $map_solarsystem->map_id,
             $map_solarsystem->id,
             $counts,
-        ));
+        );
+
+        if (mb_strlen((string) json_encode($event->broadcastWith()), '8bit') > self::MAX_PAYLOAD_BYTES) {
+            $this->resync($map_solarsystem->map_id);
+
+            return;
+        }
+
+        broadcast($event);
     }
 
     public function metadataUpdated(Map $map): void

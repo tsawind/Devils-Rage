@@ -61,7 +61,7 @@ const contentSize = computed(() => {
         maxY = Math.max(maxY, position.y * scale);
     }
     // Placeholder systems, ghosts and lane outlines (patch 12) count too.
-    const layout = store.bandLayout.value;
+    const layout = store.isTreeLayout.value ? store.bandLayout.value : null;
     if (layout) {
         for (const placeholder of store.placeholders.value) {
             const position = layout.positions.get(placeholder.nodeId);

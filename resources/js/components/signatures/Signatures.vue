@@ -409,7 +409,7 @@ function createNewSignature() {
 
 <template>
     <!-- Empty state when no system selected -->
-    <SignaturesEmptyState v-if="!map_solarsystem" />
+    <SignaturesEmptyState v-if="!map_solarsystem" show-combat />
 
     <!-- Signatures list when system is selected -->
     <MapPanel v-if="map_solarsystem" class="overflow-x-hidden">
