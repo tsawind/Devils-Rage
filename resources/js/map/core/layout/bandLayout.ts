@@ -60,6 +60,11 @@ export type BandLayoutOptions = {
     rowGap?: number;
     /** Column distance inside a lane. */
     laneColumnGap?: number;
+    /** Row distance inside a lane (patch 13: compact combat lanes). */
+    laneRowGap?: number;
+    /** A combat lane system's size (patch 13: compact). */
+    laneNodeWidth?: number;
+    laneNodeHeight?: number;
     /** Space between two lanes, and between bands. */
     laneGap?: number;
     bandGap?: number;
@@ -84,7 +89,12 @@ export type BandGhost = {
 
 export type BandRect = { minX: number; minY: number; maxX: number; maxY: number };
 
-export type BandLane = BandRect & { color: string; homeId: number | null };
+export type BandLane = BandRect & {
+    color: string;
+    homeId: number | null;
+    /** Where the lane hangs off (patch 13): the system its home was found from, or null for an unlinked chain. */
+    parentId: number | null;
+};
 
 export type BandSideChain = { rootId: number; memberIds: number[] };
 
@@ -94,6 +104,8 @@ export type BandLayoutResult = {
     lanes: BandLane[];
     mainBand: BandRect | null;
     sideBand: BandRect | null;
+    /** The area for combat chains not linked to anything (patch 13), between the main chain and the side chains. */
+    combatBand: BandRect | null;
     /** The connection each system was found through: child → parent (real ids). */
     parentOf: Map<number, number>;
     /** Which band each system is in. */
@@ -121,7 +133,10 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
     const snap = (value: number): number => Math.round(value / gridSize) * gridSize;
     const levelGap = snap(options.levelGap ?? 320);
     const rowGap = snap(options.rowGap ?? 100);
-    const laneColumnGap = snap(options.laneColumnGap ?? 260);
+    const laneColumnGap = snap(options.laneColumnGap ?? 100);
+    const laneRowGap = snap(options.laneRowGap ?? 60);
+    const laneNodeWidth = options.laneNodeWidth ?? 80;
+    const laneNodeHeight = options.laneNodeHeight ?? 26;
     const laneGap = snap(options.laneGap ?? 80);
     const bandGap = snap(options.bandGap ?? 80);
     const marginX = snap(options.marginX ?? 60);
@@ -147,7 +162,6 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
     const isMember = (id: number): boolean => colorOf(id) !== null && !isHome(id);
     const isPlaceholder = (id: number): boolean => Boolean(byId.get(id)?.placeholder);
 
-    const ghostIdFor = (homeId: number): number => GHOST_BASE + homeId;
     const reservedGhostId = GHOST_BASE * 2;
     const ghostInfo = new Map<number, { label: string; note: string; color: string | null; alias: string | null; realId: number | null }>();
 
@@ -178,10 +192,16 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
     const bandOf = new Map<number, 'main' | 'side' | 'lane'>();
     const visited = new Set<number>();
 
+    /** Combat homes found from a band system: their lane sits inside that band, under it (patch 13). */
+    const laneLinks = new Map<number, { parent: number; band: 'main' | 'side' }>();
+
     /**
      * Breadth-first tree of one band from `root`: steps through uncolored
-     * systems only. A combat home met on the way is left for its lane; a ghost
-     * holds its spot and its uncolored neighbours hang off the ghost.
+     * systems only. A combat home met on the way is left for its lane, which
+     * hangs off the system it was found from; its uncolored neighbours (found
+     * before the chain started) stay in the band, under that same system.
+     * Branches leading to a lane sort to the bottom, so the lane has room
+     * right under them.
      */
     const growBand = (root: number, band: 'main' | 'side'): Map<number, number[]> => {
         const childrenOf = new Map<number, number[]>();
@@ -197,17 +217,8 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
                 visited.add(neighbour);
                 parentOf.set(neighbour, realId);
                 if (isHome(neighbour)) {
-                    const ghostId = ghostIdFor(neighbour);
-                    ghostInfo.set(ghostId, {
-                        label: byId.get(neighbour)?.alias ?? '',
-                        note: '',
-                        color: colorOf(neighbour),
-                        alias: byId.get(neighbour)?.alias ?? null,
-                        realId: neighbour,
-                    });
-                    childrenOf.get(layoutId)!.push(ghostId);
-                    childrenOf.set(ghostId, []);
-                    queue.push([ghostId, neighbour]);
+                    laneLinks.set(neighbour, { parent: realId, band });
+                    queue.push([layoutId, neighbour]);
                     continue;
                 }
                 bandOf.set(neighbour, band);
@@ -216,12 +227,107 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
                 queue.push([neighbour, neighbour]);
             }
         }
-        for (const children of childrenOf.values()) children.sort(compare);
+        // Every system on the way to a lane sorts after its siblings.
+        const layoutParent = new Map<number, number>();
+        for (const [id, children] of childrenOf) for (const child of children) layoutParent.set(child, id);
+        const towardLane = new Set<number>();
+        for (const link of laneLinks.values()) {
+            if (link.band !== band) continue;
+            let id: number | undefined = link.parent;
+            while (id !== undefined && !towardLane.has(id)) {
+                towardLane.add(id);
+                id = layoutParent.get(id);
+            }
+        }
+        const compareBand = (a: number, b: number): number => (towardLane.has(a) ? 1 : 0) - (towardLane.has(b) ? 1 : 0) || compare(a, b);
+        for (const children of childrenOf.values()) children.sort(compareBand);
         return childrenOf;
     };
 
+    // --- Classify first: the main band, then each side chain -------------
+    const homeId = input.homeId !== null && adjacency.has(input.homeId) && !colorOf(input.homeId) ? input.homeId : null;
+    const reserved = input.reservedAlias?.trim().toUpperCase() || null;
+    let mainTree: Map<number, number[]> | null = null;
+    if (homeId !== null) {
+        mainTree = growBand(homeId, 'main');
+        if (reserved) {
+            const daisyChildren = mainTree.get(homeId)!;
+            const holdsReserved = daisyChildren.some((id) => (aliasFor(id) ?? '').trim().toUpperCase() === reserved);
+            if (!holdsReserved) {
+                ghostInfo.set(reservedGhostId, { label: reserved, note: 'kept free', color: null, alias: reserved, realId: null });
+                daisyChildren.push(reservedGhostId);
+                mainTree.set(reservedGhostId, []);
+                daisyChildren.sort(compare);
+            }
+        }
+    }
+
+    const sideChains: BandSideChain[] = [];
+    const sideTrees: { root: number; tree: Map<number, number[]> }[] = [];
+    const leftovers = input.nodes
+        .map((node) => node.id)
+        .filter((id) => !visited.has(id) && !isMember(id) && !isHome(id) && !isPlaceholder(id));
+    while (leftovers.some((id) => !visited.has(id))) {
+        const component = collectComponent(
+            leftovers.find((id) => !visited.has(id))!,
+            adjacency,
+            (id) => !isMember(id) && !isHome(id),
+        );
+        const root = pickSideRoot(component, byId, adjacency);
+        const tree = growBand(root, 'side');
+        sideChains.push({ rootId: root, memberIds: [...tree.keys()].filter((id) => !ghostInfo.has(id)) });
+        sideTrees.push({ root, tree });
+    }
+
+    // --- Lanes: each chain's own tree, from its home through its own systems ---
+    const colors = new Set<string>();
+    for (const node of input.nodes) if (node.color) colors.add(node.color);
+    const laneColors = [...(input.laneOrder ?? []).filter((color) => colors.has(color)), ...[...colors].filter((color) => !(input.laneOrder ?? []).includes(color)).sort()];
+
+    const laneTrees = new Map<string, { homeId: number | null; roots: number[]; childrenOf: Map<number, number[]> }>();
+    for (const color of laneColors) {
+        const laneIds = input.nodes.filter((node) => node.color === color).map((node) => node.id);
+        const laneSet = new Set(laneIds);
+        const homeOfLane = laneIds.find((id) => isHome(id)) ?? null;
+        const childrenOf = new Map<number, number[]>();
+        const roots: number[] = [];
+        const placed = new Set<number>();
+        const grow = (root: number): void => {
+            roots.push(root);
+            placed.add(root);
+            bandOf.set(root, 'lane');
+            childrenOf.set(root, []);
+            const queue = [root];
+            while (queue.length > 0) {
+                const id = queue.shift()!;
+                for (const neighbour of adjacency.get(id) ?? []) {
+                    if (!laneSet.has(neighbour) || placed.has(neighbour)) continue;
+                    placed.add(neighbour);
+                    bandOf.set(neighbour, 'lane');
+                    parentOf.set(neighbour, id);
+                    childrenOf.get(id)!.push(neighbour);
+                    childrenOf.set(neighbour, []);
+                    queue.push(neighbour);
+                }
+            }
+        };
+        if (homeOfLane !== null) grow(homeOfLane);
+        for (const id of laneIds.toSorted(compareLane)) {
+            if (!placed.has(id) && !isPlaceholder(id)) grow(id);
+        }
+        // A placeholder whose parent is elsewhere: give it its own spot at the end.
+        for (const id of laneIds) {
+            if (!placed.has(id)) grow(id);
+        }
+        for (const children of childrenOf.values()) children.sort(compareLane);
+        for (const id of placed) visited.add(id);
+        laneTrees.set(color, { homeId: homeOfLane, roots, childrenOf });
+    }
+
+    // --- Placement ----------------------------------------------------------
     const positions = new Map<number, Vec2>();
     const ghosts: BandGhost[] = [];
+    const lanes: BandLane[] = [];
     let cursorY = marginY;
 
     const placeTree = (root: number, childrenOf: Map<number, number[]>, top: number): { bottom: number; right: number } => {
@@ -242,7 +348,7 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         for (const id of order) {
             const point = { x: snap(marginX + depthOf.get(id)! * levelGap), y: snap(top + cross.get(id)! - minCross) };
             bottom = Math.max(bottom, point.y);
-            right = Math.max(right, point.x);
+            right = Math.max(right, point.x + nodeWidth);
             const ghost = ghostInfo.get(id);
             if (ghost) {
                 ghosts.push({ key: `ghost-${id}`, position: point, label: ghost.label, note: ghost.note, color: ghost.color });
@@ -253,116 +359,15 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         return { bottom, right };
     };
 
-    const bandRect = (top: number, bottom: number, right: number): BandRect => ({
-        minX: marginX - anchorX - 20,
-        minY: top - anchorY - 20,
-        maxX: right - anchorX + nodeWidth + 20,
-        maxY: bottom - anchorY + nodeHeight + 20,
-    });
-
-    // --- Main band --------------------------------------------------------
-    let mainBand: BandRect | null = null;
-    const homeId = input.homeId !== null && adjacency.has(input.homeId) && !colorOf(input.homeId) ? input.homeId : null;
-    if (homeId !== null) {
-        const childrenOf = growBand(homeId, 'main');
-        const reserved = input.reservedAlias?.trim().toUpperCase() || null;
-        if (reserved) {
-            const daisyChildren = childrenOf.get(homeId)!;
-            const holdsReserved = daisyChildren.some((id) => (aliasFor(id) ?? '').trim().toUpperCase() === reserved);
-            if (!holdsReserved) {
-                ghostInfo.set(reservedGhostId, { label: reserved, note: 'kept free', color: null, alias: reserved, realId: null });
-                daisyChildren.push(reservedGhostId);
-                childrenOf.set(reservedGhostId, []);
-                daisyChildren.sort(compare);
-            }
-        }
-        const { bottom, right } = placeTree(homeId, childrenOf, cursorY);
-        mainBand = bandRect(cursorY, bottom, right);
-        cursorY = bottom + nodeHeight + bandGap + rowGap / 2;
-    }
-
-    // --- Side band: everything uncolored not linked to Daisy ---------------
-    const sideChains: BandSideChain[] = [];
-    let sideBand: BandRect | null = null;
-    const sideTop = cursorY;
-    let sideBottom = cursorY;
-    let sideRight = marginX;
-    const leftovers = input.nodes
-        .map((node) => node.id)
-        .filter((id) => !visited.has(id) && !isMember(id) && !isHome(id) && !isPlaceholder(id));
-    while (leftovers.some((id) => !visited.has(id))) {
-        const component = collectComponent(
-            leftovers.find((id) => !visited.has(id))!,
-            adjacency,
-            (id) => !isMember(id) && !isHome(id),
-        );
-        const root = pickSideRoot(component, byId, adjacency);
-        const childrenOf = growBand(root, 'side');
-        const members = [...childrenOf.keys()].filter((id) => !ghostInfo.has(id));
-        sideChains.push({ rootId: root, memberIds: members });
-        const { bottom, right } = placeTree(root, childrenOf, cursorY);
-        sideBottom = bottom;
-        sideRight = Math.max(sideRight, right);
-        cursorY = bottom + rowGap + rowGap / 2;
-    }
-    if (sideChains.length > 0) {
-        sideBand = bandRect(sideTop, sideBottom, sideRight);
-        cursorY = sideBottom + nodeHeight + bandGap + rowGap / 2;
-    }
-
-    // --- Combat lanes, side by side --------------------------------------
-    const lanes: BandLane[] = [];
-    const colors = new Set<string>();
-    for (const node of input.nodes) if (node.color) colors.add(node.color);
-    const laneColors = [...(input.laneOrder ?? []).filter((color) => colors.has(color)), ...[...colors].filter((color) => !(input.laneOrder ?? []).includes(color)).sort()];
-
-    const lanesTop = cursorY;
-    let laneLeft = marginX;
-    for (const color of laneColors) {
-        const laneIds = input.nodes.filter((node) => node.color === color).map((node) => node.id);
-        const laneSet = new Set(laneIds);
-        const homeOfLane = laneIds.find((id) => isHome(id)) ?? null;
-
-        // The chain's own tree: from the home, through its own systems only.
-        const childrenOf = new Map<number, number[]>();
-        const roots: number[] = [];
-        const grow = (root: number): void => {
-            roots.push(root);
-            visited.add(root);
-            bandOf.set(root, 'lane');
-            childrenOf.set(root, []);
-            const queue = [root];
-            while (queue.length > 0) {
-                const id = queue.shift()!;
-                for (const neighbour of adjacency.get(id) ?? []) {
-                    if (!laneSet.has(neighbour) || visited.has(neighbour) || bandOf.get(neighbour) === 'lane') continue;
-                    visited.add(neighbour);
-                    bandOf.set(neighbour, 'lane');
-                    parentOf.set(neighbour, id);
-                    childrenOf.get(id)!.push(neighbour);
-                    childrenOf.set(neighbour, []);
-                    queue.push(neighbour);
-                }
-            }
-        };
-        if (homeOfLane !== null) grow(homeOfLane);
-        for (const id of laneIds.toSorted(compareLane)) {
-            if (bandOf.get(id) !== 'lane' && !isPlaceholder(id)) grow(id);
-        }
-        // A placeholder whose parent is elsewhere: give it its own spot at the end.
-        for (const id of laneIds) {
-            if (bandOf.get(id) !== 'lane') grow(id);
-        }
-        for (const children of childrenOf.values()) children.sort(compareLane);
-
-        // First child straight down, every other child starts a new column to the right.
+    /** One lane at (left, top): first child straight down, every other child a new column to the right. */
+    const placeLane = (color: string, left: number, top: number, parentId: number | null): { right: number; bottom: number } => {
+        const lane = laneTrees.get(color)!;
         let lastColumn = -1;
         let maxRow = 0;
         const place = (id: number, column: number, row: number): void => {
-            positions.set(id, { x: snap(laneLeft + column * laneColumnGap), y: snap(lanesTop + row * rowGap) });
+            positions.set(id, { x: snap(left + column * laneColumnGap), y: snap(top + row * laneRowGap) });
             maxRow = Math.max(maxRow, row);
-            const children = childrenOf.get(id) ?? [];
-            children.forEach((child, index) => {
+            (lane.childrenOf.get(id) ?? []).forEach((child, index) => {
                 if (index === 0) {
                     place(child, column, row + 1);
                 } else {
@@ -371,33 +376,113 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
                 }
             });
         };
-        for (const root of roots) {
+        for (const root of lane.roots) {
             lastColumn += 1;
             place(root, lastColumn, 0);
         }
-
-        const right = laneLeft + lastColumn * laneColumnGap;
-        lanes.push({
+        const rect: BandLane = {
             color,
-            homeId: homeOfLane,
-            minX: laneLeft - anchorX - 20,
-            minY: lanesTop - anchorY - 36,
-            maxX: right - anchorX + nodeWidth + 20,
-            maxY: lanesTop + maxRow * rowGap - anchorY + nodeHeight + 24,
-        });
-        laneLeft = snap(right + nodeWidth + laneGap + 40);
+            homeId: lane.homeId,
+            parentId,
+            minX: left - anchorX - 14,
+            minY: top - anchorY - 26,
+            maxX: left + Math.max(0, lastColumn) * laneColumnGap - anchorX + laneNodeWidth + 14,
+            maxY: top + maxRow * laneRowGap - anchorY + laneNodeHeight + 14,
+        };
+        lanes.push(rect);
+        return { right: rect.maxX, bottom: rect.maxY };
+    };
+
+    /** The lanes hanging off one band's systems, under the band's own systems (patch 13). */
+    const placeLinkedLanes = (band: 'main' | 'side', members: Set<number>, top: number): { right: number; bottom: number } => {
+        let laneLeft = -Infinity;
+        let right = -Infinity;
+        let bottom = top;
+        for (const color of laneColors) {
+            const lane = laneTrees.get(color)!;
+            const link = lane.homeId !== null ? laneLinks.get(lane.homeId) : undefined;
+            if (!link || link.band !== band || !members.has(link.parent)) continue;
+            const parentPosition = positions.get(link.parent);
+            const desired = parentPosition ? parentPosition.x + Math.round(levelGap / 2) : marginX;
+            const left = snap(Math.max(desired, laneLeft));
+            const placed = placeLane(color, left, top, link.parent);
+            laneLeft = placed.right + anchorX + laneGap / 2;
+            right = Math.max(right, placed.right);
+            bottom = Math.max(bottom, placed.bottom);
+        }
+        return { right, bottom };
+    };
+
+    const bandRect = (top: number, bottom: number, right: number): BandRect => ({
+        minX: marginX - anchorX - 20,
+        minY: top - anchorY - 20,
+        maxX: right - anchorX + 20,
+        maxY: bottom + 20,
+    });
+
+    // Main band, with the lanes that hang off it.
+    let mainBand: BandRect | null = null;
+    if (homeId !== null && mainTree) {
+        const { bottom, right } = placeTree(homeId, mainTree, cursorY);
+        const linked = placeLinkedLanes('main', new Set(mainTree.keys()), bottom + rowGap);
+        const bandBottom = Math.max(bottom - anchorY + nodeHeight, linked.bottom);
+        mainBand = bandRect(cursorY, bandBottom, Math.max(right, linked.right + anchorX));
+        cursorY = bandBottom + bandGap + anchorY + 20;
+    }
+
+    // Combat chains not linked to anything: their own area, between the main chain and the side chains.
+    let combatBand: BandRect | null = null;
+    const unlinked = laneColors.filter((color) => !lanes.some((lane) => lane.color === color));
+    const linkedToSide = new Set(
+        laneColors.filter((color) => {
+            const home = laneTrees.get(color)!.homeId;
+            return home !== null && laneLinks.get(home)?.band === 'side';
+        }),
+    );
+    const standalone = unlinked.filter((color) => !linkedToSide.has(color));
+    if (standalone.length > 0) {
+        const top = cursorY + 20;
+        let left = marginX;
+        let right = marginX;
+        let bottom = top;
+        for (const color of standalone) {
+            const placed = placeLane(color, left, top, null);
+            left = snap(placed.right + anchorX + laneGap / 2);
+            right = Math.max(right, placed.right);
+            bottom = Math.max(bottom, placed.bottom);
+        }
+        combatBand = { minX: marginX - anchorX - 20, minY: top - anchorY - 40, maxX: right + 20, maxY: bottom + 16 };
+        cursorY = bottom + bandGap + anchorY + 20;
+    }
+
+    // Side chains, each with the lanes that hang off it.
+    let sideBand: BandRect | null = null;
+    if (sideTrees.length > 0) {
+        const sideTop = cursorY;
+        let sideBottom = cursorY;
+        let sideRight = marginX;
+        for (const { root, tree } of sideTrees) {
+            const { bottom, right } = placeTree(root, tree, cursorY);
+            const linked = placeLinkedLanes('side', new Set(tree.keys()), bottom + rowGap);
+            const blockBottom = Math.max(bottom - anchorY + nodeHeight, linked.bottom);
+            sideBottom = blockBottom;
+            sideRight = Math.max(sideRight, right, linked.right + anchorX);
+            cursorY = blockBottom + rowGap + anchorY;
+        }
+        sideBand = bandRect(sideTop, sideBottom, sideRight);
+        cursorY = sideBottom + bandGap + anchorY;
     }
 
     // Anything left (a placeholder without a placed parent): park it below everything.
     let parkX = marginX;
-    const parkY = snap(lanes.length > 0 ? Math.max(...lanes.map((lane) => lane.maxY)) + bandGap + anchorY : cursorY);
+    const parkY = snap(cursorY);
     for (const node of input.nodes) {
         if (positions.has(node.id)) continue;
         positions.set(node.id, { x: snap(parkX), y: parkY });
-        parkX += laneColumnGap;
+        parkX += levelGap / 2;
     }
 
-    return { positions, ghosts, lanes, mainBand, sideBand, parentOf, bandOf, sideChains };
+    return { positions, ghosts, lanes, mainBand, sideBand, combatBand, parentOf, bandOf, sideChains };
 }
 
 /** Every system reachable from `start` through systems that pass `allowed`. */

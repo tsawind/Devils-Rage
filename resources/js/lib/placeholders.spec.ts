@@ -39,4 +39,42 @@ describe('patch 12: placeholder systems', () => {
         expect(holeDestination('unknown')).toBe('?');
         expect(holeDestination(null)).toBe('?');
     });
+
+    it('patch 13: shows the statics a system must have that nobody has scanned', () => {
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
+            { id: 1, alias: 'Daisy', solarsystem: { class: '5', statics: [{ name: 'H296', leads_to: 'c5' }] }, pending_holes: [] },
+            // Alpha: a C6 with a V911 (C5) static, found from Daisy through Daisy's own static (H296 on Daisy's side).
+            { id: 2, alias: 'A', solarsystem: { class: '6', statics: [{ name: 'V911', leads_to: 'c5' }] }, pending_holes: [] },
+        ];
+        const connections = [{ from_map_solarsystem_id: 1, to_map_solarsystem_id: 2, signatures: [{ id: 9, map_solarsystem_id: 1, wormhole: { name: 'H296' } }] }];
+        const placeholders = buildPlaceholders(systems, FORMATS, new Set(), { connections, parentOf: new Map([[2, 1]]), homeId: 1 });
+        const expected = placeholders.filter((placeholder) => placeholder.expected);
+        // Daisy's static is linked (H296 on Daisy's side) so only Alpha's is missing: A0, no note.
+        expect(expected.map((placeholder) => placeholder.label)).toEqual(['A0']);
+        expect(expected[0].detail).toBe('V911 → C5 static · not scanned');
+        expect(expected[0].note).toBe(null);
+    });
+
+    it('patch 13: notes when the way back could be the static', () => {
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
+            { id: 2, alias: 'A', solarsystem: { class: '6', statics: [] }, pending_holes: [] },
+            // A1: a C5 with a V753 (C6) static, found through a K162 on Alpha's side.
+            { id: 3, alias: 'A1', solarsystem: { class: '5', statics: [{ name: 'V753', leads_to: 'c6' }] }, pending_holes: [] },
+        ];
+        const connections = [{ from_map_solarsystem_id: 2, to_map_solarsystem_id: 3, signatures: [{ id: 9, map_solarsystem_id: 2, wormhole: { name: 'K162' } }] }];
+        const expected = buildPlaceholders(systems, FORMATS, new Set(), { connections, parentOf: new Map([[3, 2]]), homeId: null }).filter((placeholder) => placeholder.expected);
+        expect(expected).toHaveLength(1);
+        expect(expected[0].label).toBe('A10');
+        expect(expected[0].note).toBe('maybe *return?');
+    });
+
+    it('patch 13: a scanned hole of the static type accounts for it; unlinked systems get none', () => {
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
+            { id: 3, alias: 'A1', solarsystem: { class: '5', statics: [{ name: 'V753', leads_to: 'c6' }] }, pending_holes: [{ id: 50, signature_id: 'QRT-111', alias: null, is_static: false, target_class: '6', wormhole: 'V753' }] },
+            { id: 4, alias: null, solarsystem: { class: '3', statics: [{ name: 'D845', leads_to: 'hs' }] }, pending_holes: [] },
+        ];
+        const connections = [{ from_map_solarsystem_id: 2, to_map_solarsystem_id: 3, signatures: [] }];
+        const expected = buildPlaceholders(systems, FORMATS, new Set(), { connections, parentOf: new Map(), homeId: null }).filter((placeholder) => placeholder.expected);
+        expect(expected).toHaveLength(0);
+    });
 });

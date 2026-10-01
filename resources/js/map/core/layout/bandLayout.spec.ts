@@ -78,9 +78,11 @@ describe('computeBandLayout', () => {
             reservedAlias: 'A',
         });
         const p = result.positions;
-        // Ghosts hold Alpha's and Bravo's spots in the main band.
-        expect(result.ghosts.map((ghost) => ghost.label).sort()).toEqual(['A', 'B']);
-        // Lanes below the main band.
+        // Patch 13: no ghost for a combat home; Alpha's row is still kept free.
+        expect(result.ghosts.map((ghost) => ghost.label)).toEqual(['A']);
+        // Lanes hang off Daisy inside the main band, below its systems.
+        expect(result.lanes.every((lane) => lane.parentId === 1)).toBe(true);
+        expect(result.combatBand).toBe(null);
         expect(p.get(2)!.y).toBeGreaterThan(p.get(8)!.y);
         // Blue started first: its lane is on the left.
         expect(p.get(3)!.x).toBeLessThan(p.get(2)!.x);
@@ -88,7 +90,8 @@ describe('computeBandLayout', () => {
         // Red drops straight down: home, 1, 11; 12 starts a column to the right.
         expect(p.get(4)!.x).toBe(p.get(2)!.x);
         expect(p.get(5)!.x).toBe(p.get(2)!.x);
-        expect(p.get(4)!.y - p.get(2)!.y).toBe(100);
+        // Compact lanes: rows 60 apart.
+        expect(p.get(4)!.y - p.get(2)!.y).toBe(60);
         expect(p.get(6)!.x).toBeGreaterThan(p.get(5)!.x);
         expect(p.get(6)!.y).toBe(p.get(5)!.y);
         // Daisy → Alpha is how Alpha was found, not a loop.
@@ -192,5 +195,117 @@ describe('computeBandLayout', () => {
         });
         expect(result.positions.get(3)!.x).toBe(result.positions.get(2)!.x);
         expect(result.positions.get(-5)!.x).toBeGreaterThan(result.positions.get(2)!.x);
+    });
+
+    it('patch 13: puts a lane under the system it hangs off, that branch at the bottom', () => {
+        const nodes = [
+            sys(DAISY, 'Daisy'),
+            sys(2, 'A'),
+            sys(3, 'B'),
+            sys(4, 'D'),
+            sys(5, 'D1', { color: 'red', home: true }),
+            sys(6, '1', { color: 'red' }),
+            sys(7, 'A1'),
+        ];
+        const result = computeBandLayout({
+            nodes,
+            edges: [
+                { from: 1, to: 2 },
+                { from: 1, to: 3 },
+                { from: 1, to: 4 },
+                { from: 4, to: 5 },
+                { from: 5, to: 6 },
+                { from: 2, to: 7 },
+            ],
+            homeId: DAISY,
+            laneOrder: ['red'],
+            compareNodes: byAlias(nodes),
+            reservedAlias: 'A',
+        });
+        const p = result.positions;
+        // Delta (leads to Red) sorts below Bravo, though D comes after B anyway; Alpha stays on top.
+        expect(p.get(4)!.y).toBeGreaterThan(p.get(3)!.y);
+        expect(p.get(4)!.y).toBeGreaterThan(p.get(2)!.y);
+        // The lane starts below the main chain's systems, to the right of Delta, inside the main band.
+        expect(p.get(5)!.y).toBeGreaterThan(p.get(4)!.y);
+        expect(p.get(5)!.x).toBeGreaterThan(p.get(4)!.x);
+        expect(result.lanes[0].parentId).toBe(4);
+        expect(result.mainBand!.maxY).toBeGreaterThanOrEqual(result.lanes[0].maxY);
+    });
+
+    it('patch 13: sorts a branch leading to a lane after its siblings', () => {
+        const nodes = [sys(DAISY, 'Daisy'), sys(2, 'A'), sys(3, 'B'), sys(5, 'A1', { color: 'red', home: true })];
+        const result = computeBandLayout({
+            nodes,
+            edges: [
+                { from: 1, to: 2 },
+                { from: 1, to: 3 },
+                { from: 2, to: 5 },
+            ],
+            homeId: DAISY,
+            laneOrder: ['red'],
+            compareNodes: byAlias(nodes),
+            reservedAlias: 'A',
+        });
+        // Alpha leads to Red, so it goes below Bravo.
+        expect(result.positions.get(2)!.y).toBeGreaterThan(result.positions.get(3)!.y);
+    });
+
+    it('patch 13: unlinked chains sit between the main chain and the side chains', () => {
+        const nodes = [
+            sys(DAISY, 'Daisy'),
+            sys(2, 'A'),
+            sys(10, null),
+            sys(11, '1'),
+            sys(30, null, { color: 'green', home: true }),
+            sys(31, '1', { color: 'green' }),
+        ];
+        const result = computeBandLayout({
+            nodes,
+            edges: [
+                { from: 1, to: 2 },
+                { from: 10, to: 11 },
+                { from: 30, to: 31 },
+            ],
+            homeId: DAISY,
+            laneOrder: ['green'],
+            compareNodes: byAlias(nodes),
+            reservedAlias: 'A',
+        });
+        const p = result.positions;
+        expect(result.combatBand).not.toBe(null);
+        expect(p.get(30)!.y).toBeGreaterThan(p.get(2)!.y);
+        expect(p.get(10)!.y).toBeGreaterThan(p.get(31)!.y);
+        expect(result.lanes[0].parentId).toBe(null);
+    });
+
+    it('patch 13: a lane linked to a side chain sits inside the side chains', () => {
+        const nodes = [
+            sys(DAISY, 'Daisy'),
+            sys(2, 'A'),
+            sys(10, null),
+            sys(11, '1'),
+            sys(12, '11'),
+            sys(20, '111', { color: 'blue', home: true }),
+            sys(21, '1', { color: 'blue' }),
+        ];
+        const result = computeBandLayout({
+            nodes,
+            edges: [
+                { from: 1, to: 2 },
+                { from: 10, to: 11 },
+                { from: 11, to: 12 },
+                { from: 12, to: 20 },
+                { from: 20, to: 21 },
+            ],
+            homeId: DAISY,
+            laneOrder: ['blue'],
+            compareNodes: byAlias(nodes),
+            reservedAlias: 'A',
+        });
+        expect(result.combatBand).toBe(null);
+        expect(result.lanes[0].parentId).toBe(12);
+        expect(result.positions.get(20)!.y).toBeGreaterThan(result.positions.get(12)!.y);
+        expect(result.sideBand!.maxY).toBeGreaterThanOrEqual(result.lanes[0].maxY);
     });
 });

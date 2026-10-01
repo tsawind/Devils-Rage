@@ -1,6 +1,7 @@
 import { isWormholeClass } from '@/const/solarsystemClasses';
-import { displayAlias, planSignatureAliases, type TAliasScheme } from '@/lib/alias';
+import { displayAlias, planSignatureAliases, staticSlotAlias, suggestAlias, type TAliasScheme } from '@/lib/alias';
 import { chainAliases } from '@/lib/combat';
+import { classCode, wayBackCouldBe } from '@/lib/staticCertainty';
 import type { TStringedSolarsystemClass } from '@/types/models';
 
 /**
@@ -29,9 +30,20 @@ type TPlaceholderSystem = {
     alias?: string | null;
     combat_color?: string | null;
     combat_home?: boolean | null;
-    solarsystem?: { class?: TStringedSolarsystemClass | null } | null;
+    solarsystem?: { class?: TStringedSolarsystemClass | null; statics?: { name: string; leads_to: string }[] | null } | null;
     pending_holes?: TPlaceholderHole[] | null;
 };
+
+/** A connection as the expected-statics check needs it (patch 13). */
+type TPlaceholderConnection = {
+    from_map_solarsystem_id: number;
+    to_map_solarsystem_id: number;
+    type?: string | null;
+    signatures?: { id: number; map_solarsystem_id: number; is_static?: boolean | null; wormhole?: { name: string } | null }[] | null;
+};
+
+/** Ids for expected statics (no signature yet): far below any signature's placeholder id. */
+const EXPECTED_BASE = 2_000_000_000;
 
 export type TPlaceholder = {
     /** Negative node id (see placeholderNodeId). */
@@ -51,6 +63,10 @@ export type TPlaceholder = {
     wormhole: string | null;
     massStatus: string | null;
     lifetime: string | null;
+    /** Patch 13: a static the system must have that nobody has scanned yet (no signature: signatureId 0). */
+    expected?: boolean;
+    /** Patch 13: "maybe *return?" when the way back could be this static. */
+    note?: string | null;
 };
 
 const KSPACE: Record<string, string> = { h: 'HS', l: 'LS', n: 'NS', p: 'Pochven' };
@@ -71,6 +87,8 @@ export function buildPlaceholders(
     systems: readonly TPlaceholderSystem[],
     formats: { bookmark_alias_scheme?: TAliasScheme; bookmark_ignored_alias?: string },
     linkedSignatureIds: ReadonlySet<number> = new Set(),
+    /** Patch 13: connections and the way each system was found, for its unscanned statics. */
+    context?: { connections: readonly TPlaceholderConnection[]; parentOf: ReadonlyMap<number, number>; homeId: number | null },
 ): TPlaceholder[] {
     const result: TPlaceholder[] = [];
     for (const system of systems) {
@@ -114,6 +132,111 @@ export function buildPlaceholders(
                 lifetime: hole.lifetime ?? null,
             });
         }
+    }
+    if (context) result.push(...expectedStatics(systems, formats, context, result));
+    return result;
+}
+
+/**
+ * Patch 13: every wormhole system in a chain shows the statics it must have
+ * that nobody has scanned yet, as dashed systems: the first takes the static's
+ * number (A0, Alpha off Daisy), the others the next free numbers; combat
+ * chains leave them unnumbered. When the way back could be one of them it
+ * gets the note "maybe *return?".
+ */
+function expectedStatics(
+    systems: readonly TPlaceholderSystem[],
+    formats: { bookmark_alias_scheme?: TAliasScheme; bookmark_ignored_alias?: string },
+    context: { connections: readonly TPlaceholderConnection[]; parentOf: ReadonlyMap<number, number>; homeId: number | null },
+    holes: readonly TPlaceholder[],
+): TPlaceholder[] {
+    const byId = new Map(systems.map((system) => [system.id, system]));
+    const result: TPlaceholder[] = [];
+
+    for (const system of systems) {
+        const statics = system.solarsystem?.statics ?? [];
+        if (statics.length === 0 || !isWormholeClass(system.solarsystem?.class ?? null)) continue;
+
+        const touching = context.connections.filter(
+            (connection) => connection.from_map_solarsystem_id === system.id || connection.to_map_solarsystem_id === system.id,
+        );
+        // Only systems that are part of a chain (linked to something, or home).
+        if (touching.length === 0 && system.id !== context.homeId) continue;
+
+        // Types already seen in this system: unjumped holes and the linked ones on this side.
+        const seen: string[] = (system.pending_holes ?? []).map((hole) => (hole.wormhole ?? '').toUpperCase());
+        let markedStatics = (system.pending_holes ?? []).filter((hole) => hole.is_static && !hole.wormhole).length;
+        let wayBack: { thisSideType: string | null; farSideType: string | null; leadsTo: string | null; signatureId: number | null } | null = null;
+        const parentId = context.parentOf.get(system.id) ?? null;
+        for (const connection of touching) {
+            const thisSide = (connection.signatures ?? []).find((signature) => signature.map_solarsystem_id === system.id) ?? null;
+            const farSide = (connection.signatures ?? []).find((signature) => signature.map_solarsystem_id !== system.id) ?? null;
+            if (thisSide?.wormhole?.name) seen.push(thisSide.wormhole.name.toUpperCase());
+            else if (thisSide?.is_static) markedStatics++;
+            const otherId = connection.from_map_solarsystem_id === system.id ? connection.to_map_solarsystem_id : connection.from_map_solarsystem_id;
+            if (otherId === parentId && connection.type !== 'stargate') {
+                wayBack = {
+                    signatureId: thisSide?.id ?? null,
+                    thisSideType: thisSide?.wormhole?.name ?? null,
+                    farSideType: farSide?.wormhole?.name ?? null,
+                    leadsTo: classCode(byId.get(otherId)?.solarsystem?.class ?? null),
+                };
+            }
+        }
+
+        const staticList = statics.map((candidate) => ({ name: candidate.name, leadsTo: candidate.leads_to }));
+        const maybeBack = wayBackCouldBe(staticList, wayBack);
+
+        const missing = statics.filter((candidate) => {
+            const index = seen.indexOf(candidate.name.toUpperCase());
+            if (index === -1) return true;
+            seen.splice(index, 1);
+            return false;
+        });
+        // A hole marked static without a type accounts for one static.
+        const unscanned = missing.slice(Math.min(markedStatics, missing.length));
+        if (unscanned.length === 0) continue;
+
+        const limbo = Boolean(system.combat_color);
+        const taken = [
+            ...chainAliases(systems, system),
+            ...holes.filter((hole) => hole.parentId === system.id && hole.alias).map((hole) => hole.alias as string),
+        ];
+        const staticSlot = staticSlotAlias(system.alias, formats.bookmark_ignored_alias, Boolean(system.combat_home));
+        unscanned.forEach((candidate, index) => {
+            let alias: string | null = null;
+            if (!limbo) {
+                alias =
+                    index === 0 && !taken.map((value) => value.toUpperCase()).includes(staticSlot.toUpperCase())
+                        ? staticSlot
+                        : suggestAlias({
+                              parentAlias: system.alias,
+                              targetIsWormhole: true,
+                              originIsWormhole: true,
+                              aliases: taken,
+                              scheme: formats.bookmark_alias_scheme,
+                              ignoredAlias: formats.bookmark_ignored_alias,
+                              combatHome: Boolean(system.combat_home),
+                          });
+                if (alias) taken.push(alias);
+            }
+            const leadsTo = candidate.leads_to.toUpperCase();
+            result.push({
+                nodeId: -(EXPECTED_BASE + system.id * 4 + index),
+                signatureId: 0,
+                parentId: system.id,
+                color: system.combat_color ?? null,
+                alias,
+                label: alias ? displayAlias(alias, formats.bookmark_alias_scheme) : limbo ? `static ${leadsTo}` : '—',
+                detail: `${candidate.name} → ${leadsTo} static · not scanned`,
+                isStatic: true,
+                wormhole: candidate.name,
+                massStatus: null,
+                lifetime: null,
+                expected: true,
+                note: maybeBack.some((name) => name.toUpperCase() === candidate.name.toUpperCase()) ? 'maybe *return?' : null,
+            });
+        });
     }
     return result;
 }

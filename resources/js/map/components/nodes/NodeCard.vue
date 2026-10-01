@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { isWormholeClass } from '@/const/solarsystemClasses';
+import { displayAlias } from '@/lib/alias';
 import { combatColorHex, combatColorLabel } from '@/lib/combat';
 import SolarsystemName from '@/map/components/solarsystem/SolarsystemName.vue';
 import SolarsystemPilots from '@/map/components/solarsystem/SolarsystemPilots.vue';
@@ -33,6 +34,7 @@ const {
     pilots,
     threatLevel = null,
     isDeadEnd = false,
+    compact = false,
 } = defineProps<{
     system: TMapSolarsystem;
     pilots: TCharacter[];
@@ -45,6 +47,8 @@ const {
     threatLevel?: TThreatLevel | null;
     /** Fully scanned with no way on: shown faded. */
     isDeadEnd?: boolean;
+    /** A combat lane system (patch 13, rage scanning): small, the number big, J-code and class tiny. */
+    compact?: boolean;
 }>();
 
 // ---- Combat chains ------------------------------------------------------------
@@ -145,14 +149,14 @@ function handleSubmit() {
         :data-selected="isSelected"
         :data-hovered="isHovered"
         :data-status="system.status"
-        :data-has-pilots="pilots.length > 0"
+        :data-has-pilots="pilots.length > 0 && !compact"
         :data-is-active="isActive"
         :data-threat-level="threatLevel"
         :data-dead-end="isDeadEnd"
         :title="isDeadEnd ? 'Dead end: fully scanned, no other holes' : undefined"
         :style="chainStyle"
         class="relative grid h-[40px] rounded border border-neutral-300 bg-white text-left text-xs ring-offset-2 ring-offset-neutral-50 transition-colors duration-200 ease-in-out select-none hover:bg-white focus:bg-white data-[has-pilots=true]:h-[60px] data-[hovered=true]:outline-2 data-[hovered=true]:outline-yellow-500 data-[is-active=true]:ring-2 data-[is-active=true]:ring-amber-500 data-[selected=true]:bg-amber-100 data-[status=active]:border-active data-[status=empty]:border-empty data-[status=friendly]:border-friendly data-[status=hostile]:border-hostile data-[status=unknown]:border-unknown data-[is-active=false]:data-[threat-level=critical]:ring-2 data-[is-active=false]:data-[threat-level=critical]:ring-threat-critical data-[is-active=false]:data-[threat-level=high]:ring-2 data-[is-active=false]:data-[threat-level=high]:ring-threat-high dark:border-neutral-700 dark:bg-neutral-900 dark:ring-offset-neutral-900 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800 dark:data-[is-active=true]:ring-2 dark:data-[is-active=true]:ring-amber-500 dark:data-[selected=true]:bg-amber-900 dark:data-[status=active]:border-active dark:data-[status=empty]:border-empty dark:data-[status=friendly]:border-friendly dark:data-[status=hostile]:border-hostile dark:data-[status=unscanned]:border-unscanned data-[dead-end=true]:opacity-60 data-[dead-end=true]:saturate-50 data-[dead-end=true]:hover:opacity-100"
-        :class="{ 'w-[180px]': fixedWidth }"
+        :class="compact ? '!h-[26px] !w-[80px]' : { 'w-[180px]': fixedWidth }"
         @dblclick="openEditor()"
         @drag.prevent
     >
@@ -178,7 +182,22 @@ function handleSubmit() {
         >
             was {{ previousChain }}
         </div>
-        <div class="row-start-1 grid grid-cols-[auto_1fr_auto] items-center justify-center gap-x-1 px-2">
+        <!-- Compact (combat lane): the number big, J-code and class tiny on the right; the rest on hover -->
+        <div
+            v-if="compact"
+            class="flex h-full items-center justify-between gap-1 overflow-hidden px-1.5"
+            :title="`${displayAlias(system.alias) || resolvedSolarsystem.name} · ${resolvedSolarsystem.name}${pilots.length ? ` · ${pilots.length} pilot${pilots.length === 1 ? '' : 's'}` : ''}`"
+        >
+            <span class="truncate text-[15px] leading-none font-bold">{{ displayAlias(system.alias) || '·' }}</span>
+            <span class="flex shrink-0 flex-col items-end leading-[9px]">
+                <span class="text-[7.5px] text-muted-foreground">{{ resolvedSolarsystem.name }}</span>
+                <span class="flex items-center gap-0.5 text-[8px] font-semibold">
+                    <span v-if="pilots.length" class="rounded-full bg-sky-500/80 px-[3px] text-[7px] text-white">{{ pilots.length }}</span>
+                    <SolarsystemClass :solarsystem_class="resolvedSolarsystem.class" class="!text-[8px]" />
+                </span>
+            </span>
+        </div>
+        <div v-else class="row-start-1 grid grid-cols-[auto_1fr_auto] items-center justify-center gap-x-1 px-2">
             <SolarsystemClass :solarsystem_class="resolvedSolarsystem.class" />
             <Popover :open="open" @update:open="(value) => open && (open = value)">
                 <PopoverAnchor class="col-start-2 row-start-1 min-w-0">
@@ -242,7 +261,7 @@ function handleSubmit() {
             />
             <SolarsystemStatics v-else-if="resolvedSolarsystem.statics" :statics="resolvedSolarsystem.statics" />
         </div>
-        <SolarsystemPilots v-if="pilots.length" :pilots />
+        <SolarsystemPilots v-if="pilots.length && !compact" :pilots />
     </div>
 </template>
 

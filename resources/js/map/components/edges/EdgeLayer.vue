@@ -67,7 +67,8 @@ const treeGeometries = computed<Map<number, EdgeGeometry> | null>(() => {
     const layout = store.bandLayout.value;
     for (const placeholder of store.placeholders.value) {
         const anchor = layout?.positions.get(placeholder.nodeId);
-        if (anchor) rects.set(placeholder.nodeId, nodeRect(anchor, { width: 180, height: 40 }));
+        const compact = layout?.bandOf.get(placeholder.nodeId) === 'lane';
+        if (anchor) rects.set(placeholder.nodeId, nodeRect(anchor, compact ? { width: 80, height: 26 } : { width: 180, height: 40 }));
     }
 
     return computeTreeEdgeGeometries(edges, rects, anchors);

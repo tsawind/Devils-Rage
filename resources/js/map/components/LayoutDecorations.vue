@@ -34,6 +34,7 @@ const bands = computed(() => {
     // The main band only gets an outline once there is something else to set it apart from.
     const others = Boolean(current.sideBand) || current.lanes.length > 0;
     if (current.mainBand && others) result.push({ key: 'main', label: 'Main chain', style: boxStyle(current.mainBand) });
+    if (current.combatBand) result.push({ key: 'combat', label: 'Combat chains (not linked)', style: boxStyle(current.combatBand) });
     if (current.sideBand) result.push({ key: 'side', label: 'Side chains', style: boxStyle(current.sideBand) });
     return result;
 });

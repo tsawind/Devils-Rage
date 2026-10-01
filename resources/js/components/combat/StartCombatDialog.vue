@@ -114,6 +114,20 @@ function startHere(): void {
 
             <CountdownBar :remaining="remaining" :fraction="fraction" :action="defaultLabel" />
 
+            <ol class="grid gap-1.5 border-b border-border/50 px-6 py-3 text-xs text-muted-foreground">
+                <li>
+                    <span class="font-semibold text-foreground">1 · Paste</span> only the signature of the hole you want to jump. It's armed with
+                    the next number and its bookmark name is copied ("1 LIH C2").
+                </li>
+                <li>
+                    <span class="font-semibold text-foreground">2 · Jump.</span> Bookmark it in game as that number ("1" or paste), then jump. The
+                    way back is copied: paste it as your return bookmark.
+                </li>
+                <li>
+                    <span class="font-semibold text-foreground">3 · Repeat</span> in the new system. Popups answer themselves after 60 s.
+                </li>
+            </ol>
+
             <div class="grid gap-2 px-6 py-4">
                 <Button v-if="canStartHere" @click="startHere">Yes — start a new chain here</Button>
                 <Button

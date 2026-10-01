@@ -16,8 +16,8 @@ import { computed } from 'vue';
  */
 const store = useMapStore();
 
-const NODE_WIDTH = 180;
-const NODE_HEIGHT = 40;
+const FULL_WIDTH = 180;
+const FULL_HEIGHT = 40;
 
 const items = computed(() => {
     const layout = store.bandLayout.value;
@@ -32,7 +32,11 @@ const items = computed(() => {
         if (!position || !parentPosition || !parent) return [];
 
         const hex = combatColorHex(placeholder.color);
-        const parentSize = store.nodeSizes.get(placeholder.parentId) ?? { width: NODE_WIDTH, height: NODE_HEIGHT };
+        // Patch 13: compact in a combat lane, like the systems there.
+        const compact = layout.bandOf.get(placeholder.nodeId) === 'lane';
+        const NODE_WIDTH = compact ? 80 : FULL_WIDTH;
+        const NODE_HEIGHT = compact ? 26 : FULL_HEIGHT;
+        const parentSize = store.nodeSizes.get(placeholder.parentId) ?? { width: FULL_WIDTH, height: FULL_HEIGHT };
         const parentLeft = parentPosition.x - ANCHOR_OFFSET.x;
         const parentTop = parentPosition.y - ANCHOR_OFFSET.y;
         const left = position.x - ANCHOR_OFFSET.x;
@@ -41,7 +45,7 @@ const items = computed(() => {
         // Straight down when it sits under its system, else out of the system's right side.
         let path: string;
         if (left === parentLeft && top > parentTop) {
-            const x = (left + 50) * scale;
+            const x = (left + (compact ? 30 : 50)) * scale;
             path = `M ${x} ${(parentTop + parentSize.height) * scale} V ${top * scale}`;
         } else {
             const startX = parentLeft + parentSize.width;
@@ -57,7 +61,7 @@ const items = computed(() => {
         const mass = wormholeMass(placeholder.wormhole);
         const pipe = mass
             ? {
-                  width: isFrigateHole(mass.maxJump) ? 2 : pipeWidth(mass.total * 1.1) * Math.min(scale, 1.5),
+                  width: isFrigateHole(mass.maxJump) ? 2 : pipeWidth(mass.total * 1.1) * Math.min(scale, 1.5) * (compact ? 0.5 : 1),
                   color: placeholder.massStatus === 'critical' ? '#ef4444' : placeholder.massStatus === 'reduced' ? '#f59e0b' : '#a3a3a3',
                   eol: placeholder.lifetime === 'eol' || placeholder.lifetime === 'critical',
                   eolCritical: placeholder.lifetime === 'critical',
@@ -77,8 +81,16 @@ const items = computed(() => {
                     width: `${NODE_WIDTH * scale}px`,
                     height: `${NODE_HEIGHT * scale}px`,
                     ...(hex ? { borderColor: `${hex}b3` } : {}),
+                    // Expected statics (nothing scanned yet) are fainter than scanned holes.
+                    ...(placeholder.expected ? { opacity: '0.7', borderStyle: 'dotted' } : {}),
                 },
-                fontScale: scale,
+                fontScale: scale * (compact ? 0.8 : 1),
+                title: placeholder.expected
+                    ? `${placeholder.label || 'Static'}: this static isn't scanned yet${placeholder.note ? ' (it may be the hole you came in by)' : ''}`
+                    : placeholder.label
+                      ? `${placeholder.label}: not jumped yet (click to see its signature)`
+                      : 'Not jumped yet (click to see its signature)',
+                compact,
             },
         ];
     });
@@ -139,13 +151,28 @@ const items = computed(() => {
             preserve-state
             preserve-scroll
             :only="['map', 'selected_map_solarsystem', 'map_navigation', 'map_characters', 'eve_scout_connections', 'threat_analysis']"
-            :data-placeholder-id="item.signatureId"
-            :title="item.label ? `${item.label}: not jumped yet (click to see its signature)` : 'Not jumped yet (click to see its signature)'"
+            :data-placeholder-id="item.signatureId > 0 ? item.signatureId : undefined"
+            :title="item.title"
             class="pointer-events-auto absolute top-0 left-0 flex flex-col items-center justify-center rounded border border-dashed border-neutral-400 bg-white/40 leading-tight text-neutral-600 transition-colors hover:bg-white/80 dark:border-neutral-600 dark:bg-neutral-900/40 dark:text-neutral-300 dark:hover:bg-neutral-900/80"
             :style="item.style"
         >
-            <span class="font-medium" :style="{ fontSize: `${12 * item.fontScale}px` }">{{ item.label || '\u00a0' }}</span>
-            <span class="font-mono text-muted-foreground" :style="{ fontSize: `${10 * item.fontScale}px` }">{{ item.detail }}</span>
+            <template v-if="item.compact">
+                <span class="flex w-full items-center justify-between px-1.5">
+                    <span class="font-bold" :style="{ fontSize: `${15 * item.fontScale}px` }">{{ item.label || '\u00a0' }}</span>
+                    <span class="font-mono text-muted-foreground" :style="{ fontSize: `${8 * item.fontScale}px` }">{{ item.detail }}</span>
+                </span>
+            </template>
+            <template v-else>
+                <span class="font-medium" :style="{ fontSize: `${12 * item.fontScale}px` }">{{ item.label || '\u00a0' }}</span>
+                <span class="font-mono text-muted-foreground" :style="{ fontSize: `${10 * item.fontScale}px` }">{{ item.detail }}</span>
+            </template>
+            <span
+                v-if="item.note"
+                class="absolute -top-2 right-1 rounded-full border border-amber-500/60 bg-amber-100 px-1.5 leading-tight font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                :style="{ fontSize: `${9 * item.fontScale}px` }"
+            >
+                {{ item.note }}
+            </span>
         </Link>
     </div>
 </template>

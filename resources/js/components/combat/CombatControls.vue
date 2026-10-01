@@ -73,11 +73,29 @@ function handleChooseCombat(choice: TCombatStart): void {
                     <span>{{ combat_label }}</span>
                 </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">
-                <p class="text-xs font-medium">Combat Mode</p>
-                <p class="max-w-xs text-xs text-muted-foreground">
-                    {{ is_combat ? 'On' : 'Off' }} - No jump prompt when the hole is certain, and popups answer themselves after 60 s. Just for you.
-                </p>
+            <TooltipContent side="bottom" class="max-w-sm">
+                <p class="text-xs font-medium">Combat Mode · {{ is_combat ? 'On' : 'Off' }} (just for you)</p>
+                <div class="mt-1 space-y-1.5 text-xs text-muted-foreground">
+                    <p>
+                        Rage scanning: the mapper stops asking and keeps up with you. Popups answer themselves after 60 s, holes are numbered 1, 2,
+                        3 in the order you jump them (no automatic 0), and your chain gets its own color and compact lane.
+                    </p>
+                    <p>
+                        <span class="font-medium text-foreground">Scan, then arm:</span> only paste the signature of the hole you want to jump. That
+                        arms it: it takes the next number and its bookmark name is copied ("1 LIH C2"). A full paste arms the one hole on grid
+                        with you. You can also right-click a dashed system → Arm.
+                    </p>
+                    <p>
+                        <span class="font-medium text-foreground">In game:</span> bookmark the hole as the number (type "1", or paste the copied
+                        name), jump. After the jump the way back is on your clipboard: paste it as the return bookmark. Your jump is linked to
+                        the armed hole with no prompt.
+                    </p>
+                    <p>
+                        <span class="font-medium text-foreground">Clipboard:</span> the signature list's copy = the full name, the way back after
+                        each jump, Nearest highsec, Copy route.
+                    </p>
+                </div>
+            </TooltipContent>
             </TooltipContent>
         </Tooltip>
 

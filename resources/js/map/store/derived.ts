@@ -56,7 +56,11 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         for (const connection of entities.connections.values()) {
             for (const signature of connection.signatures ?? []) linked.add(signature.id);
         }
-        return buildPlaceholders([...entities.systems.values()], meta.value, linked);
+        const systems = [...entities.systems.values()];
+        const connections = [...entities.connections.values()];
+        const homeSolarsystemId = meta.value.home_solarsystem_id;
+        const homeId = homeSolarsystemId !== null ? (systems.find((system) => system.solarsystem_id === homeSolarsystemId)?.id ?? null) : null;
+        return buildPlaceholders(systems, meta.value, linked, { connections, parentOf: chainParents(systems, connections, homeId), homeId });
     });
 
     /**
@@ -168,6 +172,41 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         routeConnectionIds,
         rallyEdgeDirections,
     };
+}
+
+/**
+ * Who each system was reached from: a breadth-first walk out from home, then
+ * from the remaining systems (lowest id first). The band layout has its own
+ * tree, but it takes the placeholders as input, so this can't use it.
+ */
+function chainParents(systems: readonly TMapSolarsystem[], connections: readonly TMapConnection[], homeId: number | null): Map<number, number> {
+    const neighbours = new Map<number, number[]>();
+    for (const connection of connections) {
+        const a = connection.from_map_solarsystem_id;
+        const b = connection.to_map_solarsystem_id;
+        if (!neighbours.has(a)) neighbours.set(a, []);
+        if (!neighbours.has(b)) neighbours.set(b, []);
+        neighbours.get(a)!.push(b);
+        neighbours.get(b)!.push(a);
+    }
+    const parentOf = new Map<number, number>();
+    const seen = new Set<number>();
+    const roots = [...(homeId !== null ? [homeId] : []), ...systems.map((system) => system.id).toSorted((a, b) => a - b)];
+    for (const root of roots) {
+        if (seen.has(root)) continue;
+        seen.add(root);
+        const queue = [root];
+        while (queue.length) {
+            const current = queue.shift()!;
+            for (const next of (neighbours.get(current) ?? []).toSorted((a, b) => a - b)) {
+                if (seen.has(next)) continue;
+                seen.add(next);
+                parentOf.set(next, current);
+                queue.push(next);
+            }
+        }
+    }
+    return parentOf;
 }
 
 /** Translates the entity maps into the structural input the band layout needs. */

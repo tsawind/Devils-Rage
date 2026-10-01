@@ -92,6 +92,9 @@ const threatLevel = computed(() => {
 
 const fixedWidth = computed(() => store.isTreeLayout.value || store.isConstantWidthEnabled.value);
 
+/** Patch 13: combat lane systems are drawn small for rage scanning. */
+const compact = computed(() => store.isTreeLayout.value && store.bandLayout.value?.bandOf.get(id) === 'lane');
+
 const canWrite = computed(() => page.props.permission === 'member' || page.props.permission === 'manager');
 
 const linkHref = computed(() => {
@@ -165,6 +168,7 @@ onBeforeUnmount(() => {
                             :fixed-width="fixedWidth"
                             :threat-level="threatLevel"
                             :is-dead-end="isDeadEnd"
+                            :compact="compact"
                         />
                     </Link>
                     <template v-if="canWrite">
