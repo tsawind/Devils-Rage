@@ -33,7 +33,7 @@ export function pickGridHole(candidates: readonly TGridCandidate[]): { mode: 'on
     return { mode: 'none' };
 }
 
-export type TArmCandidate = { id: number; isWormhole: boolean; linked: boolean; signal: number | null; meters: number | null };
+export type TArmCandidate = { id: number; isWormhole: boolean; linked: boolean; signal: number | null; meters: number | null; unscanned?: boolean };
 
 /**
  * Patch 15: what a Rage Scanning paste arms. Never guessed from the grid:
@@ -41,16 +41,21 @@ export type TArmCandidate = { id: number; isWormhole: boolean; linked: boolean; 
  * once; more than one opens the yellow "which hole?" list (100% scanned first,
  * then closest); none: nothing.
  */
-export function pasteArmDecision(pastedCount: number, candidates: readonly TArmCandidate[]): { mode: 'arm'; id: number } | { mode: 'ask'; ids: number[] } | { mode: 'none' } {
+export function pasteArmDecision(
+    pastedCount: number,
+    candidates: readonly TArmCandidate[],
+): { mode: 'arm'; id: number } | { mode: 'ask'; ids: number[]; unscanned: number } | { mode: 'none' } {
     const holes = candidates.filter((candidate) => candidate.isWormhole && !candidate.linked);
+    // Patch 16: a signature nobody scanned yet could be the hole you want: never arm on your own then.
+    const unscanned = candidates.filter((candidate) => candidate.unscanned && !candidate.isWormhole && !candidate.linked).length;
     if (pastedCount === 1 && holes.length === 1) return { mode: 'arm', id: holes[0].id };
-    if (holes.length === 1) return { mode: 'arm', id: holes[0].id };
+    if (holes.length === 1 && unscanned === 0) return { mode: 'arm', id: holes[0].id };
     if (holes.length === 0) return { mode: 'none' };
     const full = (candidate: TArmCandidate) => ((candidate.signal ?? 0) >= 100 ? 0 : 1);
     const ordered = holes.toSorted(
         (a, b) => full(a) - full(b) || (a.meters ?? Number.POSITIVE_INFINITY) - (b.meters ?? Number.POSITIVE_INFINITY) || a.id - b.id,
     );
-    return { mode: 'ask', ids: ordered.map((candidate) => candidate.id) };
+    return { mode: 'ask', ids: ordered.map((candidate) => candidate.id), unscanned };
 }
 
 export type TArmAsOption = {

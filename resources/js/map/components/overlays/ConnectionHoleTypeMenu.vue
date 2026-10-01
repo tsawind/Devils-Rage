@@ -7,7 +7,10 @@ import { classSortWeight } from '@/const/solarsystemClasses';
 import { displayAlias } from '@/lib/alias';
 import { typeSearchMatches } from '@/lib/arming';
 import { holeSide } from '@/lib/holeSide';
+import { visibleBookmarkName } from '@/lib/bookmark';
 import { setConnectionHoleType } from '@/map/actions/holeType';
+import { linkedForwardBookmark } from '@/map/holeBookmark';
+import { useMapStore } from '@/map/store/mapStore';
 import type { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import type { TSignatureType } from '@/types/models';
 import { Fan } from 'lucide-vue-next';
@@ -25,6 +28,7 @@ const { connection } = defineProps<{
 }>();
 
 const { canEdit } = usePermission();
+const store = useMapStore();
 const typed = ref('');
 
 const wormholeCategoryId = signatureCategories.find((category) => category.code === 'wormhole')?.id ?? null;
@@ -80,9 +84,17 @@ function handleKeydown(event: KeyboardEvent): void {
 
 function pick(entry: { type: TSignatureType; sideId: number }): void {
     const other = entry.sideId === connection.source.id ? connection.target.id : connection.source.id;
-    setConnectionHoleType(connection.id, entry.sideId, entry.type.id, () =>
-        toast.success(`${entry.type.signature} from ${sideName(entry.sideId)}`, { description: `${sideName(other)}'s side is its K162.` }),
-    );
+    setConnectionHoleType(connection.id, entry.sideId, entry.type.id, () => {
+        // Patch 16: copy the hole's bookmark from your side (the side you're in, else the first end), now with its type.
+        const here = [connection.source.id, connection.target.id].includes(store.currentSystemId.value ?? -1) ? store.currentSystemId.value! : connection.source.id;
+        const there = here === connection.source.id ? connection.target : connection.source;
+        const system = store.systems.get(here);
+        const name = system ? linkedForwardBookmark(store, system, there.id, there.alias ?? '') : '';
+        if (name) navigator.clipboard.writeText(name).catch(() => undefined);
+        toast.success(`${entry.type.signature} from ${sideName(entry.sideId)}`, {
+            description: name ? `${sideName(other)}'s side is its K162 · copied ${visibleBookmarkName(name)}` : `${sideName(other)}'s side is its K162.`,
+        });
+    });
 }
 </script>
 

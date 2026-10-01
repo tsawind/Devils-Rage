@@ -41,7 +41,7 @@ const combat_homes = computed(() => map_solarsystems.value.filter((system) => sy
 
 const combat_label = computed(() => {
     const chain = combatColorLabel(combat_color.value);
-    return chain ? `Rage Scanning · ${chain}` : 'Rage Scanning';
+    return chain ? `Rage · ${chain}` : 'Rage Scanning';
 });
 const combat_dot = computed(() => combatColorHex(combat_color.value));
 
@@ -64,13 +64,13 @@ function handleChooseCombat(choice: TCombatStart): void {
             <TooltipTrigger as-child>
                 <button
                     type="button"
-                    class="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs transition-colors"
+                    class="flex shrink-0 items-center gap-1.5 rounded px-1.5 py-0.5 text-xs whitespace-nowrap transition-colors"
                     :class="is_combat ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
                     @click="handleToggleCombat"
                 >
                     <Swords class="size-3.5" />
                     <span v-if="combat_dot" class="inline-block size-2 rounded-full" :style="{ backgroundColor: combat_dot }" />
-                    <span>{{ combat_label }}</span>
+                    <span class="@max-[28rem]/sigheader:hidden">{{ combat_label }}</span>
                 </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" class="max-w-sm">

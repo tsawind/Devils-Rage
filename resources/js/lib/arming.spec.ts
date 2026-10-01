@@ -117,7 +117,18 @@ describe('patch 15: what a Rage Scanning paste arms', () => {
     });
 
     it('asks when there are more, 100% scanned first then closest, never by grid alone', () => {
-        expect(pasteArmDecision(6, [hole(1, 0, 1e9), hole(2, 100, 9e11), hole(3, 100, 5e11), hole(4, 0, 500)])).toEqual({ mode: 'ask', ids: [3, 2, 4, 1] });
+        expect(pasteArmDecision(6, [hole(1, 0, 1e9), hole(2, 100, 9e11), hole(3, 100, 5e11), hole(4, 0, 500)])).toEqual({ mode: 'ask', ids: [3, 2, 4, 1], unscanned: 0 });
         expect(pasteArmDecision(3, [hole(2, 100, 0, true)])).toEqual({ mode: 'none' });
+    });
+});
+
+describe('patch 16: no auto-arm while signatures are unscanned', () => {
+    it('asks when the one wormhole sits next to unscanned signatures', () => {
+        const wormhole = { id: 1, isWormhole: true, linked: false, signal: 100, meters: 1e12 };
+        const unscanned = { id: 2, isWormhole: false, linked: false, signal: 20, meters: 1e12, unscanned: true };
+        expect(pasteArmDecision(4, [wormhole, unscanned, { ...unscanned, id: 3 }])).toEqual({ mode: 'ask', ids: [1], unscanned: 2 });
+        expect(pasteArmDecision(4, [wormhole])).toEqual({ mode: 'arm', id: 1 });
+        // Only unscanned signatures: nothing to arm yet.
+        expect(pasteArmDecision(4, [unscanned])).toEqual({ mode: 'none' });
     });
 });

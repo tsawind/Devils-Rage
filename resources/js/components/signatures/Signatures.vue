@@ -7,6 +7,7 @@ import ReturnHoleDialog from '@/components/signatures/ReturnHoleDialog.vue';
 import SideChainLetterDialog from '@/components/signatures/SideChainLetterDialog.vue';
 import CombatControls from '@/components/combat/CombatControls.vue';
 import ChainCleanupRows from '@/components/signatures/ChainCleanupRows.vue';
+import SolarsystemClass from '@/components/solarsystem/SolarsystemClass.vue';
 import Signature from '@/components/signatures/Signature.vue';
 import SignaturesEmptyState from '@/components/signatures/SignaturesEmptyState.vue';
 import MapPanel from '@/components/ui/map-panel/MapPanel.vue';
@@ -33,7 +34,7 @@ import { displayAlias, suggestAlias } from '@/lib/alias';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
 import { armAsOptions, armedSummary, myArmedHole, pasteArmDecision, type TArmAsOption } from '@/lib/arming';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
-import { chainAliases } from '@/lib/combat';
+import { chainAliases, combatColorHex, combatColorLabel } from '@/lib/combat';
 import { AUTO_LINK_WINDOW_MS, decideReturnHole, orderOpenConnections, type TReturnConnectionOption, type TReturnHoleOption, type TScanDistance } from '@/lib/returnHole';
 import type { TRawSignature } from '@/lib/SignatureParser';
 import { needsSideChainLetter, suggestSideChainLetter, takenLetters } from '@/lib/sideChain';
@@ -207,7 +208,7 @@ function armAsFor(signature: TSignature): TArmAsOption[] {
  * wormhole in the paste, arms at once; more than one opens the yellow list
  * (100% scanned first, then closest) and you pick. Returns true when handled.
  */
-const arm_choice = ref<{ systemId: number; ids: number[]; at: number } | null>(null);
+const arm_choice = ref<{ systemId: number; ids: number[]; unscanned: number; at: number } | null>(null);
 const ARM_CHOICE_SECONDS = 60;
 
 function armFromPaste(pasted: TRawSignature[], system: TResolvedSelectedMapSolarsystem): boolean {
@@ -225,6 +226,7 @@ function armFromPaste(pasted: TRawSignature[], system: TResolvedSelectedMapSolar
                     linked: Boolean(signature.map_connection_id),
                     signal: raw?.signal ?? null,
                     meters: raw?.distance?.meters ?? null,
+                    unscanned: !signature.signature_category_id,
                 };
             }),
     );
@@ -234,7 +236,7 @@ function armFromPaste(pasted: TRawSignature[], system: TResolvedSelectedMapSolar
         return true;
     }
     if (decision.mode === 'ask') {
-        arm_choice.value = { systemId: system.id, ids: decision.ids, at: Date.now() };
+        arm_choice.value = { systemId: system.id, ids: decision.ids, unscanned: decision.unscanned, at: Date.now() };
         return true;
     }
     return false;
@@ -265,6 +267,25 @@ function pickArmChoice(signature: TSignature): void {
     arm_choice.value = null;
     armRow(signature);
 }
+
+// ---- Where am I (patch 16) ---------------------------------------------------
+// Rage Scanning: the system you're in, in big text at the top of the panel, to
+// call on comms ("111-2 · Red · C4 J212129 · 3 unscanned").
+const where_am_i = computed(() => {
+    if (!is_combat.value) return null;
+    const solarsystemId = character.value?.status?.solarsystem_id ?? null;
+    if (!solarsystemId) return null;
+    const system = map_solarsystems.value.find((candidate) => candidate.solarsystem_id === solarsystemId);
+    if (!system) return null;
+    return {
+        name: displayAlias(system.alias) || system.solarsystem.name,
+        chain: combatColorLabel(system.combat_color),
+        hex: combatColorHex(system.combat_color),
+        solarsystemClass: system.solarsystem.class,
+        jcode: system.solarsystem.name,
+        unscanned: system.uncategorized_signatures_count ?? 0,
+    };
+});
 
 // ---- Side chain letters (patch 12) ------------------------------------------
 // A chain not linked to Daisy numbers its holes plainly (1, 11, 111) when it is
@@ -611,7 +632,7 @@ function createNewSignature() {
     <SignaturesEmptyState v-if="!map_solarsystem" show-combat />
 
     <!-- Signatures list when system is selected -->
-    <MapPanel v-if="map_solarsystem" class="overflow-x-hidden">
+    <MapPanel v-if="map_solarsystem" class="@container/sigheader overflow-x-hidden">
         <MapPanelHeader>
             <CombatControls class="mr-2" />
             Signatures
@@ -690,6 +711,20 @@ function createNewSignature() {
             </template>
         </MapPanelHeader>
         <MapPanelContent>
+            <!-- Patch 16: where am I (Rage Scanning), big enough to call on comms -->
+            <div
+                v-if="where_am_i"
+                class="flex items-baseline gap-2 border-b border-border/40 px-3 py-1.5"
+                :style="where_am_i.hex ? { borderLeft: `4px solid ${where_am_i.hex}` } : undefined"
+            >
+                <span class="text-xl leading-none font-bold">{{ where_am_i.name }}</span>
+                <span v-if="where_am_i.chain" class="text-sm font-semibold" :style="{ color: where_am_i.hex ?? undefined }">{{ where_am_i.chain }}</span>
+                <span class="flex items-center gap-1 text-xs text-muted-foreground">
+                    <SolarsystemClass :solarsystem_class="where_am_i.solarsystemClass" /> {{ where_am_i.jcode }}
+                </span>
+                <span v-if="where_am_i.unscanned > 0" class="ml-auto text-xs text-amber-400">{{ where_am_i.unscanned }} unscanned</span>
+                <span v-else class="ml-auto text-xs text-emerald-400">all scanned</span>
+            </div>
             <!-- Header -->
             <div
                 class="flex items-center gap-2 border-b border-border/30 bg-muted/20 px-3 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
@@ -741,6 +776,9 @@ function createNewSignature() {
                     <span class="flex-1 truncate text-muted-foreground">{{ hole.signature_type?.name ?? 'Wormhole, type not set' }}</span>
                     <span class="font-mono text-amber-300">→ {{ displayAlias(planned_aliases.get(hole.id) ?? claim_alias ?? '') || 'next' }}</span>
                 </button>
+                <p v-if="arm_choice && arm_choice.unscanned > 0" class="px-2 pt-0.5 text-amber-300/80">
+                    {{ arm_choice.unscanned }} signature{{ arm_choice.unscanned === 1 ? '' : 's' }} not scanned yet: could be the hole you want.
+                </p>
             </div>
 
             <!-- Patch 14: cleanup rows (a combat chain being converted, one system at a time) -->

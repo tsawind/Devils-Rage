@@ -71,12 +71,12 @@ function copyRoute(): void {
         <TooltipTrigger as-child>
             <button
                 type="button"
-                class="flex items-center gap-1.5 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
+                class="flex shrink-0 items-center gap-1.5 rounded bg-muted px-1.5 py-0.5 text-xs whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
                 :disabled="!fromSolarsystemId"
                 @click="copyRoute"
             >
                 <DoorOpen class="size-3.5" />
-                <span>Nearest highsec</span>
+                <span class="@max-[28rem]/sigheader:hidden">Nearest HS</span>
             </button>
         </TooltipTrigger>
         <TooltipContent side="bottom">

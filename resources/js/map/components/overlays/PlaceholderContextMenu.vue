@@ -177,7 +177,20 @@ function handleTypeKeydown(event: KeyboardEvent): void {
 function setType(typeId: number): void {
     const system = parent.value;
     if (!system) return;
-    updateSignature({ id: placeholder.signatureId } as TSignature, { signature_type_id: typeId });
+    // Patch 16: also copy the hole's bookmark, named with the type just picked, and lock its number.
+    const type = getTypesByCategory(wormholeCategoryId ?? 0).find((candidate) => candidate.id === typeId);
+    const lock = canEdit.value && hole.value && !hole.value.alias && claim.value ? claim.value : null;
+    const name =
+        hole.value && type
+            ? pendingHoleBookmark(store, system, { ...hole.value, wormhole: type.signature, target_class: type.target_class }, hole.value.alias ?? claim.value)
+            : '';
+    updateSignature({ id: placeholder.signatureId } as TSignature, { signature_type_id: typeId, ...(lock ? { alias: lock } : {}) });
+    if (name) {
+        navigator.clipboard
+            .writeText(name)
+            .then(() => toast.success(`${type?.signature ?? 'Type'} set · copied bookmark`, { description: visibleBookmarkName(name) }))
+            .catch(() => undefined);
+    }
     // The type may make a static certain (everything scanned, nothing else can be it).
     requestStaticCheck(system.id, system);
 }
