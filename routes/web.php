@@ -7,6 +7,7 @@ use App\Http\Controllers\BulkMapConnectionController;
 use App\Http\Controllers\BulkSignatureController;
 use App\Http\Controllers\BulkWaypointController;
 use App\Http\Controllers\ChainCleanupController;
+use App\Http\Controllers\ConnectionHoleTypeController;
 use App\Http\Controllers\DiscordAccountController;
 use App\Http\Controllers\DocumentationController;
 use App\Http\Controllers\EveController;
@@ -129,6 +130,8 @@ Route::middleware('auth')->group(function () {
     Route::resource('map-solarsystems.signatures', SignatureController::class)->only(['store', 'update', 'destroy'])->shallow();
     Route::resource('paste-signatures', PasteSignatureController::class)->only(['store']);
     Route::post('signatures/{signature}/arm', [SignatureArmController::class, 'store'])->name('signatures.arm.store');
+    Route::post('map-connections/{mapConnection}/hole-type', [ConnectionHoleTypeController::class, 'store'])->name('map-connections.hole-type.store');
+    Route::post('signatures/{signature}/absorb', [ConnectionHoleTypeController::class, 'absorb'])->name('signatures.absorb');
     Route::delete('signatures/{signature}/arm', [SignatureArmController::class, 'destroy'])->name('signatures.arm.destroy');
 
     Route::put('user-characters/{character}', [UserCharacterController::class, 'update'])->name('user-characters.update');

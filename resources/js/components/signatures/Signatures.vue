@@ -39,6 +39,7 @@ import type { TRawSignature } from '@/lib/SignatureParser';
 import { needsSideChainLetter, suggestSideChainLetter, takenLetters } from '@/lib/sideChain';
 import { aliasedSolarsystemLabel } from '@/lib/solarsystem';
 import { disarmSignature } from '@/map/actions/arm';
+import { absorbSignature } from '@/map/actions/holeType';
 import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { createSignature, TProcessedConnection, updateMapUserSettings, updateSignature, useMapSolarsystems, useMapStore } from '@/map/api';
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
@@ -323,6 +324,37 @@ async function handlePastedScan(pasted: TRawSignature[]): Promise<void> {
     requestStaticCheck(system.id, before);
 
     const jump = recentJump.value && recentJump.value.toSolarsystemId === system.solarsystem_id ? recentJump.value : null;
+
+    // Patch 14: a hole typed from the map before anyone pasted here has a row
+    // without an ID. The paste fills it in: the one signature pasted, or the
+    // one wormhole on grid with you (you sit on the way back after a jump).
+    const unnamed = system.signatures.filter((signature) => !signature.signature_id && signature.map_connection_id);
+    if (unnamed.length > 0) {
+        const wayBackRow = jump
+            ? unnamed.find((signature) =>
+                  connections.value.some((connection) => connection.id === signature.map_connection_id && connection.target.solarsystem_id === jump.fromSolarsystemId),
+              )
+            : undefined;
+        const row = wayBackRow ?? (unnamed.length === 1 ? unnamed[0] : undefined);
+        if (row) {
+            const distances = new Map(pasted.map((raw) => [raw.signature_id, raw.distance ?? null]));
+            const fresh = system.signatures.filter(
+                (signature) =>
+                    signature.signature_id &&
+                    distances.has(signature.signature_id) &&
+                    !signature.map_connection_id &&
+                    (isWormholeSignature(signature) || !signature.signature_category_id),
+            );
+            const onGrid = fresh.filter((signature) => distances.get(signature.signature_id ?? '')?.onGrid);
+            const match = pasted.length === 1 ? fresh[0] : onGrid.length === 1 ? onGrid[0] : undefined;
+            if (match) {
+                absorbSignature(row.id, match.id, () =>
+                    toast.success(`${match.signature_id} is the hole typed from the map`, { description: 'Its ID was filled in; no second row.' }),
+                );
+                return;
+            }
+        }
+    }
 
     // Patch 13: the hole you came through already has its signature on this
     // side, so the way back is known: don't ask about other unlinked connections.
