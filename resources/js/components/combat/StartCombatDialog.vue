@@ -12,14 +12,14 @@ import { computed } from 'vue';
 
 /**
  * Turning combat mode on: start a new chain in the system you are in, join a
- * chain already on the map, or just use combat speed. Answers itself after 60 s.
+ * chain already on the map, or just use rage speed. Answers itself after 60 s.
  */
 const props = defineProps<{
     /** The map system you are in, if it is on the map. */
     currentSystem: TMapSolarsystem | null;
     /** Where you are when that isn't on the map yet (it gets added as the combat home). */
     currentSolarsystem?: { id: number; name: string } | null;
-    /** You are in the map's home (Daisy), which can't be a combat home. */
+    /** You are in the map's home (Daisy), which can't be a rage home. */
     currentIsHome: boolean;
     /** The combat homes on the map, one per chain. */
     combatHomes: TMapSolarsystem[];
@@ -77,7 +77,7 @@ const defaultLabel = computed(() => {
     const choice = defaultChoice.value;
     if (choice.mode === 'join') return `Join ${combatColorLabel(choice.color) ?? choice.color}`;
     if (choice.mode === 'start') return 'Yes';
-    return 'Combat speed';
+    return 'Rage speed';
 });
 
 function choose(choice: TCombatStart): void {
@@ -104,11 +104,11 @@ function startHere(): void {
                 <DialogTitle>⚔ Start a new chain here?</DialogTitle>
                 <DialogDescription>
                     <template v-if="canStartHere">
-                        <strong>{{ currentLabel }}</strong> {{ addsSystem ? 'is added to the map and becomes' : 'becomes' }} a combat home. Its
+                        <strong>{{ currentLabel }}</strong> {{ addsSystem ? 'is added to the map and becomes' : 'becomes' }} a rage home. Its
                         holes are numbered 1, 2, 3 in jump order and the chain gets its own color and lane.
                     </template>
-                    <template v-else-if="currentIsHome">You're in the home system, which can't be a combat home. Join a chain or use combat speed.</template>
-                    <template v-else>Your location isn't known. Join a chain or use combat speed.</template>
+                    <template v-else-if="currentIsHome">You're in the home system, which can't be a rage home. Join a chain or use rage speed.</template>
+                    <template v-else>Your location isn't known. Join a chain or use rage speed.</template>
                 </DialogDescription>
             </DialogHeader>
 
@@ -145,7 +145,7 @@ function startHere(): void {
 
             <DialogFooter class="border-t border-border/50 bg-muted/30 px-6 py-3 sm:justify-between">
                 <Button variant="ghost" @click="open = false">Cancel</Button>
-                <Button variant="outline" @click="choose({ mode: 'solo' })">No — combat speed only</Button>
+                <Button variant="outline" @click="choose({ mode: 'solo' })">No — rage speed only</Button>
             </DialogFooter>
         </DialogScrollContent>
     </Dialog>

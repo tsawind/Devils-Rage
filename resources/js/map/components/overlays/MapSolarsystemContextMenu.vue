@@ -82,9 +82,9 @@ function handleCopyRoute() {
 
 /** Patch 14: offer the cleanup with a confirming toast (nothing is renamed when it starts). */
 function handleStartCleanup() {
-    const label = combatColorLabel(map_solarsystem.combat_color) ?? 'combat';
+    const label = combatColorLabel(map_solarsystem.combat_color) ?? 'rage';
     toast(`Clean up the ${label} chain?`, {
-        description: 'The home loses its color and Combat turns off for whoever works the chain. Nothing is renamed: each system converts when a scanner standing next to it presses Done.',
+        description: 'The home loses its color and Rage Scanning turns off for whoever works the chain. Nothing is renamed: each system converts when a scanner standing next to it presses Done.',
         duration: 15_000,
         action: { label: 'Start cleanup', onClick: () => startChainCleanup(map_solarsystem.id, label) },
     });
@@ -128,11 +128,11 @@ const options: TMapSolarsystemStatus[] = ['unknown', 'friendly', 'hostile', 'act
         </ContextMenuItem>
         <ContextMenuItem v-if="can_write && map_solarsystem.combat_home && map_solarsystem.combat_color" @select="handleStartCleanup">
             <Brush class="size-4" />
-            Clean up {{ combatColorLabel(map_solarsystem.combat_color) ?? 'combat' }} chain…
+            Clean up {{ combatColorLabel(map_solarsystem.combat_color) ?? 'rage' }} chain…
         </ContextMenuItem>
         <ContextMenuItem v-if="can_write && map_solarsystem.combat_color" @select="handleClearCombatChain">
             <Eraser class="size-4" />
-            Clear {{ combatColorLabel(map_solarsystem.combat_color) ?? 'combat' }} chain…
+            Clear {{ combatColorLabel(map_solarsystem.combat_color) ?? 'rage' }} chain…
         </ContextMenuItem>
 
         <ContextMenuSeparator />

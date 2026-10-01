@@ -47,8 +47,8 @@ const workers = computed(() => home.value?.combat_workers ?? []);
 const workersText = computed(() => {
     const names = workers.value;
     if (names.length === 0) return '';
-    if (names.length === 1) return `${names[0]} is still working this chain. Their Combat will turn off.`;
-    return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} are still working this chain. Their Combat will turn off.`;
+    if (names.length === 1) return `${names[0]} is still working this chain. Their Rage Scanning will turn off.`;
+    return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} are still working this chain. Their Rage Scanning will turn off.`;
 });
 
 function confirm(): void {

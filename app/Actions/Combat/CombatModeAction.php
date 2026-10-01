@@ -304,8 +304,8 @@ final readonly class CombatModeAction
                 continue;
             }
             $message = ($result['chains_left'] ?? true)
-                ? sprintf('Combat off: %s cleared the %s chain', $who, $label)
-                : 'Combat off: no combat chains left';
+                ? sprintf('Rage Scanning off: %s cleared the %s chain', $who, $label)
+                : 'Rage Scanning off: no rage chains left';
             broadcast(new CombatModeTurnedOffEvent((int) $user_id, $map->id, $message, sprintf('%s cleared the %s chain.', $who, $label)));
         }
 

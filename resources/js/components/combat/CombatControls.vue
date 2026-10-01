@@ -41,7 +41,7 @@ const combat_homes = computed(() => map_solarsystems.value.filter((system) => sy
 
 const combat_label = computed(() => {
     const chain = combatColorLabel(combat_color.value);
-    return chain ? `Combat · ${chain}` : 'Combat';
+    return chain ? `Rage Scanning · ${chain}` : 'Rage Scanning';
 });
 const combat_dot = computed(() => combatColorHex(combat_color.value));
 
@@ -74,16 +74,17 @@ function handleChooseCombat(choice: TCombatStart): void {
                 </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" class="max-w-sm">
-                <p class="text-xs font-medium">Combat Mode · {{ is_combat ? 'On' : 'Off' }} (just for you)</p>
+                <p class="text-xs font-medium">Rage Scanning · {{ is_combat ? 'On' : 'Off' }} (just for you)</p>
                 <div class="mt-1 space-y-1.5 text-xs text-muted-foreground">
                     <p>
-                        Rage scanning: the mapper stops asking and keeps up with you. Popups answer themselves after 60 s, holes are numbered 1, 2,
-                        3 in the order you jump them (no automatic 0), and your chain gets its own color and compact lane.
+                        The mapper stops asking and keeps up with you. No jump prompt, popups answer themselves after 60 s, holes are numbered
+                        1, 2, 3 in the order you jump them (no automatic 0), and your chain gets its own color and lane.
                     </p>
                     <p>
-                        <span class="font-medium text-foreground">Scan, then arm:</span> only paste the signature of the hole you want to jump. That
-                        arms it: it takes the next number and its bookmark name is copied ("1 LIH C2"). A full paste arms the one hole on grid
-                        with you. You can also right-click a dashed system → Arm.
+                        <span class="font-medium text-foreground">Scan, then arm:</span> paste only the signature of the hole you want to jump, or
+                        press the crosshair next to its ID. That arms it: it takes the next number and its bookmark name is copied ("1 LIH C2").
+                        After a full paste you pick the hole from a yellow list (armed at once only when there is one). Right-click a dashed system
+                        → Arm works too.
                     </p>
                     <p>
                         <span class="font-medium text-foreground">In game:</span> bookmark the hole as the number (type "1", or paste the copied

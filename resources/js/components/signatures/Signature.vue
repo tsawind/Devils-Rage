@@ -317,7 +317,7 @@ function makeStatic(typeId: number | null | undefined, manual: boolean): void {
     // Combat mode (outside combat chains): no popup, it keeps its name.
     if (!is_limbo.value && is_combat.value) {
         handleChange({ ...base, ...(!current && name ? { alias: name } : {}) });
-        toast.success(`${signature.signature_id ?? 'Signature'} marked as the static`, { description: `Keeps ${displayAlias(name)} (combat mode).` });
+        toast.success(`${signature.signature_id ?? 'Signature'} marked as the static`, { description: `Keeps ${displayAlias(name)} (Rage Scanning).` });
         return;
     }
 
@@ -766,7 +766,7 @@ const name_title = computed(() => {
     if (selected_connection.value) return 'Leads to this system';
     if (signature.alias) return 'Number locked (copied or jumped)';
     if (planned_alias) return 'The number this hole gets';
-    return 'Combat chain: numbered when it is jumped or copied';
+    return 'Rage chain: numbered when it is jumped or copied';
 });
 
 // The destination bookmark for this hole: the real connection target when one
@@ -821,6 +821,33 @@ function copyBookmark() {
         :data-updated="Data(is_updated)"
         :title="is_deleted ? 'Not in your last paste (ignored in game, or gone). It keeps its number until you delete it.' : undefined"
     >
+        <!-- Patch 15: arm button (grey: arm and copy the bookmark; red: yours, click to disarm) -->
+        <div class="flex w-4 shrink-0 justify-center">
+            <button
+                v-if="can_arm"
+                type="button"
+                class="flex size-4 items-center justify-center rounded-full transition-colors"
+                :class="
+                    armed_by_me
+                        ? 'bg-red-500 text-white hover:bg-red-400'
+                        : signature.armed_by_user_id
+                          ? 'cursor-not-allowed text-red-400/70'
+                          : 'text-muted-foreground/60 hover:bg-red-500/20 hover:text-red-400'
+                "
+                :disabled="Boolean(signature.armed_by_user_id) && !armed_by_me"
+                :title="
+                    armed_by_me
+                        ? 'Armed by you: click to disarm'
+                        : signature.armed_by_user_id
+                          ? `Armed by ${signature.armed_by_name ?? 'someone else'}`
+                          : 'Arm this hole as your next jump (copies its bookmark)'
+                "
+                @click="armed_by_me ? emit('disarm') : emit('arm', null, false)"
+            >
+                <Crosshair class="size-3" />
+            </button>
+        </div>
+
         <!-- Signature ID -->
         <div class="w-16 shrink-0">
             <input

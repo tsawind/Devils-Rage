@@ -20,7 +20,7 @@ export function startCombat(mapSlug: string, data: TCombatStart, onSuccess?: () 
         only: ['map_user_settings', 'map'],
         onSuccess: () => onSuccess?.(),
         onError: (errors) => {
-            toast.error(errors.combat ?? 'Could not turn combat mode on.');
+            toast.error(errors.combat ?? 'Could not turn Rage Scanning on.');
         },
     });
 }
@@ -31,7 +31,7 @@ export function stopCombat(mapSlug: string): void {
         preserveState: true,
         only: ['map_user_settings', 'map'],
         onError: () => {
-            toast.error('Could not turn combat mode off.');
+            toast.error('Could not turn Rage Scanning off.');
         },
     });
 }
@@ -50,7 +50,7 @@ export function clearCombatChain(mapSlug: string, color: string, label: string):
             toast.success(`${label} chain cleared`);
         },
         onError: (errors) => {
-            toast.error(errors.combat ?? 'Could not clear the combat chain.');
+            toast.error(errors.combat ?? 'Could not clear the rage chain.');
         },
     });
 }

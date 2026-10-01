@@ -77,7 +77,7 @@ final readonly class ChainCleanupAction
             broadcast(new CombatModeTurnedOffEvent(
                 (int) $userId,
                 $home->map_id,
-                sprintf('Combat off: %s started cleaning up the %s chain', $by->name, $label),
+                sprintf('Rage Scanning off: %s started cleaning up the %s chain', $by->name, $label),
                 'The chain is being converted one system at a time. Follow the cleanup rows in the signature list.',
             ));
         }

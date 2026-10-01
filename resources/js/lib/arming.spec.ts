@@ -1,4 +1,4 @@
-import { armAsOptions, armedSummary, jumpMatchesArm, matchesQuickKey, myArmedHole, nextQuickKey, pickGridHole, typeSearchMatches } from '@/lib/arming';
+import { armAsOptions, armedSummary, jumpMatchesArm, matchesQuickKey, myArmedHole, nextQuickKey, pasteArmDecision, pickGridHole, typeSearchMatches } from '@/lib/arming';
 import { describe, expect, it } from 'vitest';
 
 describe('patch 13: arming', () => {
@@ -104,5 +104,20 @@ describe('patch 14: Type list search', () => {
         expect(typeSearchMatches('F1', E004)).toBe(false);
         expect(typeSearchMatches('', H296)).toBe(true);
         expect(typeSearchMatches('thera', F135)).toBe(true);
+    });
+});
+
+describe('patch 15: what a Rage Scanning paste arms', () => {
+    const hole = (id: number, signal: number | null, meters: number | null, linked = false) => ({ id, isWormhole: true, linked, signal, meters });
+
+    it('arms at once when there is only one possible hole', () => {
+        expect(pasteArmDecision(1, [hole(1, 30, 1e12)])).toEqual({ mode: 'arm', id: 1 });
+        // A full paste with one unjumped wormhole (the way back is linked, so it doesn't count).
+        expect(pasteArmDecision(5, [hole(1, 100, 1e12), hole(2, 100, 0, true), { id: 3, isWormhole: false, linked: false, signal: 0, meters: 1e12 }])).toEqual({ mode: 'arm', id: 1 });
+    });
+
+    it('asks when there are more, 100% scanned first then closest, never by grid alone', () => {
+        expect(pasteArmDecision(6, [hole(1, 0, 1e9), hole(2, 100, 9e11), hole(3, 100, 5e11), hole(4, 0, 500)])).toEqual({ mode: 'ask', ids: [3, 2, 4, 1] });
+        expect(pasteArmDecision(3, [hole(2, 100, 0, true)])).toEqual({ mode: 'none' });
     });
 });

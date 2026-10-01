@@ -31,7 +31,7 @@ import useUser from '@/composables/useUser';
 import { signatureCategories } from '@/const/signatures';
 import { displayAlias, suggestAlias } from '@/lib/alias';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
-import { armAsOptions, armedSummary, myArmedHole, pickGridHole, type TArmAsOption } from '@/lib/arming';
+import { armAsOptions, armedSummary, myArmedHole, pasteArmDecision, type TArmAsOption } from '@/lib/arming';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
 import { AUTO_LINK_WINDOW_MS, decideReturnHole, orderOpenConnections, type TReturnConnectionOption, type TReturnHoleOption, type TScanDistance } from '@/lib/returnHole';
@@ -202,38 +202,68 @@ function armAsFor(signature: TSignature): TArmAsOption[] {
 }
 
 /**
- * Combat mode: a paste arms the hole you want to jump. One signature pasted
- * arms that one; a full scan arms the one wormhole you sit on (under 10 km).
- * Returns true when the paste was handled here.
+ * Rage Scanning: a paste arms the hole you want to jump, but never by guessing
+ * from the grid (patch 15). One signature pasted, or exactly one unjumped
+ * wormhole in the paste, arms at once; more than one opens the yellow list
+ * (100% scanned first, then closest) and you pick. Returns true when handled.
  */
+const arm_choice = ref<{ systemId: number; ids: number[]; at: number } | null>(null);
+const ARM_CHOICE_SECONDS = 60;
+
 function armFromPaste(pasted: TRawSignature[], system: TResolvedSelectedMapSolarsystem): boolean {
-    if (pasted.length === 1) {
-        const only = system.signatures.find((signature) => signature.signature_id === pasted[0].signature_id);
-        if (!only || only.map_connection_id || !(isWormholeSignature(only) || !only.signature_category_id)) return false;
-        armRow(only);
-        return true;
-    }
-    const distances = new Map(pasted.map((raw) => [raw.signature_id, raw.distance ?? null]));
-    const pick = pickGridHole(
+    const raws = new Map(pasted.map((raw) => [raw.signature_id, raw]));
+    const decision = pasteArmDecision(
+        pasted.length,
         system.signatures
-            .filter((signature) => signature.signature_id && distances.has(signature.signature_id))
-            .map((signature) => ({
-                id: signature.id,
-                meters: distances.get(signature.signature_id ?? '')?.meters ?? null,
-                isWormhole: isWormholeSignature(signature),
-                linked: Boolean(signature.map_connection_id),
-            })),
+            .filter((signature) => signature.signature_id && raws.has(signature.signature_id))
+            .map((signature) => {
+                const raw = raws.get(signature.signature_id ?? '');
+                return {
+                    id: signature.id,
+                    // One signature pasted: it's the hole you mean, even before it is categorised.
+                    isWormhole: isWormholeSignature(signature) || (pasted.length === 1 && !signature.signature_category_id),
+                    linked: Boolean(signature.map_connection_id),
+                    signal: raw?.signal ?? null,
+                    meters: raw?.distance?.meters ?? null,
+                };
+            }),
     );
-    if (pick.mode === 'one') {
-        const hole = system.signatures.find((signature) => signature.id === pick.id);
+    if (decision.mode === 'arm') {
+        const hole = system.signatures.find((signature) => signature.id === decision.id);
         if (hole) armRow(hole);
         return true;
     }
-    if (pick.mode === 'many') {
-        toast.info(`${pick.count} holes on grid: paste the one you want`, { description: 'Nothing was armed.' });
+    if (decision.mode === 'ask') {
+        arm_choice.value = { systemId: system.id, ids: decision.ids, at: Date.now() };
         return true;
     }
     return false;
+}
+
+/** The yellow list's rows, for the system you are looking at. */
+const arm_choice_rows = computed(() => {
+    const choice = arm_choice.value;
+    const system = props.map_solarsystem;
+    if (!choice || !system || choice.systemId !== system.id) return [];
+    return choice.ids
+        .map((id) => system.signatures.find((signature) => signature.id === id))
+        .filter((signature): signature is TSignature => Boolean(signature && !signature.map_connection_id));
+});
+
+const arm_choice_seconds = computed(() =>
+    arm_choice.value ? Math.max(0, Math.ceil((ARM_CHOICE_SECONDS * 1000 - (now.value.getTime() - arm_choice.value.at)) / 1000)) : 0,
+);
+// Answers itself after 60 s: nothing armed.
+watch(arm_choice, (choice) => {
+    if (!choice) return;
+    setTimeout(() => {
+        if (arm_choice.value === choice) arm_choice.value = null;
+    }, ARM_CHOICE_SECONDS * 1000);
+});
+
+function pickArmChoice(signature: TSignature): void {
+    arm_choice.value = null;
+    armRow(signature);
 }
 
 // ---- Side chain letters (patch 12) ------------------------------------------
@@ -665,6 +695,7 @@ function createNewSignature() {
                 class="flex items-center gap-2 border-b border-border/30 bg-muted/20 px-3 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
                 :class="map_user_settings.compact_signature_list ? 'py-0.5' : 'py-1.5'"
             >
+                <span class="w-4 shrink-0" aria-hidden="true"></span>
                 <button class="flex w-16 shrink-0 items-center gap-1 hover:text-foreground" @click="handleSort('id')">
                     <span>ID</span>
                     <ArrowUp v-if="sortPreferences.column === 'id' && sortPreferences.direction === 'asc'" class="size-3" />
@@ -687,6 +718,28 @@ function createNewSignature() {
                     <span>Age</span>
                     <ArrowUp v-if="sortPreferences.column === 'age' && sortPreferences.direction === 'asc'" class="size-3" />
                     <ArrowDown v-if="sortPreferences.column === 'age' && sortPreferences.direction === 'desc'" class="size-3" />
+                </button>
+            </div>
+
+            <!-- Patch 15: which hole to arm (more than one after a full paste) -->
+            <div v-if="arm_choice_rows.length" class="border-b border-amber-500/40 bg-amber-500/15 px-3 py-1.5 text-xs">
+                <div class="mb-1 flex items-center justify-between">
+                    <span class="font-medium text-amber-300">Arm the hole you're jumping? Click one: it arms and copies its bookmark</span>
+                    <span class="flex items-center gap-2 font-mono text-amber-300/80">
+                        {{ arm_choice_seconds }}s
+                        <button type="button" class="rounded px-1 hover:bg-amber-500/20" aria-label="Arm nothing" @click="arm_choice = null">✕</button>
+                    </span>
+                </div>
+                <button
+                    v-for="hole in arm_choice_rows"
+                    :key="hole.id"
+                    type="button"
+                    class="flex w-full items-center gap-3 rounded px-2 py-0.5 text-left hover:bg-amber-500/25"
+                    @click="pickArmChoice(hole)"
+                >
+                    <span class="w-16 font-mono font-semibold">{{ hole.signature_id }}</span>
+                    <span class="flex-1 truncate text-muted-foreground">{{ hole.signature_type?.name ?? 'Wormhole, type not set' }}</span>
+                    <span class="font-mono text-amber-300">→ {{ displayAlias(planned_aliases.get(hole.id) ?? claim_alias ?? '') || 'next' }}</span>
                 </button>
             </div>
 

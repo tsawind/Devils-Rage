@@ -12,7 +12,17 @@ export type TRawSignature = {
     created_at?: string;
     /** Distance from the probe scanner (kept on the page only, never sent to the server). */
     distance?: TScanDistance | null;
+    /** Patch 15: signal strength in % ("100.0%" → 100), page only. */
+    signal?: number | null;
 };
+
+/** "100.0%", "45,2 %" → 100, 45.2; anything else → null. */
+export function parseSignal(value: string | null | undefined): number | null {
+    const match = /^\s*([\d.,]+)\s*%\s*$/.exec(value ?? '');
+    if (!match) return null;
+    const amount = Number.parseFloat(match[1].replace(',', '.'));
+    return Number.isFinite(amount) ? amount : null;
+}
 
 class SignatureParser {
     parseSignatures(text: string): TRawSignature[] {
@@ -54,6 +64,7 @@ class SignatureParser {
             raw_type_name,
             created_at: new UTCDate().toISOString(),
             distance: distanceFromScanRow(signature.slice(4)),
+            signal: signature.slice(4).map(parseSignal).find((value) => value !== null) ?? null,
         };
     }
 

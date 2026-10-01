@@ -201,7 +201,7 @@ export function useTracking() {
         // signature (sig IDs fill in when someone pastes a scan), so the scanner runs full speed.
         if (!gate_connected && is_combat.value) {
             const alias = suggested_alias.value;
-            toast.info(`New system ${alias ? displayAlias(alias) : ''}`.trim(), { description: 'Combat mode: no prompt, numbered in jump order.' });
+            toast.info(`New system ${alias ? displayAlias(alias) : ''}`.trim(), { description: 'Rage Scanning: no prompt, numbered in jump order.' });
             handleSelectSignature({
                 signatureId: null,
                 alias,

@@ -172,7 +172,7 @@ function handleSubmit() {
             class="pointer-events-none absolute -top-2.5 left-2 rounded px-1 text-[9px] leading-4 font-bold tracking-wide text-white uppercase"
             :style="{ backgroundColor: chainHex ?? undefined }"
         >
-            ⚔ Combat{{ chainLabel ? ` · ${chainLabel}` : '' }}
+            ⚔ Rage{{ chainLabel ? ` · ${chainLabel}` : '' }}
         </div>
         <div
             v-else-if="previousChain"

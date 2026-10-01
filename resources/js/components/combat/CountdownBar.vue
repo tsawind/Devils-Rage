@@ -11,7 +11,7 @@ defineProps<{
 <template>
     <div v-if="remaining !== null" class="grid gap-1 border-b border-red-500/30 bg-red-500/10 px-6 py-2 text-xs text-red-300">
         <div class="flex items-center justify-between">
-            <span>⚔ Combat: {{ action }} in</span>
+            <span>⚔ Rage Scanning: {{ action }} in</span>
             <span class="font-mono font-medium">{{ remaining }}s</span>
         </div>
         <div class="h-1 overflow-hidden rounded bg-red-500/20">
