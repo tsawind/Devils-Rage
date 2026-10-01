@@ -11,7 +11,7 @@ import { TMapBackgroundMode, useMapBackground } from '@/composables/useMapBackgr
 import { updateMapUserSettings } from '@/map/actions/updateMapUserSettings';
 import { useMapStore } from '@/map/store/mapStore';
 import { router } from '@inertiajs/vue3';
-import { ImageUp, Loader2, Trash2, Waypoints, Workflow } from 'lucide-vue-next';
+import { CircleDashed, ImageUp, Loader2, Trash2, Waypoints, Workflow } from 'lucide-vue-next';
 import { computed, ref, useTemplateRef, type Component } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -142,6 +142,20 @@ function onDrop(event: DragEvent) {
             </Tooltip>
             <span class="mx-0.5 h-5 w-px bg-neutral-300/70 dark:bg-neutral-600/70" />
         </template>
+        <Tooltip v-if="effective_layout === 'tree'" :delay-duration="300">
+            <TooltipTrigger as-child>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-8 w-8 rounded-full"
+                    :class="store.showPlaceholders.value ? 'bg-white text-foreground shadow-sm dark:bg-neutral-700' : 'text-neutral-600 dark:text-neutral-400'"
+                    @click="store.setShowPlaceholders(!store.showPlaceholders.value)"
+                >
+                    <CircleDashed class="size-4" />
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent>{{ store.showPlaceholders.value ? 'Hide' : 'Show' }} unjumped holes</TooltipContent>
+        </Tooltip>
         <Popover>
             <PopoverTrigger as-child>
                 <Button variant="ghost" size="icon" class="h-8 w-8 rounded-full text-neutral-600 dark:text-neutral-400" title="Background Image">

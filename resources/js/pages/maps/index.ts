@@ -113,8 +113,21 @@ export type TMapSolarsystemBase = {
     combat_previous_color?: string | null;
     /** Combat homes: who is working the chain (names). */
     combat_workers?: string[];
+    /** Wormhole signatures nobody has jumped yet: placeholder systems on the map (patch 12). */
+    pending_holes?: TPendingHole[];
     /** When a scan was last pasted here (ISO), for greying out dead ends. */
     scanned_at?: string | null;
+};
+
+/** An unjumped wormhole signature, drawn as a placeholder system (patch 12). */
+export type TPendingHole = {
+    id: number;
+    signature_id: string | null;
+    alias: string | null;
+    is_static: boolean;
+    is_wandering: boolean;
+    target_class: string | null;
+    wormhole: string | null;
 };
 
 export type TMapSolarsystem = TMapSolarsystemBase & {

@@ -51,6 +51,7 @@ use Staudenmeir\EloquentHasManyDeep\HasRelationships;
  * @property-read WormholeSystem|null $wormholeSystem
  * @property-read Collection<int,Signature> $signatures
  * @property-read Collection<int,Signature> $wormholeSignatures
+ * @property-read Collection<int,Signature> $pendingHoles
  * @property-read Collection<int,Wormhole> $wormholes
  */
 #[UseFactory(MapSolarsystemFactory::class)]
@@ -134,6 +135,45 @@ final class MapSolarsystem extends Model
     {
         return $this->hasMany(Signature::class, 'map_solarsystem_id')
             ->whereRelation('signatureCategory', 'code', \App\Enums\SignatureCategory::Wormhole);
+    }
+
+    /**
+     * Wormhole signatures nobody has jumped yet (no connection): drawn as
+     * placeholder systems on the map (patch 12).
+     *
+     * @return HasMany<Signature,$this>
+     */
+    public function pendingHoles(): HasMany
+    {
+        return $this->hasMany(Signature::class, 'map_solarsystem_id')
+            ->whereNull('map_connection_id')
+            ->whereRelation('signatureCategory', 'code', \App\Enums\SignatureCategory::Wormhole);
+    }
+
+    /**
+     * The placeholder data for this system's unjumped holes: the eager-loaded
+     * relation when there is one, else a fresh query (one system at a time).
+     *
+     * @return list<array{id: int, signature_id: string|null, alias: string|null, is_static: bool, is_wandering: bool, target_class: string|null, wormhole: string|null}>
+     */
+    public function pendingHolesPayload(): array
+    {
+        $holes = $this->relationLoaded('pendingHoles')
+            ? $this->pendingHoles
+            : $this->pendingHoles()->with('signatureType', 'wormhole')->get();
+
+        return $holes
+            ->map(fn (Signature $signature): array => [
+                'id' => $signature->id,
+                'signature_id' => $signature->signature_id,
+                'alias' => $signature->alias,
+                'is_static' => (bool) $signature->is_static,
+                'is_wandering' => (bool) $signature->is_wandering,
+                'target_class' => $signature->signatureType?->target_class?->value,
+                'wormhole' => $signature->wormhole?->name,
+            ])
+            ->values()
+            ->all();
     }
 
     public function wormholes(): HasManyDeep

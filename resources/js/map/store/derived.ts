@@ -1,4 +1,5 @@
 import { computeBandLayout, isLoopEdge, type BandLayoutInput, type BandLayoutResult } from '@/map/core/layout/bandLayout';
+import { buildPlaceholders, type TPlaceholder } from '@/lib/placeholders';
 import { compareSystems } from '@/map/core/sorting';
 import type { Vec2 } from '@/map/core/types';
 import { TMap, TMapConnection, TMapSolarsystem, TSolarsystem } from '@/pages/maps';
@@ -48,6 +49,12 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
 
     const isConstantWidthEnabled = computed(() => meta.value?.constant_width_enabled ?? false);
 
+    /** Unjumped wormhole signatures shown as placeholder systems (tree layout, when switched on). */
+    const placeholders: ComputedRef<TPlaceholder[]> = computed(() => {
+        if (!meta.value || !isTreeLayout.value || !view.showPlaceholders.value) return [];
+        return buildPlaceholders([...entities.systems.values()], meta.value);
+    });
+
     /**
      * The band layout (patch 12): main band, side chains, combat lanes. Always
      * computed (cheap) since the side chains also drive the side-chain letters;
@@ -57,7 +64,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
      */
     const bandLayout: ComputedRef<BandLayoutResult | null> = computed(() => {
         if (!meta.value) return null;
-        return computeBandLayout(toBandInput(entities, meta.value), {
+        return computeBandLayout(toBandInput(entities, meta.value, placeholders.value), {
             gridSize: view.config.value.grid_size,
             nodeWidth: meta.value.constant_width_enabled ? 180 : 160,
         });
@@ -147,6 +154,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         isLayoutLocked,
         isConstantWidthEnabled,
         bandLayout,
+        placeholders,
         loopConnectionIds,
         treePositions,
         renderPosition,
@@ -158,7 +166,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
 }
 
 /** Translates the entity maps into the structural input the band layout needs. */
-function toBandInput(entities: EntityState, metaValue: TMapMeta): BandLayoutInput {
+function toBandInput(entities: EntityState, metaValue: TMapMeta, placeholders: readonly TPlaceholder[]): BandLayoutInput {
     const systems = [...entities.systems.values()];
     const systemsById = entities.systems;
     const homeSolarsystemId = metaValue.home_solarsystem_id;
@@ -171,17 +179,29 @@ function toBandInput(entities: EntityState, metaValue: TMapMeta): BandLayoutInpu
         .map((system) => system.combat_color as string);
 
     return {
-        nodes: systems.map((system) => ({
-            id: system.id,
-            alias: system.alias,
-            color: system.combat_color ?? null,
-            home: Boolean(system.combat_home),
-            pinned: Boolean(system.pinned),
-        })),
-        edges: [...entities.connections.values()].map((connection) => ({
-            from: connection.from_map_solarsystem_id,
-            to: connection.to_map_solarsystem_id,
-        })),
+        nodes: [
+            ...systems.map((system) => ({
+                id: system.id,
+                alias: system.alias,
+                color: system.combat_color ?? null,
+                home: Boolean(system.combat_home),
+                pinned: Boolean(system.pinned),
+            })),
+            // Placeholders sit where the system will appear, in their parent's chain.
+            ...placeholders.map((placeholder) => ({
+                id: placeholder.nodeId,
+                alias: placeholder.alias,
+                color: placeholder.color,
+                placeholder: true,
+            })),
+        ],
+        edges: [
+            ...[...entities.connections.values()].map((connection) => ({
+                from: connection.from_map_solarsystem_id,
+                to: connection.to_map_solarsystem_id,
+            })),
+            ...placeholders.map((placeholder) => ({ from: placeholder.parentId, to: placeholder.nodeId })),
+        ],
         homeId,
         laneOrder,
         // Daisy's static is Alpha: its row is kept free (numeric scheme only).

@@ -63,6 +63,13 @@ const treeGeometries = computed<Map<number, EdgeGeometry> | null>(() => {
         }
     }
 
+    // Placeholder systems (patch 12) are in the way too.
+    const layout = store.bandLayout.value;
+    for (const placeholder of store.placeholders.value) {
+        const anchor = layout?.positions.get(placeholder.nodeId);
+        if (anchor) rects.set(placeholder.nodeId, nodeRect(anchor, { width: 180, height: 40 }));
+    }
+
     return computeTreeEdgeGeometries(edges, rects, anchors);
 });
 

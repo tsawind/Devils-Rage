@@ -106,6 +106,8 @@ final readonly class MapBroadcaster
             'signatures_count' => (int) $map_solarsystem->signatures_count,
             'wormhole_signatures_count' => (int) $map_solarsystem->wormhole_signatures_count,
             'uncategorized_signatures_count' => (int) $map_solarsystem->uncategorized_signatures_count,
+            // The unjumped holes, for the placeholder systems on the map (patch 12).
+            'pending_holes' => $map_solarsystem->unsetRelation('pendingHoles')->pendingHolesPayload(),
         ];
 
         // When the system was last scanned, for greying out dead ends. Only

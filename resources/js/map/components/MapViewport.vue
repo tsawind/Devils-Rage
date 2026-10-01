@@ -26,7 +26,7 @@ const { gestures } = defineProps<{
 
 const emit = defineEmits<{
     (e: 'contextMenuOpenChange', open: boolean): void;
-    (e: 'surfaceContextMenu', payload: { nodeId: number | null; basePoint: Vec2 }): void;
+    (e: 'surfaceContextMenu', payload: { nodeId: number | null; basePoint: Vec2; placeholderSignatureId: number | null }): void;
 }>();
 
 const store = useMapStore();
@@ -59,6 +59,24 @@ const contentSize = computed(() => {
         if (!position) continue;
         maxX = Math.max(maxX, position.x * scale);
         maxY = Math.max(maxY, position.y * scale);
+    }
+    // Placeholder systems, ghosts and lane outlines (patch 12) count too.
+    const layout = store.bandLayout.value;
+    if (layout) {
+        for (const placeholder of store.placeholders.value) {
+            const position = layout.positions.get(placeholder.nodeId);
+            if (!position) continue;
+            maxX = Math.max(maxX, position.x * scale);
+            maxY = Math.max(maxY, position.y * scale);
+        }
+        for (const ghost of layout.ghosts) {
+            maxX = Math.max(maxX, ghost.position.x * scale);
+            maxY = Math.max(maxY, ghost.position.y * scale);
+        }
+        for (const lane of layout.lanes) {
+            maxX = Math.max(maxX, lane.maxX * scale);
+            maxY = Math.max(maxY, lane.maxY * scale);
+        }
     }
     return { x: maxX + padding, y: maxY + padding };
 });
@@ -153,7 +171,10 @@ function handleContextMenu(event: MouseEvent): void {
         event.preventDefault();
         return;
     }
-    emit('surfaceContextMenu', { nodeId: resolveNodeId(event.target), basePoint: toBasePoint(event) });
+    // A placeholder system (patch 12) carries its signature's id.
+    const placeholder = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-placeholder-id]') : null;
+    const placeholderSignatureId = placeholder?.dataset.placeholderId ? Number(placeholder.dataset.placeholderId) : null;
+    emit('surfaceContextMenu', { nodeId: resolveNodeId(event.target), basePoint: toBasePoint(event), placeholderSignatureId });
 }
 </script>
 

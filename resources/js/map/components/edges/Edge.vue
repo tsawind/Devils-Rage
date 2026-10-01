@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import EdgeBadges, { type EdgeIndicator } from '@/map/components/edges/EdgeBadges.vue';
 import { scalePoint } from '@/map/core/coords';
+import { describeEstimate, estimateMass, formatMass, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { edgePathAndCenter } from '@/map/core/geometry/paths';
 import type { EdgeGeometry } from '@/map/core/types';
@@ -104,6 +105,45 @@ const indicators = computed<EdgeIndicator[]>(() => {
     return items;
 });
 
+// ---- Mass pipe (patch 12) -----------------------------------------------------
+// The line is drawn as a pipe: its outline is the hole's size when new, the
+// lighter band what could be left at most, the solid core what is left at least.
+
+/** The hole's type from either side's signature (never the K162 side). */
+const holeType = computed(() => {
+    for (const signature of connection?.signatures ?? []) {
+        const wormhole = signature.wormhole;
+        if (wormhole && !wormhole.name.startsWith('K162') && wormhole.total_mass > 0) return wormhole;
+    }
+    return null;
+});
+
+const estimate = computed(() => {
+    if (isStargate.value || !connection || !holeType.value) return null;
+    return estimateMass({ totalMass: holeType.value.total_mass, jumped: connection.jumps_mass_sum, status: massStatus.value });
+});
+
+const pipe = computed(() => {
+    const current = estimate.value;
+    if (!current) return null;
+    const factor = Math.min(scale, 1.5);
+    const color = massStatus.value === 'critical' ? '#ef4444' : massStatus.value === 'reduced' ? '#f59e0b' : '#a3a3a3';
+    return {
+        outline: pipeWidth(current.capacity) * factor + 2,
+        hollow: pipeWidth(current.capacity) * factor,
+        max: pipeWidth(current.max) * factor,
+        min: pipeWidth(current.min) * factor,
+        color,
+    };
+});
+
+const pipeTitle = computed(() => {
+    const current = estimate.value;
+    if (!current || !holeType.value || !connection) return undefined;
+    const jumps = connection.jumps_count ?? 0;
+    return `${holeType.value.name}: ${describeEstimate(current)} · ${formatMass(holeType.value.total_mass)} kg hole · ${jumps} ${jumps === 1 ? 'jump' : 'jumps'} logged (${formatMass(connection.jumps_mass_sum ?? 0)} kg)`;
+});
+
 function getDashArray(): string | undefined {
     if (!massStatus.value) return '0';
     if (lifetime.value === 'eol' || lifetime.value === 'critical') return '2,6';
@@ -117,6 +157,13 @@ function getDashArray(): string | undefined {
         <template v-if="chainColor">
             <path :d="path.d" :stroke="chainColor" fill="none" :stroke-width="isOrthogonal ? 9 : 14" stroke-opacity="0.18" stroke-linejoin="round" stroke-linecap="round" />
             <path :d="path.d" :stroke="chainColor" fill="none" :stroke-width="isOrthogonal ? 4 : 7" stroke-opacity="0.55" stroke-linejoin="round" stroke-linecap="round" />
+        </template>
+        <!-- Mass pipe: outline = size when new, light band = could be up to, solid core = at least -->
+        <template v-if="pipe">
+            <path :d="path.d" stroke="currentColor" fill="none" :stroke-width="pipe.outline" stroke-opacity="0.5" stroke-linejoin="round" class="pointer-events-none" />
+            <path :d="path.d" fill="none" :stroke-width="pipe.hollow" stroke-linejoin="round" class="pointer-events-none stroke-neutral-100 dark:stroke-neutral-950" />
+            <path v-if="pipe.max > 0" :d="path.d" :stroke="pipe.color" fill="none" :stroke-width="pipe.max" stroke-opacity="0.35" stroke-linejoin="round" class="pointer-events-none" />
+            <path v-if="pipe.min > 0" :d="path.d" :stroke="pipe.color" fill="none" :stroke-width="pipe.min" stroke-linejoin="round" class="pointer-events-none" />
         </template>
         <!-- Stargates are permanent, so they draw a single solid line instead of the wormhole's mass/lifetime styling. -->
         <path
@@ -202,7 +249,9 @@ function getDashArray(): string | undefined {
             @contextmenu="(event) => emit('connectionContextMenu', event)"
             @click="(event) => emit('connectionClick', event)"
             @pointerdown.stop
-        />
+        >
+            <title v-if="pipeTitle">{{ pipeTitle }}</title>
+        </path>
         <!-- Original style draws solid endpoints; the orthogonal style meets the node edge instead. -->
         <template v-if="!isOrthogonal">
             <circle :cx="scaledFrom.x" :cy="scaledFrom.y" r="4" fill="currentColor" />

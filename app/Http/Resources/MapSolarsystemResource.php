@@ -58,6 +58,8 @@ final class MapSolarsystemResource extends JsonResource
             'wormhole_signatures_count' => $this->wormhole_signatures_count,
             'map_connections_count' => $this->map_connections_count,
             'threat_level' => $this->whenLoaded('wormholeSystem', fn () => $this->wormholeSystem?->threat_level),
+            // Unjumped wormhole signatures: placeholder systems on the map (patch 12).
+            'pending_holes' => $this->resource->pendingHolesPayload(),
             'signatures' => $this->whenLoaded('signatures', fn () => $this->signatures->toResourceCollection(MapSignatureResource::class)),
         ];
     }

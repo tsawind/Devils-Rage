@@ -8,6 +8,16 @@ export type Marquee = { start: Vec2; end: Vec2 };
 
 export type ViewState = ReturnType<typeof createViewState>;
 
+const SHOW_PLACEHOLDERS_KEY = 'map-show-unjumped-holes';
+
+function readShowPlaceholders(): boolean {
+    try {
+        return typeof window === 'undefined' || window.localStorage.getItem(SHOW_PLACEHOLDERS_KEY) !== '0';
+    } catch {
+        return true;
+    }
+}
+
 /**
  * Interaction and viewport state. The selected set is replaced wholesale on every
  * change, so per-node `selectedIds.value.has(id)` computeds re-evaluate together
@@ -25,6 +35,17 @@ export function createViewState() {
     const linkDragOriginId: Ref<number | null> = ref(null);
     /** The viewer's personal layout override (when the map allows it); null follows the map. */
     const userLayoutOverride: Ref<'manual' | 'tree' | null> = ref(null);
+    /** Show unjumped wormhole signatures as placeholder systems (patch 12); remembered per browser. */
+    const showPlaceholders: Ref<boolean> = ref(readShowPlaceholders());
+
+    function setShowPlaceholders(value: boolean): void {
+        showPlaceholders.value = value;
+        try {
+            window.localStorage.setItem(SHOW_PLACEHOLDERS_KEY, value ? '1' : '0');
+        } catch {
+            // Storage unavailable: the switch still works for this visit.
+        }
+    }
 
     function setSelection(ids: Iterable<number>): void {
         selectedIds.value = new Set(ids);
@@ -59,6 +80,8 @@ export function createViewState() {
         activeGesture,
         linkDragOriginId,
         userLayoutOverride,
+        showPlaceholders,
+        setShowPlaceholders,
         setSelection,
         clearSelection,
         pruneSelection,

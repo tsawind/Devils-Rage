@@ -33,8 +33,8 @@ export type BandLayoutNode = {
     pinned?: boolean | null;
     /**
      * A placeholder for an unjumped wormhole signature (patch 12c): always a
-     * leaf, and sorted after real systems so a combat chain still runs
-     * straight down through its real systems.
+     * leaf. In a lane it sorts after real systems so a combat chain still runs
+     * straight down through its real systems; in the bands it sits by number.
      */
     placeholder?: boolean | null;
 };
@@ -151,12 +151,10 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
     const reservedGhostId = GHOST_BASE * 2;
     const ghostInfo = new Map<number, { label: string; note: string; color: string | null; alias: string | null; realId: number | null }>();
 
-    // Sibling order: placeholders after real systems, then the given order. Ghosts sort by the alias they hold.
+    // Sibling order in the bands: the given order (statics first), placeholders
+    // mixed in by the number they hold. Ghosts sort by the alias they hold.
     const aliasFor = (id: number): string | null => (ghostInfo.has(id) ? ghostInfo.get(id)!.alias : (byId.get(id)?.alias ?? null));
     const compare = (a: number, b: number): number => {
-        const placeholderA = isPlaceholder(a) ? 1 : 0;
-        const placeholderB = isPlaceholder(b) ? 1 : 0;
-        if (placeholderA !== placeholderB) return placeholderA - placeholderB;
         const realA = ghostInfo.get(a)?.realId ?? (ghostInfo.has(a) ? null : a);
         const realB = ghostInfo.get(b)?.realId ?? (ghostInfo.has(b) ? null : b);
         if (realA !== null && realB !== null && input.compareNodes) {
@@ -168,6 +166,12 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         if (aliasA && !aliasB) return 1;
         if (!aliasA && aliasB) return -1;
         return (aliasA ?? '').localeCompare(aliasB ?? '') || a - b;
+    };
+    // In a lane, placeholders come after real systems, so the chain runs straight down through what was jumped.
+    const compareLane = (a: number, b: number): number => {
+        const placeholderA = isPlaceholder(a) ? 1 : 0;
+        const placeholderB = isPlaceholder(b) ? 1 : 0;
+        return placeholderA - placeholderB || compare(a, b);
     };
 
     const parentOf = new Map<number, number>();
@@ -342,14 +346,14 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
             }
         };
         if (homeOfLane !== null) grow(homeOfLane);
-        for (const id of laneIds.toSorted(compare)) {
+        for (const id of laneIds.toSorted(compareLane)) {
             if (bandOf.get(id) !== 'lane' && !isPlaceholder(id)) grow(id);
         }
         // A placeholder whose parent is elsewhere: give it its own spot at the end.
         for (const id of laneIds) {
             if (bandOf.get(id) !== 'lane') grow(id);
         }
-        for (const children of childrenOf.values()) children.sort(compare);
+        for (const children of childrenOf.values()) children.sort(compareLane);
 
         // First child straight down, every other child starts a new column to the right.
         let lastColumn = -1;

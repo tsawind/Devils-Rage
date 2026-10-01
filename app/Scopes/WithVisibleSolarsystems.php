@@ -18,7 +18,7 @@ final class WithVisibleSolarsystems
     public function __invoke(Builder $query): Builder
     {
         return $query->with([
-            'mapSolarsystems' => fn (Relation $query) => $query->withCount('signatures', 'wormholeSignatures', 'mapConnections', 'uncategorizedSignatures')->with('wormholeSystem:id,threat_level', 'details'),
+            'mapSolarsystems' => fn (Relation $query) => $query->withCount('signatures', 'wormholeSignatures', 'mapConnections', 'uncategorizedSignatures')->with('wormholeSystem:id,threat_level', 'details', 'pendingHoles.signatureType', 'pendingHoles.wormhole'),
             'mapConnections' => function (Relation $query): void {
                 $builder = $query->getQuery();
                 assert($builder instanceof MapConnectionBuilder);

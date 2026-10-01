@@ -10,6 +10,8 @@ import EdgeLayer from '@/map/components/edges/EdgeLayer.vue';
 import LayoutDecorations from '@/map/components/LayoutDecorations.vue';
 import MapViewport from '@/map/components/MapViewport.vue';
 import MapNode from '@/map/components/nodes/MapNode.vue';
+import PlaceholderLayer from '@/map/components/nodes/PlaceholderLayer.vue';
+import PlaceholderContextMenu from '@/map/components/overlays/PlaceholderContextMenu.vue';
 import ConnectionPopover from '@/map/components/overlays/ConnectionPopover.vue';
 import ClearChainDialog from '@/map/components/overlays/ClearChainDialog.vue';
 import MapAddConnectionDialog from '@/map/components/overlays/MapAddConnectionDialog.vue';
@@ -143,11 +145,19 @@ const connectionPopoverReference = computed(() => {
 /** The node under the last right-click and where it landed, in base units. */
 const contextMenuNodeId = ref<number | null>(null);
 const contextMenuBasePoint = ref<Vec2 | null>(null);
+/** A placeholder system under the last right-click (its signature id, patch 12). */
+const contextMenuPlaceholderId = ref<number | null>(null);
 
-function handleSurfaceContextMenu(payload: { nodeId: number | null; basePoint: Vec2 }): void {
+function handleSurfaceContextMenu(payload: { nodeId: number | null; basePoint: Vec2; placeholderSignatureId: number | null }): void {
     contextMenuNodeId.value = payload.nodeId;
     contextMenuBasePoint.value = payload.basePoint;
+    contextMenuPlaceholderId.value = payload.placeholderSignatureId;
 }
+
+const contextMenuPlaceholder = computed(() => {
+    const id = contextMenuPlaceholderId.value;
+    return id === null ? null : (store.placeholders.value.find((placeholder) => placeholder.signatureId === id) ?? null);
+});
 
 const contextMenuSystem = computed(() => {
     const id = contextMenuNodeId.value;
@@ -157,9 +167,10 @@ const contextMenuSystem = computed(() => {
 // Connection wins like in the old root (selected_connection drove the type);
 // the node menu replaces the old per-node ContextMenu wrapper, which the new
 // MapNode no longer renders.
-const contextMenuType = computed<'connection' | 'node' | 'map'>(() => {
+const contextMenuType = computed<'connection' | 'node' | 'placeholder' | 'map'>(() => {
     if (selectedConnection.value) return 'connection';
     if (contextMenuSystem.value) return 'node';
+    if (contextMenuPlaceholder.value) return 'placeholder';
     return 'map';
 });
 
@@ -167,6 +178,7 @@ function handleContextMenuOpenChange(open: boolean): void {
     if (!open) {
         selectedConnectionId.value = null;
         contextMenuNodeId.value = null;
+        contextMenuPlaceholderId.value = null;
     }
 }
 
@@ -190,6 +202,7 @@ whenever(Delete, () => {
         @surface-context-menu="handleSurfaceContextMenu"
     >
         <LayoutDecorations />
+        <PlaceholderLayer />
         <EdgeLayer
             :pending-from="pendingFrom"
             :pending-to="pendingTo"
@@ -200,6 +213,7 @@ whenever(Delete, () => {
         <template #context-menu>
             <MapContextMenu v-if="contextMenuType === 'map' && canWrite" :position="contextMenuBasePoint" />
             <MapSolarsystemContextMenu v-else-if="contextMenuType === 'node' && contextMenuSystem" :map_solarsystem="contextMenuSystem" />
+            <PlaceholderContextMenu v-else-if="contextMenuType === 'placeholder' && contextMenuPlaceholder" :placeholder="contextMenuPlaceholder" />
             <MapConnectionContextMenu
                 v-else-if="contextMenuType === 'connection' && selectedConnection && canWrite"
                 :map_connection="selectedConnection"

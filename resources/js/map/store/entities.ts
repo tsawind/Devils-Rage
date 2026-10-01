@@ -1,5 +1,5 @@
 import type { Size, Vec2 } from '@/map/core/types';
-import { TMap, TMapConnection, TMapSolarsystem } from '@/pages/maps';
+import { TMap, TMapConnection, TMapSolarsystem, TPendingHole } from '@/pages/maps';
 import { shallowReactive } from 'vue';
 
 /**
@@ -16,6 +16,8 @@ export type SystemCounts = {
     uncategorized_signatures_count: number;
     /** Sent with a paste: when the system was last scanned. */
     scanned_at?: string | null;
+    /** The unjumped wormhole signatures (patch 12 placeholders). */
+    pending_holes?: TPendingHole[];
 };
 
 export type EntityState = ReturnType<typeof createEntityState>;
