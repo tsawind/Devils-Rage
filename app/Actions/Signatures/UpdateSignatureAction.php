@@ -34,12 +34,13 @@ final readonly class UpdateSignatureAction
     public function handle(Signature $signature, SignatureData $data): Signature
     {
         return DB::transaction(function () use ($signature, $data): Signature {
+            $this->lockOthers($signature, $data);
             $this->guardChainNumbering($signature, $data);
             $previousAlias = $signature->alias;
 
             $updateData = $data->toArray();
-            // Not a column: whether the linked system follows a confirmed rename.
-            unset($updateData['rename_system']);
+            // Not columns: whether the linked system follows a confirmed rename; numbers to lock elsewhere.
+            unset($updateData['rename_system'], $updateData['lock_others']);
 
             // Update wormhole_id if signature_type_id changed, resetting it when cleared
             if (! $data->signature_type_id instanceof Optional) {
@@ -64,6 +65,40 @@ final readonly class UpdateSignatureAction
 
             return $signature;
         });
+    }
+
+    /**
+     * Patch 14: a rename here would shift the planned numbers of the other
+     * unjumped holes in this system: lock them to the numbers they show now.
+     * Only holes without a number of their own, and only numbers not in use.
+     */
+    private function lockOthers(Signature $signature, SignatureData $data): void
+    {
+        if ($data->lock_others instanceof Optional || $data->lock_others === []) {
+            return;
+        }
+
+        $others = Signature::query()
+            ->where('map_solarsystem_id', $signature->map_solarsystem_id)
+            ->whereKeyNot($signature->id)
+            ->whereIn('id', array_map(intval(...), array_keys($data->lock_others)))
+            ->whereNull('alias')
+            ->whereNull('map_connection_id')
+            ->get();
+
+        foreach ($others as $other) {
+            $alias = mb_trim((string) ($data->lock_others[$other->id] ?? $data->lock_others[(string) $other->id] ?? ''));
+            if ($alias === '') {
+                continue;
+            }
+            $taken = Signature::query()
+                ->where('map_solarsystem_id', $signature->map_solarsystem_id)
+                ->where('alias', $alias)
+                ->exists();
+            if (! $taken) {
+                $other->update(['alias' => $alias]);
+            }
+        }
     }
 
     /**

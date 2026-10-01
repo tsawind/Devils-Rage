@@ -37,6 +37,13 @@ final class SignatureData extends Data
         public bool|Optional $is_wandering = new Optional,
         /** Patch 14: the scanner confirmed renaming the system this hole leads to (rename popup). */
         public bool|Optional $rename_system = new Optional,
+        /**
+         * Patch 14: lock other unjumped holes in this system to the numbers they show now
+         * (signature id => number), so a rename here doesn't shift their planned numbers.
+         *
+         * @var array<int|string, string>|Optional
+         */
+        public array|Optional $lock_others = new Optional,
     ) {}
 
     public static function rules(): array
@@ -55,6 +62,8 @@ final class SignatureData extends Data
             'is_static' => ['sometimes', 'boolean'],
             'is_wandering' => ['sometimes', 'boolean'],
             'rename_system' => ['sometimes', 'boolean'],
+            'lock_others' => ['sometimes', 'array'],
+            'lock_others.*' => ['string', 'max:32'],
         ];
     }
 

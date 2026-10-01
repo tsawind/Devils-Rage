@@ -3,6 +3,7 @@ import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { displayAlias, staticSlotAlias } from '@/lib/alias';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { mappedBelow, pendingHoleBookmark, renameChanges } from '@/map/holeBookmark';
+import { planPendingHoles } from '@/lib/placeholders';
 import { classCode, decideStatic, type TCertaintyHole, type TCertaintyWayBack } from '@/lib/staticCertainty';
 import { updateSignature } from '@/map/actions/updateSignature';
 import type { MapStore } from '@/map/store/mapStore';
@@ -140,7 +141,12 @@ export function useStaticCertainty(store: MapStore): void {
                 choose: (choice) => {
                     certainAsk.value = null;
                     if (choice === 'rename' && beyond.length === 0) {
-                        updateSignature({ id: signatureId } as TSignature, { ...payload, alias: slot, ...(linked ? { rename_system: true } : {}) });
+                        updateSignature({ id: signatureId } as TSignature, {
+                            ...payload,
+                            alias: slot,
+                            lock_others: lockOthersFor(system, signatureId),
+                            ...(linked ? { rename_system: true } : {}),
+                        });
                         const copy = hole ? pendingHoleBookmark(store, system, hole, slot, true) : '';
                         if (copy) navigator.clipboard.writeText(copy).catch(() => undefined);
                         toast.success(`Renamed to ${displayAlias(slot)}`, { description: copy ? `Copied ${visibleBookmarkName(copy)}` : undefined });
@@ -159,11 +165,29 @@ export function useStaticCertainty(store: MapStore): void {
         }
     }
 
+    /** The numbers the system's unjumped holes show now (locked or planned). */
+    function plannedOf(system: TMapSolarsystem): Map<number, string> {
+        const meta = store.meta.value;
+        return planPendingHoles([...store.systems.values()], system, { bookmark_alias_scheme: meta?.bookmark_alias_scheme, bookmark_ignored_alias: meta?.bookmark_ignored_alias });
+    }
+
+    /** Lock the other unjumped holes to the numbers they show, so a rename doesn't shift them. */
+    function lockOthersFor(system: TMapSolarsystem, exceptId: number): Record<string, string> {
+        const planned = plannedOf(system);
+        const locks: Record<string, string> = {};
+        for (const hole of system.pending_holes ?? []) {
+            if (hole.id === exceptId || hole.alias) continue;
+            const alias = planned.get(hole.id);
+            if (alias) locks[String(hole.id)] = alias;
+        }
+        return locks;
+    }
+
     /** The name a hole has in game: its locked number, or the system it leads to. */
     function currentName(system: TMapSolarsystem, signatureId: number): string | null {
         const hole = system.pending_holes?.find((candidate) => candidate.id === signatureId);
-        // Only a locked number counts: a planned one nobody copied, armed or jumped shifts on its own.
-        if (hole) return hole.alias ?? null;
+        // Its locked number, or the planned one shown on the map (someone may have bookmarked it by hand).
+        if (hole) return hole.alias ?? plannedOf(system).get(signatureId) ?? null;
         for (const connection of store.connections.values()) {
             const signature = (connection.signatures ?? []).find((candidate) => candidate.id === signatureId);
             if (!signature) continue;

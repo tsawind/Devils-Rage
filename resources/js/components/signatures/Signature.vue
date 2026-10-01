@@ -33,6 +33,7 @@ import { aliasForSlot, displayAlias, isIgnoredAlias, staticSlotAlias, suggestAli
 import type { TArmAsOption } from '@/lib/arming';
 import { buildSignatureBookmark, formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases, combatColorLabel } from '@/lib/combat';
+import { planPendingHoles } from '@/lib/placeholders';
 import { isK162, validateManualAlias } from '@/lib/chainNumbering';
 import { Data } from '@/lib/data';
 import { formatDateToISO } from '@/lib/utils';
@@ -272,7 +273,8 @@ function makeStatic(typeId: number | null | undefined, manual: boolean): void {
 
     // Patch 14: ask when a name used in game would change (a locked number, or the jumped system's name).
     // A planned number nobody copied, armed or jumped just shifts on its own.
-    const name = current ?? forward_target_alias.value;
+    // The name it shows: locked, the jumped system's, or the planned one (someone may have bookmarked it by hand).
+    const name = current ?? forward_target_alias.value ?? (is_limbo.value ? null : (planned_alias ?? null));
     if (name === static_slot.value || (!is_limbo.value && !name)) {
         const previous: Record<string, FormDataConvertible> = {
             signature_type_id: signature.signature_type_id,
@@ -400,13 +402,13 @@ function handleRenameChoice(choice: 'rename' | 'keep'): void {
     const base = pending_static.value;
     if (choice === 'keep' || rename_beyond.value.length > 0) {
         // Keep its name: lock it, or the static would take the static's slot on its own.
-        const keep = forward_target_alias.value;
+        const keep = forward_target_alias.value ?? planned_alias ?? null;
         handleChange({ ...base, ...(!is_limbo.value && !signature.alias && keep && keep !== static_slot.value ? { alias: keep } : {}) });
         return;
     }
 
     const name = staticBookmarkName(static_slot.value);
-    handleChange({ ...base, alias: static_slot.value, ...(selected_connection.value ? { rename_system: true } : {}) });
+    handleChange({ ...base, alias: static_slot.value, lock_others: lockOthers(), ...(forward_target_alias.value ? { rename_system: true } : {}) });
     navigator.clipboard.writeText(name).catch(() => undefined);
     toast.success(`Renamed to ${displayAlias(static_slot.value)}`, { description: `Copied ${visibleBookmarkName(name)}` });
 }
@@ -430,6 +432,27 @@ const map_store = (() => {
         return null;
     }
 })();
+
+/**
+ * Patch 14: the numbers the other unjumped holes here show now, to lock them
+ * when this hole is renamed, so their planned numbers don't shift.
+ */
+function lockOthers(): Record<string, string> {
+    const system = map_system.value;
+    if (!system || !map_store || is_limbo.value) return {};
+    const meta = page.props.map;
+    const planned = planPendingHoles([...map_store.systems.values()], system, {
+        bookmark_alias_scheme: meta.bookmark_alias_scheme,
+        bookmark_ignored_alias: meta.bookmark_ignored_alias,
+    });
+    const locks: Record<string, string> = {};
+    for (const hole of system.pending_holes ?? []) {
+        if (hole.id === signature.id || hole.alias) continue;
+        const alias = planned.get(hole.id);
+        if (alias) locks[String(hole.id)] = alias;
+    }
+    return locks;
+}
 
 /** The system this hole leads on to, unless it is the way back (the parent's name is not this hole's name). */
 const forward_target_alias = computed(() => {
@@ -461,22 +484,23 @@ function handleToggleStatic() {
     if (is_k162.value) return;
     if (signature.is_static) {
         // Patch 14: an unjumped hole bookmarked as the static's slot gets a new number: ask first.
-        if (!is_limbo.value && !selected_connection.value && signature.alias && signature.alias === static_slot.value) {
+        const shown = signature.alias ?? planned_alias ?? null;
+        if (!is_limbo.value && !selected_connection.value && shown && shown === static_slot.value) {
             const next = nextFreeNumber();
             if (next && is_combat.value) {
-                handleChange({ is_static: false, is_wandering: false, alias: next });
+                handleChange({ is_static: false, is_wandering: false, alias: next, lock_others: lockOthers() });
                 return;
             }
             if (next) {
                 askRename({
-                    title: `${signature.signature_id ?? 'This hole'} is not the static: rename ${displayAlias(signature.alias)} → ${displayAlias(next)}?`,
+                    title: `${signature.signature_id ?? 'This hole'} is not the static: rename ${displayAlias(shown)} → ${displayAlias(next)}?`,
                     description: 'The static slot is only for the static. Cancel keeps it marked as the static.',
-                    from: signature.alias,
+                    from: shown,
                     to: next,
                     isStatic: false,
                     keepLabel: 'Cancel',
                     renameLabel: `Untick and rename to ${displayAlias(next)}`,
-                    onRename: () => handleChange({ is_static: false, is_wandering: false, alias: next }),
+                    onRename: () => handleChange({ is_static: false, is_wandering: false, alias: next, lock_others: lockOthers() }),
                 });
                 return;
             }
@@ -541,9 +565,10 @@ function handleSetNumber() {
         alias: result.alias,
         is_static: makesStatic,
         ...(makesStatic ? { is_wandering: false } : {}),
+        lock_others: lockOthers(),
     };
     // Patch 14: a name already used in game (jumped, or locked by a copy or arm) changes: ask first.
-    const before = signature.alias ?? forward_target_alias.value ?? null;
+    const before = signature.alias ?? forward_target_alias.value ?? (is_limbo.value ? null : (planned_alias ?? null));
     const renamesSystem = Boolean(forward_target_alias.value);
     if (!quiet.value && before && before.toUpperCase() !== result.alias.toUpperCase()) {
         askRename({

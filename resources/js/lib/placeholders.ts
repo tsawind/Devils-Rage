@@ -103,25 +103,7 @@ export function buildPlaceholders(
         if (holes.length === 0) continue;
 
         const limbo = Boolean(system.combat_color);
-        const planned = planSignatureAliases({
-            parentAlias: system.alias,
-            originIsWormhole: isWormholeClass(system.solarsystem?.class ?? null),
-            aliases: chainAliases(systems, system),
-            scheme: formats.bookmark_alias_scheme,
-            ignoredAlias: formats.bookmark_ignored_alias,
-            combatHome: Boolean(system.combat_home),
-            limbo,
-            signatures: holes.map((hole) => ({
-                id: hole.id,
-                isWormhole: true,
-                isConnected: false,
-                lockedAlias: hole.alias,
-                isStatic: hole.is_static,
-                targetIsWormhole: !hole.target_class || hole.target_class === 'unknown' || isWormholeClass(hole.target_class),
-                targetClass: hole.target_class,
-            })),
-        });
-
+        const planned = planPendingHoles(systems, system, formats, holes);
         for (const hole of holes.toSorted((a, b) => a.id - b.id)) {
             const alias = hole.alias ?? planned.get(hole.id) ?? null;
             const destination = holeDestination(hole.target_class);
@@ -144,6 +126,36 @@ export function buildPlaceholders(
     }
     if (context) result.push(...expectedStatics(systems, formats, context, result));
     return result;
+}
+
+/**
+ * The number each unjumped hole in a system has or would get (its locked one,
+ * or the planned one; none in combat limbo). `holes` defaults to all of them.
+ */
+export function planPendingHoles(
+    systems: readonly TPlaceholderSystem[],
+    system: TPlaceholderSystem,
+    formats: { bookmark_alias_scheme?: TAliasScheme; bookmark_ignored_alias?: string },
+    holes: readonly TPlaceholderHole[] = system.pending_holes ?? [],
+): Map<number, string> {
+    return planSignatureAliases({
+        parentAlias: system.alias,
+        originIsWormhole: isWormholeClass(system.solarsystem?.class ?? null),
+        aliases: chainAliases(systems, system),
+        scheme: formats.bookmark_alias_scheme,
+        ignoredAlias: formats.bookmark_ignored_alias,
+        combatHome: Boolean(system.combat_home),
+        limbo: Boolean(system.combat_color),
+        signatures: holes.map((hole) => ({
+            id: hole.id,
+            isWormhole: true,
+            isConnected: false,
+            lockedAlias: hole.alias,
+            isStatic: hole.is_static,
+            targetIsWormhole: !hole.target_class || hole.target_class === 'unknown' || isWormholeClass(hole.target_class),
+            targetClass: hole.target_class,
+        })),
+    });
 }
 
 /**
