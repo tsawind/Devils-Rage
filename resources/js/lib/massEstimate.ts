@@ -20,8 +20,16 @@ export type TMassEstimate = {
 
 /** The biggest hole in game is 5.5 B kg (+10%): that draws at the full width. */
 export const PIPE_FULL_MASS = 5_500_000_000;
-export const PIPE_FULL_WIDTH = 16;
+/** Patch 13: a straight scale, 2 px + 30 px × share of the biggest hole (a new D845 is 32 px, 1 B about 8). */
+export const PIPE_FULL_WIDTH = 32;
 export const PIPE_MIN_WIDTH = 2;
+/** Holes that only let frigates through (max jump 5 M kg) always draw thin. */
+export const FRIGATE_JUMP_MASS = 5_000_000;
+
+/** Whether a hole type only lets frigates through. */
+export function isFrigateHole(maximumJumpMass: number | null | undefined): boolean {
+    return (maximumJumpMass ?? 0) > 0 && (maximumJumpMass ?? 0) <= FRIGATE_JUMP_MASS;
+}
 
 export function estimateMass(params: { totalMass: number | null | undefined; jumped: number | null | undefined; status: string | null | undefined }): TMassEstimate | null {
     const total = params.totalMass ?? 0;
@@ -52,10 +60,10 @@ export function estimateMass(params: { totalMass: number | null | undefined; jum
     return { capacity: high, min: Math.max(0, Math.min(min, max)), max };
 }
 
-/** Pipe width for a mass: square-root scale, 16 px for 5.5 B kg, never under 2 px (0 for nothing). */
+/** Pipe width for a mass: 2 px + 30 px × (mass ÷ 5.5 B), so 32 px for the biggest hole (0 for nothing). */
 export function pipeWidth(mass: number): number {
     if (!(mass > 0)) return 0;
-    return Math.max(PIPE_MIN_WIDTH, PIPE_FULL_WIDTH * Math.sqrt(Math.min(mass, PIPE_FULL_MASS) / PIPE_FULL_MASS));
+    return PIPE_MIN_WIDTH + (PIPE_FULL_WIDTH - PIPE_MIN_WIDTH) * (Math.min(mass, PIPE_FULL_MASS) / PIPE_FULL_MASS);
 }
 
 /** "1.6 B", "450 M", "0". */

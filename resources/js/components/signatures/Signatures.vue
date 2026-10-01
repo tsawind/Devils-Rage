@@ -16,6 +16,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCombat } from '@/composables/combat/useCombat';
 import { recentJump } from '@/composables/signatures/recentJump';
+import { requestStaticCheck } from '@/composables/signatures/useStaticCertainty';
 import { usePasteSignatures } from '@/composables/signatures/usePasteSignatures';
 import { useSignatures } from '@/composables/signatures/useSignatures';
 import { useSortableSignatures } from '@/composables/signatures/useSortedSignatures';
@@ -198,11 +199,32 @@ const return_connections = ref<TReturnConnectionOption[]>([]);
 let pending_return: { candidates: TReturnCandidate[]; connections: TProcessedConnection[] } | null = null;
 
 async function handlePasted(pasted: TRawSignature[]): Promise<void> {
+    // The map's copy of this system before the server's update, for the static check.
+    const before = map_system.value;
+
     // Let the fresh signature list reach this component first.
     await nextTick();
 
     const system = props.map_solarsystem;
     if (!system) return;
+
+    // Patch 13: once everything is scanned, the static may now be certain.
+    requestStaticCheck(system.id, before);
+
+    const jump = recentJump.value && recentJump.value.toSolarsystemId === system.solarsystem_id ? recentJump.value : null;
+
+    // Patch 13: the hole you came through already has its signature on this
+    // side, so the way back is known: don't ask about other unlinked connections.
+    if (
+        jump &&
+        connections.value.some(
+            (connection) =>
+                connection.target.solarsystem_id === jump.fromSolarsystemId &&
+                (connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === system.id),
+        )
+    ) {
+        return;
+    }
 
     const open = connections.value.filter(
         (connection) =>
@@ -211,8 +233,6 @@ async function handlePasted(pasted: TRawSignature[]): Promise<void> {
             !(connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === system.id),
     );
     if (open.length === 0) return;
-
-    const jump = recentJump.value && recentJump.value.toSolarsystemId === system.solarsystem_id ? recentJump.value : null;
 
     const ordered = orderOpenConnections(
         open.map((connection) => ({ ...connection, otherSolarsystemId: connection.target.solarsystem_id, createdAt: connection.created_at })),

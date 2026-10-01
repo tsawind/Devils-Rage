@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { combatColorHex } from '@/lib/combat';
+import { isFrigateHole, pipeWidth } from '@/lib/massEstimate';
+import { wormholeMass } from '@/lib/wormholeMass';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
 import { useMapStore } from '@/map/store/mapStore';
 import { show } from '@/routes/maps';
@@ -49,11 +51,26 @@ const items = computed(() => {
             path = `M ${startX * scale} ${startY * scale} H ${middleX * scale} V ${endY * scale} H ${left * scale}`;
         }
 
+        // Patch 13: a striped pipe sized by the hole's type (full mass, nothing jumped
+        // yet), colored by its mass status, with a purple edge when end of life.
+        // A K162 or unknown type keeps the thin dotted line.
+        const mass = wormholeMass(placeholder.wormhole);
+        const pipe = mass
+            ? {
+                  width: isFrigateHole(mass.maxJump) ? 2 : pipeWidth(mass.total * 1.1) * Math.min(scale, 1.5),
+                  color: placeholder.massStatus === 'critical' ? '#ef4444' : placeholder.massStatus === 'reduced' ? '#f59e0b' : '#a3a3a3',
+                  eol: placeholder.lifetime === 'eol' || placeholder.lifetime === 'critical',
+                  eolCritical: placeholder.lifetime === 'critical',
+              }
+            : null;
+
         return [
             {
                 ...placeholder,
                 hex,
                 path,
+                pipe,
+                tag: pipe?.eol ? { text: pipe.eolCritical ? 'EOL!' : 'EOL', x: (left - 6) * scale, y: (top + NODE_HEIGHT / 2) * scale } : null,
                 href: show(meta.slug, { mergeQuery: { solarsystem_id: parent.solarsystem_id } }),
                 style: {
                     transform: `translate(${left * scale}px, ${top * scale}px)`,
@@ -71,17 +88,49 @@ const items = computed(() => {
 <template>
     <div v-if="items.length" class="pointer-events-none absolute inset-0">
         <svg class="absolute inset-0 h-full w-full overflow-visible" xmlns="http://www.w3.org/2000/svg">
-            <path
-                v-for="item in items"
-                :key="`line-${item.nodeId}`"
-                :d="item.path"
-                fill="none"
-                :stroke="item.hex ?? 'currentColor'"
-                class="text-neutral-400 dark:text-neutral-600"
-                stroke-width="1.5"
-                stroke-dasharray="4,4"
-                stroke-opacity="0.7"
-            />
+            <template v-for="item in items" :key="`line-${item.nodeId}`">
+                <template v-if="item.pipe">
+                    <path
+                        v-if="item.pipe.eol"
+                        :d="item.path"
+                        fill="none"
+                        :stroke="item.pipe.eolCritical ? '#d946ef' : '#a855f7'"
+                        :stroke-width="item.pipe.width + 4"
+                        stroke-opacity="0.85"
+                        :stroke-dasharray="item.pipe.width > 4 ? '16,11' : '6,6'"
+                    />
+                    <path
+                        :d="item.path"
+                        fill="none"
+                        :stroke="item.pipe.color"
+                        :stroke-width="item.pipe.width"
+                        :stroke-opacity="item.pipe.eol ? 0.75 : 0.45"
+                        :stroke-dasharray="item.pipe.width > 4 ? '16,11' : '6,6'"
+                    />
+                </template>
+                <path
+                    v-else
+                    :d="item.path"
+                    fill="none"
+                    :stroke="item.hex ?? 'currentColor'"
+                    class="text-neutral-400 dark:text-neutral-600"
+                    stroke-width="1.5"
+                    stroke-dasharray="4,4"
+                    stroke-opacity="0.7"
+                />
+                <text
+                    v-if="item.tag"
+                    :x="item.tag.x"
+                    :y="item.tag.y"
+                    text-anchor="end"
+                    dominant-baseline="middle"
+                    :fill="item.tag.text === 'EOL!' ? '#d946ef' : '#a855f7'"
+                    :font-size="10 * item.fontScale"
+                    font-weight="600"
+                >
+                    {{ item.tag.text }}
+                </text>
+            </template>
         </svg>
         <Link
             v-for="item in items"

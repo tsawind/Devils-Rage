@@ -3,6 +3,8 @@
 export type EdgeIndicator = {
     type: 'text' | 'clock' | 'weight' | 'gate' | 'preserve';
     label?: string;
+    /** Text badges: an arrow after the label pointing this way (screen degrees), e.g. which way a hole goes. */
+    arrowAngle?: number | null;
     fill: string;
     stroke: string;
 };
@@ -10,7 +12,7 @@ export type EdgeIndicator = {
 
 <script setup lang="ts">
 import type { Vec2 } from '@/map/core/types';
-import { Clock, Heart, Orbit, Weight } from 'lucide-vue-next';
+import { ArrowRight, Clock, Heart, Orbit, Weight } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 type Props = {
@@ -24,7 +26,8 @@ const { indicators, center } = defineProps<Props>();
 const totalWidth = computed(() => {
     const count = indicators.length;
     if (count === 0) return 0;
-    return count * 18 + 8;
+    const arrows = indicators.filter((indicator) => indicator.type === 'text' && indicator.arrowAngle != null).length;
+    return count * 18 + arrows * 12 + 8;
 });
 </script>
 
@@ -41,8 +44,14 @@ const totalWidth = computed(() => {
             class="flex h-full items-center justify-center gap-0.5 rounded-full border border-neutral-300 bg-white px-1 dark:border-neutral-700 dark:bg-neutral-900"
         >
             <template v-for="(indicator, i) in indicators" :key="i">
-                <span v-if="indicator.type === 'text'" class="text-[13px] leading-none font-bold" :style="{ color: indicator.fill }">
+                <span v-if="indicator.type === 'text'" class="flex items-center text-[13px] leading-none font-bold" :style="{ color: indicator.fill }">
                     {{ indicator.label }}
+                    <ArrowRight
+                        v-if="indicator.arrowAngle != null"
+                        class="ml-px size-3"
+                        :style="{ transform: `rotate(${indicator.arrowAngle}deg)` }"
+                        aria-label="Which way the hole goes: from where it opened toward its K162 exit"
+                    />
                 </span>
                 <Weight v-else-if="indicator.type === 'weight'" class="size-3.5" :style="{ color: indicator.fill }" />
                 <Clock v-else-if="indicator.type === 'clock'" class="size-3.5" :style="{ color: indicator.fill }" />

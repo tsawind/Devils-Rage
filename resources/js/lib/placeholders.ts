@@ -20,6 +20,8 @@ type TPlaceholderHole = {
     is_static: boolean;
     target_class: TStringedSolarsystemClass | null;
     wormhole: string | null;
+    mass_status?: string | null;
+    lifetime?: string | null;
 };
 
 type TPlaceholderSystem = {
@@ -45,6 +47,10 @@ export type TPlaceholder = {
     /** Shown below: "JOW · C4", "MVD · HS", "QXP · ?". */
     detail: string;
     isStatic: boolean;
+    /** The hole's type ("D845"), null while unknown or a K162. */
+    wormhole: string | null;
+    massStatus: string | null;
+    lifetime: string | null;
 };
 
 const KSPACE: Record<string, string> = { h: 'HS', l: 'LS', n: 'NS', p: 'Pochven' };
@@ -103,6 +109,9 @@ export function buildPlaceholders(
                 label: alias ? displayAlias(alias, formats.bookmark_alias_scheme) : limbo ? '' : '—',
                 detail: `${(hole.signature_id ?? '???').slice(0, 3)} · ${destination}${hole.is_static ? 's' : ''}`,
                 isStatic: hole.is_static,
+                wormhole: hole.wormhole,
+                massStatus: hole.mass_status ?? null,
+                lifetime: hole.lifetime ?? null,
             });
         }
     }

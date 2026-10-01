@@ -20,6 +20,7 @@ import CountdownBar from '@/components/combat/CountdownBar.vue';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useCombat } from '@/composables/combat/useCombat';
 import { usePopupCountdown } from '@/composables/combat/usePopupCountdown';
+import { requestStaticCheck } from '@/composables/signatures/useStaticCertainty';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import usePermission from '@/composables/usePermission';
 import { useShowMap } from '@/composables/useShowMap';
@@ -187,24 +188,12 @@ function handleTypeChange(value: AcceptableValue) {
     const staticNames = (selected_map_solarsystem.solarsystem.statics ?? []).map((wormholeStatic) => wormholeStatic.name.trim().toUpperCase());
     const isStaticType = wormholeName !== null && !isK162(wormholeName) && staticNames.includes(wormholeName.trim().toUpperCase());
 
-    if (isStaticType) {
-        pending_type_id.value = typeId;
-        pending_type_name.value = wormholeName;
-
-        // Two holes of the static type (one of them is wandering), or the
-        // static's number is already held by something else: ask.
-        const slotOwner = number_owners?.get(static_slot.value.toUpperCase());
-        if (static_taken_by_other.value || (slotOwner && slotOwner.signatureId !== signature.id)) {
-            static_choice_open.value = true;
-            return;
-        }
-
-        makeStatic(typeId, false);
-        return;
-    }
-
-    const clearFlags = signature.is_static || signature.is_wandering ? flagChanges(false, false) : {};
+    // Patch 13: a static-type hole is only marked the static once it is
+    // certain (everything scanned, nothing else can be it): save the type and
+    // let the check decide when the update is back.
+    const clearFlags = !isStaticType && (signature.is_static || signature.is_wandering) ? flagChanges(false, false) : {};
     handleChange({ signature_type_id: typeId, ...clearFlags });
+    if (isStaticType) requestStaticCheck(selected_map_solarsystem.id, map_system.value);
 }
 
 // ---- "Static, wandering or unknown?" when a static type is picked ---------

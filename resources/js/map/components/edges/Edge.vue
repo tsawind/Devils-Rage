@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import EdgeBadges, { type EdgeIndicator } from '@/map/components/edges/EdgeBadges.vue';
 import { scalePoint } from '@/map/core/coords';
-import { describeEstimate, estimateMass, formatMass, pipeWidth } from '@/lib/massEstimate';
+import { describeEstimate, estimateMass, formatMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { edgePathAndCenter } from '@/map/core/geometry/paths';
 import type { EdgeGeometry } from '@/map/core/types';
@@ -23,10 +23,21 @@ type Props = {
     chainColor?: string | null;
     /** A loop (patch 12): not how either end was found, drawn dashed amber. */
     isLoop?: boolean;
+    /** Pipes drawn this much thinner (patch 13: compact combat lanes). */
+    pipeScale?: number;
     scale: number;
 };
 
-const { geometry, connection = null, isOnRoute = false, rallyDirection = null, chainColor = null, isLoop = false, scale } = defineProps<Props>();
+const {
+    geometry,
+    connection = null,
+    isOnRoute = false,
+    rallyDirection = null,
+    chainColor = null,
+    isLoop = false,
+    pipeScale = 1,
+    scale,
+} = defineProps<Props>();
 
 const emit = defineEmits<{
     (e: 'connectionContextMenu', event: MouseEvent): void;
@@ -83,6 +94,7 @@ const indicators = computed<EdgeIndicator[]>(() => {
             label: shipSizeLabel,
             fill: 'var(--color-neutral-500)',
             stroke: 'var(--color-neutral-600)',
+            arrowAngle: arrowAngle.value,
         });
     }
 
@@ -103,6 +115,33 @@ const indicators = computed<EdgeIndicator[]>(() => {
     }
 
     return items;
+});
+
+// ---- Direction (patch 13) -----------------------------------------------------
+// A hole opens on one side and exits as a K162 on the other: the arrow next to
+// the size letter points from where it opened toward its exit.
+
+/** The map system the hole opened in, or null when neither side's type is known. */
+const spawnSystemId = computed<number | null>(() => {
+    if (!connection) return null;
+    for (const signature of connection.signatures ?? []) {
+        const name = signature.wormhole?.name;
+        if (!name) continue;
+        if (!name.startsWith('K162')) return signature.map_solarsystem_id;
+        // The K162 side is the exit: it opened on the other side.
+        return signature.map_solarsystem_id === connection.from_map_solarsystem_id ? connection.to_map_solarsystem_id : connection.from_map_solarsystem_id;
+    }
+    return null;
+});
+
+/** Screen angle (degrees) of the arrow, from the side it opened on toward the exit. */
+const arrowAngle = computed<number | null>(() => {
+    const spawn = spawnSystemId.value;
+    if (spawn === null || !connection) return null;
+    const forward = spawn === connection.from_map_solarsystem_id;
+    const from = forward ? scaledFrom.value : scaledTo.value;
+    const to = forward ? scaledTo.value : scaledFrom.value;
+    return (Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI;
 });
 
 // ---- Mass pipe (patch 12) -----------------------------------------------------
@@ -126,13 +165,15 @@ const estimate = computed(() => {
 const pipe = computed(() => {
     const current = estimate.value;
     if (!current) return null;
-    const factor = Math.min(scale, 1.5);
+    const factor = Math.min(scale, 1.5) * pipeScale;
     const color = massStatus.value === 'critical' ? '#ef4444' : massStatus.value === 'reduced' ? '#f59e0b' : '#a3a3a3';
+    // Frigate holes always draw thin, whatever their mass (patch 13).
+    const width = (mass: number) => (isFrigateHole(holeType.value?.maximum_jump_mass) ? (mass > 0 ? 2 : 0) : pipeWidth(mass) * factor);
     return {
-        outline: pipeWidth(current.capacity) * factor + 2,
-        hollow: pipeWidth(current.capacity) * factor,
-        max: pipeWidth(current.max) * factor,
-        min: pipeWidth(current.min) * factor,
+        outline: width(current.capacity) + 2,
+        hollow: width(current.capacity),
+        max: width(current.max),
+        min: width(current.min),
         color,
     };
 });

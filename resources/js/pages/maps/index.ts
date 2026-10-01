@@ -128,6 +128,9 @@ export type TPendingHole = {
     is_wandering: boolean;
     target_class: TStringedSolarsystemClass | null;
     wormhole: string | null;
+    /** Patch 13: shown on the striped pipe. */
+    mass_status?: TMassStatus | null;
+    lifetime?: TLifetimeStatus | null;
 };
 
 export type TMapSolarsystem = TMapSolarsystemBase & {

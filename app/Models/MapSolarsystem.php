@@ -154,7 +154,7 @@ final class MapSolarsystem extends Model
      * The placeholder data for this system's unjumped holes: the eager-loaded
      * relation when there is one, else a fresh query (one system at a time).
      *
-     * @return list<array{id: int, signature_id: string|null, alias: string|null, is_static: bool, is_wandering: bool, target_class: string|null, wormhole: string|null}>
+     * @return list<array<string, mixed>>
      */
     public function pendingHolesPayload(): array
     {
@@ -171,6 +171,9 @@ final class MapSolarsystem extends Model
                 'is_wandering' => (bool) $signature->is_wandering,
                 'target_class' => $signature->signatureType?->target_class?->value,
                 'wormhole' => $signature->wormhole?->name,
+                // Patch 13: striped pipes show the hole's mass status and EOL.
+                'mass_status' => $signature->mass_status,
+                'lifetime' => $signature->lifetime,
             ])
             ->values()
             ->all();

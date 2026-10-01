@@ -119,7 +119,7 @@ final readonly class StoreTrackingAction
                     'to_map_solarsystem_id' => $target_map_solarsystem->id,
                     'wormhole_id' => null,
                     'mass_status' => $mass_status,
-                    'ship_size' => $this->getWormholeShipSize($signature) ?? $data->ship_size ?? $this->getShipSizeForSignature($signature) ?? $ship_size ?? ShipSize::Large,
+                    'ship_size' => $this->getWormholeShipSize($signature) ?? $data->ship_size ?? $this->getShipSizeForSignature($signature) ?? $ship_size,
                     'lifetime' => $lifetime_status,
                 ]
             );

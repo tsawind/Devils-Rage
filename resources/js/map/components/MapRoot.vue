@@ -4,6 +4,7 @@ import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { usePath } from '@/composables/usePath';
 import usePermission from '@/composables/usePermission';
 import { useRallyRoute } from '@/composables/useRallyRoute';
+import { useStaticCertainty } from '@/composables/signatures/useStaticCertainty';
 import { useUserEvents } from '@/composables/useUserEvents';
 import { deleteSelectedMapSolarsystems } from '@/map/actions/deleteSelectedMapSolarsystems';
 import EdgeLayer from '@/map/components/edges/EdgeLayer.vue';
@@ -84,6 +85,8 @@ watchEffect(() => {
 });
 
 useMapSync(store, () => map.id);
+// Patch 13: mark a static once it is certain, after your own paste / type change.
+useStaticCertainty(store);
 useUserEvents();
 
 const { canEdit: canWrite } = usePermission();

@@ -1,4 +1,4 @@
-import { describeEstimate, estimateMass, formatMass, pipeWidth } from '@/lib/massEstimate';
+import { describeEstimate, estimateMass, formatMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { describe, expect, it } from 'vitest';
 
 const D845 = 5_000_000_000;
@@ -36,12 +36,15 @@ describe('patch 12: mass left on a wormhole', () => {
         expect(estimateMass({ totalMass: 0, jumped: 0, status: 'fresh' })).toBe(null);
     });
 
-    it('draws big holes much thicker than small ones', () => {
-        expect(pipeWidth(5.5e9)).toBe(16);
-        expect(pipeWidth(2.2e9)).toBeLessThan(11);
-        expect(pipeWidth(2.2e9)).toBeGreaterThan(9);
-        expect(pipeWidth(1e6)).toBe(2);
+    it('draws big holes much thicker than small ones (patch 13: straight scale)', () => {
+        expect(pipeWidth(5.5e9)).toBe(32);
+        expect(Math.round(pipeWidth(2.2e9))).toBe(14);
+        expect(Math.round(pipeWidth(1.1e9))).toBe(8);
+        expect(Math.round(pipeWidth(5.5e6))).toBe(2);
         expect(pipeWidth(0)).toBe(0);
+        expect(isFrigateHole(5_000_000)).toBe(true);
+        expect(isFrigateHole(1_000_000_000)).toBe(false);
+        expect(isFrigateHole(null)).toBe(false);
     });
 
     it('describes the estimate', () => {
