@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Session;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
@@ -32,16 +33,24 @@ final class MapCombatController extends Controller
 
         $validated = $request->validate([
             'mode' => ['required', Rule::in(['start', 'join', 'solo'])],
-            'map_solarsystem_id' => ['required_if:mode,start', 'nullable', 'integer'],
+            'map_solarsystem_id' => ['nullable', 'integer'],
+            'solarsystem_id' => ['nullable', 'integer', 'exists:solarsystems,id'],
             'color' => ['nullable', Rule::in(CombatModeAction::COLORS)],
         ]);
 
+        if ($validated['mode'] === 'start' && empty($validated['map_solarsystem_id']) && empty($validated['solarsystem_id'])) {
+            throw ValidationException::withMessages(['combat' => 'Pick the system to start the chain in.']);
+        }
+
         match ($validated['mode']) {
-            'start' => $action->start(
-                $user,
-                $map,
-                MapSolarsystem::query()->where('map_id', $map->id)->findOrFail((int) ($validated['map_solarsystem_id'] ?? 0)),
-            ),
+            // Your system isn't on the map yet: it is added, then becomes the combat home.
+            'start' => empty($validated['map_solarsystem_id'])
+                ? $action->startFromSolarsystem($user, $map, (int) $validated['solarsystem_id'])
+                : $action->start(
+                    $user,
+                    $map,
+                    MapSolarsystem::query()->where('map_id', $map->id)->findOrFail((int) $validated['map_solarsystem_id']),
+                ),
             'join' => $action->join($user, $map, (string) ($validated['color'] ?? '')),
             default => $action->solo($user, $map),
         };

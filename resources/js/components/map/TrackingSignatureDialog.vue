@@ -401,7 +401,7 @@ const selectedShipSizeOption = computed(() => shipSizeOptions.find((option) => o
                             :disabled="!selectedSignature || selectedIsK162 || staticTakenByOther"
                             @change="setStatic(($event.target as HTMLInputElement).checked)"
                         />
-                        Static <span class="text-muted-foreground">(takes {{ staticSlotAlias ?? 'the static slot' }})</span>
+                        Static <span class="text-muted-foreground">{{ staticSlotAlias ? `(takes ${staticSlotAlias})` : '(keeps its number)' }}</span>
                     </label>
                     <label class="flex items-center gap-2" :class="{ 'opacity-50': !selectedSignature || selectedIsK162 }">
                         <input

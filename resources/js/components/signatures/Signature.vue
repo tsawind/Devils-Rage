@@ -199,7 +199,7 @@ function handleTypeChange(value: AcceptableValue) {
             return;
         }
 
-        markStaticAutomatically(typeId);
+        makeStatic(typeId, false);
         return;
     }
 
@@ -219,7 +219,11 @@ function chooseStaticKind(kind: 'unknown' | 'static' | 'wandering'): void {
 
     if (kind === 'static' && static_taken_by_other.value) kind = 'unknown';
 
-    handleChange({ signature_type_id: pending_type_id.value, ...flagChanges(kind === 'static', kind === 'wandering') });
+    if (kind === 'static') {
+        makeStatic(pending_type_id.value, true);
+        return;
+    }
+    handleChange({ signature_type_id: pending_type_id.value, ...flagChanges(false, kind === 'wandering') });
 }
 
 function handleStaticChoiceOpenChange(isOpen: boolean): void {
@@ -235,33 +239,68 @@ const { remaining: static_choice_remaining, fraction: static_choice_fraction } =
     () => chooseStaticKind('unknown'),
 );
 
-// ---- The static type on the only candidate: it is the static ---------------
+// ---- Marking the static (patch 12) ------------------------------------------
 
 const rename_open = ref(false);
+/** The fields saved for the static whichever way the rename popup goes (type, flags). */
+const pending_static = ref<Record<string, FormDataConvertible>>({});
 
 /**
- * The hole has this system's static type and no other hole is the static, so
- * it is the static. With no number yet it simply takes the static's slot; a
- * hole already numbered (bookmarked in game) asks whether to rename it, and
- * keeps its name unless the scanner chooses to rename.
+ * Mark this hole as the system's static.
+ *
+ * - Already named for the static slot, or a main-chain hole with no number
+ *   yet: just mark it (an unnumbered hole then takes the static's slot).
+ * - Main chain, already numbered (bookmarked in game): ask whether to rename
+ *   it to the static's number; Keep is the default.
+ * - Combat chain: never switch to 0 on its own; it is marked and keeps its
+ *   number. Only marking it by hand (`manual`) offers the rename.
+ *
+ * `typeId` undefined leaves the type as it is.
  */
-function markStaticAutomatically(typeId: number | null): void {
-    if (signature.alias && signature.alias !== static_slot.value) {
-        rename_open.value = true;
+function makeStatic(typeId: number | null | undefined, manual: boolean): void {
+    const base: Record<string, FormDataConvertible> = {
+        ...(typeId !== undefined ? { signature_type_id: typeId } : {}),
+        is_static: true,
+        is_wandering: false,
+    };
+    const current = signature.alias ?? null;
+
+    if (current === static_slot.value || (!is_limbo.value && !current)) {
+        const previous: Record<string, FormDataConvertible> = {
+            signature_type_id: signature.signature_type_id,
+            is_static: Boolean(signature.is_static),
+            is_wandering: Boolean(signature.is_wandering),
+        };
+        handleChange(base);
+        if (!manual) {
+            toast.success(`${signature.signature_id ?? 'Signature'} marked as the static`, {
+                description: `Takes ${displayAlias(static_slot.value)}`,
+                action: { label: 'Undo', onClick: () => handleChange(previous) },
+            });
+        }
         return;
     }
 
-    const previous: Record<string, FormDataConvertible> = {
-        signature_type_id: signature.signature_type_id,
-        is_static: Boolean(signature.is_static),
-        is_wandering: Boolean(signature.is_wandering),
-        alias: signature.alias ?? null,
-    };
-    handleChange({ signature_type_id: typeId, ...flagChanges(true, false) });
-    toast.success(`${signature.signature_id ?? 'Signature'} marked as the static`, {
-        description: `Takes ${displayAlias(static_slot.value)}`,
-        action: { label: 'Undo', onClick: () => handleChange(previous) },
-    });
+    if (is_limbo.value && !manual) {
+        handleChange(base);
+        toast.success(`${signature.signature_id ?? 'Signature'} marked as the static`, {
+            description: `Keeps ${current ? displayAlias(current) : 'its jump-order number'}.`,
+            action: { label: `Rename to ${displayAlias(static_slot.value)}…`, onClick: () => openStaticRename({ is_static: true, is_wandering: false }) },
+        });
+        return;
+    }
+
+    openStaticRename(base);
+}
+
+function openStaticRename(base: Record<string, FormDataConvertible>): void {
+    pending_static.value = base;
+    if (typeof base.signature_type_id === 'number' || base.signature_type_id === null) {
+        pending_type_id.value = base.signature_type_id as number | null;
+    } else {
+        pending_type_id.value = signature.signature_type_id ?? null;
+    }
+    rename_open.value = true;
 }
 
 /** The type picked for the pending static, to name the bookmarks it will get. */
@@ -310,12 +349,13 @@ function farSideReturnName(alias: string): string | null {
         alias,
         connection.target.solarsystem.class,
         connection.target.combat_color ?? null,
+        Boolean(connection.target.combat_home),
     );
 }
 
 const rename_changes = computed(() => {
     if (!rename_open.value) return [];
-    const from = signature.alias ?? '';
+    const from = rename_from_alias.value;
     const to = static_slot.value;
     const changes = [{ label: 'In this system', from: bookmark_name.value, to: staticBookmarkName(to) }];
     const farFrom = farSideReturnName(from);
@@ -324,24 +364,32 @@ const rename_changes = computed(() => {
     return changes;
 });
 
-/** Systems further down this hole's branch, which keep their names if it is renamed. */
-const rename_beyond = computed(() => {
-    const from = (signature.alias ?? '').toUpperCase();
+/** The name the hole has now: its locked number, or the one it would get (planned, or the next in a combat chain). */
+const rename_from_alias = computed(() => signature.alias ?? planned_alias ?? claim_alias ?? '');
+
+/**
+ * Systems already mapped further down this hole: renaming it is blocked then
+ * (patch 12, all chains), since everything below was bookmarked from its name.
+ */
+const rename_beyond = computed(() => descendantsOf(rename_from_alias.value));
+
+function descendantsOf(alias: string): string[] {
+    const from = alias.toUpperCase();
     if (!from) return [];
     return chainAliases(map_solarsystems.value, map_system.value)
-        .filter((alias) => alias.toUpperCase().startsWith(from) && alias.length > from.length)
-        .map((alias) => displayAlias(alias));
-});
+        .filter((candidate) => candidate.toUpperCase().startsWith(from) && candidate.length > from.length)
+        .map((candidate) => displayAlias(candidate));
+}
 
 function handleRenameChoice(choice: 'rename' | 'keep'): void {
-    const typeId = pending_type_id.value;
-    if (choice === 'keep') {
-        handleChange({ signature_type_id: typeId, is_static: true, is_wandering: false });
+    const base = pending_static.value;
+    if (choice === 'keep' || rename_beyond.value.length > 0) {
+        handleChange(base);
         return;
     }
 
     const name = staticBookmarkName(static_slot.value);
-    handleChange({ signature_type_id: typeId, is_static: true, is_wandering: false, alias: static_slot.value });
+    handleChange({ ...base, alias: static_slot.value });
     navigator.clipboard.writeText(name).catch(() => undefined);
     toast.success(`Renamed to ${displayAlias(static_slot.value)}`, { description: `Copied ${visibleBookmarkName(name)}` });
 }
@@ -353,22 +401,20 @@ const is_k162 = computed(() => isK162(signature.wormhole?.name));
 // This system as the map knows it: a combat home numbers its holes 1, 2, 3 (static 0).
 const map_system = computed(() => map_solarsystems.value.find((solarsystem) => solarsystem.id === selected_map_solarsystem.id) ?? null);
 const is_combat_home = computed(() => Boolean(map_system.value?.combat_home));
+/** In a combat chain (home included): holes are numbered in jump order and never switch to 0 on their own. */
+const is_limbo = computed(() => Boolean(map_system.value?.combat_color));
 
 const static_slot = computed(() => staticSlotAlias(selected_map_solarsystem.alias, page.props.map.bookmark_ignored_alias, is_combat_home.value));
 const static_taken_by_other = computed(() => static_owner_id != null && static_owner_id !== signature.id);
 
 /**
- * The fields to send when Static / Wandering change. A hole that becomes the
- * static moves to the static slot (A in home, 0 elsewhere) if it already had
- * a locked number; a hole that stops being the static gives the slot back and
- * gets a normal number again.
+ * The fields to send when Static / Wandering change. Becoming the static goes
+ * through `makeStatic` (it may ask before renaming); a hole that stops being
+ * the static gives the slot back and gets a normal number again.
  */
 function flagChanges(isStatic: boolean, isWandering: boolean): Record<string, FormDataConvertible> {
     const changes: Record<string, FormDataConvertible> = { is_static: isStatic, is_wandering: isWandering };
 
-    if (isStatic && signature.alias && signature.alias !== static_slot.value) {
-        changes.alias = static_slot.value;
-    }
     if (!isStatic && signature.alias === static_slot.value) {
         changes.alias = null;
     }
@@ -378,11 +424,15 @@ function flagChanges(isStatic: boolean, isWandering: boolean): Record<string, Fo
 
 function handleToggleStatic() {
     if (is_k162.value) return;
-    if (!signature.is_static && static_taken_by_other.value) {
+    if (signature.is_static) {
+        handleChange(flagChanges(false, false));
+        return;
+    }
+    if (static_taken_by_other.value) {
         toast.error('Another signature in this system is already the static.');
         return;
     }
-    handleChange(flagChanges(!signature.is_static, false));
+    makeStatic(undefined, true);
 }
 
 function handleToggleWandering() {
@@ -422,6 +472,12 @@ function handleSetNumber() {
     }
     if (makesStatic && static_taken_by_other.value) {
         toast.error(`${static_slot.value} is the static's slot, and another signature in this system is already the static.`);
+        return;
+    }
+    // Systems mapped below this hole were bookmarked from its current name: don't rename it.
+    const below = signature.alias && result.alias !== signature.alias ? descendantsOf(signature.alias) : [];
+    if (below.length > 0) {
+        toast.error(`Can't rename to ${displayAlias(result.alias)}: ${below.join(', ')} ${below.length === 1 ? 'is' : 'are'} already mapped further down.`);
         return;
     }
 
@@ -763,7 +819,7 @@ function copyBookmark() {
             v-if="rename_open"
             v-model:open="rename_open"
             :signature-label="signature.signature_id ?? 'This signature'"
-            :from-alias="displayAlias(signature.alias)"
+            :from-alias="displayAlias(rename_from_alias) || 'its number'"
             :to-alias="displayAlias(static_slot)"
             :changes="rename_changes"
             :beyond="rename_beyond"

@@ -207,7 +207,7 @@ function submitForm() {
                             >
                                 <span class="col-span-3">Ship</span>
                                 <span>Pilot</span>
-                                <span class="text-right">kt</span>
+                                <span class="text-right">M kg</span>
                                 <span class="text-right">Age</span>
                                 <Popover v-model:open="isFormOpen">
                                     <PopoverTrigger as-child>
@@ -284,7 +284,7 @@ function submitForm() {
                                                     placeholder="Mass"
                                                     class="h-7 flex-1 text-xs"
                                                 />
-                                                <span class="text-xs text-muted-foreground">kt</span>
+                                                <span class="text-xs whitespace-nowrap text-muted-foreground">million kg</span>
                                                 <Button type="submit" size="xs" :disabled="!canSubmit">Save</Button>
                                                 <Button type="button" size="xs" variant="ghost" @click="closeForm">Cancel</Button>
                                             </div>
@@ -369,7 +369,7 @@ function submitForm() {
                                 · latest {{ jumps.length }} of {{ connection.jumps_count }} shown
                             </span>
                         </span>
-                        <span class="font-mono text-foreground tabular-nums">{{ formatKilotons(connection.jumps_mass_sum) }} kt</span>
+                        <span class="font-mono text-foreground tabular-nums">{{ formatKilotons(connection.jumps_mass_sum) }} million kg</span>
                     </div>
                 </PopoverContent>
             </Popover>
@@ -398,11 +398,11 @@ function submitForm() {
             </div>
             <div v-if="remainingPercent !== null && remainingMassKg !== null" class="col-span-full grid grid-cols-subgrid">
                 <span>Remaining</span>
-                <span class="text-right tabular-nums">≈ {{ formatKilotons(remainingMassKg) }} ({{ Math.round(remainingPercent) }}%)</span>
+                <span class="text-right tabular-nums">≈ {{ formatKilotons(remainingMassKg) }} million kg ({{ Math.round(remainingPercent) }}%)</span>
             </div>
             <div class="col-span-full grid grid-cols-subgrid">
                 <span>Jumped</span>
-                <span class="text-right tabular-nums">{{ formatKilotons(connection.jumps_mass_sum) }}</span>
+                <span class="text-right tabular-nums">{{ formatKilotons(connection.jumps_mass_sum) }} million kg</span>
             </div>
         </div>
     </div>

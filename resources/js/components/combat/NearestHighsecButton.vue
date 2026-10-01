@@ -16,7 +16,7 @@ import { toast } from 'vue-sonner';
  * "Nearest highsec: 1121 → Tama (lowsec) → 3 gates → Hirri — 4 jumps".
  */
 const { map, fromSolarsystemId } = defineProps<{
-    map: TMap;
+    map: Pick<TMap, 'map_connections'>;
     fromSolarsystemId: number | null;
 }>();
 
@@ -71,12 +71,12 @@ function copyRoute(): void {
         <TooltipTrigger as-child>
             <button
                 type="button"
-                class="flex items-center gap-1.5 rounded bg-muted px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground sm:px-2"
+                class="flex items-center gap-1.5 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
                 :disabled="!fromSolarsystemId"
                 @click="copyRoute"
             >
                 <DoorOpen class="size-3.5" />
-                <span class="hidden md:inline">Highsec</span>
+                <span>Nearest highsec</span>
             </button>
         </TooltipTrigger>
         <TooltipContent side="bottom">

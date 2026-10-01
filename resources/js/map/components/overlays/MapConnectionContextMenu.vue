@@ -10,15 +10,17 @@ import {
     ContextMenuSubTrigger,
 } from '@/components/ui/context-menu';
 import { useStaticData } from '@/composables/useStaticData';
+import { displayAlias } from '@/lib/alias';
 import { SHIP_SIZE_OPTIONS, shipSizeFromJumpMass } from '@/lib/shipSize';
 import { formatDateToISO } from '@/lib/utils';
+import { openAddMass } from '@/map/actions/addMass';
 import { deleteMapConnection } from '@/map/actions/deleteMapConnection';
 import { updateMapConnection } from '@/map/actions/updateMapConnection';
 import CopyConnectionNameMenu from '@/map/components/overlays/CopyConnectionNameMenu.vue';
 import { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { TConnectionType, TLifetimeStatus, TMassStatus, TShipSize } from '@/types/models';
 import { UTCDate } from '@date-fns/utc';
-import { Check, Clock, Heart, Ship, Trash2, TriangleAlert, Waypoints, Weight } from 'lucide-vue-next';
+import { Check, Clock, Heart, Plus, Ship, Trash2, TriangleAlert, Waypoints, Weight } from 'lucide-vue-next';
 import type { AcceptableValue } from 'reka-ui';
 import { computed } from 'vue';
 
@@ -46,6 +48,12 @@ const is_gate_connected = computed(() => {
     const to = map_connection.target.solarsystem_id;
     return staticData.value?.connections[from]?.includes(to) ?? false;
 });
+
+/** Right-click a line → Add mass… (patch 12): mass seen going through, in million kg. */
+function handleAddMass() {
+    const name = (system: TMapSolarsystem) => displayAlias(system.alias) || system.solarsystem.name;
+    openAddMass({ connectionId: map_connection.id, label: `${name(map_connection.source)} → ${name(map_connection.target)}` });
+}
 
 function handleRemoveFromMap() {
     deleteMapConnection(map_connection);
@@ -186,6 +194,10 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
                 </p>
             </ContextMenuSubContent>
         </ContextMenuSub>
+        <ContextMenuItem v-if="map_connection.type !== 'stargate'" @select="handleAddMass">
+            <Plus class="size-4" />
+            Add mass…
+        </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem @select.prevent="handleTogglePreserveMass">
             <Heart class="size-4" />

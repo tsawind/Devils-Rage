@@ -1,6 +1,7 @@
 import { isWormholeClass } from '@/const/solarsystemClasses';
-import { aliasTargetKind, formatAliasPath, homeCallsign, isIgnoredAlias, localSlot, suggestAlias, TAliasScheme } from '@/lib/alias';
+import { aliasTargetKind, formatAliasPath, homeCallsign, isIgnoredAlias, suggestAlias, TAliasScheme } from '@/lib/alias';
 import { connectionFlag } from '@/lib/chainNumbering';
+import { combatColorLabel } from '@/lib/combat';
 import { TResolvedSolarsystem } from '@/pages/maps';
 import { TSignature, TStringedSolarsystemClass } from '@/types/models';
 
@@ -156,13 +157,12 @@ export function getSignatureIdShort(signatureId: string | null | undefined): str
 /**
  * `{alias}` for a hole: home's holes use their callsign with an extra leading
  * space ("A" → "  Alpha" once the template's own `{_}` is added), chain
- * aliases in groups of three ("A111-102"). Inside a combat chain (`local`) a
- * hole is named by its own number only ("111" → "1"): EVE lists bookmarks per
- * system, so the chain is jumped 1 → 1 → 1.
+ * aliases in groups of three ("A111-102"). Combat chain holes use their full
+ * path too ("1112" → "111-2"): the mapper always gives the full name, short
+ * numbers are only what scanners type by hand in game.
  */
-function aliasTokenValue(alias: string | null | undefined, useCallsigns: boolean, local = false): string {
+function aliasTokenValue(alias: string | null | undefined, useCallsigns: boolean): string {
     if (!useCallsigns) return alias ?? '';
-    if (local) return localSlot(alias);
     const callsign = homeCallsign(alias);
     return callsign ? `${BOOKMARK_SPACE}${callsign}` : formatAliasPath(alias);
 }
@@ -173,9 +173,14 @@ function hereTokenValue(alias: string | null | undefined, useCallsigns: boolean)
     return homeCallsign(alias) ?? formatAliasPath(alias);
 }
 
-/** Whether a system is a combat chain member (not the combat home), so its forward bookmark uses just its own number. */
-function isCombatMember(system: { combat_color?: string | null; combat_home?: boolean | null }): boolean {
-    return Boolean(system.combat_color) && !system.combat_home;
+/** The combat chain a system is a member of (its color), or null for the main chain and for a combat home itself. */
+export function memberChainColor(system: { combat_color?: string | null; combat_home?: boolean | null }): string | null {
+    return system.combat_color && !system.combat_home ? system.combat_color : null;
+}
+
+/** Remove the first leading space: combat forward bookmarks start right at the name ("111-0 MVD HSs"). */
+function dropFirstLeadingSpace(name: string): string {
+    return name.startsWith(' ') ? name.slice(1) : name;
 }
 
 /**
@@ -192,7 +197,7 @@ export function getBookmarkTokenValues(
     useCallsigns = true,
 ): Record<TBookmarkToken, string> {
     return {
-        alias: aliasTokenValue(system.alias, useCallsigns, isCombatMember(system)),
+        alias: aliasTokenValue(system.alias, useCallsigns),
         here: hereTokenValue(hereAlias, useCallsigns),
         hereclass: hereClass ? getBookmarkClassString({ class: hereClass, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
@@ -249,6 +254,17 @@ export function visibleBookmarkName(name: string): string {
  * `hereClass` fills `{hereclass}`: the class of that same system (e.g. "C6").
  * `oppositeCombatColor` is the combat chain of the system you stand in (null
  * for none; leave it out when unknown), used to spot returns into a combat home.
+ * `oppositeCombatHome` says the system you stand in is itself a combat home
+ * (it sits in the main chain too, so its way back up is a main-chain return).
+ *
+ * Combat chains (patch 12):
+ * - a way back inside a combat chain carries the chain color right after the
+ *   name, no space: "  * 111Red QXP C2";
+ * - a forward bookmark into a combat chain system drops its first leading
+ *   space: "111-0 MVD HSs";
+ * - a bookmark into another chain's system (a loop) adds that chain's color:
+ *   "111-2Red", and is never a return by the prefix rule (chains number on
+ *   their own, so "1" is not up-chain of another chain's "12").
  */
 export function formatBookmarkName(
     system: BookmarkSystem,
@@ -258,10 +274,20 @@ export function formatBookmarkName(
     hereAlias: string | null | undefined = oppositeAlias,
     hereClass?: TStringedSolarsystemClass | null,
     oppositeCombatColor?: string | null,
+    oppositeCombatHome?: boolean | null,
 ): string {
-    const isReturn =
-        isReturnBookmark(system.alias, oppositeAlias, formats?.bookmark_ignored_alias) ||
-        isCombatHomeReturn(system, oppositeAlias, formats?.bookmark_ignored_alias, oppositeCombatColor);
+    const ignoredAlias = formats?.bookmark_ignored_alias;
+    const hereKnown = oppositeCombatColor !== undefined;
+    // The chain each side numbers in: a combat member's color, or null for the main chain (combat homes included).
+    const hereChain = hereKnown && oppositeCombatColor && !oppositeCombatHome ? oppositeCombatColor : null;
+    const destinationChain = memberChainColor(system);
+    const sameChain = !hereKnown || hereChain === destinationChain;
+
+    const prefixReturn = sameChain
+        ? isReturnBookmark(system.alias, oppositeAlias, ignoredAlias)
+        : isIgnoredAlias(system.alias, ignoredAlias) && Boolean((oppositeAlias ?? '').trim());
+    const isReturn = prefixReturn || isCombatHomeReturn(system, oppositeAlias, ignoredAlias, oppositeCombatColor);
+
     const template = isReturn
         ? formats?.bookmark_format_return || DEFAULT_BOOKMARK_FORMAT_RETURN
         : isWormholeClass(system.solarsystem.class)
@@ -269,7 +295,26 @@ export function formatBookmarkName(
           : formats?.bookmark_format_kspace || DEFAULT_BOOKMARK_FORMAT_KSPACE;
 
     const useCallsigns = formats?.bookmark_alias_scheme !== 'alphabetical';
-    return renderBookmarkTemplate(template, getBookmarkTokenValues(system, context, hereAlias, hereClass, useCallsigns));
+    const values = getBookmarkTokenValues(system, context, hereAlias, hereClass, useCallsigns);
+
+    if (isReturn) {
+        // A way back inside a combat chain: both ends in the same chain (the combat home counts for its own chain).
+        const color = hereChain && system.combat_color === hereChain ? combatColorLabel(hereChain) : null;
+        if (color && useCallsigns) {
+            if (values.here) values.here = `${values.here}${color}`;
+            if (values.alias) values.alias = `${values.alias}${color}`;
+        }
+        return renderBookmarkTemplate(template, values);
+    }
+
+    if (!destinationChain) return renderBookmarkTemplate(template, values);
+
+    // Into another chain's system (a loop): name it with that chain's color.
+    const hereColor = hereKnown ? (oppositeCombatColor ?? null) : destinationChain;
+    if (useCallsigns && values.alias && hereColor !== destinationChain) {
+        values.alias = `${values.alias}${combatColorLabel(destinationChain) ?? ''}`;
+    }
+    return dropFirstLeadingSpace(renderBookmarkTemplate(template, values));
 }
 
 /**
@@ -362,7 +407,8 @@ export function buildSignatureBookmark(params: {
             detectReturn ? currentSystem.alias : undefined,
             currentSystem.alias,
             currentSystem.class,
-            currentSystem.combatColor,
+            currentSystem.combatColor ?? null,
+            currentSystem.combatHome ?? false,
         );
     }
 
@@ -384,8 +430,6 @@ export function buildSignatureBookmark(params: {
                     combatHome: currentSystem.combatHome,
                 }),
             useCallsigns,
-            // Holes found from a combat chain system are chain members: just their own number.
-            Boolean(currentSystem.combatColor),
         ),
         here: hereTokenValue(currentSystem.alias, useCallsigns),
         hereclass: currentSystem.class ? getBookmarkClassString({ class: currentSystem.class, name: '' }) : '',
@@ -405,5 +449,7 @@ export function buildSignatureBookmark(params: {
         ? formats.bookmark_format_wormhole || DEFAULT_BOOKMARK_FORMAT_WORMHOLE
         : formats.bookmark_format_kspace || DEFAULT_BOOKMARK_FORMAT_KSPACE;
 
-    return renderBookmarkTemplate(template, values);
+    const name = renderBookmarkTemplate(template, values);
+    // Holes found from a combat chain system (or its home) are chain members: no leading space.
+    return currentSystem.combatColor ? dropFirstLeadingSpace(name) : name;
 }

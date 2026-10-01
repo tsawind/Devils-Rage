@@ -2,8 +2,16 @@ import MapCombatController from '@/actions/App/Http/Controllers/MapCombatControl
 import { router } from '@inertiajs/vue3';
 import { toast } from 'vue-sonner';
 
-/** How combat mode is turned on: start a chain in a system, join a chain by color, or combat speed alone. */
-export type TCombatStart = { mode: 'start'; map_solarsystem_id: number } | { mode: 'join'; color: string } | { mode: 'solo' };
+/**
+ * How combat mode is turned on: start a chain in a system (a map system, or by
+ * its solar system when it isn't on the map yet: it gets added), join a chain
+ * by color, or combat speed alone.
+ */
+export type TCombatStart =
+    | { mode: 'start'; map_solarsystem_id: number }
+    | { mode: 'start'; solarsystem_id: number }
+    | { mode: 'join'; color: string }
+    | { mode: 'solo' };
 
 export function startCombat(mapSlug: string, data: TCombatStart, onSuccess?: () => void): void {
     router.post(MapCombatController.store(mapSlug).url, data, {

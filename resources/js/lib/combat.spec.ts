@@ -89,7 +89,8 @@ describe('returns into a combat home', () => {
         expect(isCombatHomeReturn(redHome, 'A', 'Daisy', 'red')).toBe(true);
         expect(isCombatHomeReturn(redHome, 'A', 'Daisy', null)).toBe(false);
         expect(isCombatHomeReturn(redHome, '12', 'Daisy', 'blue')).toBe(false);
-        expect(formatBookmarkName(redHome, { signatureId: 'JOW-123' }, FORMATS, '3', '3', '3', 'red')).toBe('  * 3 JOW C3');
+        // Patch 12: the way back inside a combat chain carries its color.
+        expect(formatBookmarkName(redHome, { signatureId: 'JOW-123' }, FORMATS, '3', '3', '3', 'red')).toBe('  * 3Red JOW C3');
     });
 
     it('is not a return for a system that is not a combat home', () => {
@@ -217,13 +218,13 @@ describe('patch 11: names', () => {
         expect(formatBookmarkName(parent, { signatureId: 'ABC-123' }, FORMATS, 'A1111', 'A1111', '3')).toBe('  * A111-1 ABC C3');
     });
 
-    it('names combat chain holes by their own number, and returns by the full path', () => {
+    it('names combat chain holes by their full path, and returns by the full path with the color', () => {
         const member = { alias: '1112', combat_color: 'red', solarsystem: { class: '3' as const, name: 'J2' } };
-        // Forward, from 111 into 1112: just "2".
-        expect(formatBookmarkName(member, { signatureId: 'LIH-655' }, FORMATS, '111', '111', '5', 'red')).toBe(' 2 LIH C3');
-        // Way back, standing in 1112: the whole path.
+        // Forward, from 111 into 1112: the full name, no leading space (patch 12).
+        expect(formatBookmarkName(member, { signatureId: 'LIH-655' }, FORMATS, '111', '111', '5', 'red')).toBe('111-2 LIH C3');
+        // Way back, standing in 1112: the whole path and the chain color.
         const parent = { alias: '111', combat_color: 'red', solarsystem: { class: '5' as const, name: 'J3' } };
-        expect(formatBookmarkName(parent, { signatureId: 'MJK-060' }, FORMATS, '1112', '1112', '3', 'red')).toBe('  * 111-2 MJK C3');
+        expect(formatBookmarkName(parent, { signatureId: 'MJK-060' }, FORMATS, '1112', '1112', '3', 'red')).toBe('  * 111-2Red MJK C3');
         // An unjumped hole in a combat system copied with its claimed number.
         expect(
             buildSignatureBookmark({
@@ -233,7 +234,7 @@ describe('patch 11: names', () => {
                 formats: FORMATS,
                 plannedAlias: '1111',
             }),
-        ).toBe(' 1 LIH');
+        ).toBe('111-1 LIH');
     });
 });
 
@@ -256,7 +257,7 @@ describe('patch 11: numbering', () => {
         expect(planned.get(4)).toBe(undefined);
     });
 
-    it('leaves combat chain holes in limbo until jumped, except the static', () => {
+    it('leaves combat chain holes in limbo until jumped, the static too', () => {
         const planned = planSignatureAliases({
             parentAlias: '1',
             originIsWormhole: true,
@@ -269,10 +270,76 @@ describe('patch 11: numbering', () => {
             ],
         });
         expect(planned.get(1)).toBe(undefined);
-        expect(planned.get(2)).toBe('10');
+        // Patch 12: the static is not switched to 0 on its own in a combat chain.
+        expect(planned.get(2)).toBe(undefined);
         expect(planned.get(3)).toBe('12');
-        // The next jump takes the next free number.
-        expect(suggestAlias({ parentAlias: '1', targetIsWormhole: true, originIsWormhole: true, aliases: ['1', '12', '10'] })).toBe('11');
+        // The next jump takes the next free number, never the static's 0.
+        expect(suggestAlias({ parentAlias: '1', targetIsWormhole: true, originIsWormhole: true, aliases: ['1', '12'] })).toBe('11');
     });
 });
 
+
+describe('patch 12: combat bookmarks', () => {
+    const red = (alias: string, extra: Record<string, unknown> = {}) => ({ alias, combat_color: 'red', solarsystem: { class: '3' as const, name: `J-${alias}` }, ...extra });
+    const redHome = { alias: 'A1', combat_color: 'red', combat_home: true, solarsystem: { class: '5' as const, name: 'J-home' } };
+
+    it('gives the full name when the mapper copies a combat forward bookmark, without the leading space', () => {
+        // Standing in 111, the hole into 1110 (renamed to the static by hand).
+        expect(formatBookmarkName(red('1110'), { signatureId: 'MVD-123', classSuffix: 's' }, FORMATS, '111', '111', '5', 'red')).toBe('111-0 MVD C3s');
+        // From the combat home into its first system.
+        expect(formatBookmarkName(red('1'), { signatureId: 'LIH-655' }, FORMATS, 'A1', 'A1', '5', 'red', true)).toBe('1 LIH C3');
+        // An unjumped hole in a combat chain system (its claimed number).
+        expect(
+            buildSignatureBookmark({
+                signature: { signature_id: 'MVD-123', ship_size: null, mass_status: null, lifetime: 'healthy' },
+                currentSystem: { alias: '111', class: '5', combatColor: 'red' },
+                aliases: [],
+                formats: FORMATS,
+                plannedAlias: '1112',
+            }),
+        ).toBe('111-2 MVD');
+    });
+
+    it('adds the chain color to returns inside a combat chain', () => {
+        // Standing in 111, the way back into 11.
+        expect(formatBookmarkName(red('11'), { signatureId: 'QXP-123' }, FORMATS, '111', '111', '2', 'red')).toBe('  * 111Red QXP C2');
+        // Standing in 1, the way back into the combat home.
+        expect(formatBookmarkName(redHome, { signatureId: 'MJK-123' }, FORMATS, '1', '1', '5', 'red')).toBe('  * 1Red MJK C5');
+        // Blue chain.
+        const blue = { alias: '111', combat_color: 'blue', solarsystem: { class: '2' as const, name: 'J9' } };
+        expect(formatBookmarkName(blue, { signatureId: 'VYP-123' }, FORMATS, '1110', '1110', '2', 'blue')).toBe('  * 111-0Blue VYP C2');
+    });
+
+    it('keeps the combat home way back up the main chain as it was', () => {
+        const parent = { alias: 'A', solarsystem: { class: '3' as const, name: 'J-alpha' } };
+        expect(formatBookmarkName(parent, { signatureId: 'JOW-123' }, FORMATS, 'A1', 'A1', '5', 'red', true)).toBe('  * A1 JOW C5');
+        // And the main chain's own bookmarks don't change.
+        const a111 = { alias: 'A111', solarsystem: { class: '3' as const, name: 'J1' } };
+        expect(formatBookmarkName(a111, { signatureId: 'ABC-123' }, FORMATS, 'A11', 'A11', '4', null)).toBe(' A111 ABC C3');
+        expect(formatBookmarkName({ ...a111, alias: 'A11' }, { signatureId: 'ABC-123' }, FORMATS, 'A111', 'A111', '3', null)).toBe('  * A111 ABC C3');
+    });
+
+    it('names loops into another chain with that chain color, never as a return', () => {
+        // Standing in Blue 2, the hole into Red 1112.
+        expect(formatBookmarkName(red('1112'), { signatureId: 'KLR-123' }, FORMATS, '2', '2', '1', 'blue')).toBe('111-2Red KLR C3');
+        // Standing in Blue 12, the hole into Red 1: "1" is not up-chain of another chain's "12".
+        expect(formatBookmarkName(red('1'), { signatureId: 'KLR-123' }, FORMATS, '12', '12', '1', 'blue')).toBe('1Red KLR C3');
+        // Standing in the main chain's B111, the hole into Red 11.
+        expect(formatBookmarkName(red('11'), { signatureId: 'KLR-123' }, FORMATS, 'B111', 'B111', '5', null)).toBe('11Red KLR C3');
+        // Standing in Red 11, the hole into the main chain's B111: a main-chain name.
+        const b111 = { alias: 'B111', solarsystem: { class: '5' as const, name: 'J-b' } };
+        expect(formatBookmarkName(b111, { signatureId: 'KLR-123' }, FORMATS, '11', '11', '3', 'red')).toBe(' B111 KLR C5');
+        // Standing in Red 11, a hole straight back into Daisy is still a return.
+        const daisy = { alias: 'Daisy', solarsystem: { class: '5' as const, name: 'J145735' } };
+        expect(formatBookmarkName(daisy, { signatureId: 'KLR-123' }, FORMATS, '11', '11', '3', 'red')).toBe('  * 11 KLR C3');
+    });
+
+    it('never plans the static 0 in a combat chain, but still does in the main chain', () => {
+        const sigs = [
+            { id: 1, isWormhole: true, isConnected: false, isStatic: true },
+            { id: 2, isWormhole: true, isConnected: false },
+        ];
+        expect(planSignatureAliases({ parentAlias: '11', originIsWormhole: true, aliases: [], limbo: true, signatures: sigs }).get(1)).toBe(undefined);
+        expect(planSignatureAliases({ parentAlias: 'A11', originIsWormhole: true, aliases: [], signatures: sigs }).get(1)).toBe('A110');
+    });
+});

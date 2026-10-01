@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Combat;
 
+use App\Actions\MapSolarsystem\StoreMapSolarsystemAction;
 use App\Actions\MapSolarsystem\UpdateMapSolarsystemAction;
 use App\Models\Map;
 use App\Models\MapSolarsystem;
@@ -35,8 +36,42 @@ final readonly class CombatModeAction
 
     public function __construct(
         private UpdateMapSolarsystemAction $updateMapSolarsystemAction,
+        private StoreMapSolarsystemAction $storeMapSolarsystemAction,
         private MapBroadcaster $mapBroadcaster,
     ) {}
+
+    /**
+     * Start a chain in a system that may not be on the map yet (patch 12): the
+     * system you are in is added to the map first, then becomes the combat home.
+     *
+     * @throws Throwable
+     */
+    public function startFromSolarsystem(User $user, Map $map, int $solarsystemId): string
+    {
+        return DB::transaction(function () use ($user, $map, $solarsystemId): string {
+            if ($map->home_solarsystem_id === $solarsystemId) {
+                throw ValidationException::withMessages([
+                    'combat' => 'The home system cannot be a combat home. Start the chain from the next system out.',
+                ]);
+            }
+
+            $home = MapSolarsystem::query()
+                ->where('map_id', $map->id)
+                ->where('solarsystem_id', $solarsystemId)
+                ->first();
+
+            if (! $home instanceof MapSolarsystem) {
+                $rightmost = (int) MapSolarsystem::query()->where('map_id', $map->id)->max('position_x');
+                $home = $this->storeMapSolarsystemAction->handle($map, [
+                    'solarsystem_id' => $solarsystemId,
+                    'position_x' => min($rightmost + 200, (int) config('map.max_size.x')),
+                    'position_y' => 40,
+                ]);
+            }
+
+            return $this->start($user, $map, $home);
+        });
+    }
 
     /**
      * @throws Throwable

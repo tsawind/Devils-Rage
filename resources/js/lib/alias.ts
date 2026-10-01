@@ -352,7 +352,7 @@ export function planSignatureAliases(params: {
     combatHome?: boolean;
     /**
      * Combat chains number holes in the order they are jumped: unjumped holes
-     * wait in "limbo" without a number (only the static takes its slot).
+     * wait in "limbo" without a number, the static included.
      */
     limbo?: boolean;
 }): Map<number, string> {
@@ -380,7 +380,9 @@ export function planSignatureAliases(params: {
 
     const unnumbered = wormholes.filter((signature) => !planned.has(signature.id) && !signature.isConnected && !signature.reserveOnly);
 
-    const staticHole = unnumbered.find((signature) => signature.isStatic);
+    // Combat chains never hand the static its 0 on their own (patch 12): it waits
+    // in limbo like any other hole, until a scanner renames it by hand.
+    const staticHole = params.limbo ? undefined : unnumbered.find((signature) => signature.isStatic);
     if (staticHole && !taken.has(staticSlot)) {
         planned.set(staticHole.id, staticSlot);
         taken.add(staticSlot);

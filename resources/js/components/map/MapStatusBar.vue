@@ -2,9 +2,8 @@
 import MapAccessController from '@/actions/App/Http/Controllers/MapAccessController';
 import MapPreferencesController from '@/actions/App/Http/Controllers/MapPreferencesController';
 import MapSettingsController from '@/actions/App/Http/Controllers/MapSettingsController';
-import NearestHighsecButton from '@/components/combat/NearestHighsecButton.vue';
-import StartCombatDialog from '@/components/combat/StartCombatDialog.vue';
 import TrackingIcon from '@/components/icons/TrackingIcon.vue';
+import AddMassDialog from '@/map/components/overlays/connection/AddMassDialog.vue';
 import StaleConnectionsBadge from '@/components/map/StaleConnectionsBadge.vue';
 import SolarsystemClass from '@/components/solarsystem/SolarsystemClass.vue';
 import { Button } from '@/components/ui/button';
@@ -17,15 +16,13 @@ import { UseMapLayoutReturn } from '@/composables/useMapLayout';
 import usePermission from '@/composables/usePermission';
 import { usePing } from '@/composables/usePing';
 import { useStaticSolarsystem } from '@/composables/useStaticSolarsystems';
-import { combatColorHex, combatColorLabel } from '@/lib/combat';
-import { startCombat, stopCombat, type TCombatStart } from '@/map/actions/combat';
 import { updateMapUserSettings, useMapSolarsystems } from '@/map/api';
 import type { TMap } from '@/pages/maps';
 import type { TMapUserSetting } from '@/types/models';
 import { Link } from '@inertiajs/vue3';
 import { useConnectionStatus } from '@laravel/echo-vue';
 import { ConnectionStatus } from 'laravel-echo';
-import { AlertTriangle, Eye, EyeOff, LayoutGrid, LocateFixed, Map as MapIcon, Settings, ShieldAlert, Swords, Wifi, WifiOff } from 'lucide-vue-next';
+import { AlertTriangle, Eye, EyeOff, LayoutGrid, LocateFixed, Map as MapIcon, Settings, ShieldAlert, Wifi, WifiOff } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import CommandPaletteButton from './CommandPaletteButton.vue';
 import TrackingSignatureDialog from './TrackingSignatureDialog.vue';
@@ -63,7 +60,7 @@ const {
     target_solarsystem,
     suggested_alias,
     planned_aliases,
-    static_slot_alias,
+    prompt_static_slot_alias,
     static_owner_id,
 } = useTracking();
 
@@ -71,34 +68,8 @@ const { map_solarsystems } = useMapSolarsystems();
 
 const targetSolarsystemName = computed(() => target_solarsystem.value?.name || currentSolarsystem.value?.name || null);
 
-// ---- Combat mode --------------------------------------------------------------
-const { is_combat, combat_color, popup_seconds } = useCombat();
-const show_combat_dialog = ref(false);
-
-const current_map_solarsystem = computed(() => {
-    const solarsystem_id = character.value?.status?.solarsystem_id;
-    return solarsystem_id ? (map_solarsystems.value.find((system) => system.solarsystem_id === solarsystem_id) ?? null) : null;
-});
-const current_is_home = computed(() => current_map_solarsystem.value !== null && current_map_solarsystem.value.solarsystem_id === map.home_solarsystem_id);
-const combat_homes = computed(() => map_solarsystems.value.filter((system) => system.combat_home && system.combat_color));
-
-const combat_label = computed(() => {
-    const chain = combatColorLabel(combat_color.value);
-    return chain ? `Combat · ${chain}` : 'Combat';
-});
-const combat_dot = computed(() => combatColorHex(combat_color.value));
-
-function handleToggleCombat() {
-    if (is_combat.value) {
-        stopCombat(map.slug);
-        return;
-    }
-    show_combat_dialog.value = true;
-}
-
-function handleChooseCombat(choice: TCombatStart) {
-    startCombat(map.slug, choice);
-}
+// Combat mode: the toggle lives in the signatures panel (patch 12); the jump prompt still uses its countdown.
+const { popup_seconds } = useCombat();
 
 // Confirm before leaving layout edit mode so users don't lose unsaved changes by
 // clicking the toggle again instead of Save.
@@ -302,29 +273,6 @@ const settingsUrl = computed(() => {
             </TooltipContent>
         </Tooltip>
 
-        <!-- Combat Mode Toggle -->
-        <Tooltip v-if="canEdit">
-            <TooltipTrigger as-child>
-                <button
-                    @click="handleToggleCombat"
-                    class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors sm:px-2"
-                    :class="is_combat ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
-                >
-                    <Swords class="size-3.5" />
-                    <span v-if="combat_dot" class="inline-block size-2 rounded-full" :style="{ backgroundColor: combat_dot }" />
-                    <span class="hidden md:inline">{{ combat_label }}</span>
-                </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-                <p class="text-xs font-medium">Combat Mode</p>
-                <p class="max-w-xs text-xs text-muted-foreground">
-                    {{ is_combat ? 'On' : 'Off' }} - No jump prompt when the hole is certain, and popups answer themselves after 60 s. Just for you.
-                </p>
-            </TooltipContent>
-        </Tooltip>
-
-        <NearestHighsecButton v-if="is_combat" :map="map" :from-solarsystem-id="character?.status?.solarsystem_id ?? null" />
-
         <!-- Follow Toggle -->
         <Tooltip v-if="canEdit">
             <TooltipTrigger as-child>
@@ -415,20 +363,14 @@ const settingsUrl = computed(() => {
         :signatures="signatures"
         :suggested-alias="suggested_alias"
         :planned-aliases="planned_aliases"
-        :static-slot-alias="static_slot_alias"
+        :static-slot-alias="prompt_static_slot_alias"
         :static-owner-id="static_owner_id"
         :countdown-seconds="popup_seconds"
         @select-signature="handleSelectSignature"
     />
 
-    <!-- Combat mode: start / join a chain -->
-    <StartCombatDialog
-        v-model:open="show_combat_dialog"
-        :current-system="current_map_solarsystem"
-        :current-is-home="current_is_home"
-        :combat-homes="combat_homes"
-        @choose="handleChooseCombat"
-    />
+    <!-- Right-click a connection → Add mass… -->
+    <AddMassDialog />
 
     <!-- Leave Layout Editing Confirmation -->
     <Dialog v-model:open="showCancelLayoutDialog">

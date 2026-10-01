@@ -4,6 +4,7 @@ import PlusIcon from '@/components/icons/PlusIcon.vue';
 import TrashIcon from '@/components/icons/TrashIcon.vue';
 import PasteSignatureWarningDialog from '@/components/signatures/PasteSignatureWarningDialog.vue';
 import ReturnHoleDialog from '@/components/signatures/ReturnHoleDialog.vue';
+import CombatControls from '@/components/combat/CombatControls.vue';
 import Signature from '@/components/signatures/Signature.vue';
 import SignaturesEmptyState from '@/components/signatures/SignaturesEmptyState.vue';
 import MapPanel from '@/components/ui/map-panel/MapPanel.vue';
@@ -239,6 +240,7 @@ function linkReturnHole(signature: TSignature, connection: TProcessedConnection,
         system.alias,
         system.solarsystem.class,
         map_system.value?.combat_color ?? null,
+        Boolean(map_system.value?.combat_home),
     );
     if (name) navigator.clipboard.writeText(name).catch(() => undefined);
 
@@ -360,6 +362,7 @@ function createNewSignature() {
     <!-- Signatures list when system is selected -->
     <MapPanel v-if="map_solarsystem" class="overflow-x-hidden">
         <MapPanelHeader>
+            <CombatControls class="mr-2" />
             Signatures
             <span v-if="filteredSignatures.length" class="ml-1 text-amber-400">{{ filteredSignatures.length }}</span>
             <span v-if="hiddenSignaturesCount > 0" class="ml-1 text-muted-foreground/70">{{ hiddenSignaturesCount }} hidden</span>

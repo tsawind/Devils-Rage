@@ -61,6 +61,9 @@ export function useTracking() {
         staticSlotAlias(origin_map_solarsystem.value?.alias, page.props.map.bookmark_ignored_alias, origin_is_combat_home.value),
     );
     const static_owner_id = computed(() => signatures.value?.find((signature) => signature.is_static)?.id ?? null);
+    // The slot the jump prompt moves a hole to when Static is ticked. Combat chains never
+    // switch a hole to 0 on their own (patch 12): the hole keeps its jump-order number.
+    const prompt_static_slot_alias = computed(() => (origin_map_system.value?.combat_color ? null : static_slot_alias.value));
 
     // The alias each unjumped wormhole in the origin has reserved (statics
     // first), so the jump dialog can prefill the one for the chosen signature.
@@ -326,6 +329,7 @@ export function useTracking() {
             here,
             target_solarsystem.value.class,
             here_color,
+            Boolean(existing_map_solarsystem.value?.combat_home),
         );
 
         if (!name) return;
@@ -350,6 +354,7 @@ export function useTracking() {
         suggested_alias,
         planned_aliases,
         static_slot_alias,
+        prompt_static_slot_alias,
         static_owner_id,
     };
 }

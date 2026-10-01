@@ -52,6 +52,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 final class MapUserSetting extends Model
 {
     /**
+     * A person's first visit to a map starts with the useful settings on
+     * (patch 12). Kept in step with the column defaults, so a freshly created
+     * row carries them before it is reloaded.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'tracking_allowed' => true,
+        'is_tracking' => true,
+        'prompt_for_signature_enabled' => true,
+        'preselect_signature_enabled' => true,
+        'suggest_alias_enabled' => true,
+        'copy_bookmark_enabled' => true,
+        'compact_signature_list' => true,
+    ];
+
+    /**
      * The map that this setting belongs to.
      *
      * @return BelongsTo<Map, $this>

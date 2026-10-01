@@ -17,6 +17,8 @@ import { computed } from 'vue';
 const props = defineProps<{
     /** The map system you are in, if it is on the map. */
     currentSystem: TMapSolarsystem | null;
+    /** Where you are when that isn't on the map yet (it gets added as the combat home). */
+    currentSolarsystem?: { id: number; name: string } | null;
     /** You are in the map's home (Daisy), which can't be a combat home. */
     currentIsHome: boolean;
     /** The combat homes on the map, one per chain. */
@@ -29,7 +31,15 @@ const emit = defineEmits<{
     choose: [choice: TCombatStart];
 }>();
 
-const canStartHere = computed(() => props.currentSystem !== null && !props.currentIsHome);
+/** Start here: in a map system, or in a system not on the map yet (it is added). */
+const startChoice = computed<TCombatStart | null>(() => {
+    if (props.currentIsHome) return null;
+    if (props.currentSystem) return { mode: 'start', map_solarsystem_id: props.currentSystem.id };
+    if (props.currentSolarsystem) return { mode: 'start', solarsystem_id: props.currentSolarsystem.id };
+    return null;
+});
+const canStartHere = computed(() => startChoice.value !== null);
+const addsSystem = computed(() => !props.currentSystem && Boolean(props.currentSolarsystem));
 
 /** The chain the system you are in already belongs to (not as its home). */
 const currentChainColor = computed(() => {
@@ -50,12 +60,16 @@ const chains = computed(() =>
         .toSorted((a, b) => (a.color === currentChainColor.value ? -1 : b.color === currentChainColor.value ? 1 : 0)),
 );
 
-const currentLabel = computed(() => (props.currentSystem ? aliasedSolarsystemLabel(props.currentSystem.alias, props.currentSystem.solarsystem.name) : null));
+const currentLabel = computed(() =>
+    props.currentSystem
+        ? aliasedSolarsystemLabel(props.currentSystem.alias, props.currentSystem.solarsystem.name)
+        : (props.currentSolarsystem?.name ?? null),
+);
 
 /** What the countdown picks: join the chain you're standing in, else start one here, else combat speed. */
 const defaultChoice = computed<TCombatStart>(() => {
     if (currentChainColor.value) return { mode: 'join', color: currentChainColor.value };
-    if (canStartHere.value && props.currentSystem) return { mode: 'start', map_solarsystem_id: props.currentSystem.id };
+    if (startChoice.value) return startChoice.value;
     return { mode: 'solo' };
 });
 
@@ -79,7 +93,7 @@ const { remaining, fraction } = usePopupCountdown(
 );
 
 function startHere(): void {
-    if (props.currentSystem) choose({ mode: 'start', map_solarsystem_id: props.currentSystem.id });
+    if (startChoice.value) choose(startChoice.value);
 }
 </script>
 
@@ -90,10 +104,11 @@ function startHere(): void {
                 <DialogTitle>⚔ Start a new chain here?</DialogTitle>
                 <DialogDescription>
                     <template v-if="canStartHere">
-                        <strong>{{ currentLabel }}</strong> becomes a combat home. Its holes are numbered 1, 2, 3 (static 0) and the chain gets its own color.
+                        <strong>{{ currentLabel }}</strong> {{ addsSystem ? 'is added to the map and becomes' : 'becomes' }} a combat home. Its
+                        holes are numbered 1, 2, 3 in jump order and the chain gets its own color and lane.
                     </template>
                     <template v-else-if="currentIsHome">You're in the home system, which can't be a combat home. Join a chain or use combat speed.</template>
-                    <template v-else>Your location isn't on the map. Join a chain or use combat speed.</template>
+                    <template v-else>Your location isn't known. Join a chain or use combat speed.</template>
                 </DialogDescription>
             </DialogHeader>
 
