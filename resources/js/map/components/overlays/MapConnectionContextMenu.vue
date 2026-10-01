@@ -17,6 +17,7 @@ import { openAddMass } from '@/map/actions/addMass';
 import { deleteMapConnection } from '@/map/actions/deleteMapConnection';
 import { updateMapConnection } from '@/map/actions/updateMapConnection';
 import ConnectionHoleTypeMenu from '@/map/components/overlays/ConnectionHoleTypeMenu.vue';
+import ConnectionRelinkMenu from '@/map/components/overlays/ConnectionRelinkMenu.vue';
 import CopyConnectionNameMenu from '@/map/components/overlays/CopyConnectionNameMenu.vue';
 import { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { TConnectionType, TLifetimeStatus, TMassStatus, TShipSize } from '@/types/models';
@@ -93,6 +94,8 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
     <ContextMenuContent>
         <!-- Patch 14: the hole's type, from the map -->
         <ConnectionHoleTypeMenu :connection="map_connection" />
+        <!-- Patch 16: the jump went through another signature -->
+        <ConnectionRelinkMenu :connection="map_connection" />
         <ContextMenuSub>
             <ContextMenuSubTrigger>
                 <Clock class="size-4" />

@@ -131,6 +131,7 @@ Route::middleware('auth')->group(function () {
     Route::resource('paste-signatures', PasteSignatureController::class)->only(['store']);
     Route::post('signatures/{signature}/arm', [SignatureArmController::class, 'store'])->name('signatures.arm.store');
     Route::post('map-connections/{mapConnection}/hole-type', [ConnectionHoleTypeController::class, 'store'])->name('map-connections.hole-type.store');
+    Route::post('map-connections/{mapConnection}/relink', [ConnectionHoleTypeController::class, 'relink'])->name('map-connections.relink');
     Route::post('signatures/{signature}/absorb', [ConnectionHoleTypeController::class, 'absorb'])->name('signatures.absorb');
     Route::delete('signatures/{signature}/arm', [SignatureArmController::class, 'destroy'])->name('signatures.arm.destroy');
 

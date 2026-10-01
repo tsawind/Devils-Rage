@@ -31,9 +31,12 @@ function connection(overrides: Partial<TMapConnection> = {}): TMapConnection {
     } as TMapConnection;
 }
 
+/** The badge cluster's text (patch 16: the hover title now also carries the hole's age). */
 function badgeText(overrides: Partial<TMapConnection> = {}): string {
     return mount(Edge, { props: { geometry, connection: connection(overrides), scale: 1 } })
-        .text()
+        .findAll('foreignObject')
+        .map((badges) => badges.text())
+        .join('')
         .trim();
 }
 

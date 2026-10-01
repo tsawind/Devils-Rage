@@ -113,6 +113,80 @@ final readonly class ConnectionHoleTypeAction
         }
     }
 
+    /**
+     * Patch 16: connection right-click → "Link to a different hole…": the jump
+     * went through another signature on that side. The link moves to it (the
+     * two swap numbers); the old one stays as an unjumped hole, unless it was
+     * only a stand-in typed from the map without an ID, which goes (its type
+     * moves along when the new one has none).
+     *
+     * @throws Throwable
+     */
+    public function relink(MapConnection $connection, Signature $target): void
+    {
+        $sideId = $target->map_solarsystem_id;
+        if (! in_array($sideId, [$connection->from_map_solarsystem_id, $connection->to_map_solarsystem_id], true)) {
+            throw ValidationException::withMessages(['signature' => 'That signature is not on either end of this connection.']);
+        }
+        if ($target->map_connection_id !== null) {
+            throw ValidationException::withMessages(['signature' => 'That hole is already linked to a connection.']);
+        }
+
+        DB::transaction(function () use ($connection, $target, $sideId): void {
+            $current = Signature::query()
+                ->where('map_connection_id', $connection->id)
+                ->where('map_solarsystem_id', $sideId)
+                ->first();
+
+            $targetAlias = $target->alias;
+            if ($current instanceof Signature) {
+                $currentAlias = $current->alias;
+                if ($current->signature_id === null) {
+                    if ($target->signature_type_id === null && $current->signature_type_id !== null) {
+                        $target->fill([
+                            'signature_category_id' => $current->signature_category_id,
+                            'signature_type_id' => $current->signature_type_id,
+                            'wormhole_id' => $current->wormhole_id,
+                        ]);
+                    }
+                    $current->delete();
+                } else {
+                    // Free the number first (one number per system), then swap.
+                    $current->update(['map_connection_id' => null, 'alias' => null]);
+                }
+                $target->fill(['alias' => $currentAlias]);
+                $target->map_connection_id = $connection->id;
+                $target->save();
+                if ($current->exists) {
+                    $current->update(['alias' => $targetAlias]);
+                }
+            } else {
+                $target->map_connection_id = $connection->id;
+                $target->save();
+            }
+
+            // Only one side can be the hole itself: if the new one is typed, the far side gives way to its K162.
+            $target->load('signatureType');
+            if ($target->signatureType instanceof SignatureType && ! self::isK162($target->signatureType)) {
+                $others = Signature::query()
+                    ->with('signatureType')
+                    ->where('map_connection_id', $connection->id)
+                    ->where('map_solarsystem_id', '!=', $sideId)
+                    ->get();
+                foreach ($others as $other) {
+                    if ($other->signatureType instanceof SignatureType && ! self::isK162($other->signatureType)) {
+                        $other->update(['signature_type_id' => null, 'wormhole_id' => null]);
+                    }
+                }
+            }
+
+            $this->fillFarSideK162Action->handle($connection->id);
+            $this->syncConnectionShipSizeAction->handle($target);
+        });
+
+        $this->broadcast($connection);
+    }
+
     private function broadcast(MapConnection $connection): void
     {
         foreach ([$connection->from_map_solarsystem_id, $connection->to_map_solarsystem_id] as $id) {

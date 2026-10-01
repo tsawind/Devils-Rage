@@ -35,3 +35,20 @@ export function absorbSignature(typedId: number, pastedId: number, onSuccess?: (
         },
     );
 }
+
+/** Patch 16: the jump went through a different signature on that side: move the link to it. */
+export function relinkConnection(connectionId: number, signatureId: number, onSuccess?: () => void): void {
+    router.post(
+        ConnectionHoleTypeController.relink(connectionId).url,
+        { signature_id: signatureId },
+        {
+            preserveScroll: true,
+            preserveState: true,
+            only: ['map', 'selected_map_solarsystem'],
+            onSuccess: () => onSuccess?.(),
+            onError: (errors) => {
+                toast.error(Object.values(errors)[0] ?? 'Could not move the link.');
+            },
+        },
+    );
+}

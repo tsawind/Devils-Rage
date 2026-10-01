@@ -37,6 +37,24 @@ final class ConnectionHoleTypeController extends Controller
     }
 
     /**
+     * Patch 16: the jump went through a different signature on that side.
+     *
+     * @throws Throwable
+     */
+    public function relink(Request $request, MapConnection $mapConnection, ConnectionHoleTypeAction $action): RedirectResponse
+    {
+        Gate::authorize('update', $mapConnection);
+
+        $validated = $request->validate(['signature_id' => ['required', 'integer']]);
+        $target = Signature::query()->findOrFail((int) $validated['signature_id']);
+        Gate::authorize('update', $target);
+
+        $action->relink($mapConnection, $target);
+
+        return back();
+    }
+
+    /**
      * @throws Throwable
      */
     public function absorb(Request $request, Signature $signature, ConnectionHoleTypeAction $action): RedirectResponse

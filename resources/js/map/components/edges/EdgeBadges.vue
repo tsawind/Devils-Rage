@@ -7,6 +7,8 @@ export type EdgeIndicator = {
     arrowAngle?: number | null;
     fill: string;
     stroke: string;
+    /** Patch 16: a guess (likely EOL), drawn faint. */
+    faint?: boolean;
 };
 </script>
 
@@ -54,7 +56,12 @@ const totalWidth = computed(() => {
                     />
                 </span>
                 <Weight v-else-if="indicator.type === 'weight'" class="size-3.5" :style="{ color: indicator.fill }" />
-                <Clock v-else-if="indicator.type === 'clock'" class="size-3.5" :style="{ color: indicator.fill }" />
+                <Clock
+                    v-else-if="indicator.type === 'clock'"
+                    class="size-3.5"
+                    :style="{ color: indicator.fill, opacity: indicator.faint ? 0.45 : 1 }"
+                    :aria-label="indicator.faint ? 'Likely end of life by its age' : undefined"
+                />
                 <Orbit v-else-if="indicator.type === 'gate'" class="size-3.5" :style="{ color: indicator.fill }" />
                 <Heart v-else-if="indicator.type === 'preserve'" class="size-3.5" :style="{ color: indicator.fill }" />
             </template>

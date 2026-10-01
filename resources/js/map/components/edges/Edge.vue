@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import EdgeBadges, { type EdgeIndicator } from '@/map/components/edges/EdgeBadges.vue';
 import { scalePoint } from '@/map/core/coords';
+import { useMinuteNow } from '@/composables/useMinuteNow';
+import { holeAge } from '@/lib/holeAge';
 import { describeEstimate, estimateMass, formatMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { edgePathAndCenter } from '@/map/core/geometry/paths';
@@ -113,6 +115,10 @@ const indicators = computed<EdgeIndicator[]>(() => {
             stroke: lifetime.value === 'critical' ? 'var(--color-red-600)' : 'var(--color-purple-600)',
         });
     }
+    // Patch 16: a faint clock once the hole is near the end of its type's lifetime and nobody checked.
+    else if (age.value?.likelyEol) {
+        items.push({ type: 'clock', fill: 'var(--color-purple-500)', stroke: 'var(--color-purple-600)', faint: true });
+    }
 
     return items;
 });
@@ -178,11 +184,26 @@ const pipe = computed(() => {
     };
 });
 
+// ---- Age (patch 16) -------------------------------------------------------------
+const now = useMinuteNow();
+const age = computed(() => {
+    if (!connection || isStargate.value) return null;
+    return holeAge({
+        seen: [connection.created_at, ...(connection.signatures ?? []).map((signature) => signature.created_at)],
+        now: now.value,
+        maximumLifetime: holeType.value?.maximum_lifetime ?? null,
+        lifetimeStatus: connection.lifetime_status,
+        lifetimeUpdatedAt: connection.lifetime_status_updated_at,
+    });
+});
+
 const pipeTitle = computed(() => {
+    if (!connection) return undefined;
+    const seen = age.value ? `${age.value.label}${age.value.likelyEol ? ' · likely EOL' : ''}` : null;
     const current = estimate.value;
-    if (!current || !holeType.value || !connection) return undefined;
+    if (!current || !holeType.value) return seen ?? undefined;
     const jumps = connection.jumps_count ?? 0;
-    return `${holeType.value.name}: ${describeEstimate(current)} · ${formatMass(holeType.value.total_mass)} kg hole · ${jumps} ${jumps === 1 ? 'jump' : 'jumps'} logged (${formatMass(connection.jumps_mass_sum ?? 0)} kg)`;
+    return `${holeType.value.name}: ${describeEstimate(current)} · ${formatMass(holeType.value.total_mass)} kg hole · ${jumps} ${jumps === 1 ? 'jump' : 'jumps'} logged (${formatMass(connection.jumps_mass_sum ?? 0)} kg)${seen ? ` · ${seen}` : ''}`;
 });
 
 function getDashArray(): string | undefined {
