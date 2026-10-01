@@ -1,4 +1,4 @@
-import { aliasForSlot, guessNextAlias, homeCallsign, isIgnoredAlias, planSignatureAliases, staticSlotAlias, suggestAlias } from '@/lib/alias';
+import { aliasesBelow, aliasForSlot, guessNextAlias, homeCallsign, isIgnoredAlias, planSignatureAliases, staticSlotAlias, suggestAlias } from '@/lib/alias';
 import { describe, expect, it } from 'vitest';
 
 describe('guessNextAlias (numeric, default)', () => {
@@ -335,5 +335,13 @@ describe('static slot, callsigns and hand-set numbers', () => {
         expect(homeCallsign('E')).toBeNull();
         expect(homeCallsign('A1')).toBeNull();
         expect(homeCallsign('1')).toBeNull();
+    });
+});
+
+describe('patch 15: systems mapped further down a hole', () => {
+    it('counts only chain numbers, never the home name that starts with the same letter', () => {
+        expect(aliasesBelow(['Daisy', 'D1', 'D12', 'B', 'DA'], 'D', 'Daisy')).toEqual(['D1', 'D12', 'DA']);
+        expect(aliasesBelow(['Daisy', 'B1'], 'D', 'Daisy')).toEqual([]);
+        expect(aliasesBelow(['A1'], '', 'Daisy')).toEqual([]);
     });
 });

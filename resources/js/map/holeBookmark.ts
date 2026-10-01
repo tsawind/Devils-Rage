@@ -1,4 +1,4 @@
-import { suggestAlias } from '@/lib/alias';
+import { aliasesBelow, suggestAlias } from '@/lib/alias';
 import { buildSignatureBookmark, formatBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
 import type { MapStore } from '@/map/store/mapStore';
@@ -136,9 +136,7 @@ export function renameChanges(
 
 /** Systems already mapped further down a name in the chain ("A21" under "A2"): renaming it is blocked then. */
 export function mappedBelow(store: MapStore, system: TMapSolarsystem, alias: string): string[] {
-    const from = alias.toUpperCase();
-    if (!from) return [];
-    return chainAliases([...store.systems.values()], system).filter((candidate) => candidate.toUpperCase().startsWith(from) && candidate.length > from.length);
+    return aliasesBelow(chainAliases([...store.systems.values()], system), alias, store.meta.value?.bookmark_ignored_alias);
 }
 
 /** Patch 14: the forward bookmark of a jumped hole from `system`, if the system it leads to were named `alias`. */

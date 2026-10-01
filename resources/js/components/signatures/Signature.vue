@@ -29,7 +29,7 @@ import usePermission from '@/composables/usePermission';
 import { useShowMap } from '@/composables/useShowMap';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
-import { aliasForSlot, displayAlias, isIgnoredAlias, staticSlotAlias, suggestAlias } from '@/lib/alias';
+import { aliasesBelow, aliasForSlot, displayAlias, isIgnoredAlias, staticSlotAlias, suggestAlias } from '@/lib/alias';
 import type { TArmAsOption } from '@/lib/arming';
 import { buildSignatureBookmark, formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases, combatColorLabel } from '@/lib/combat';
@@ -414,11 +414,10 @@ const rename_from_alias = computed(() => signature.alias ?? forward_target_alias
 const rename_beyond = computed(() => descendantsOf(rename_from_alias.value));
 
 function descendantsOf(alias: string): string[] {
-    const from = alias.toUpperCase();
-    if (!from) return [];
-    return chainAliases(map_solarsystems.value, map_system.value)
-        .filter((candidate) => candidate.toUpperCase().startsWith(from) && candidate.length > from.length)
-        .map((candidate) => displayAlias(candidate));
+    // Patch 15: only real chain numbers ("Daisy" isn't below Delta just because it starts with D).
+    return aliasesBelow(chainAliases(map_solarsystems.value, map_system.value), alias, page.props.map.bookmark_ignored_alias).map((candidate) =>
+        displayAlias(candidate),
+    );
 }
 
 function handleRenameChoice(choice: 'rename' | 'keep'): void {

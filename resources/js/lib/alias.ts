@@ -480,3 +480,21 @@ export function localSlot(alias: string | null | undefined): string {
     const value = (alias ?? '').trim();
     return value ? value[value.length - 1] : '';
 }
+
+/**
+ * Patch 15: the names of systems mapped further down a hole named `from`
+ * (A → A1, A12…). Only real chain numbers count: the home's own name
+ * ("Daisy") or any other plain name that merely starts with the same letter
+ * is not further down the chain.
+ */
+export function aliasesBelow(aliases: readonly string[], from: string, ignoredAlias?: string | null): string[] {
+    const prefix = from.trim().toUpperCase();
+    if (!prefix) return [];
+    const ignored = (ignoredAlias ?? '').trim().toUpperCase();
+    return aliases.filter((candidate) => {
+        const name = candidate.trim();
+        if (!/^[A-Z0-9-]+$/.test(name)) return false;
+        const upper = name.toUpperCase();
+        return upper !== ignored && upper.startsWith(prefix) && upper.length > prefix.length;
+    });
+}
