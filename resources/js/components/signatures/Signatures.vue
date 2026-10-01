@@ -16,6 +16,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCombat } from '@/composables/combat/useCombat';
 import { recentJump } from '@/composables/signatures/recentJump';
+import { armHole } from '@/composables/signatures/armHole';
 import { requestStaticCheck } from '@/composables/signatures/useStaticCertainty';
 import { usePasteSignatures } from '@/composables/signatures/usePasteSignatures';
 import { useSignatures } from '@/composables/signatures/useSignatures';
@@ -24,15 +25,18 @@ import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { useShowMap } from '@/composables/useShowMap';
 import usePermission from '@/composables/usePermission';
+import useUser from '@/composables/useUser';
 import { signatureCategories } from '@/const/signatures';
 import { displayAlias, suggestAlias } from '@/lib/alias';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
+import { armAsOptions, armedSummary, myArmedHole, pickGridHole, type TArmAsOption } from '@/lib/arming';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
 import { AUTO_LINK_WINDOW_MS, decideReturnHole, orderOpenConnections, type TReturnConnectionOption, type TReturnHoleOption, type TScanDistance } from '@/lib/returnHole';
 import type { TRawSignature } from '@/lib/SignatureParser';
 import { needsSideChainLetter, suggestSideChainLetter, takenLetters } from '@/lib/sideChain';
 import { aliasedSolarsystemLabel } from '@/lib/solarsystem';
+import { disarmSignature } from '@/map/actions/arm';
 import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { createSignature, TProcessedConnection, updateMapUserSettings, updateSignature, useMapSolarsystems, useMapStore } from '@/map/api';
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
@@ -56,7 +60,10 @@ const map_user_settings = useMapUserSettings();
 
 const page = useShowMap();
 
-const { popup_seconds } = useCombat();
+const { popup_seconds, is_combat } = useCombat();
+
+const user = useUser();
+const user_id = computed<number | null>(() => user.value?.id ?? null);
 
 function toggleCompactSignatureList() {
     updateMapUserSettings(page.props.map.slug, {
@@ -134,6 +141,97 @@ const claim_alias = computed<string | null>(() => {
         combatHome: Boolean(map_system.value.combat_home),
     });
 });
+
+// ---- Arming (patch 13) -------------------------------------------------------
+// Arm the hole you are about to jump: it takes its number (the planned one, or
+// the next jump-order number in a combat chain), its bookmark name is copied,
+// and your next jump is linked to it with no prompt.
+
+/** "1 LIH (you) · 2 QXP (Kyle)" for the header. */
+const armed_text = computed(() => armedSummary(signatures.value, user_id.value));
+
+function armRow(signature: TSignature, asAlias: string | null = null, swap = false): void {
+    const system = props.map_solarsystem;
+    if (!system || !can_write.value || signature.map_connection_id) return;
+    const limbo = Boolean(map_system.value?.combat_color);
+    // Re-arming another hole in this combat system keeps your number.
+    const mine = myArmedHole(signatures.value, user_id.value);
+    const reuse = limbo && mine && mine.id !== signature.id && mine.alias ? mine.alias : null;
+    const own = signature.alias ?? reuse ?? planned_aliases.value.get(signature.id) ?? claim_alias.value;
+    const alias = asAlias ?? own;
+    if (!alias) {
+        toast.error('No free number to arm this hole as.');
+        return;
+    }
+    armHole({
+        signature,
+        system: {
+            alias: system.alias,
+            class: system.solarsystem.class,
+            combatHome: Boolean(map_system.value?.combat_home),
+            combatColor: map_system.value?.combat_color ?? null,
+        },
+        aliases: chain_aliases.value,
+        formats: page.props.map,
+        alias,
+        fallbackAlias: own,
+        swap,
+    });
+}
+
+function disarmRow(signature: TSignature): void {
+    disarmSignature(signature.id, () => toast.success(`Disarmed ${signature.signature_id?.slice(0, 3) ?? 'the hole'}`));
+}
+
+/** "Arm as…" numbers for a hole in a combat chain (empty elsewhere: those holes keep their planned number). */
+function armAsFor(signature: TSignature): TArmAsOption[] {
+    const system = props.map_solarsystem;
+    if (!system || !map_system.value?.combat_color || signature.map_connection_id) return [];
+    return armAsOptions({
+        parentAlias: system.alias,
+        ignoredAlias: page.props.map.bookmark_ignored_alias,
+        combatHome: Boolean(map_system.value.combat_home),
+        usedBySystems: chain_aliases.value,
+        signatures: signatures.value,
+        signatureId: signature.id,
+        userId: user_id.value,
+    });
+}
+
+/**
+ * Combat mode: a paste arms the hole you want to jump. One signature pasted
+ * arms that one; a full scan arms the one wormhole you sit on (under 10 km).
+ * Returns true when the paste was handled here.
+ */
+function armFromPaste(pasted: TRawSignature[], system: TResolvedSelectedMapSolarsystem): boolean {
+    if (pasted.length === 1) {
+        const only = system.signatures.find((signature) => signature.signature_id === pasted[0].signature_id);
+        if (!only || only.map_connection_id || !(isWormholeSignature(only) || !only.signature_category_id)) return false;
+        armRow(only);
+        return true;
+    }
+    const distances = new Map(pasted.map((raw) => [raw.signature_id, raw.distance ?? null]));
+    const pick = pickGridHole(
+        system.signatures
+            .filter((signature) => signature.signature_id && distances.has(signature.signature_id))
+            .map((signature) => ({
+                id: signature.id,
+                meters: distances.get(signature.signature_id ?? '')?.meters ?? null,
+                isWormhole: isWormholeSignature(signature),
+                linked: Boolean(signature.map_connection_id),
+            })),
+    );
+    if (pick.mode === 'one') {
+        const hole = system.signatures.find((signature) => signature.id === pick.id);
+        if (hole) armRow(hole);
+        return true;
+    }
+    if (pick.mode === 'many') {
+        toast.info(`${pick.count} holes on grid: paste the one you want`, { description: 'Nothing was armed.' });
+        return true;
+    }
+    return false;
+}
 
 // ---- Side chain letters (patch 12) ------------------------------------------
 // A chain not linked to Daisy numbers its holes plainly (1, 11, 111) when it is
@@ -215,16 +313,14 @@ async function handlePasted(pasted: TRawSignature[]): Promise<void> {
 
     // Patch 13: the hole you came through already has its signature on this
     // side, so the way back is known: don't ask about other unlinked connections.
-    if (
+    const return_known = Boolean(
         jump &&
-        connections.value.some(
-            (connection) =>
-                connection.target.solarsystem_id === jump.fromSolarsystemId &&
-                (connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === system.id),
-        )
-    ) {
-        return;
-    }
+            connections.value.some(
+                (connection) =>
+                    connection.target.solarsystem_id === jump.fromSolarsystemId &&
+                    (connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === system.id),
+            ),
+    );
 
     const open = connections.value.filter(
         (connection) =>
@@ -232,7 +328,11 @@ async function handlePasted(pasted: TRawSignature[]): Promise<void> {
             !dismissed_connections.has(connection.id) &&
             !(connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === system.id),
     );
-    if (open.length === 0) return;
+
+    // Patch 13: in combat mode, once the way back is known, a paste arms your next hole.
+    if (is_combat.value && can_write.value && (return_known || open.length === 0) && armFromPaste(pasted, system)) return;
+
+    if (return_known || open.length === 0) return;
 
     const ordered = orderOpenConnections(
         open.map((connection) => ({ ...connection, otherSolarsystemId: connection.target.solarsystem_id, createdAt: connection.created_at })),
@@ -438,6 +538,9 @@ function createNewSignature() {
             Signatures
             <span v-if="filteredSignatures.length" class="ml-1 text-amber-400">{{ filteredSignatures.length }}</span>
             <span v-if="hiddenSignaturesCount > 0" class="ml-1 text-muted-foreground/70">{{ hiddenSignaturesCount }} hidden</span>
+            <span v-if="armed_text" class="ml-2 truncate font-sans text-[10px] tracking-normal text-red-400 normal-case" :title="`Armed holes: ${armed_text}`">
+                Armed: {{ armed_text }}
+            </span>
             <template #actions>
                 <Tooltip>
                     <TooltipTrigger as-child>
@@ -554,6 +657,10 @@ function createNewSignature() {
                     :claim_alias="claim_alias"
                     :number_owners="number_owners"
                     :static_owner_id="static_owner_id"
+                    :user_id="user_id"
+                    :arm_as="armAsFor(signature)"
+                    @arm="(alias, swap) => armRow(signature, alias, swap)"
+                    @disarm="disarmRow(signature)"
                 />
             </template>
             <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">

@@ -131,6 +131,9 @@ export type TPendingHole = {
     /** Patch 13: shown on the striped pipe. */
     mass_status?: TMassStatus | null;
     lifetime?: TLifetimeStatus | null;
+    /** Patch 13: armed as someone's next jump. */
+    armed_by_user_id?: number | null;
+    armed_by_name?: string | null;
 };
 
 export type TMapSolarsystem = TMapSolarsystemBase & {

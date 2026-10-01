@@ -17,6 +17,7 @@ export const MapConnectionsRemovedEvent = getEventName('MapConnections', 'MapCon
 export const MapMetadataUpdatedEvent = getEventName('Maps', 'MapMetadataUpdatedEvent');
 export const MapResyncEvent = getEventName('Maps', 'MapResyncEvent');
 export const CombatModeTurnedOffEvent = getEventName('Maps', 'CombatModeTurnedOffEvent');
+export const MapNoticeEvent = getEventName('Maps', 'MapNoticeEvent');
 export const SignaturesChangedEvent = getEventName('Signatures', 'SignaturesChangedEvent');
 
 export const CharacterStatusUpdatedEvent = getEventName('Characters', 'CharacterStatusUpdatedEvent');

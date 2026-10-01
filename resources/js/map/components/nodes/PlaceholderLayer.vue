@@ -3,6 +3,7 @@ import { combatColorHex } from '@/lib/combat';
 import { isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { wormholeMass } from '@/lib/wormholeMass';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
+import useUser from '@/composables/useUser';
 import { useMapStore } from '@/map/store/mapStore';
 import { show } from '@/routes/maps';
 import { Link } from '@inertiajs/vue3';
@@ -15,6 +16,7 @@ import { computed } from 'vue';
  * signature list; right-click has its own menu (see PlaceholderContextMenu).
  */
 const store = useMapStore();
+const user = useUser();
 
 const FULL_WIDTH = 180;
 const FULL_HEIGHT = 40;
@@ -83,8 +85,15 @@ const items = computed(() => {
                     ...(hex ? { borderColor: `${hex}b3` } : {}),
                     // Expected statics (nothing scanned yet) are fainter than scanned holes.
                     ...(placeholder.expected ? { opacity: '0.7', borderStyle: 'dotted' } : {}),
+                    // Patch 13: armed as someone's next jump.
+                    ...(placeholder.armedBy ? { borderColor: '#ef4444', borderWidth: '2px', borderStyle: 'dashed' } : {}),
                 },
                 fontScale: scale * (compact ? 0.8 : 1),
+                armed: placeholder.armedBy
+                    ? placeholder.armedBy === user.value?.id
+                        ? 'armed · you'
+                        : `armed · ${placeholder.armedByName ?? '?'}`
+                    : null,
                 title: placeholder.expected
                     ? `${placeholder.label || 'Static'}: this static isn't scanned yet${placeholder.note ? ' (it may be the hole you came in by)' : ''}`
                     : placeholder.label
@@ -166,6 +175,13 @@ const items = computed(() => {
                 <span class="font-medium" :style="{ fontSize: `${12 * item.fontScale}px` }">{{ item.label || '\u00a0' }}</span>
                 <span class="font-mono text-muted-foreground" :style="{ fontSize: `${10 * item.fontScale}px` }">{{ item.detail }}</span>
             </template>
+            <span
+                v-if="item.armed"
+                class="absolute -top-2 left-1 rounded-full bg-red-500 px-1.5 leading-tight font-medium text-white"
+                :style="{ fontSize: `${9 * item.fontScale}px` }"
+            >
+                {{ item.armed }}
+            </span>
             <span
                 v-if="item.note"
                 class="absolute -top-2 right-1 rounded-full border border-amber-500/60 bg-amber-100 px-1.5 leading-tight font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"

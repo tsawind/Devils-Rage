@@ -3,6 +3,7 @@ import UnknownTypeOption from '@/components/signatures/UnknownTypeOption.vue';
 import WormholeOption from '@/components/signatures/WormholeOption.vue';
 import { Combobox, ComboboxAnchor, ComboboxInput, ComboboxItem, ComboboxTrigger, ComboboxVirtualList } from '@/components/ui/combobox';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
+import { matchesQuickKey, nextQuickKey, quickKeyLabel } from '@/lib/arming';
 import { comboboxRowText, flattenComboboxSections, type TComboboxRow } from '@/lib/comboboxSections';
 import type { TSignatureType } from '@/types/models';
 import { computed, ref, watch } from 'vue';
@@ -26,12 +27,24 @@ const map_user_settings = useMapUserSettings();
 
 const open = ref(false);
 const search = ref('');
+/** Patch 13: quick key filter (1-6 = leads to C1-C6, h / l / n = high, low, null, f = frigate holes). */
+const quick = ref<string | null>(null);
 
 watch(open, (isOpen) => {
     if (isOpen) {
         search.value = '';
+        quick.value = null;
     }
 });
+
+/** A quick key on an empty search sets (or clears) the filter instead of typing. */
+function handleSearchKeydown(event: KeyboardEvent): void {
+    if (search.value !== '' || event.ctrlKey || event.metaKey || event.altKey) return;
+    const next = nextQuickKey(quick.value, event.key);
+    if (next === undefined) return;
+    event.preventDefault();
+    quick.value = next;
+}
 
 const statics = computed<TSignatureType[]>(() => {
     if (static_signatures.length === 0) {
@@ -53,11 +66,14 @@ const wormholes = computed<TSignatureType[]>(() => {
 // A pinned null row lets a wormhole signature be reset to an unknown type.
 const rows = computed<TComboboxRow<TSignatureType | null>[]>(() => {
     const needle = search.value.trim().toLowerCase();
+    const text = (option: TSignatureType, value: string) =>
+        value === '' || option.name.toLowerCase().includes(value) || (option.extra ?? '').toLowerCase().includes(value);
+    // Typing on after a quick letter also finds names starting with it ("h" then "296" finds H296).
     const matches = (option: TSignatureType) =>
-        needle === '' || option.name.toLowerCase().includes(needle) || (option.extra ?? '').toLowerCase().includes(needle);
+        (matchesQuickKey(quick.value, option) && text(option, needle)) || (quick.value !== null && needle !== '' && text(option, quick.value + needle));
 
     return flattenComboboxSections<TSignatureType | null>([
-        { key: 'unknown', heading: '', items: needle === '' || 'unknown'.includes(needle) ? [null] : [] },
+        { key: 'unknown', heading: '', items: quick.value === null && (needle === '' || 'unknown'.includes(needle)) ? [null] : [] },
         { key: 'statics', heading: 'Statics', items: statics.value.filter(matches) },
         { key: 'k162', heading: 'K162', items: k162_options.value.filter(matches) },
         { key: 'wormholes', heading: 'Wormholes', items: wormholes.value.filter(matches) },
@@ -98,7 +114,13 @@ function filterByCurrentClass(option: TSignatureType) {
         </ComboboxAnchor>
         <ComboboxVirtualList :options="rows" :text-content="rowText" empty-text="No types found" class="min-w-44">
             <template #header>
-                <ComboboxInput v-model="search" placeholder="Search types" class="h-8 border-b text-xs" auto-focus />
+                <ComboboxInput
+                    v-model="search"
+                    :placeholder="quick ? `${quickKeyLabel(quick)} only · ${quick} again to clear` : 'Search · 1-6, h, l, n, f to filter'"
+                    class="h-8 border-b text-xs"
+                    auto-focus
+                    @keydown="handleSearchKeydown"
+                />
             </template>
             <template #default="{ option }">
                 <div class="w-full">

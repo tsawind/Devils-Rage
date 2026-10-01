@@ -21,6 +21,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $id
  * @property string|null $signature_id
  * @property string|null $alias Locked chain alias of the hole (e.g. "12")
+ * @property int|null $armed_by_user_id Patch 13: who armed the hole as their next jump
+ * @property string|null $armed_by_name
+ * @property CarbonImmutable|null $armed_at
+ * @property bool $armed_claimed_alias Arming gave the hole its number (disarming frees it)
  * @property bool $is_static
  * @property bool $is_wandering
  * @property int $map_solarsystem_id
@@ -56,7 +60,49 @@ final class Signature extends Model
         'lifetime_updated_at' => 'immutable_datetime',
         'is_static' => 'boolean',
         'is_wandering' => 'boolean',
+        'armed_at' => 'immutable_datetime',
+        'armed_claimed_alias' => 'boolean',
     ];
+
+    /** Arms run out after this many minutes without a jump (patch 13). */
+    public const int ARM_MINUTES = 15;
+
+    protected static function booted(): void
+    {
+        // Jumping a hole (it gets linked to a connection) uses up its arm; the number stays.
+        self::saving(function (Signature $signature): void {
+            if ($signature->map_connection_id !== null && $signature->armed_by_user_id !== null) {
+                $signature->armed_by_user_id = null;
+                $signature->armed_by_name = null;
+                $signature->armed_at = null;
+                $signature->armed_claimed_alias = false;
+            }
+        });
+    }
+
+    /** Armed by someone, and not run out yet. */
+    public function isArmed(): bool
+    {
+        return $this->armed_by_user_id !== null
+            && $this->armed_at !== null
+            && $this->armed_at->greaterThan(now()->subMinutes(self::ARM_MINUTES));
+    }
+
+    /**
+     * The arm as the map shows it, or nulls when not armed.
+     *
+     * @return array{armed_by_user_id: int|null, armed_by_name: string|null, armed_at: string|null}
+     */
+    public function armedPayload(): array
+    {
+        $armed = $this->isArmed();
+
+        return [
+            'armed_by_user_id' => $armed ? $this->armed_by_user_id : null,
+            'armed_by_name' => $armed ? $this->armed_by_name : null,
+            'armed_at' => $armed ? $this->armed_at?->toISOString() : null,
+        ];
+    }
 
     /**
      * @return BelongsTo<MapSolarsystem,$this>

@@ -5,12 +5,15 @@ import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { useShowMap } from '@/composables/useShowMap';
 import { useStaticData } from '@/composables/useStaticData';
 import { useTrackingSystems } from '@/composables/useTrackingSystems';
+import useUser from '@/composables/useUser';
 import { aliasTargetKind, displayAlias, staticSlotAlias, suggestAlias } from '@/lib/alias';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
+import { jumpMatchesArm, myArmedHole } from '@/lib/arming';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
 import { groupSignatureOptions } from '@/lib/signatureCompatibility';
 import { isWormholeSystem } from '@/lib/solarsystem';
+import { disarmSignature } from '@/map/actions/arm';
 import { createTracking, updateMapUserSettings, useMapSolarsystems } from '@/map/api';
 import { show } from '@/routes/maps';
 import { TLifetimeStatus, TMassStatus, TShipSize, TSignature } from '@/types/models';
@@ -25,6 +28,7 @@ export function useTracking() {
     const page = useShowMap();
     const { staticData } = useStaticData();
     const { map_solarsystems } = useMapSolarsystems();
+    const user = useUser();
 
     const is_tracking = computed(() => map_user_settings.value?.is_tracking && character.value && map_user_settings.value?.tracking_allowed);
     const is_tracking_allowed = computed(() => map_user_settings.value.tracking_allowed);
@@ -180,6 +184,11 @@ export function useTracking() {
 
         const gate_connected = isGateConnected(origin_map_solarsystem.value?.solarsystem_id, target_solarsystem.value?.id);
 
+        // Patch 13: you armed a hole in the system you left: that's the one you jumped.
+        if (!gate_connected && performArmedJump()) {
+            return;
+        }
+
         // Skip the prompt when it is certain which hole was jumped (everyone, not just combat mode).
         if (!gate_connected && performCertainJump()) {
             return;
@@ -192,6 +201,46 @@ export function useTracking() {
         // The dialog defers the tracking request until the scout picks a
         // signature, so following waits for that path instead.
         show_signature_modal.value = true;
+    }
+
+    /**
+     * Patch 13: the hole you armed in the system you left is the one you
+     * jumped: link it with no prompt (its number is the one it was armed as).
+     * When you clearly jumped another hole (its class doesn't match where you
+     * landed), the arm is released and the usual rules decide.
+     */
+    function performArmedJump(): boolean {
+        const armed = myArmedHole(signatures.value, user.value?.id ?? null);
+        if (!armed) return false;
+
+        const label = armed.signature_id?.slice(0, 3) ?? 'a hole';
+        if (
+            !jumpMatchesArm({
+                armedTargetClass: armed.signature_type?.target_class ?? null,
+                destinationClass: target_solarsystem.value?.class ?? null,
+                connectedByOtherHole: false,
+            })
+        ) {
+            disarmSignature(armed.id);
+            toast.warning(`You armed ${label} but jumped another hole`, {
+                description: `${label} released. Check the bookmark you made in game.`,
+                duration: 15_000,
+            });
+            return false;
+        }
+
+        const alias = existing_map_solarsystem.value?.alias ? suggested_alias.value : (armed.alias ?? planned_aliases.value.get(armed.id) ?? suggested_alias.value);
+        toast.info(`Jumped armed ${label}${alias ? ` → ${displayAlias(alias)}` : ''}`, { description: 'Linked to the hole you armed, no prompt.' });
+        handleSelectSignature({
+            signatureId: armed.id,
+            alias,
+            lifetime: armed.lifetime ?? 'healthy',
+            massStatus: armed.mass_status ?? 'fresh',
+            shipSize: armed.ship_size ?? null,
+            isStatic: null,
+            isWandering: null,
+        });
+        return true;
     }
 
     /**

@@ -14,6 +14,7 @@ use App\Console\Commands\MapAccess\PurgeExpiredMapAccessCommand;
 use App\Console\Commands\MapConnections\PruneUnclaimedConnectionJumpsCommand;
 use App\Console\Commands\Organisations\ResolveUnnamedOrganisationsCommand;
 use App\Console\Commands\Signatures\DeleteOldSignaturesCommand;
+use App\Console\Commands\Signatures\ReleaseExpiredArmsCommand;
 use App\Console\Commands\Skyhooks\GetRaidableSkyhooksCommand;
 use App\Console\Commands\Sovereignty\GetSovereigntiesCommand;
 use Illuminate\Queue\Console\PruneBatchesCommand;
@@ -26,6 +27,7 @@ Schedule::command(GetSovereigntiesCommand::class)->runInBackground()->daily()->a
 Schedule::command(GetRaidableSkyhooksCommand::class)->runInBackground()->everyFiveMinutes()->withoutOverlapping()->notDuringDowntime();
 Schedule::command(GenerateStaticDataCommand::class)->runInBackground()->daily()->withoutOverlapping()->notDuringDowntime();
 Schedule::command(CheckConnectionAgeCommand::class)->runInBackground()->everyTenMinutes()->withoutOverlapping();
+Schedule::command(ReleaseExpiredArmsCommand::class)->runInBackground()->everyMinute()->withoutOverlapping();
 Schedule::command(DeleteOldSignaturesCommand::class)->runInBackground()->everyTenMinutes()->withoutOverlapping();
 Schedule::command(PruneUnclaimedConnectionJumpsCommand::class)->runInBackground()->everyTenMinutes()->withoutOverlapping();
 Schedule::command(GetKillmailsForLast90DaysCommand::class)->runInBackground()->weekly();

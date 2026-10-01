@@ -1,7 +1,10 @@
 import { useOnClient } from '@/composables/useOnClient';
 import useUser from '@/composables/useUser';
 import { getUserChannelName } from '@/const/channels';
-import { CombatModeTurnedOffEvent, UserCharacterStatusUpdatedEvent } from '@/const/events';
+import { CombatModeTurnedOffEvent, MapNoticeEvent, UserCharacterStatusUpdatedEvent } from '@/const/events';
+import { visibleBookmarkName } from '@/lib/bookmark';
+import { pendingHoleBookmark } from '@/map/holeBookmark';
+import { useMapStore } from '@/map/store/mapStore';
 import { router, usePage } from '@inertiajs/vue3';
 import { useEcho } from '@laravel/echo-vue';
 import { toast } from 'vue-sonner';
@@ -34,5 +37,40 @@ export function useUserEvents() {
             const props = page.props as unknown as { map?: { id?: number } };
             if (props.map?.id === event.map_id) router.reload({ only: ['map_user_settings'] });
         });
+
+        // Patch 13: a notice for you alone (e.g. someone took your armed number).
+        // Clicking Copy copies the hole's new bookmark name.
+        useEcho<{ map_id: number; message: string; detail: string; signature_id: number | null }>(getUserChannelName(userId), MapNoticeEvent, (event) => {
+            toast.warning(event.message, {
+                description: event.detail,
+                duration: Infinity,
+                closeButton: true,
+                action: event.signature_id
+                    ? {
+                          label: 'Copy',
+                          onClick: () => copyHoleBookmark(event.signature_id as number),
+                      }
+                    : undefined,
+            });
+        });
     });
+}
+
+/** Copy an unjumped hole's bookmark name, as the map has it now. */
+function copyHoleBookmark(signatureId: number): void {
+    let store;
+    try {
+        store = useMapStore();
+    } catch {
+        return;
+    }
+    for (const system of store.systems.values()) {
+        const hole = system.pending_holes?.find((candidate) => candidate.id === signatureId);
+        if (!hole) continue;
+        const name = pendingHoleBookmark(store, system, hole, hole.alias);
+        if (!name) return;
+        navigator.clipboard.writeText(name).catch(() => undefined);
+        toast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(name) });
+        return;
+    }
 }

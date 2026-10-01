@@ -14,6 +14,9 @@ import {
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
     DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import CountdownBar from '@/components/combat/CountdownBar.vue';
@@ -27,6 +30,7 @@ import { useShowMap } from '@/composables/useShowMap';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
 import { aliasForSlot, displayAlias, isIgnoredAlias, staticSlotAlias } from '@/lib/alias';
+import type { TArmAsOption } from '@/lib/arming';
 import { buildSignatureBookmark, formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases, combatColorLabel } from '@/lib/combat';
 import { isK162, validateManualAlias } from '@/lib/chainNumbering';
@@ -38,7 +42,7 @@ import { TSignature } from '@/types/models';
 import { UTCDate } from '@date-fns/utc';
 import type { FormDataConvertible } from '@inertiajs/core';
 import { syncRefs } from '@vueuse/core';
-import { Check, Cloud, Copy, Database, Fan, Flag, Gem, Heart, Landmark, MoreVertical, Shield, Swords } from 'lucide-vue-next';
+import { Check, Cloud, Copy, Crosshair, Database, Fan, Flag, Gem, Heart, Landmark, MoreVertical, Shield, Swords } from 'lucide-vue-next';
 import { AcceptableValue } from 'reka-ui';
 import { type Component, computed, nextTick, ref, toRef } from 'vue';
 import { toast } from 'vue-sonner';
@@ -52,6 +56,8 @@ const {
     claim_alias = null,
     number_owners,
     static_owner_id,
+    user_id = null,
+    arm_as = [],
 } = defineProps<{
     signature: TSignature;
     is_deleted?: boolean;
@@ -68,6 +74,16 @@ const {
     number_owners?: Map<string, { signatureId: number | null; label: string }>;
     /** The signature marked as this system's static, if any. */
     static_owner_id?: number | null;
+    /** Patch 13: you, for "armed by you". */
+    user_id?: number | null;
+    /** Patch 13: the numbers "Arm as…" offers (combat chains). */
+    arm_as?: TArmAsOption[];
+}>();
+
+const emit = defineEmits<{
+    /** Arm this hole as your next jump: as its own number (null) or as another (swap: someone else's). */
+    arm: [alias: string | null, swap: boolean];
+    disarm: [];
 }>();
 
 const original = toRef(() => signature.signature_id || '');
@@ -582,6 +598,15 @@ const bookmark_name = computed(() =>
     }),
 );
 
+// ---- Arming (patch 13) -----------------------------------------------------
+
+const can_arm = computed(() => isWormhole.value && !selected_connection.value && can_write.value);
+const armed_by_me = computed(() => Boolean(signature.armed_by_user_id) && signature.armed_by_user_id === user_id);
+const armed_label = computed(() => {
+    if (!signature.armed_by_user_id || selected_connection.value) return null;
+    return armed_by_me.value ? 'armed' : `armed · ${signature.armed_by_name ?? '?'}`;
+});
+
 function copyBookmark() {
     navigator.clipboard.writeText(bookmark_name.value);
 
@@ -693,8 +718,9 @@ function copyBookmark() {
         </div>
 
         <!-- Name: the number this hole has or gets, or where it leads -->
-        <div class="w-16 shrink-0 truncate font-mono text-xs" :title="name_title">
+        <div class="flex w-16 shrink-0 items-center gap-1 truncate font-mono text-xs" :title="armed_label ? `${name_title ?? ''} · ${armed_by_me ? 'armed by you: your next jump' : `armed by ${signature.armed_by_name ?? 'someone'}`}` : name_title">
             <span :class="name_class">{{ name_label }}</span>
+            <span v-if="armed_label" class="truncate rounded bg-red-500/20 px-1 font-sans text-[9px] leading-tight text-red-400">{{ armed_label }}</span>
         </div>
 
         <!-- Actions -->
@@ -782,6 +808,39 @@ function copyBookmark() {
                         </DropdownMenuItem>
 
                         <DropdownMenuSeparator />
+
+                        <!-- Arming (patch 13) -->
+                        <template v-if="can_arm">
+                            <DropdownMenuItem v-if="!signature.armed_by_user_id || armed_by_me" class="text-xs" @select="emit('arm', null, false)">
+                                <Crosshair class="mr-2 size-3.5 text-red-400" />
+                                {{ armed_by_me ? 'Re-arm (copy again)' : 'Arm (next jump)' }}
+                            </DropdownMenuItem>
+                            <DropdownMenuSub v-if="arm_as.length && (!signature.armed_by_user_id || armed_by_me)">
+                                <DropdownMenuSubTrigger class="text-xs">
+                                    <Crosshair class="mr-2 size-3.5 text-red-400" />
+                                    Arm as…
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent class="w-48">
+                                    <DropdownMenuItem
+                                        v-for="option in arm_as"
+                                        :key="option.alias"
+                                        :disabled="option.state === 'taken' || option.state === 'mine'"
+                                        class="text-xs"
+                                        @select="emit('arm', option.alias, option.state === 'swap')"
+                                    >
+                                        <span class="font-mono font-bold">{{ displayAlias(option.alias) }}</span>
+                                        <span class="ml-auto text-muted-foreground">
+                                            {{ option.state === 'swap' ? `swap with ${option.holder}` : option.state === 'mine' ? 'this hole' : option.holder ?? 'free' }}
+                                        </span>
+                                    </DropdownMenuItem>
+                                </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                            <DropdownMenuItem v-if="armed_by_me" class="text-xs" @select="emit('disarm')">
+                                <Crosshair class="mr-2 size-3.5 text-muted-foreground" />
+                                Disarm
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                        </template>
 
                         <template v-if="selected_connection">
                             <DropdownMenuItem @select.prevent="handleTogglePreserveMass" class="text-xs">

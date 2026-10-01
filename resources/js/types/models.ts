@@ -180,6 +180,10 @@ export type TSignature = {
     signature_id: string | null;
     /** Locked chain number (e.g. "12"), set on first copy or jump. */
     alias?: string | null;
+    /** Patch 13: armed as someone's next jump (null when not armed, or run out). */
+    armed_by_user_id?: number | null;
+    armed_by_name?: string | null;
+    armed_at?: string | null;
     /** Marked as the system's static (takes the static slot: A / Alpha in home, 0 elsewhere). */
     is_static?: boolean;
     /** Marked as a wandering hole (another hole of a static's type). */

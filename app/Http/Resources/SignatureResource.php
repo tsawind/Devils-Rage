@@ -26,6 +26,7 @@ final class SignatureResource extends JsonResource
             'id' => $this->id,
             'signature_id' => $this->signature_id,
             'alias' => $this->alias,
+            ...$this->resource->armedPayload(),
             'is_static' => (bool) $this->is_static,
             'is_wandering' => (bool) $this->is_wandering,
             'map_solarsystem_id' => $this->map_solarsystem_id,

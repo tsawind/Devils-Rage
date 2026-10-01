@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Actions\Combat\CombatModeAction;
+use App\Actions\Signatures\ArmSignatureAction;
 use App\Features\MapSettingsFeature;
 use App\Models\Map;
 use App\Models\MapSolarsystem;
@@ -63,11 +64,13 @@ final class MapCombatController extends Controller
     /**
      * @throws Throwable
      */
-    public function destroy(Map $map, CombatModeAction $action, #[CurrentUser] User $user): RedirectResponse
+    public function destroy(Map $map, CombatModeAction $action, ArmSignatureAction $arms, #[CurrentUser] User $user): RedirectResponse
     {
         Gate::authorize('update', $map);
 
         $action->stop($user, $map);
+        // Patch 13: turning Combat off gives back the numbers your unjumped arms took.
+        $arms->releaseFor($user, $map->id);
 
         $this->refreshSessionSettings($user, $map);
 

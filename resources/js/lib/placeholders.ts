@@ -23,6 +23,8 @@ type TPlaceholderHole = {
     wormhole: string | null;
     mass_status?: string | null;
     lifetime?: string | null;
+    armed_by_user_id?: number | null;
+    armed_by_name?: string | null;
 };
 
 type TPlaceholderSystem = {
@@ -67,6 +69,9 @@ export type TPlaceholder = {
     expected?: boolean;
     /** Patch 13: "maybe *return?" when the way back could be this static. */
     note?: string | null;
+    /** Patch 13: armed as someone's next jump (red dashed outline). */
+    armedBy?: number | null;
+    armedByName?: string | null;
 };
 
 const KSPACE: Record<string, string> = { h: 'HS', l: 'LS', n: 'NS', p: 'Pochven' };
@@ -130,6 +135,8 @@ export function buildPlaceholders(
                 wormhole: hole.wormhole,
                 massStatus: hole.mass_status ?? null,
                 lifetime: hole.lifetime ?? null,
+                armedBy: hole.armed_by_user_id ?? null,
+                armedByName: hole.armed_by_name ?? null,
             });
         }
     }

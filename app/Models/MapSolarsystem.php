@@ -174,6 +174,8 @@ final class MapSolarsystem extends Model
                 // Patch 13: striped pipes show the hole's mass status and EOL.
                 'mass_status' => $signature->mass_status,
                 'lifetime' => $signature->lifetime,
+                // Patch 13: armed as someone's next jump.
+                ...$signature->armedPayload(),
             ])
             ->values()
             ->all();
