@@ -25,6 +25,7 @@ type TPlaceholderHole = {
     lifetime?: string | null;
     armed_by_user_id?: number | null;
     armed_by_name?: string | null;
+    ship_size?: string | null;
 };
 
 type TPlaceholderSystem = {
@@ -68,6 +69,8 @@ export type TPlaceholder = {
     destination?: string;
     /** Patch 17: the class the hole leads to (for a default pipe size while the type is unknown). */
     targetClass?: string | null;
+    /** Patch 17: a frigate-only hole never gets the guessed big pipe. */
+    shipSize?: string | null;
     isStatic: boolean;
     /** The hole's type ("D845"), null while unknown or a K162. */
     wormhole: string | null;
@@ -124,6 +127,7 @@ export function buildPlaceholders(
                 sigCode: hole.signature_id ? hole.signature_id.slice(0, 3) : null,
                 destination: `${destination}${hole.is_static ? 's' : ''}`,
                 targetClass: hole.target_class ?? null,
+                shipSize: hole.ship_size ?? null,
                 isStatic: hole.is_static,
                 wormhole: hole.wormhole,
                 massStatus: hole.mass_status ?? null,

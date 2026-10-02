@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMapBackground } from '@/composables/useMapBackground';
 import ConnectedEdge from '@/map/components/edges/ConnectedEdge.vue';
 import Edge from '@/map/components/edges/Edge.vue';
 import { nodeRect } from '@/map/core/coords';
@@ -78,11 +79,18 @@ const pendingGeometry = computed<EdgeGeometry | null>(() => {
     if (!pendingFrom || !pendingTo) return null;
     return { id: -1, kind: 'curve', from: pendingFrom, to: pendingTo };
 });
+
+// Patch 17: no halo pass over a background image (it would show as a solid band).
+const { backgroundImageUrl } = useMapBackground();
 </script>
 
 <template>
     <div ref="container">
         <svg class="h-full w-full text-neutral-700" xmlns="http://www.w3.org/2000/svg" :viewBox="`0 0 ${viewBoxWidth} ${viewBoxHeight}`">
+            <!-- Patch 17: every pipe's dark gap first, under all pipes (not over a background image) -->
+            <template v-if="!backgroundImageUrl">
+                <ConnectedEdge v-for="id in connectionIds" :id="id" :key="`halo-${id}`" :tree-geometries="treeGeometries" halo-only />
+            </template>
             <ConnectedEdge
                 v-for="id in connectionIds"
                 :id="id"

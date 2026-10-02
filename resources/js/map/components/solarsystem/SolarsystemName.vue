@@ -14,7 +14,7 @@ defineProps<{
         <!-- Patch 17: names in Oxanium; the J-code beside a chain number in mono -->
         <span class="mr-1 inline-block font-display text-[13px] font-semibold" v-if="map_solarsystem.alias">{{ displayAlias(map_solarsystem.alias) }}</span>
         <span
-            :data-has-alias="map_solarsystem.alias !== null"
+            :data-has-alias="Boolean(map_solarsystem.alias)"
             class="font-display text-[13px] font-semibold data-[has-alias=true]:font-mono data-[has-alias=true]:text-[11px] data-[has-alias=true]:font-normal data-[has-alias=true]:text-muted-foreground"
             >{{
             map_solarsystem.solarsystem?.name

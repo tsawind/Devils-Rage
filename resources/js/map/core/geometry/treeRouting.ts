@@ -82,12 +82,13 @@ function intoLane(x: number, columns: Column[], from: number, to: number, top: n
         if (column.right <= near || column.left >= far) continue;
         // Patch 17: only nodes the vertical run actually passes count; a column of a lane
         // far below (other bands line up differently) is not in the way.
-        if (!column.members.some((member) => member.minY < bottom && member.maxY > top)) continue;
+        if (!column.members.some((member) => member.minY < bottom + 4 && member.maxY > top - 4)) continue;
         if (x > column.left - LANE_MARGIN / 2 && x < column.right + LANE_MARGIN) {
             return clamp(column.right + LANE_MARGIN, near + stub, far - stub);
         }
     }
-    return clamp(x, near + stub, far - stub);
+    // Lane-packed runs are already spaced inside the corridor: leave them where they are.
+    return x;
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -27,6 +27,8 @@ type Props = {
     isLoop?: boolean;
     /** Pipes drawn this much thinner (patch 13: compact combat lanes). */
     pipeScale?: number;
+    /** Patch 17: draw only the halo under the pipe (the first pass in the edge layer). */
+    haloOnly?: boolean;
     /** Patch 17: the two systems' classes, for a guessed size while the hole's type is unknown. */
     endClasses?: readonly [string | null, string | null] | null;
     scale: number;
@@ -41,6 +43,7 @@ const {
     isLoop = false,
     pipeScale = 1,
     endClasses = null,
+    haloOnly = false,
     scale,
 } = defineProps<Props>();
 
@@ -228,16 +231,18 @@ function getDashArray(): string | undefined {
 </script>
 
 <template>
-    <g pointer-events="visiblePainted" class="group text-neutral-300 dark:text-neutral-700">
-        <!-- Patch 17: a thin dark gap around the pipe, so a dotted pipe crossing it reads as passing under -->
-        <path
-            v-if="pipe"
-            :d="path.d"
-            fill="none"
-            :stroke-width="pipe.outline + 5"
-            stroke-linejoin="round"
-            class="pointer-events-none stroke-neutral-100 dark:stroke-neutral-950"
-        />
+    <!-- Patch 17: halo pass (drawn for every pipe before any pipe): a thin dark gap around it, so a
+         dotted pipe crossing it reads as passing under, without cutting into neighbouring pipes -->
+    <path
+        v-if="haloOnly"
+        v-show="pipe"
+        :d="path.d"
+        fill="none"
+        :stroke-width="(pipe?.outline ?? 0) + 5"
+        stroke-linejoin="round"
+        class="pointer-events-none stroke-neutral-100 dark:stroke-neutral-950"
+    />
+    <g v-else pointer-events="visiblePainted" class="group text-neutral-300 dark:text-neutral-700">
         <!-- Combat chain: a soft band in the chain's color behind the connection, so the chain reads as one colored path. -->
         <template v-if="chainColor">
             <path :d="path.d" :stroke="chainColor" fill="none" :stroke-width="isOrthogonal ? 9 : 14" stroke-opacity="0.18" stroke-linejoin="round" stroke-linecap="round" />

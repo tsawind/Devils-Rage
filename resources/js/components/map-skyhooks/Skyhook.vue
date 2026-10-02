@@ -120,7 +120,7 @@ const hasRoute = computed(() => route !== null && route.length > 1);
                 <Tooltip>
                     <TooltipTrigger as-child>
                         <span
-                            class="cursor-help justify-self-end font-sans font-semibold text-[11px] font-semibold tracking-wider uppercase"
+                            class="cursor-help justify-self-end font-sans font-semibold text-[11px] tracking-wider uppercase"
                             :class="statusTimeClass"
                             >{{ statusTime }}</span
                         >

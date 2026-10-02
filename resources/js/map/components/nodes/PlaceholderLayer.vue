@@ -51,7 +51,7 @@ const items = computed(() => {
         // yet), colored by its mass status, with a purple edge when end of life.
         // A K162 or unknown type keeps the thin dotted line.
         // Patch 17: type not known yet: C5 / C6 holes draw as 3,300 M (3,000 M to highsec).
-        const guessed = placeholder.wormhole ? null : guessedHoleMass(parent.solarsystem?.class ?? null, placeholder.targetClass ?? null);
+        const guessed = placeholder.wormhole || placeholder.shipSize === 'frigate' ? null : guessedHoleMass(parent.solarsystem?.class ?? null, placeholder.targetClass ?? null);
         const mass = wormholeMass(placeholder.wormhole) ?? (guessed ? { total: guessed, maxJump: Number.POSITIVE_INFINITY } : null);
         const pipe = mass
             ? {
@@ -65,13 +65,18 @@ const items = computed(() => {
 
         // Patch 17: drawn from the box back to its system, so the stripes start whole at the
         // box and stop a few px short of its border; corners curve like jumped connections.
-        const endGap = 3 + strokeWidth / 2;
+        // Where the last straight stretch is too short for that (small lane boxes sit just
+        // 10 px beside their system), the stripes keep square ends and touch the box as before.
+        const wantedGap = 3 + strokeWidth / 2;
+        let rounded = true;
         let points: { x: number; y: number }[];
         if (left === parentLeft && top > parentTop) {
             // Straight down when it sits under its system.
             const x = (left + (compact ? 30 : 50)) * scale;
+            const room = (top - (parentTop + parentSize.height)) * scale;
+            rounded = room > wantedGap + 6;
             points = [
-                { x, y: top * scale - endGap },
+                { x, y: top * scale - (rounded ? wantedGap : 0) },
                 { x, y: (parentTop + parentSize.height) * scale },
             ];
         } else {
@@ -80,21 +85,24 @@ const items = computed(() => {
             const startX = parentLeft + parentSize.width;
             const parentMid = parentTop + parentSize.height / 2;
             let endY = top + NODE_HEIGHT / 2;
-            const startY = endY > parentMid + 1 ? parentTop + parentSize.height * 0.72 : parentTop + parentSize.height * 0.28;
+            const startY = endY > parentMid + 1 ? parentTop + parentSize.height * 0.8 : parentTop + parentSize.height * 0.2;
             // Nearly level: keep it a straight line, entering the box a little off its middle.
             if (Math.abs(endY - startY) < NODE_HEIGHT / 2 - 4) endY = startY;
             const middleX = left > startX ? startX + Math.min(40, (left - startX) / 2) : startX + 20;
+            rounded = (left - middleX) * scale > wantedGap + 6;
             points = [
-                { x: left * scale - endGap, y: endY * scale },
+                { x: left * scale - (rounded ? wantedGap : 0), y: endY * scale },
                 { x: middleX * scale, y: endY * scale },
                 { x: middleX * scale, y: startY * scale },
                 { x: startX * scale, y: startY * scale },
             ];
         }
         const path = roundedElbowPath(points, Math.max(CORNER_RADIUS, strokeWidth));
-        // Round stripe ends add half the width at each end: shorten the dash to keep the look.
+        // Round stripe ends add half the width at each end: the dash is shortened by the width,
+        // and wide pipes get longer stripes so they stay stripes, not dots.
         const [dash, gap] = pipe ? (pipe.width > 4 ? [16, 11] : [6, 6]) : [4, 4];
-        const dashArray = pipe ? `${Math.max(0.01, dash - strokeWidth)},${gap + strokeWidth}` : `${dash},${gap}`;
+        const dashArray = pipe && rounded ? `${Math.max(dash - strokeWidth, strokeWidth * 0.5)},${gap + strokeWidth}` : `${dash},${gap}`;
+        const lineCap = pipe && rounded ? 'round' : 'butt';
 
         return [
             {
@@ -103,6 +111,7 @@ const items = computed(() => {
                 path,
                 pipe,
                 dashArray,
+                lineCap,
                 tag: pipe?.eol ? { text: pipe.eolCritical ? 'EOL!' : 'EOL', x: (left - 6) * scale, y: (top + NODE_HEIGHT / 2) * scale } : null,
                 href: show(meta.slug, { mergeQuery: { solarsystem_id: parent.solarsystem_id } }),
                 style: {
@@ -173,7 +182,7 @@ const chips = computed(() => {
                         :stroke-width="item.pipe.width + 4"
                         stroke-opacity="0.85"
                         :stroke-dasharray="item.dashArray"
-                        stroke-linecap="round"
+                        :stroke-linecap="item.lineCap"
                         stroke-linejoin="round"
                     />
                     <path
@@ -183,7 +192,7 @@ const chips = computed(() => {
                         :stroke-width="item.pipe.width"
                         :stroke-opacity="item.pipe.eol ? 0.75 : 0.45"
                         :stroke-dasharray="item.dashArray"
-                        stroke-linecap="round"
+                        :stroke-linecap="item.lineCap"
                         stroke-linejoin="round"
                     />
                 </template>

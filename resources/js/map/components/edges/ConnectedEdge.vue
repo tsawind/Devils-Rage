@@ -16,9 +16,11 @@ type Props = {
      * from just its two endpoints so dragging a node only recomputes its edges.
      */
     treeGeometries?: ReadonlyMap<number, EdgeGeometry> | null;
+    /** Patch 17: the halo pass only. */
+    haloOnly?: boolean;
 };
 
-const { id, treeGeometries = null } = defineProps<Props>();
+const { id, treeGeometries = null, haloOnly = false } = defineProps<Props>();
 
 const emit = defineEmits<{
     (e: 'connectionContextMenu', event: MouseEvent, connection: TMapConnection): void;
@@ -106,6 +108,7 @@ function handleConnectionContextMenu(event: MouseEvent): void {
         :is-loop="isLoop"
         :pipe-scale="pipeScale"
         :end-classes="endClasses"
+        :halo-only="haloOnly"
         :scale="store.scale.value"
         @connection-click="handleConnectionClick"
         @connection-context-menu="handleConnectionContextMenu"
