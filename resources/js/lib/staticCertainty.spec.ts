@@ -136,3 +136,61 @@ describe('patch 13: the static only when it is certain', () => {
         expect(result.mark).toEqual({ signatureId: 1, staticName: 'H296', setType: false });
     });
 });
+
+describe('patch 18b: the only untyped wormhole is the static', () => {
+    it('marks the only wormhole in a fully scanned system (Daisy, IHJ) and sets its type', () => {
+        const result = decideStatic({ statics: V753, holes: [{ signatureId: 7, typeName: null, isStatic: false, linked: false }], uncategorized: 0, wayBack: null });
+        expect(result.mark).toEqual({ signatureId: 7, staticName: 'V753', setType: true });
+    });
+
+    it('not while a signature is uncategorised, nor with two untyped holes (and no "ambiguous" message then)', () => {
+        expect(decideStatic({ statics: V753, holes: [{ signatureId: 7, typeName: null, isStatic: false, linked: false }], uncategorized: 1, wayBack: null }).mark).toBe(null);
+        const two = decideStatic({
+            statics: V753,
+            holes: [
+                { signatureId: 7, typeName: null, isStatic: false, linked: false },
+                { signatureId: 8, typeName: null, isStatic: false, linked: false },
+            ],
+            uncategorized: 0,
+            wayBack: null,
+        });
+        expect(two.mark).toBe(null);
+        expect(two.ambiguous).toBe(null);
+    });
+
+    it('an untyped hole known to lead elsewhere is not a candidate', () => {
+        const result = decideStatic({
+            statics: V753,
+            holes: [
+                { signatureId: 7, typeName: null, isStatic: false, linked: false, leadsTo: 'hs' },
+                { signatureId: 8, typeName: null, isStatic: false, linked: false },
+            ],
+            uncategorized: 0,
+            wayBack: null,
+        });
+        expect(result.mark?.signatureId).toBe(8);
+    });
+
+    it('down chain: not while the way back could be the static', () => {
+        const result = decideStatic({
+            statics: V753,
+            holes: [{ signatureId: 7, typeName: null, isStatic: false, linked: false }],
+            uncategorized: 0,
+            wayBack: { signatureId: 3, thisSideType: null, farSideType: null, leadsTo: 'c6' },
+        });
+        expect(result.mark).toBe(null);
+    });
+
+    it('down chain: marks it once the way back is known not to be the static', () => {
+        const result = decideStatic({
+            statics: V753,
+            holes: [
+                { signatureId: 3, typeName: 'K162', isStatic: false, linked: true, leadsTo: 'c6' },
+                { signatureId: 7, typeName: null, isStatic: false, linked: false },
+            ],
+            uncategorized: 0,
+            wayBack: { signatureId: 3, thisSideType: 'K162', farSideType: 'H296', leadsTo: 'c6' },
+        });
+        expect(result.mark?.signatureId).toBe(7);
+    });
+});

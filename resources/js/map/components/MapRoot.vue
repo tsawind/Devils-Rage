@@ -5,6 +5,7 @@ import { usePath } from '@/composables/usePath';
 import usePermission from '@/composables/usePermission';
 import { useRallyRoute } from '@/composables/useRallyRoute';
 import StaticCertainDialog from '@/components/signatures/StaticCertainDialog.vue';
+import StaticConfirmDialog from '@/components/signatures/StaticConfirmDialog.vue';
 import WayBackPopup from '@/components/signatures/WayBackPopup.vue';
 import { useStaticCertainty } from '@/composables/signatures/useStaticCertainty';
 import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
@@ -290,6 +291,7 @@ whenever(Delete, () => {
     <MapAddConnectionDialog />
     <ClearChainDialog />
     <StaticCertainDialog />
+    <StaticConfirmDialog />
 </template>
 
 <style scoped></style>

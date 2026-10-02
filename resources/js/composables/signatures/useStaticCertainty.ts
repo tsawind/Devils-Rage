@@ -36,6 +36,19 @@ export type TCertainAsk = {
     choose: (choice: 'rename' | 'keep') => void;
 };
 export const certainAsk = ref<TCertainAsk | null>(null);
+/**
+ * Patch 18b: "★ This is the static" from the map asks first (a wandering hole
+ * can look the same); StaticConfirmDialog shows this.
+ */
+export type TStaticConfirm = { signatureLabel: string; where: string; staticName: string; leadsTo: string; slot: string; confirm: () => void };
+export const staticConfirm = ref<TStaticConfirm | null>(null);
+let markHandler: ((mapSolarsystemId: number, mark: { signatureId: number; staticName: string; setType: boolean }, byHand: boolean) => void) | null = null;
+
+/** Patch 18b: mark a hole as the static by hand (after the warning). */
+export function markStaticByHand(mapSolarsystemId: number, signatureId: number, staticName: string, setType: boolean): void {
+    markHandler?.(mapSolarsystemId, { signatureId, staticName, setType }, true);
+}
+
 /** Bumped on every request, so the watcher picks up new systems to follow. */
 const requestedVersion = ref(0);
 let notify: (() => void) | null = null;
@@ -60,6 +73,8 @@ export function certaintyInputFor(store: MapStore, system: TMapSolarsystem) {
         typeName: hole.wormhole,
         isStatic: hole.is_static,
         linked: false,
+        // Patch 18b: an untyped hole that leads somewhere else can't be the static.
+        leadsTo: classCode(hole.target_class ?? null),
     }));
 
     let wayBack: TCertaintyWayBack | null = null;
@@ -109,7 +124,35 @@ export function useStaticCertainty(store: MapStore): void {
 
         const result = decideStatic(certaintyInputFor(store, system));
         if (result.mark) {
-            const { signatureId, staticName, setType } = result.mark;
+            applyMark(system, result.mark, false);
+        } else if (result.ambiguous) {
+            // Said once per system and set of holes, not again on every change.
+            const key = `${result.ambiguous.staticName}:${result.ambiguous.signatureIds.toSorted((a, b) => a - b).join(',')}`;
+            if (toldAmbiguous.get(mapSolarsystemId) === key) return;
+            toldAmbiguous.set(mapSolarsystemId, key);
+            const where = displayAlias(system.alias) || system.solarsystem.name;
+            toast.info(`${result.ambiguous.staticName} in ${where}: more than one hole could be the static`, {
+                description: 'Mark the right one by hand (right-click it on the map → This is the static).',
+            });
+        }
+    }
+
+    /** Patch 18b: "Undo" on every static message: unmark it (and drop the type / name it was given). */
+    function undoAction(signatureId: number, setType: boolean, previousAlias: string | null | undefined) {
+        return {
+            label: 'Undo',
+            onClick: () =>
+                updateSignature({ id: signatureId } as TSignature, {
+                    is_static: false,
+                    ...(setType ? { signature_type_id: null } : {}),
+                    ...(previousAlias !== undefined ? { alias: previousAlias } : {}),
+                }),
+        };
+    }
+
+    function applyMark(system: TMapSolarsystem, mark: { signatureId: number; staticName: string; setType: boolean }, byHand: boolean): void {
+        {
+            const { signatureId, staticName, setType } = mark;
             const type =
                 setType && wormholeCategoryId !== null
                     ? getTypesByCategory(wormholeCategoryId).find(
@@ -125,7 +168,10 @@ export function useStaticCertainty(store: MapStore): void {
             // Combat chains keep their jump-order numbers; a hole already named for the slot (or unnamed) changes nothing.
             if (system.combat_color || is_combat.value || !name || name.toUpperCase() === slot.toUpperCase()) {
                 updateSignature({ id: signatureId } as TSignature, payload);
-                toast.success(`${staticName} is ${where}'s static`, { description: 'Every signature is scanned and nothing else can be it.' });
+                toast.success(`${staticName} is ${where}'s static`, {
+                    description: byHand ? 'Marked by hand.' : 'Every signature is scanned and nothing else can be it.',
+                    action: undoAction(signatureId, setType, undefined),
+                });
                 return;
             }
 
@@ -151,23 +197,20 @@ export function useStaticCertainty(store: MapStore): void {
                         });
                         const copy = hole ? pendingHoleBookmark(store, system, hole, slot, true) : '';
                         if (copy) navigator.clipboard.writeText(copy).catch(() => undefined);
-                        toast.success(`Renamed to ${displayAlias(slot)}`, { description: copy ? `Copied ${visibleBookmarkName(copy)}` : undefined });
+                        toast.success(`${staticName} is ${where}'s static · renamed to ${displayAlias(slot)}`, {
+                            description: copy ? `Copied ${visibleBookmarkName(copy)}` : undefined,
+                            action: undoAction(signatureId, setType, hole?.alias ?? null),
+                        });
                         return;
                     }
                     // Keep: lock the name it has, or the static would take the slot on its own.
                     updateSignature({ id: signatureId } as TSignature, { ...payload, alias: name });
-                    toast.success(`${staticName} is ${where}'s static`, { description: `Keeps the name ${displayAlias(name)}.` });
+                    toast.success(`${staticName} is ${where}'s static`, {
+                        description: `Keeps the name ${displayAlias(name)}.`,
+                        action: undoAction(signatureId, setType, hole?.alias ?? null),
+                    });
                 },
             };
-        } else if (result.ambiguous) {
-            // Said once per system and set of holes, not again on every change.
-            const key = `${result.ambiguous.staticName}:${result.ambiguous.signatureIds.toSorted((a, b) => a - b).join(',')}`;
-            if (toldAmbiguous.get(mapSolarsystemId) === key) return;
-            toldAmbiguous.set(mapSolarsystemId, key);
-            const where = displayAlias(system.alias) || system.solarsystem.name;
-            toast.info(`${result.ambiguous.staticName} in ${where}: more than one hole could be the static`, {
-                description: 'Mark the right one by hand (signature row menu → Static).',
-            });
         }
     }
 
@@ -215,6 +258,10 @@ export function useStaticCertainty(store: MapStore): void {
         }
     }
 
+    markHandler = (mapSolarsystemId, mark, byHand) => {
+        const system = store.systems.get(mapSolarsystemId);
+        if (system) applyMark(system, mark, byHand);
+    };
     notify = () => setTimeout(check, 4100);
     const stop = watch(
         () => [requestedVersion.value, ...[...requested.keys()].map((id) => store.systems.get(id))],
@@ -223,5 +270,6 @@ export function useStaticCertainty(store: MapStore): void {
     onBeforeUnmount(() => {
         stop();
         notify = null;
+        markHandler = null;
     });
 }

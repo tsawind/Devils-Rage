@@ -88,8 +88,10 @@ export function decideStatic(input: TCertaintyInput): TCertaintyResult {
     // One static per system in our numbering: nothing to do once a hole is marked.
     if (input.holes.some((hole) => hole.isStatic)) return result;
 
-    const allScanned = input.uncategorized === 0 && input.holes.every((hole) => hole.linked || Boolean(hole.typeName));
-    if (!allScanned) return result;
+    // Patch 18b: every signature must be categorised; untyped wormholes now count as candidates
+    // (a static always exists, so the only untyped hole left is it), instead of blocking the check.
+    if (input.uncategorized !== 0) return result;
+    const allTyped = input.holes.every((hole) => hole.linked || Boolean(hole.typeName));
 
     const wayBackId = input.wayBack?.signatureId ?? null;
     const seen = new Set<string>();
@@ -106,6 +108,10 @@ export function decideStatic(input: TCertaintyInput): TCertaintyResult {
                       hole.linked && Boolean(hole.leadsTo) && hole.leadsTo === staticHole.leadsTo,
             )
             .map((hole) => hole.signatureId);
+        // Patch 18b: an unjumped hole with no type could be it, unless it's known to lead elsewhere.
+        for (const hole of input.holes) {
+            if (!hole.linked && !hole.typeName && (!hole.leadsTo || hole.leadsTo === staticHole.leadsTo)) candidates.push(hole.signatureId);
+        }
         const backIsCandidate = maybeBack.some((candidate) => candidate.toUpperCase() === name);
         // The way back could be it: a candidate too, even before its signature is pasted (-1 then).
         if (backIsCandidate && !candidates.includes(wayBackId ?? -1)) candidates.push(wayBackId ?? -1);
@@ -118,7 +124,8 @@ export function decideStatic(input: TCertaintyInput): TCertaintyResult {
             result.mark = { signatureId, staticName: staticHole.name, setType: !hole?.typeName };
             return result;
         }
-        if (candidates.length > 1 && !result.ambiguous) {
+        // Only said when every hole has a type (untyped holes are usually just not typed yet).
+        if (candidates.length > 1 && allTyped && !result.ambiguous) {
             result.ambiguous = { staticName: staticHole.name, signatureIds: candidates.filter((id) => id !== -1) };
         }
     }

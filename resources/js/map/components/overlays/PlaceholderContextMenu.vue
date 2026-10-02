@@ -10,12 +10,12 @@ import {
 } from '@/components/ui/context-menu';
 import WormholeOption from '@/components/signatures/WormholeOption.vue';
 import { armHole } from '@/composables/signatures/armHole';
-import { requestStaticCheck } from '@/composables/signatures/useStaticCertainty';
+import { markStaticByHand, requestStaticCheck, staticConfirm } from '@/composables/signatures/useStaticCertainty';
 import usePermission from '@/composables/usePermission';
 import useUser from '@/composables/useUser';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
-import { displayAlias } from '@/lib/alias';
+import { displayAlias, staticSlotAlias } from '@/lib/alias';
 import { armAsOptions, myArmedHole, typeSearchMatches } from '@/lib/arming';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
@@ -30,7 +30,7 @@ import type { TSignature } from '@/types/models';
 import { formatDateToISO } from '@/lib/utils';
 import { UTCDate } from '@date-fns/utc';
 import { router } from '@inertiajs/vue3';
-import { Check, ClipboardCopy, Crosshair, Fan, Hourglass, ListTree, Scale, Trash2 } from 'lucide-vue-next';
+import { Check, ClipboardCopy, Crosshair, Fan, Hourglass, ListTree, Scale, Star, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -64,6 +64,35 @@ function copyBookmark(): void {
         updateSignature({ id: placeholder.signatureId } as TSignature, { alias: claim.value });
     }
     toast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(name) });
+}
+
+// ---- Patch 18b: the static ------------------------------------------------------
+
+/** The parent's statics no hole is marked as yet (one static per system in our numbering). */
+const missingStatics = computed(() => {
+    const system = parent.value;
+    if (!system || (system.pending_holes ?? []).some((candidate) => candidate.is_static)) return [];
+    return (system.solarsystem.statics ?? []).map((candidate) => ({ name: candidate.name, leadsTo: candidate.leads_to }));
+});
+
+function askStatic(candidate: { name: string; leadsTo: string }): void {
+    const system = parent.value;
+    const current = hole.value;
+    if (!system || !current) return;
+    const meta = store.meta.value;
+    staticConfirm.value = {
+        signatureLabel: current.signature_id?.slice(0, 3) ?? 'This hole',
+        where: displayAlias(system.alias) || system.solarsystem.name,
+        staticName: candidate.name,
+        leadsTo: candidate.leadsTo.toUpperCase(),
+        slot: displayAlias(staticSlotAlias(system.alias, meta?.bookmark_ignored_alias, Boolean(system.combat_home))),
+        confirm: () => markStaticByHand(system.id, current.id, candidate.name, (current.wormhole ?? '').toUpperCase() !== candidate.name.toUpperCase()),
+    };
+}
+
+function notStatic(): void {
+    updateSignature({ id: placeholder.signatureId } as TSignature, { is_static: false });
+    toast.success('No longer marked as the static');
 }
 
 // ---- Arming ------------------------------------------------------------------
@@ -329,6 +358,20 @@ function removeSignature(): void {
                     </ContextMenuItem>
                 </ContextMenuSubContent>
             </ContextMenuSub>
+        </template>
+        <!-- Patch 18b: mark (or unmark) the static by hand, after a warning -->
+        <template v-if="canEdit && hole">
+            <ContextMenuItem v-if="hole.is_static" @select="notStatic">
+                <Star class="size-4" />
+                Not the static
+            </ContextMenuItem>
+            <template v-else>
+                <ContextMenuItem v-for="candidate in missingStatics" :key="candidate.name" @select="askStatic(candidate)">
+                    <Star class="size-4 text-green-400" />
+                    This is the static
+                    <span class="ml-auto pl-3 font-mono text-xs text-green-400">{{ candidate.name }}</span>
+                </ContextMenuItem>
+            </template>
         </template>
         <ContextMenuItem :disabled="!bookmark" @select="copyBookmark">
             <ClipboardCopy class="size-4" />
