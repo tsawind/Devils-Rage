@@ -397,10 +397,12 @@ const rename_changes = computed(() => {
     if (!rename_open.value) return [];
     const from = rename_from_alias.value;
     const to = static_slot.value;
-    const changes = [{ label: 'In this system', from: bookmark_name.value, to: staticBookmarkName(to) }];
+    const changes: { label: string; from: string; to: string; keep?: string }[] = [
+        { label: 'In this system', from: bookmark_name.value, to: staticBookmarkName(to), keep: staticBookmarkName(from) },
+    ];
     const farFrom = farSideReturnName(from);
     const farTo = farSideReturnName(to);
-    if (farFrom && farTo) changes.push({ label: 'On the far side (way back)', from: farFrom, to: farTo });
+    if (farFrom && farTo) changes.push({ label: 'On the far side (way back)', from: farFrom, to: farTo, keep: farFrom });
     return changes;
 });
 

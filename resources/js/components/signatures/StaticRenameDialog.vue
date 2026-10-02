@@ -18,7 +18,8 @@ const props = defineProps<{
     fromAlias: string;
     toAlias: string;
     /** Each in-game bookmark that changes, from → to. */
-    changes: { label: string; from: string; to: string }[];
+    /** Patch 18b: `keep` = the bookmark after "Keep" (shown as its own row when set). */
+    changes: { label: string; from: string; to: string; keep?: string }[];
     /** Systems already mapped further down: renaming is blocked when there are any. */
     beyond: string[];
     countdownSeconds?: number | null;
@@ -79,7 +80,18 @@ const { remaining, fraction } = usePopupCountdown(
             <div v-else class="grid gap-2 px-6 py-4 text-xs">
                 <div v-for="change in changes" :key="change.label" class="grid gap-0.5">
                     <span class="text-muted-foreground">{{ change.label }}</span>
-                    <span class="font-mono">
+                    <!-- Patch 18b: what each button leaves you with. -->
+                    <div v-if="change.keep !== undefined" class="grid grid-cols-[auto_1fr] items-baseline gap-x-3 gap-y-0.5 font-mono">
+                        <span class="font-sans font-semibold text-muted-foreground">Now</span>
+                        <span>{{ visibleBookmarkName(change.from) }}</span>
+                        <span class="font-sans font-semibold text-emerald-400">{{ renameLabel ?? `Rename to ${toAlias}` }}</span>
+                        <span class="text-emerald-400">{{ visibleBookmarkName(change.to) }}</span>
+                        <span class="font-sans font-semibold text-sky-300">{{ keepLabel ?? `Keep ${fromAlias}` }}</span>
+                        <span :class="change.keep === change.from ? 'text-muted-foreground' : 'text-sky-300'">
+                            {{ change.keep === change.from ? 'no change' : visibleBookmarkName(change.keep ?? '') }}
+                        </span>
+                    </div>
+                    <span v-else class="font-mono">
                         {{ visibleBookmarkName(change.from) }} <span class="text-muted-foreground">→</span>
                         <span class="text-emerald-400">{{ visibleBookmarkName(change.to) }}</span>
                     </span>

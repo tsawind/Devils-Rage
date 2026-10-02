@@ -97,14 +97,22 @@ export function renameChanges(
     toAlias: string,
     isStatic: boolean,
     staticName?: string,
-): { label: string; from: string; to: string }[] {
+): { label: string; from: string; to: string; keep?: string }[] {
     const meta = store.meta.value;
     if (!meta) return [];
     const hole = system.pending_holes?.find((candidate) => candidate.id === signatureId);
     if (hole) {
         // Patch 18b: the new name shows the hole as it will be: the static's type, class and size.
         const after = staticName ? asStaticHole(system, hole, staticName) : hole;
-        return [{ label: 'In this system', from: pendingHoleBookmark(store, system, hole, fromAlias), to: pendingHoleBookmark(store, system, after, toAlias, isStatic) }];
+        return [
+            {
+                label: 'In this system',
+                from: pendingHoleBookmark(store, system, hole, fromAlias),
+                to: pendingHoleBookmark(store, system, after, toAlias, isStatic),
+                // Keeping the name still marks it static: the bookmark gains the static's details.
+                ...(isStatic ? { keep: pendingHoleBookmark(store, system, after, fromAlias, true) } : {}),
+            },
+        ];
     }
 
     for (const connection of store.connections.values()) {
@@ -149,8 +157,13 @@ export function renameChanges(
                 Boolean(target.combat_home),
             );
         return [
-            { label: 'In this system', from: forward(fromAlias, Boolean(signature.is_static)), to: forward(toAlias, isStatic) },
-            { label: 'On the far side (way back)', from: back(fromAlias), to: back(toAlias) },
+            {
+                label: 'In this system',
+                from: forward(fromAlias, Boolean(signature.is_static)),
+                to: forward(toAlias, isStatic),
+                ...(isStatic ? { keep: forward(fromAlias, true) } : {}),
+            },
+            { label: 'On the far side (way back)', from: back(fromAlias), to: back(toAlias), ...(isStatic ? { keep: back(fromAlias) } : {}) },
         ];
     }
     return [];
