@@ -50,8 +50,9 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
     const isConstantWidthEnabled = computed(() => meta.value?.constant_width_enabled ?? false);
 
     /** Unjumped wormhole signatures shown as placeholder systems (tree layout, when switched on). */
-    const allPlaceholders: ComputedRef<TPlaceholder[]> = computed(() => {
-        if (!meta.value || !isTreeLayout.value || !view.showPlaceholders.value) return [];
+    const placeholderBuild = computed((): { placeholders: TPlaceholder[]; staticDoubts: Set<number> } => {
+        const staticDoubts = new Set<number>();
+        if (!meta.value || !isTreeLayout.value || !view.showPlaceholders.value) return { placeholders: [], staticDoubts };
         const linked = new Set<number>();
         for (const connection of entities.connections.values()) {
             for (const signature of connection.signatures ?? []) linked.add(signature.id);
@@ -60,8 +61,12 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         const connections = [...entities.connections.values()];
         const homeSolarsystemId = meta.value.home_solarsystem_id;
         const homeId = homeSolarsystemId !== null ? (systems.find((system) => system.solarsystem_id === homeSolarsystemId)?.id ?? null) : null;
-        return buildPlaceholders(systems, meta.value, linked, { connections, parentOf: chainParents(systems, connections, homeId), homeId });
+        const placeholders = buildPlaceholders(systems, meta.value, linked, { connections, parentOf: chainParents(systems, connections, homeId), homeId, staticDoubts });
+        return { placeholders, staticDoubts };
     });
+    const allPlaceholders: ComputedRef<TPlaceholder[]> = computed(() => placeholderBuild.value.placeholders);
+    /** Patch 18b: signatures that may be their system's static (two holes of the static's type). */
+    const staticDoubtSignatureIds = computed(() => placeholderBuild.value.staticDoubts);
 
     /**
      * Patch 15: in rage lanes a system's unjumped holes fold into a chip;
@@ -190,6 +195,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         placeholders,
         foldedHoles,
         loopConnectionIds,
+        staticDoubtSignatureIds,
         treePositions,
         renderPosition,
         resolveConnection,

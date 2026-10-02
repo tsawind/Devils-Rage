@@ -82,6 +82,8 @@ const endClasses = computed<readonly [string | null, string | null] | null>(() =
     };
     return [cls(resolved.from_map_solarsystem_id), cls(resolved.to_map_solarsystem_id)] as const;
 });
+/** Patch 18b: one of two holes of a system's static type (static or wanderer: no telling which). */
+const staticDoubt = computed(() => (connection.value?.signatures ?? []).some((signature) => store.staticDoubtSignatureIds.value.has(signature.id)));
 /** Patch 18: the class of the system a K162 sits in (the real hole leads there). */
 const k162Class = computed<string | null>(() => {
     const resolved = connection.value;
@@ -116,6 +118,7 @@ function handleConnectionContextMenu(event: MouseEvent): void {
         :pipe-scale="pipeScale"
         :end-classes="endClasses"
         :k162-class="k162Class"
+        :static-doubt="staticDoubt"
         :halo-only="haloOnly"
         :scale="store.scale.value"
         @connection-click="handleConnectionClick"

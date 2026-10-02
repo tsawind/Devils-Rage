@@ -33,6 +33,8 @@ type Props = {
     /** Patch 17/18: the two systems' classes (and the K162 side's), for a guessed size while the hole's type is unknown. */
     endClasses?: readonly [string | null, string | null] | null;
     k162Class?: string | null;
+    /** Patch 18b: this hole may be its system's static (two of the static's type). */
+    staticDoubt?: boolean;
     scale: number;
 };
 
@@ -46,6 +48,7 @@ const {
     pipeScale = 1,
     endClasses = null,
     k162Class = null,
+    staticDoubt = false,
     haloOnly = false,
     scale,
 } = defineProps<Props>();
@@ -96,6 +99,11 @@ const indicators = computed<EdgeIndicator[]>(() => {
             fill: 'var(--color-emerald-500)',
             stroke: 'var(--color-emerald-600)',
         });
+    }
+
+    // Patch 18b: a static and a wanderer of the same type: this one may be the static.
+    if (staticDoubt) {
+        items.push({ type: 'text', label: 'static?', fill: 'var(--color-amber-400)', stroke: 'var(--color-amber-600)' });
     }
 
     // Patch 18: the pipe's size is a guess.

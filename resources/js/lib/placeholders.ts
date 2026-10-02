@@ -49,6 +49,18 @@ type TPlaceholderConnection = {
         | null;
 };
 
+type TStaticContext = {
+    connections: readonly TPlaceholderConnection[];
+    parentOf: ReadonlyMap<number, number>;
+    homeId: number | null;
+    /**
+     * Patch 18b: filled in with the signatures (by id) that might be their system's static when
+     * two or more holes have the static's type (a static and a wanderer: no telling which until
+     * one collapses). Their pipes get a "static?" tag and the expected box goes away.
+     */
+    staticDoubts?: Set<number>;
+};
+
 /** Ids for expected statics (no signature yet): far below any signature's placeholder id. */
 const EXPECTED_BASE = 2_000_000_000;
 
@@ -108,7 +120,7 @@ export function buildPlaceholders(
     formats: { bookmark_alias_scheme?: TAliasScheme; bookmark_ignored_alias?: string },
     linkedSignatureIds: ReadonlySet<number> = new Set(),
     /** Patch 13: connections and the way each system was found, for its unscanned statics. */
-    context?: { connections: readonly TPlaceholderConnection[]; parentOf: ReadonlyMap<number, number>; homeId: number | null },
+    context?: TStaticContext,
 ): TPlaceholder[] {
     const result: TPlaceholder[] = [];
     for (const system of systems) {
@@ -186,8 +198,8 @@ export function planPendingHoles(
 function expectedStatics(
     systems: readonly TPlaceholderSystem[],
     formats: { bookmark_alias_scheme?: TAliasScheme; bookmark_ignored_alias?: string },
-    context: { connections: readonly TPlaceholderConnection[]; parentOf: ReadonlyMap<number, number>; homeId: number | null },
-    holes: readonly TPlaceholder[],
+    context: TStaticContext,
+    holes: TPlaceholder[],
 ): TPlaceholder[] {
     const byId = new Map(systems.map((system) => [system.id, system]));
     const result: TPlaceholder[] = [];
@@ -207,11 +219,13 @@ function expectedStatics(
         // A hole already named for the static's slot (A0, Alpha off Daisy) is the static by our naming.
         const slot = staticSlotAlias(system.alias, formats.bookmark_ignored_alias, Boolean(system.combat_home)).toUpperCase();
         const marked: (string | null)[] = [];
-        const candidates: { name: string; sig: string }[] = [];
-        const consider = (hole: { is_static?: boolean | null; wormhole?: string | null; signature_id?: string | null; alias?: string | null }): void => {
+        const candidates: { name: string; sig: string; id: number | null }[] = [];
+        const consider = (hole: { id?: number | null; is_static?: boolean | null; wormhole?: string | null; signature_id?: string | null; alias?: string | null }): void => {
             const name = (hole.wormhole ?? '').toUpperCase() || null;
             if (hole.is_static || (hole.alias ?? '').toUpperCase() === slot) marked.push(name);
-            else if (name) candidates.push({ name, sig: (hole.signature_id ?? '???').slice(0, 3) });
+            else if (name && !(hole.id && candidates.some((entry) => entry.id === hole.id))) {
+                candidates.push({ name, sig: (hole.signature_id ?? '???').slice(0, 3), id: hole.id ?? null });
+            }
         };
         for (const hole of system.pending_holes ?? []) consider(hole);
         let wayBack: { thisSideType: string | null; farSideType: string | null; leadsTo: string | null; signatureId: number | null } | null = null;
@@ -224,6 +238,7 @@ function expectedStatics(
             const leadsToSlot = otherId !== parentId && (byId.get(otherId)?.alias ?? '').toUpperCase() === slot;
             if (thisSide || leadsToSlot) {
                 consider({
+                    id: thisSide?.id ?? null,
                     is_static: thisSide?.is_static || leadsToSlot,
                     wormhole: thisSide?.wormhole?.name ?? null,
                     signature_id: thisSide?.signature_id ?? null,
@@ -251,7 +266,23 @@ function expectedStatics(
             typedMarked.splice(index, 1);
             return false;
         });
-        const unscanned = missing.slice(Math.min(untypedMarked, missing.length));
+        // Patch 18b: two or more holes of the static's type (VGU and XDH, both W237): one is the static,
+        // the other a wanderer, and nothing tells which until one collapses. No expected box then;
+        // each of them is tagged "static?".
+        const doubted = new Set<string>();
+        for (const candidate of missing) {
+            const name = candidate.name.toUpperCase();
+            const sameType = candidates.filter((entry) => entry.name === name);
+            if (sameType.length < 2) continue;
+            doubted.add(name);
+            for (const entry of sameType) {
+                if (entry.id === null) continue;
+                context.staticDoubts?.add(entry.id);
+                const hole = holes.find((placeholder) => placeholder.signatureId === entry.id && !placeholder.expected);
+                if (hole) hole.note = 'static?';
+            }
+        }
+        const unscanned = missing.slice(Math.min(untypedMarked, missing.length)).filter((candidate) => !doubted.has(candidate.name.toUpperCase()));
         if (unscanned.length === 0) continue;
 
         /** "maybe SUE / *return?": the holes that could be this static (none is assumed). */

@@ -156,6 +156,25 @@ describe('patch 18: an untyped hole may be the missing static', () => {
     });
 });
 
+describe('patch 18b: a static and a wanderer of the same type', () => {
+    it('two W237 holes: no expected box, both tagged "static?"', () => {
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
+            { id: 1, alias: 'Daisy', solarsystem: { class: '5', statics: [] }, pending_holes: [] },
+            { id: 2, alias: 'A1', solarsystem: { class: '6', statics: [{ name: 'W237', leads_to: 'c6' }] }, pending_holes: [
+                { id: 60, signature_id: 'XDH-100', alias: null, is_static: false, target_class: '6', wormhole: 'W237' },
+            ] },
+        ];
+        const connections = [
+            { from_map_solarsystem_id: 1, to_map_solarsystem_id: 2, type: null, signatures: [{ id: 70, map_solarsystem_id: 2, signature_id: 'VGU-200', is_static: false, wormhole: { name: 'W237' } }] },
+        ];
+        const staticDoubts = new Set<number>();
+        const placeholders = buildPlaceholders(systems, FORMATS, new Set(), { connections, parentOf: new Map([[2, 1]]), homeId: 1, staticDoubts });
+        expect(placeholders.filter((placeholder) => placeholder.expected)).toHaveLength(0);
+        expect(placeholders.find((placeholder) => placeholder.signatureId === 60)!.note).toBe('static?');
+        expect([...staticDoubts].sort()).toEqual([60, 70]);
+    });
+});
+
 describe('patch 15: folding unjumped holes in rage lanes', () => {
     const hole = (nodeId: number, parentId: number, armedBy: number | null = null) =>
         ({ nodeId, signatureId: -nodeId, parentId, color: 'red', alias: null, label: '', detail: '', isStatic: false, wormhole: null, massStatus: null, lifetime: null, armedBy }) as const;
