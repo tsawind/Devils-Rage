@@ -131,6 +131,19 @@ describe('patch 18: an untyped hole may be the missing static', () => {
         expect(placeholders.filter((placeholder) => placeholder.expected)).toHaveLength(1);
     });
 
+    it('fix: no guess on the untyped hole while another hole has the static\'s type', () => {
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
+            { id: 1, alias: 'Daisy', solarsystem: { class: '5', statics: [{ name: 'V753', leads_to: 'c6' }] }, pending_holes: [
+                { id: 50, signature_id: 'FUN-228', alias: 'A2', is_static: false, target_class: '6', wormhole: 'V753' },
+                { id: 51, signature_id: 'XAQ-755', alias: 'A3', is_static: false, target_class: null, wormhole: null },
+            ] },
+        ];
+        const placeholders = buildPlaceholders(systems, FORMATS, new Set(), { connections: [], parentOf: new Map(), homeId: 1 });
+        const xaq = placeholders.find((placeholder) => placeholder.signatureId === 51)!;
+        expect(xaq.maybeStatic).toBeFalsy();
+        expect(xaq.label.endsWith('?')).toBe(false);
+    });
+
     it('patch 18b fix: a lone untyped hole is not guessed while signatures are unscanned', () => {
         const systems: Parameters<typeof buildPlaceholders>[0] = [
             { id: 1, alias: 'Daisy', uncategorized_signatures_count: 2, solarsystem: { class: '5', statics: [{ name: 'V753', leads_to: 'c6' }] }, pending_holes: [

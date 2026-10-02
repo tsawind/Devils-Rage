@@ -292,7 +292,9 @@ function expectedStatics(
         const stillMissing = unscanned.filter((candidate, index) => {
             const fitting = untyped.filter((entry) => !entry.maybeStatic && fitsStatic(entry, candidate.leads_to));
             const backCouldBe = maybeBack.some((back) => back.toUpperCase() === candidate.name.toUpperCase());
-            if (!fullyScanned || unscanned.length !== 1 || backCouldBe || fitting.length !== 1) return true;
+            // A hole already typed as this static (FUN typed Z060) is the likely static, not an untyped one.
+            const typedAsStatic = candidates.some((entry) => entry.name === candidate.name.toUpperCase());
+            if (!fullyScanned || unscanned.length !== 1 || backCouldBe || typedAsStatic || fitting.length !== 1) return true;
             const hole = fitting[0];
             hole.maybeStatic = true;
             hole.note = `static? ${candidate.name}`;
