@@ -20,14 +20,27 @@ final readonly class CharacterHasMapAccess
      */
     public function __invoke(Builder $query): Builder
     {
+        // Devil's Rage: access is per account. An alt gets the best access of any
+        // character on the same account (the main picked when joining), the same
+        // way Map::getUserPermission already decides what the account may do.
         return $query
             ->whereExists(MapAccess::query()
                 ->notExpired()
                 ->whereBelongsTo($this->map)
-                ->where(fn (Builder $query) => $query
-                    ->whereColumn('accessible_id', 'characters.id')
-                    ->orWhereColumn('accessible_id', 'characters.corporation_id')
-                    ->orWhereColumn('accessible_id', 'characters.alliance_id'
+                ->whereExists(fn ($accountCharacters) => $accountCharacters
+                    ->selectRaw('1')
+                    ->from('characters as account_characters')
+                    ->where(fn ($same) => $same
+                        ->whereColumn('account_characters.id', 'characters.id')
+                        ->orWhere(fn ($sameUser) => $sameUser
+                            ->whereNotNull('characters.user_id')
+                            ->whereColumn('account_characters.user_id', 'characters.user_id')
+                        )
+                    )
+                    ->where(fn ($match) => $match
+                        ->whereColumn('map_access.accessible_id', 'account_characters.id')
+                        ->orWhereColumn('map_access.accessible_id', 'account_characters.corporation_id')
+                        ->orWhereColumn('map_access.accessible_id', 'account_characters.alliance_id')
                     )
                 )
                 ->when($this->without_guests, fn (Builder $query) => $query

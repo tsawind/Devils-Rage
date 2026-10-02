@@ -209,3 +209,30 @@ it('correctly identifies expired access via isExpired', function () {
         ->and($active->isExpired())->toBeFalse()
         ->and($permanent->isExpired())->toBeFalse();
 });
+
+// --- Devil's Rage: an alt uses the best access on its account ---
+
+it('lets an alt with no access of its own through on its main\'s access', function () {
+    $map = Map::factory()->create();
+    $user = User::factory()->create();
+    $main = Character::factory()->for($user)->create();
+    $alt = Character::factory()->for($user)->create();
+
+    MapAccess::factory(['permission' => Permission::Member])->for($map)->for($main, 'accessible')->create();
+
+    $result = Character::query()->tap(new CharacterHasMapAccess($map, without_guests: true))->where('id', $alt->id)->exists();
+
+    expect($result)->toBeTrue();
+});
+
+it('does not let a character on another account through', function () {
+    $map = Map::factory()->create();
+    $main = Character::factory()->for(User::factory())->create();
+    $stranger = Character::factory()->for(User::factory())->create();
+
+    MapAccess::factory(['permission' => Permission::Member])->for($map)->for($main, 'accessible')->create();
+
+    $result = Character::query()->tap(new CharacterHasMapAccess($map))->where('id', $stranger->id)->exists();
+
+    expect($result)->toBeFalse();
+});

@@ -23,7 +23,7 @@ import type { TMapUserSetting } from '@/types/models';
 import { Link } from '@inertiajs/vue3';
 import { useConnectionStatus } from '@laravel/echo-vue';
 import { ConnectionStatus } from 'laravel-echo';
-import { AlertTriangle, Eye, EyeOff, LayoutGrid, LocateFixed, Map as MapIcon, Settings, ShieldAlert, Wifi, WifiOff } from 'lucide-vue-next';
+import { Eye, EyeOff, LayoutGrid, LocateFixed, Map as MapIcon, Settings, ShieldAlert, Wifi, WifiOff } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import CommandPaletteButton from './CommandPaletteButton.vue';
 import TrackingSignatureDialog from './TrackingSignatureDialog.vue';
@@ -147,19 +147,17 @@ const settingsUrl = computed(() => {
                     <component
                         :is="canManageAccess ? Link : 'div'"
                         :href="canManageAccess ? MapAccessController.show(map.slug) : undefined"
-                        class="flex items-center gap-1.5 rounded-full border border-yellow-500/40 bg-yellow-500/15 px-3 py-1 text-xs font-medium text-yellow-500 shadow-sm transition-colors hover:bg-yellow-500/25"
+                        class="flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-300 shadow-sm transition-colors hover:bg-sky-500/20"
                     >
-                        <AlertTriangle class="size-3.5 shrink-0 animate-pulse" />
-                        <span class="whitespace-nowrap">Limited map access</span>
+                        <span class="whitespace-nowrap">Alt · account access</span>
                     </component>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                    <p class="text-xs font-medium text-yellow-500">Limited Access</p>
+                    <p class="text-xs font-medium text-sky-300">Alt access</p>
                     <p class="max-w-xs text-xs text-muted-foreground">
-                        Your active character{{
-                            $page.props.auth.user.active_character?.name ? ` ${$page.props.auth.user.active_character.name}` : ''
-                        }}
-                        is not on this map's access list. You are viewing through another character's access.{{
+                        {{ $page.props.auth.user.active_character?.name ?? 'This character' }}
+                        isn't on the access list itself, so it uses the best access of the other characters on your account
+                        (your main): it can map, track and shows on the map the same way.{{
                             canManageAccess ? ' Click to manage access.' : ''
                         }}
                     </p>
