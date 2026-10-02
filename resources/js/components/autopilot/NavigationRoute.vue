@@ -164,7 +164,7 @@ function clearTo() {
             <ComboboxAnchor class="w-full">
                 <template v-if="fromSystem">
                     <div class="flex h-8 items-center gap-1.5 rounded-md bg-muted/30 px-2">
-                        <span class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">From</span>
+                        <span class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">From</span>
                         <SolarsystemClass :solarsystem_class="fromSystem.class" class="shrink-0 text-xs" />
                         <span class="min-w-0 flex-1 truncate text-sm">
                             <span v-if="aliases.get(fromSystem.id)" class="mr-1">{{ aliases.get(fromSystem.id) }}</span>
@@ -201,7 +201,7 @@ function clearTo() {
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
                 @click="handleFromSystemSelect(selected_map_solarsystem.solarsystem)"
             >
-                <SolarsystemClass :solarsystem_class="selected_map_solarsystem.solarsystem.class" class="shrink-0 text-[10px]" />
+                <SolarsystemClass :solarsystem_class="selected_map_solarsystem.solarsystem.class" class="shrink-0 text-[11px]" />
                 <span>
                     <span v-if="aliases.get(selected_map_solarsystem.solarsystem.id)" class="mr-1">{{
                         aliases.get(selected_map_solarsystem.solarsystem.id)
@@ -217,7 +217,7 @@ function clearTo() {
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
                 @click="handleFromSystemSelect(activeCharacterSystem)"
             >
-                <SolarsystemClass :solarsystem_class="activeCharacterSystem.class" class="shrink-0 text-[10px]" />
+                <SolarsystemClass :solarsystem_class="activeCharacterSystem.class" class="shrink-0 text-[11px]" />
                 <span>
                     <span v-if="aliases.get(activeCharacterSystem.id)" class="mr-1">{{ aliases.get(activeCharacterSystem.id) }}</span>
                     <span :class="{ 'text-muted-foreground': aliases.get(activeCharacterSystem.id) }">{{ activeCharacterSystem.name }}</span>
@@ -230,7 +230,7 @@ function clearTo() {
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
                 @click="handleFromSystemSelect(dest.solarsystem)"
             >
-                <SolarsystemClass :solarsystem_class="dest.solarsystem.class" class="shrink-0 text-[10px]" />
+                <SolarsystemClass :solarsystem_class="dest.solarsystem.class" class="shrink-0 text-[11px]" />
                 <span>
                     <span v-if="aliases.get(dest.solarsystem.id)" class="mr-1">{{ aliases.get(dest.solarsystem.id) }}</span>
                     <span :class="{ 'text-muted-foreground': aliases.get(dest.solarsystem.id) }">{{ dest.solarsystem.name }}</span>
@@ -243,7 +243,7 @@ function clearTo() {
     <div class="flex justify-center border-b border-border/30 py-0.5">
         <button class="inline-flex items-center gap-1 text-muted-foreground/40 transition-colors hover:text-foreground" @click="swapSystems">
             <ArrowUpDown class="size-3" />
-            <span class="font-mono text-[10px] tracking-wider uppercase">Swap</span>
+            <span class="font-sans font-semibold text-[11px] tracking-wider uppercase">Swap</span>
         </button>
     </div>
 
@@ -253,7 +253,7 @@ function clearTo() {
             <ComboboxAnchor class="w-full">
                 <template v-if="toSystem">
                     <div class="flex h-8 items-center gap-1.5 rounded-md bg-muted/30 px-2">
-                        <span class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">To</span>
+                        <span class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">To</span>
                         <SolarsystemClass :solarsystem_class="toSystem.class" class="shrink-0 text-xs" />
                         <span class="min-w-0 flex-1 truncate text-sm">
                             <span v-if="aliases.get(toSystem.id)" class="mr-1">{{ aliases.get(toSystem.id) }}</span>
@@ -290,7 +290,7 @@ function clearTo() {
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
                 @click="handleToSystemSelect(selected_map_solarsystem.solarsystem)"
             >
-                <SolarsystemClass :solarsystem_class="selected_map_solarsystem.solarsystem.class" class="shrink-0 text-[10px]" />
+                <SolarsystemClass :solarsystem_class="selected_map_solarsystem.solarsystem.class" class="shrink-0 text-[11px]" />
                 <span>
                     <span v-if="aliases.get(selected_map_solarsystem.solarsystem.id)" class="mr-1">{{
                         aliases.get(selected_map_solarsystem.solarsystem.id)
@@ -306,7 +306,7 @@ function clearTo() {
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
                 @click="handleToSystemSelect(activeCharacterSystem)"
             >
-                <SolarsystemClass :solarsystem_class="activeCharacterSystem.class" class="shrink-0 text-[10px]" />
+                <SolarsystemClass :solarsystem_class="activeCharacterSystem.class" class="shrink-0 text-[11px]" />
                 <span>
                     <span v-if="aliases.get(activeCharacterSystem.id)" class="mr-1">{{ aliases.get(activeCharacterSystem.id) }}</span>
                     <span :class="{ 'text-muted-foreground': aliases.get(activeCharacterSystem.id) }">{{ activeCharacterSystem.name }}</span>
@@ -319,7 +319,7 @@ function clearTo() {
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
                 @click="handleToSystemSelect(dest.solarsystem)"
             >
-                <SolarsystemClass :solarsystem_class="dest.solarsystem.class" class="shrink-0 text-[10px]" />
+                <SolarsystemClass :solarsystem_class="dest.solarsystem.class" class="shrink-0 text-[11px]" />
                 <span>
                     <span v-if="aliases.get(dest.solarsystem.id)" class="mr-1">{{ aliases.get(dest.solarsystem.id) }}</span>
                     <span :class="{ 'text-muted-foreground': aliases.get(dest.solarsystem.id) }">{{ dest.solarsystem.name }}</span>
@@ -330,10 +330,10 @@ function clearTo() {
 
     <!-- Route info bar -->
     <div v-if="fromSystem && toSystem" class="flex items-center justify-between border-b border-border/30 px-3 py-1.5">
-        <span v-if="hasRoute" class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">{{ routeJumps }} jumps</span>
+        <span v-if="hasRoute" class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">{{ routeJumps }} jumps</span>
         <button
             v-if="ignored_systems.length > 0"
-            class="font-mono text-[10px] text-muted-foreground hover:text-foreground"
+            class="font-mono text-[11px] text-muted-foreground hover:text-foreground"
             @click="handleClearIgnoreList"
         >
             Clear {{ ignored_systems.length }} ignored
@@ -344,14 +344,14 @@ function clearTo() {
     <div v-if="hasRoute" v-element-hover="onRouteHover" class="grid grid-cols-[1.5rem_1.5rem_auto_1.25rem_1rem_1.25rem] gap-x-2">
         <DestinationContextMenu v-for="(entry, index) in enrichedRoute" :key="entry.solarsystem.id" :solarsystem_id="entry.solarsystem.id">
             <div class="col-span-full grid grid-cols-subgrid items-center border-b border-border/30 px-3 py-1 hover:bg-muted/30">
-                <span class="text-center font-mono text-[10px] text-muted-foreground/60">{{ index + 1 }}</span>
+                <span class="text-center font-mono text-[11px] text-muted-foreground/60">{{ index + 1 }}</span>
 
                 <SolarsystemClass :solarsystem_class="entry.solarsystem.class" class="justify-self-center" />
 
                 <span class="min-w-0 truncate text-xs">
                     <span v-if="aliases.get(entry.solarsystem.id)" class="mr-1">{{ aliases.get(entry.solarsystem.id) }}</span>
                     <span :class="{ 'text-muted-foreground': aliases.get(entry.solarsystem.id) }">{{ entry.solarsystem.name }}</span>
-                    <span class="text-[10px] text-muted-foreground">· {{ entry.solarsystem.region?.name }}</span>
+                    <span class="text-[11px] text-muted-foreground">· {{ entry.solarsystem.region?.name }}</span>
                 </span>
 
                 <SolarsystemSovereignty
@@ -402,10 +402,10 @@ function clearTo() {
 
     <!-- Empty states -->
     <div v-else-if="fromSystem && toSystem" class="flex h-full flex-col items-center justify-center p-4">
-        <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">No route found</p>
+        <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No route found</p>
     </div>
     <div v-else class="flex h-full flex-col items-center justify-center p-4">
-        <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">Select origin and destination</p>
+        <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">Select origin and destination</p>
     </div>
 </template>
 

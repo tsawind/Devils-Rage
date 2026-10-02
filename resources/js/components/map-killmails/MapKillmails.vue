@@ -82,12 +82,12 @@ useOnClient(() =>
                         </div>
                     </template>
                     <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">
-                        <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">No killmails</p>
+                        <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No killmails</p>
                     </div>
                 </div>
                 <template #fallback>
                     <div class="flex h-full animate-pulse items-center justify-center gap-2 p-4">
-                        <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">Loading killmails...</p>
+                        <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">Loading killmails...</p>
                     </div>
                 </template>
             </Deferred>

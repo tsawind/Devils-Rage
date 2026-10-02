@@ -72,21 +72,21 @@ const activeTab = ref('destinations');
                 <TabsList class="grid h-8 w-full shrink-0 grid-cols-3 rounded-none border-b border-border/50 bg-muted/20 p-0">
                     <TabsTrigger
                         value="destinations"
-                        class="flex h-8 items-center justify-center gap-1 rounded-none border-r border-border/30 font-mono text-[10px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                        class="flex h-8 items-center justify-center gap-1 rounded-none border-r border-border/30 font-sans font-semibold text-[11px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
                     >
                         <RouteIcon class="size-3" />
                         <span>Watch</span>
                     </TabsTrigger>
                     <TabsTrigger
                         value="route"
-                        class="flex h-8 items-center justify-center gap-1 rounded-none border-r border-border/30 font-mono text-[10px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                        class="flex h-8 items-center justify-center gap-1 rounded-none border-r border-border/30 font-sans font-semibold text-[11px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
                     >
                         <NetworkIcon class="size-3" />
                         <span>Route</span>
                     </TabsTrigger>
                     <TabsTrigger
                         value="find-systems"
-                        class="flex h-8 items-center justify-center gap-1 rounded-none font-mono text-[10px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                        class="flex h-8 items-center justify-center gap-1 rounded-none font-sans font-semibold text-[11px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
                     >
                         <MapIcon class="size-3" />
                         <span>Find</span>
@@ -103,7 +103,7 @@ const activeTab = ref('destinations');
                         <NavigationDestinations :destinations="map_navigation.destinations" :ignored_systems="ignored_systems" />
                     </template>
                     <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">
-                        <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">Select a system</p>
+                        <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">Select a system</p>
                     </div>
                 </TabsContent>
 

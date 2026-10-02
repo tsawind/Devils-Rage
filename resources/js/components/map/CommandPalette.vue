@@ -38,7 +38,7 @@ type TThreatSystemMatch = {
 
 const item_classes =
     'col-span-full grid cursor-default grid-cols-subgrid items-center rounded-sm px-2 py-1.5 outline-none select-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent';
-const label_classes = 'col-span-full px-2 py-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase';
+const label_classes = 'col-span-full px-2 py-1.5 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase';
 
 const { open } = useCommandPalette();
 const search = ref('');
@@ -195,7 +195,7 @@ function handleThreatSystemSelect(system: TThreatSystemMatch) {
                             class="h-11 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                             @keydown.esc.prevent="open = false"
                         />
-                        <kbd class="shrink-0 rounded border border-border/50 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">esc</kbd>
+                        <kbd class="shrink-0 rounded border border-border/50 px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">esc</kbd>
                     </div>
                     <!-- reka forces inline flex styles on the content element, so the grid lives on an inner div. -->
                     <ComboboxContent position="inline" class="max-h-80 overflow-y-auto p-1">
@@ -249,7 +249,7 @@ function handleThreatSystemSelect(system: TThreatSystemMatch) {
                                         :alias="note.alias"
                                         :occupier_alias="note.occupier_alias"
                                     >
-                                        <span class="min-w-0 truncate text-[10px] text-muted-foreground italic">
+                                        <span class="min-w-0 truncate text-[11px] text-muted-foreground italic">
                                             {{ note.note_excerpt }}
                                         </span>
                                     </SolarsystemSearchResult>
@@ -275,8 +275,8 @@ function handleThreatSystemSelect(system: TThreatSystemMatch) {
                                         :corporation_name="entity.name"
                                         class="size-4 rounded"
                                     />
-                                    <span class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">{{ entity.name }}</span>
-                                    <span class="ml-auto font-mono text-[10px] text-muted-foreground/60">
+                                    <span class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">{{ entity.name }}</span>
+                                    <span class="ml-auto font-mono text-[11px] text-muted-foreground/60">
                                         {{ entity.total_kills }} kills · {{ entity.systems_count }} systems
                                     </span>
                                 </ComboboxLabel>
@@ -294,7 +294,7 @@ function handleThreatSystemSelect(system: TThreatSystemMatch) {
                                         :occupier_alias="system.map_solarsystem?.occupier_alias ?? system.occupier_alias"
                                     >
                                         <span
-                                            class="flex items-center justify-end gap-1 font-mono text-[10px] whitespace-nowrap text-muted-foreground"
+                                            class="flex items-center justify-end gap-1 font-mono text-[11px] whitespace-nowrap text-muted-foreground"
                                         >
                                             {{ system.kills }} kills
                                             <CommandPaletteAddBadge v-if="!system.map_solarsystem" />
@@ -305,7 +305,7 @@ function handleThreatSystemSelect(system: TThreatSystemMatch) {
 
                             <!-- Empty / hint -->
                             <div v-if="!hasResults" class="col-span-full p-6 text-center">
-                                <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">
+                                <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">
                                     {{ search.trim() ? 'No results' : 'Search systems, aliases, occupiers, notes and threat activity' }}
                                 </p>
                             </div>

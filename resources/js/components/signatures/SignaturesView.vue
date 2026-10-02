@@ -67,7 +67,7 @@ const sorted = computed(() => [...signatures].sort((a, b) => (a.signature_id ?? 
     <div>
         <!-- Header -->
         <div
-            class="flex items-center gap-2 border-b border-border/30 bg-muted/20 px-3 py-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+            class="flex items-center gap-2 border-b border-border/30 bg-muted/20 px-3 py-1.5 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase"
         >
             <span class="w-16 shrink-0">ID</span>
             <span class="w-24 shrink-0">Cat</span>
@@ -134,7 +134,7 @@ const sorted = computed(() => [...signatures].sort((a, b) => (a.signature_id ?? 
             </div>
         </template>
         <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">
-            <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">No signatures</p>
+            <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No signatures</p>
         </div>
     </div>
 </template>

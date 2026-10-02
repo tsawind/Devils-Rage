@@ -203,7 +203,7 @@ function submitForm() {
                     <div class="max-h-64 overflow-y-auto px-3">
                         <div class="grid grid-cols-[auto_auto_1fr_auto_auto_auto_auto] divide-y divide-border/40">
                             <div
-                                class="sticky top-0 z-10 col-span-full grid grid-cols-subgrid gap-x-3 bg-popover py-1.5 text-[10px] font-medium tracking-wider text-muted-foreground uppercase"
+                                class="sticky top-0 z-10 col-span-full grid grid-cols-subgrid gap-x-3 bg-popover py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase"
                             >
                                 <span class="col-span-3">Ship</span>
                                 <span>Pilot</span>
@@ -225,7 +225,7 @@ function submitForm() {
                                     <PopoverContent class="w-72 p-3" side="right" align="start" @focus-outside.prevent>
                                         <form class="space-y-2" @submit.prevent="submitForm">
                                             <div class="flex items-center justify-between gap-2">
-                                                <span class="text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+                                                <span class="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
                                                     {{ editingJump ? 'Edit jump' : 'Log jump' }}
                                                 </span>
                                                 <Tooltip>
@@ -317,19 +317,19 @@ function submitForm() {
                                         :character_name="jump.character_name || ''"
                                         class="size-4 shrink-0 rounded-full"
                                     />
-                                    <span class="max-w-20 truncate text-[10px] text-muted-foreground">{{ jump.character_name }}</span>
+                                    <span class="max-w-20 truncate text-[11px] text-muted-foreground">{{ jump.character_name }}</span>
                                 </div>
-                                <div v-else class="flex items-center gap-1 text-[10px] text-muted-foreground italic">
+                                <div v-else class="flex items-center gap-1 text-[11px] text-muted-foreground italic">
                                     <PencilLine class="size-3 shrink-0" />
                                     manual
                                 </div>
-                                <span class="text-right font-mono text-[10px] whitespace-nowrap text-foreground/80 tabular-nums">{{
+                                <span class="text-right font-mono text-[11px] whitespace-nowrap text-foreground/80 tabular-nums">{{
                                     formatKilotons(jump.mass)
                                 }}</span>
                                 <Tooltip>
                                     <TooltipTrigger as-child>
                                         <span
-                                            class="cursor-help text-right font-mono text-[10px] whitespace-nowrap text-muted-foreground tabular-nums"
+                                            class="cursor-help text-right font-mono text-[11px] whitespace-nowrap text-muted-foreground tabular-nums"
                                             >{{ getJumpedAgo(jump) }}</span
                                         >
                                     </TooltipTrigger>

@@ -72,11 +72,11 @@ watch(
             Notes
             <template #actions>
                 <template v-if="editing && can_write">
-                    <Button variant="ghost" size="sm" class="h-5 px-1.5 text-[10px]" @click="editing = false" type="button"> Cancel </Button>
+                    <Button variant="ghost" size="sm" class="h-5 px-1.5 text-[11px]" @click="editing = false" type="button"> Cancel </Button>
                     <Button
                         variant="ghost"
                         size="sm"
-                        class="h-5 px-1.5 text-[10px] text-amber-400 hover:text-amber-400"
+                        class="h-5 px-1.5 text-[11px] text-amber-400 hover:text-amber-400"
                         @click="handleSubmit"
                         type="button"
                     >
@@ -108,7 +108,7 @@ watch(
                 class="prose prose-sm max-w-none px-3 py-2 prose-invert prose-headings:my-2 prose-headings:text-foreground prose-p:my-2 prose-a:text-amber-500 prose-a:no-underline hover:prose-a:underline prose-code:rounded prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:text-amber-400 prose-code:before:content-none prose-code:after:content-none prose-pre:border prose-pre:border-border/50 prose-pre:bg-muted prose-ol:my-2 prose-ul:my-2 prose-li:my-0.5"
             />
             <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">
-                <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">No notes</p>
+                <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No notes</p>
             </div>
         </MapPanelContent>
     </MapPanel>

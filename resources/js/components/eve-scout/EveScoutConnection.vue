@@ -72,7 +72,7 @@ const remainingHoursFormatted = computed(() => {
 
             <span class="truncate text-xs">{{ otherSystem.name }}</span>
 
-            <span class="truncate text-[10px] text-muted-foreground">{{ otherSystem.region?.name || '' }}</span>
+            <span class="truncate text-[11px] text-muted-foreground">{{ otherSystem.region?.name || '' }}</span>
 
             <SolarsystemSovereignty :sovereignty="otherSystem.sovereignty" :solarsystem-id="otherSystem.id" class="size-4 justify-self-center">
                 <template #fallback>
@@ -92,17 +92,17 @@ const remainingHoursFormatted = computed(() => {
                 >
                     {{ connection.jumps_from_selected }}j
                 </span>
-                <span v-else class="font-mono text-[10px] text-muted-foreground/60">--</span>
+                <span v-else class="font-mono text-[11px] text-muted-foreground/60">--</span>
             </RoutePopover>
 
-            <span class="font-mono text-[10px] text-muted-foreground">{{ specialSignature }}</span>
+            <span class="font-mono text-[11px] text-muted-foreground">{{ specialSignature }}</span>
 
-            <span class="font-mono text-[10px] text-muted-foreground">{{ otherSignature }}</span>
+            <span class="font-mono text-[11px] text-muted-foreground">{{ otherSignature }}</span>
 
-            <span class="font-mono text-[10px] text-muted-foreground">{{ connection.wormhole_type }}</span>
+            <span class="font-mono text-[11px] text-muted-foreground">{{ connection.wormhole_type }}</span>
 
-            <span v-if="remainingHoursFormatted" class="font-mono text-[10px] text-muted-foreground">{{ remainingHoursFormatted }}</span>
-            <span v-else class="font-mono text-[10px] text-muted-foreground/60">--</span>
+            <span v-if="remainingHoursFormatted" class="font-mono text-[11px] text-muted-foreground">{{ remainingHoursFormatted }}</span>
+            <span v-else class="font-mono text-[11px] text-muted-foreground/60">--</span>
         </div>
     </DestinationContextMenu>
 </template>

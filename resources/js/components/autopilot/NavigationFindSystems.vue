@@ -180,7 +180,7 @@ function clearSystem() {
                         <span class="min-w-0 flex-1 truncate text-sm">
                             <span v-if="aliases.get(fromSystem.id)" class="mr-1">{{ aliases.get(fromSystem.id) }}</span>
                             <span :class="{ 'text-muted-foreground': aliases.get(fromSystem.id) }">{{ fromSystem.name }}</span>
-                            <span class="text-[10px] text-muted-foreground">· {{ fromSystem.region?.name }}</span>
+                            <span class="text-[11px] text-muted-foreground">· {{ fromSystem.region?.name }}</span>
                         </span>
                         <button class="shrink-0 text-muted-foreground/40 hover:text-foreground" @click="clearSystem">
                             <X class="size-3" />
@@ -206,7 +206,7 @@ function clearSystem() {
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
                 @click="handleSystemSelect(selected_map_solarsystem.solarsystem)"
             >
-                <SolarsystemClass :solarsystem_class="selected_map_solarsystem.solarsystem.class" class="shrink-0 text-[10px]" />
+                <SolarsystemClass :solarsystem_class="selected_map_solarsystem.solarsystem.class" class="shrink-0 text-[11px]" />
                 <span>
                     <span v-if="aliases.get(selected_map_solarsystem.solarsystem.id)" class="mr-1">{{
                         aliases.get(selected_map_solarsystem.solarsystem.id)
@@ -222,7 +222,7 @@ function clearSystem() {
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
                 @click="handleSystemSelect(activeCharacterSystem)"
             >
-                <SolarsystemClass :solarsystem_class="activeCharacterSystem.class" class="shrink-0 text-[10px]" />
+                <SolarsystemClass :solarsystem_class="activeCharacterSystem.class" class="shrink-0 text-[11px]" />
                 <span>
                     <span v-if="aliases.get(activeCharacterSystem.id)" class="mr-1">{{ aliases.get(activeCharacterSystem.id) }}</span>
                     <span :class="{ 'text-muted-foreground': aliases.get(activeCharacterSystem.id) }">{{ activeCharacterSystem.name }}</span>
@@ -235,7 +235,7 @@ function clearSystem() {
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
                 @click="handleSystemSelect(dest.solarsystem)"
             >
-                <SolarsystemClass :solarsystem_class="dest.solarsystem.class" class="shrink-0 text-[10px]" />
+                <SolarsystemClass :solarsystem_class="dest.solarsystem.class" class="shrink-0 text-[11px]" />
                 <span>
                     <span v-if="aliases.get(dest.solarsystem.id)" class="mr-1">{{ aliases.get(dest.solarsystem.id) }}</span>
                     <span :class="{ 'text-muted-foreground': aliases.get(dest.solarsystem.id) }">{{ dest.solarsystem.name }}</span>
@@ -251,16 +251,16 @@ function clearSystem() {
                 <SelectValue placeholder="Condition..." />
             </SelectTrigger>
             <SelectContent>
-                <div class="px-2 py-1 text-[10px] font-medium text-muted-foreground">Features</div>
+                <div class="px-2 py-1 text-[11px] font-medium text-muted-foreground">Features</div>
                 <SelectItem v-for="option in conditionOptions.filter((o) => o.group === 'features')" :key="option.value" :value="option.value">
                     {{ option.label }}
                 </SelectItem>
-                <div class="px-2 py-1 text-[10px] font-medium text-muted-foreground">Security</div>
+                <div class="px-2 py-1 text-[11px] font-medium text-muted-foreground">Security</div>
                 <SelectItem v-for="option in conditionOptions.filter((o) => o.group === 'security')" :key="option.value" :value="option.value">
                     {{ option.label }}
                 </SelectItem>
                 <template v-if="serviceConditionOptions.length">
-                    <div class="px-2 py-1 text-[10px] font-medium text-muted-foreground">Station Services</div>
+                    <div class="px-2 py-1 text-[11px] font-medium text-muted-foreground">Station Services</div>
                     <SelectItem v-for="option in conditionOptions.filter((o) => o.group === 'services')" :key="option.value" :value="option.value">
                         {{ option.label }}
                     </SelectItem>
@@ -284,7 +284,7 @@ function clearSystem() {
     <!-- Results table -->
     <div v-if="sortedResults.length" class="grid grid-cols-[1.5rem_auto_auto_1.25rem_2rem] gap-x-2">
         <div
-            class="col-span-full grid grid-cols-subgrid border-b border-border/30 bg-muted/20 px-3 py-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+            class="col-span-full grid grid-cols-subgrid border-b border-border/30 bg-muted/20 px-3 py-1.5 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase"
         >
             <span></span>
             <button @click="handleSort('name')" class="flex items-center gap-1 hover:text-foreground">
@@ -314,7 +314,7 @@ function clearSystem() {
                     <span :class="{ 'text-muted-foreground': aliases.get(result.solarsystem.id) }">{{ result.solarsystem.name }}</span>
                 </span>
 
-                <span class="truncate text-[10px] text-muted-foreground">{{ result.solarsystem.region?.name ?? '' }}</span>
+                <span class="truncate text-[11px] text-muted-foreground">{{ result.solarsystem.region?.name ?? '' }}</span>
 
                 <SolarsystemSovereignty
                     :sovereignty="result.solarsystem.sovereignty"
@@ -338,7 +338,7 @@ function clearSystem() {
                     >
                         {{ result.jumps }}j
                     </span>
-                    <span v-else class="font-mono text-[10px] text-muted-foreground/60">--</span>
+                    <span v-else class="font-mono text-[11px] text-muted-foreground/60">--</span>
                 </RoutePopover>
             </div>
         </DestinationContextMenu>
@@ -346,7 +346,7 @@ function clearSystem() {
 
     <!-- Empty state -->
     <div v-else class="flex h-full flex-col items-center justify-center p-4">
-        <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">
+        <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">
             {{ fromSystem ? 'No systems found' : 'Select a starting system' }}
         </p>
     </div>

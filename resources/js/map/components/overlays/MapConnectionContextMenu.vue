@@ -173,7 +173,7 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
             <ContextMenuSubContent>
                 <ContextMenuRadioGroup :model-value="map_connection.ship_size ?? UNKNOWN_SHIP_SIZE" @update:model-value="handleShipSizeChange">
                     <ContextMenuRadioItem :value="UNKNOWN_SHIP_SIZE" class="flex items-center gap-2" :disabled="locked_ship_size !== null">
-                        <span class="inline-flex w-6 justify-center font-mono text-[10px] leading-4 text-muted-foreground">?</span>
+                        <span class="inline-flex w-6 justify-center font-mono text-[11px] leading-4 text-muted-foreground">?</span>
                         Unknown
                     </ContextMenuRadioItem>
                     <ContextMenuRadioItem
@@ -183,11 +183,11 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
                         class="flex items-center gap-2"
                         :disabled="locked_ship_size !== null"
                     >
-                        <span class="inline-flex w-6 justify-center font-mono text-[10px] leading-4 text-muted-foreground">{{ option.letter }}</span>
+                        <span class="inline-flex w-6 justify-center font-mono text-[11px] leading-4 text-muted-foreground">{{ option.letter }}</span>
                         {{ option.label }}
                     </ContextMenuRadioItem>
                 </ContextMenuRadioGroup>
-                <div v-if="locked_ship_size" class="px-2 py-1 text-[10px] text-muted-foreground">Locked by the identified wormhole type</div>
+                <div v-if="locked_ship_size" class="px-2 py-1 text-[11px] text-muted-foreground">Locked by the identified wormhole type</div>
             </ContextMenuSubContent>
         </ContextMenuSub>
         <ContextMenuSub>

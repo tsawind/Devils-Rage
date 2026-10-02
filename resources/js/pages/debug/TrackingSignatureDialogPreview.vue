@@ -155,7 +155,7 @@ function handleSelection(selection: Record<string, unknown>): void {
         <div class="min-h-screen bg-background p-8 text-foreground">
             <div class="mx-auto max-w-3xl">
                 <div class="flex items-start justify-between gap-4">
-                    <p class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Debug · local only</p>
+                    <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">Debug · local only</p>
                     <Appearance />
                 </div>
                 <h1 class="mt-2 font-display text-2xl font-bold tracking-tight">Tracking signature dialog preview</h1>
@@ -173,7 +173,7 @@ function handleSelection(selection: Record<string, unknown>): void {
                     >
                         <span class="font-display font-bold">{{ scenario.title }}</span>
                         <span class="text-sm leading-6 text-muted-foreground">{{ scenario.description }}</span>
-                        <span class="mt-2 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+                        <span class="mt-2 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">
                             → {{ scenario.targetName }} · class {{ scenario.targetClass }} · {{ scenario.signatures.length }} signatures
                         </span>
                     </button>
@@ -192,7 +192,7 @@ function handleSelection(selection: Record<string, unknown>): void {
                 </div>
 
                 <div v-if="lastSelection" class="mt-6 overflow-hidden rounded bg-card ring-1 ring-border">
-                    <div class="border-b border-border/50 bg-muted/30 px-3 py-2 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+                    <div class="border-b border-border/50 bg-muted/30 px-3 py-2 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">
                         Last emitted selection
                     </div>
                     <pre class="overflow-x-auto p-4 text-xs">{{ JSON.stringify(lastSelection, null, 2) }}</pre>

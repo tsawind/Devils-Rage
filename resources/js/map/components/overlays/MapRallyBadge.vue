@@ -33,7 +33,7 @@ const resolvedRoute = computed(() => {
             <DestinationContextMenu :solarsystem_id="rallySolarsystem.id">
                 <button class="group flex cursor-pointer items-center gap-3 transition-all hover:opacity-80">
                     <div class="flex flex-col items-start gap-0.5">
-                        <span class="text-[10px] font-medium tracking-wider text-pink-500/70 uppercase">Rally Point</span>
+                        <span class="text-[11px] font-medium tracking-wider text-pink-500/70 uppercase">Rally Point</span>
                         <div class="flex items-center gap-1.5 text-sm font-semibold">
                             <SolarsystemClass :solarsystem_class="rallySolarsystem.class" class="font-bold" />
                             <span>{{ rallySolarsystem.name }}</span>

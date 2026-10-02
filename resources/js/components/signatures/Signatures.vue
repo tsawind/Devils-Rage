@@ -641,13 +641,13 @@ function createNewSignature() {
             <button
                 v-if="heldWayBack && is_combat"
                 type="button"
-                class="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 font-sans text-[10px] tracking-normal text-amber-300 normal-case hover:bg-amber-500/30"
+                class="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 font-sans text-[11px] tracking-normal text-amber-300 normal-case hover:bg-amber-500/30"
                 :title="`Copies ${heldWayBack.name}`"
                 @click="copyHeldWayBack"
             >
                 Way back ready · click to copy
             </button>
-            <span v-if="armed_text" class="ml-2 truncate font-sans text-[10px] tracking-normal text-red-400 normal-case" :title="`Armed holes: ${armed_text}`">
+            <span v-if="armed_text" class="ml-2 truncate font-sans text-[11px] tracking-normal text-red-400 normal-case" :title="`Armed holes: ${armed_text}`">
                 Armed: {{ armed_text }}
             </span>
             <template #actions>
@@ -727,7 +727,7 @@ function createNewSignature() {
             </div>
             <!-- Header -->
             <div
-                class="flex items-center gap-2 border-b border-border/30 bg-muted/20 px-3 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+                class="flex items-center gap-2 border-b border-border/30 bg-muted/20 px-3 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase"
                 :class="map_user_settings.compact_signature_list ? 'py-0.5' : 'py-1.5'"
             >
                 <span class="w-4 shrink-0" aria-hidden="true"></span>
@@ -816,7 +816,7 @@ function createNewSignature() {
                 />
             </template>
             <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">
-                <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">
+                <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">
                     {{ hiddenSignaturesCount > 0 ? `${hiddenSignaturesCount} hidden by filters` : 'No signatures' }}
                 </p>
             </div>

@@ -188,7 +188,7 @@ const settingsUrl = computed(() => {
 
         <!-- Pilot Location -->
         <div v-if="character && currentSolarsystem" class="hidden items-center gap-2 lg:flex">
-            <span class="text-[10px] tracking-wider text-muted-foreground uppercase">Location</span>
+            <span class="text-[11px] tracking-wider text-muted-foreground uppercase">Location</span>
             <div class="flex items-center gap-1.5">
                 <SolarsystemClass :solarsystem_class="currentSolarsystem.class" :name="currentSolarsystem.name" />
                 <span class="text-xs">{{ currentSolarsystem.name }}</span>

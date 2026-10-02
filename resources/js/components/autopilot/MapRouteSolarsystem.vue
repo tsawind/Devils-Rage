@@ -73,7 +73,7 @@ function removeRoute() {
                 <span :class="{ 'text-muted-foreground': alias }">{{ map_route.solarsystem.name }}</span>
             </span>
 
-            <span class="truncate text-[10px] text-muted-foreground">{{ map_route.solarsystem.region?.name || '' }}</span>
+            <span class="truncate text-[11px] text-muted-foreground">{{ map_route.solarsystem.region?.name || '' }}</span>
 
             <SolarsystemSovereignty
                 :sovereignty="map_route.solarsystem.sovereignty"
@@ -97,7 +97,7 @@ function removeRoute() {
                 >
                     {{ map_route.route.length - 1 }}j
                 </span>
-                <span v-else class="font-mono text-[10px] text-muted-foreground/60">--</span>
+                <span v-else class="font-mono text-[11px] text-muted-foreground/60">--</span>
             </RoutePopover>
 
             <div v-if="can_write" class="flex justify-end gap-1">

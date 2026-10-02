@@ -227,14 +227,14 @@ function handleSort(column: SkyhookSortColumn) {
                 <TabsList class="grid h-8 w-full shrink-0 grid-cols-2 rounded-none border-b border-border/50 bg-muted/20 p-0">
                     <TabsTrigger
                         value="lava"
-                        class="h-8 rounded-none border-r border-border/30 font-mono text-[10px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                        class="h-8 rounded-none border-r border-border/30 font-sans font-semibold text-[11px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
                     >
                         Lava
                         <span v-if="tabCounts.lava" class="ml-1 text-amber-400">{{ tabCounts.lava }}</span>
                     </TabsTrigger>
                     <TabsTrigger
                         value="ice"
-                        class="h-8 rounded-none font-mono text-[10px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                        class="h-8 rounded-none font-sans font-semibold text-[11px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
                     >
                         Ice
                         <span v-if="tabCounts.ice" class="ml-1 text-amber-400">{{ tabCounts.ice }}</span>
@@ -245,7 +245,7 @@ function handleSort(column: SkyhookSortColumn) {
                         <template v-if="sortedSkyhooks.length">
                             <div class="grid grid-cols-[1rem_auto_auto_1rem_2rem_auto] gap-x-2">
                                 <div
-                                    class="col-span-full grid grid-cols-subgrid border-b border-border/30 bg-muted/20 px-3 py-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+                                    class="col-span-full grid grid-cols-subgrid border-b border-border/30 bg-muted/20 px-3 py-1.5 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase"
                                 >
                                     <span></span>
                                     <button @click="handleSort('system')" class="flex items-center gap-1 hover:text-foreground">
@@ -282,11 +282,11 @@ function handleSort(column: SkyhookSortColumn) {
                             </div>
                         </template>
                         <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">
-                            <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">No raidable skyhooks</p>
+                            <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No raidable skyhooks</p>
                         </div>
                         <template #fallback>
                             <div class="flex h-full animate-pulse items-center justify-center gap-2 p-4">
-                                <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">Loading skyhooks...</p>
+                                <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">Loading skyhooks...</p>
                             </div>
                         </template>
                     </Deferred>

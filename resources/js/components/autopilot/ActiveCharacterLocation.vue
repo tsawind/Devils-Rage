@@ -67,7 +67,7 @@ function handleHover(hovered: boolean, route: TSolarsystem[] | null) {
                 </div>
             </div>
             <RoutePopover v-if="activeCharacter?.route" :route="activeCharacter.route">
-                <Button variant="ghost" size="sm" class="h-6 px-1.5 font-mono text-[10px] text-muted-foreground">
+                <Button variant="ghost" size="sm" class="h-6 px-1.5 font-mono text-[11px] text-muted-foreground">
                     {{ activeCharacter.route.length > 0 ? activeCharacter.route.length - 1 : '0' }}j
                 </Button>
             </RoutePopover>

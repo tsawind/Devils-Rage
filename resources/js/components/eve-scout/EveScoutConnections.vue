@@ -401,14 +401,14 @@ const activeTab = useLocalStorage<'thera' | 'turnur'>('eve-scout-active-tab', 't
                 <TabsList class="grid h-8 w-full shrink-0 grid-cols-2 rounded-none border-b border-border/50 bg-muted/20 p-0">
                     <TabsTrigger
                         value="thera"
-                        class="h-8 rounded-none border-r border-border/30 font-mono text-[10px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                        class="h-8 rounded-none border-r border-border/30 font-sans font-semibold text-[11px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
                     >
                         Thera
                         <span v-if="theraConnections.length" class="ml-1 text-amber-400">{{ theraConnections.length }}</span>
                     </TabsTrigger>
                     <TabsTrigger
                         value="turnur"
-                        class="h-8 rounded-none font-mono text-[10px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
+                        class="h-8 rounded-none font-sans font-semibold text-[11px] tracking-wider uppercase data-[state=active]:bg-muted/30 data-[state=active]:text-foreground data-[state=active]:shadow-none"
                     >
                         Turnur
                         <span v-if="turnurConnections.length" class="ml-1 text-amber-400">{{ turnurConnections.length }}</span>
@@ -418,7 +418,7 @@ const activeTab = useLocalStorage<'thera' | 'turnur'>('eve-scout-active-tab', 't
                 <TabsContent value="thera" class="mt-0 flex-1 overflow-y-auto">
                     <div class="grid grid-cols-[1.5rem_auto_auto_1.25rem_2rem_auto_auto_auto_auto] gap-x-2">
                         <div
-                            class="col-span-full grid grid-cols-subgrid border-b border-border/30 bg-muted/20 px-3 py-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+                            class="col-span-full grid grid-cols-subgrid border-b border-border/30 bg-muted/20 px-3 py-1.5 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase"
                         >
                             <span></span>
                             <button @click="handleTheraSort('system')" class="flex items-center gap-1 hover:text-foreground">
@@ -461,7 +461,7 @@ const activeTab = useLocalStorage<'thera' | 'turnur'>('eve-scout-active-tab', 't
                             special-system="Thera"
                         />
                         <div v-if="!theraConnections.length" class="col-span-full flex h-full flex-col items-center justify-center gap-2 p-4">
-                            <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">No Thera connections</p>
+                            <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No Thera connections</p>
                         </div>
                     </div>
                 </TabsContent>
@@ -469,7 +469,7 @@ const activeTab = useLocalStorage<'thera' | 'turnur'>('eve-scout-active-tab', 't
                 <TabsContent value="turnur" class="mt-0 flex-1 overflow-y-auto">
                     <div class="grid grid-cols-[1.5rem_auto_auto_1.25rem_2rem_auto_auto_auto_auto] gap-x-2">
                         <div
-                            class="col-span-full grid grid-cols-subgrid border-b border-border/30 bg-muted/20 px-3 py-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+                            class="col-span-full grid grid-cols-subgrid border-b border-border/30 bg-muted/20 px-3 py-1.5 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase"
                         >
                             <span></span>
                             <button @click="handleTurnurSort('system')" class="flex items-center gap-1 hover:text-foreground">
@@ -512,7 +512,7 @@ const activeTab = useLocalStorage<'thera' | 'turnur'>('eve-scout-active-tab', 't
                             special-system="Turnur"
                         />
                         <div v-if="!turnurConnections.length" class="col-span-full flex h-full flex-col items-center justify-center gap-2 p-4">
-                            <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">No Turnur connections</p>
+                            <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No Turnur connections</p>
                         </div>
                     </div>
                 </TabsContent>

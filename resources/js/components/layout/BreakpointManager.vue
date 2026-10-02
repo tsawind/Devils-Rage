@@ -168,8 +168,8 @@ function confirmRemove(key: string) {
                                 <div class="min-w-0">
                                     <div class="flex items-center gap-2">
                                         <span class="truncate text-sm font-medium">{{ bp.label }}</span>
-                                        <Badge variant="outline" class="font-mono text-[10px]">{{ bp.key }}</Badge>
-                                        <Badge v-if="isProtectedBreakpoint(bp.key)" variant="secondary" class="text-[10px]">Default</Badge>
+                                        <Badge variant="outline" class="font-mono text-[11px]">{{ bp.key }}</Badge>
+                                        <Badge v-if="isProtectedBreakpoint(bp.key)" variant="secondary" class="text-[11px]">Default</Badge>
                                     </div>
                                     <div class="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                                         <span class="rounded bg-muted px-1.5 py-0.5">≥ {{ bp.minWidth }}px</span>

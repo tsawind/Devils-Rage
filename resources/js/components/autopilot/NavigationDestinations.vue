@@ -89,7 +89,7 @@ const { canEdit: can_write } = usePermission();
 <template>
     <div class="grid grid-cols-[1.5rem_auto_auto_1.25rem_2rem_auto] gap-x-2">
         <div
-            class="col-span-full grid grid-cols-subgrid border-b border-border/30 bg-muted/20 px-3 py-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+            class="col-span-full grid grid-cols-subgrid border-b border-border/30 bg-muted/20 px-3 py-1.5 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase"
         >
             <span></span>
             <button @click="handleSort('system')" class="flex items-center gap-1 hover:text-foreground">
@@ -114,7 +114,7 @@ const { canEdit: can_write } = usePermission();
         <MapRouteSolarsystem v-for="route in sorted" :key="route.solarsystem.id" :map_route="route" />
 
         <div v-if="!sorted?.length" class="col-span-full flex h-full flex-col items-center justify-center gap-2 p-4">
-            <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">Watchlist empty</p>
+            <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">Watchlist empty</p>
         </div>
     </div>
 </template>

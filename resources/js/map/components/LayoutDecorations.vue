@@ -77,10 +77,10 @@ const ghosts = computed(() =>
 <template>
     <div v-if="layout" class="pointer-events-none absolute inset-0">
         <div v-for="band in bands" :key="band.key" class="absolute rounded-xl border border-border/40 bg-muted/10" :style="band.style">
-            <span class="absolute top-1 left-2 font-mono text-[10px] tracking-wider text-muted-foreground/70 uppercase">{{ band.label }}</span>
+            <span class="absolute top-1 left-2 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/70 uppercase">{{ band.label }}</span>
         </div>
         <div v-for="lane in lanes" :key="lane.key" class="absolute rounded-xl border" :style="lane.style">
-            <span class="absolute top-1 left-2 font-mono text-[10px] tracking-wider uppercase" :style="{ color: lane.hex }">{{ lane.label }}</span>
+            <span class="absolute top-1 left-2 font-sans font-semibold text-[11px] tracking-wider uppercase" :style="{ color: lane.hex }">{{ lane.label }}</span>
         </div>
         <div
             v-for="ghost in ghosts"

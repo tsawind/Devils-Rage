@@ -329,7 +329,7 @@ const selectedShipSizeOption = computed(() => shipSizeOptions.find((option) => o
                             <Select :model-value="effectiveShipSize" :disabled="lockedShipSize !== null" @update:model-value="handleShipSizeChange">
                                 <SelectTrigger class="w-full">
                                     <span class="flex items-center gap-2">
-                                        <span class="inline-flex w-6 justify-center font-mono text-[10px] leading-4 text-muted-foreground">{{
+                                        <span class="inline-flex w-6 justify-center font-mono text-[11px] leading-4 text-muted-foreground">{{
                                             selectedShipSizeOption.letter
                                         }}</span>
                                         {{ selectedShipSizeOption.label }}
@@ -338,7 +338,7 @@ const selectedShipSizeOption = computed(() => shipSizeOptions.find((option) => o
                                 <SelectContent>
                                     <SelectItem v-for="option in shipSizeOptions" :key="option.value" :value="option.value">
                                         <span class="flex items-center gap-2">
-                                            <span class="inline-flex w-6 justify-center font-mono text-[10px] leading-4 text-muted-foreground">{{
+                                            <span class="inline-flex w-6 justify-center font-mono text-[11px] leading-4 text-muted-foreground">{{
                                                 option.letter
                                             }}</span>
                                             {{ option.label }}
@@ -446,7 +446,7 @@ const selectedShipSizeOption = computed(() => shipSizeOptions.find((option) => o
                         <template v-for="section in sections" :key="section.key">
                             <div
                                 v-if="section.label && section.options.length"
-                                class="col-span-5 mt-2 border-t border-border/50 px-2 pt-2.5 pb-1 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+                                class="col-span-5 mt-2 border-t border-border/50 px-2 pt-2.5 pb-1 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase"
                             >
                                 {{ section.label }}
                             </div>

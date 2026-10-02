@@ -107,7 +107,7 @@ const finalBlow = computed(() => killmail.data.attackers.find((a) => a.final_blo
         />
         <span v-else />
 
-        <span v-if="victimTicker" class="truncate font-mono text-[10px] text-muted-foreground">[{{ victimTicker }}]</span>
+        <span v-if="victimTicker" class="truncate font-mono text-[11px] text-muted-foreground">[{{ victimTicker }}]</span>
         <span v-else />
 
         <!-- Location -->
@@ -118,7 +118,7 @@ const finalBlow = computed(() => killmail.data.attackers.find((a) => a.final_blo
             <span :class="{ 'text-muted-foreground': alias }">{{ solarsystem.name }}</span>
         </span>
 
-        <span class="truncate text-[10px] text-muted-foreground">{{ solarsystem.region?.name }}</span>
+        <span class="truncate text-[11px] text-muted-foreground">{{ solarsystem.region?.name }}</span>
 
         <!-- Attacker info -->
         <a
@@ -149,12 +149,12 @@ const finalBlow = computed(() => killmail.data.attackers.find((a) => a.final_blo
         />
         <span v-else />
 
-        <span class="text-right font-mono text-[10px] font-medium" :class="attackerCountClass">{{ attackerCount }}</span>
+        <span class="text-right font-mono text-[11px] font-medium" :class="attackerCountClass">{{ attackerCount }}</span>
 
         <!-- Meta -->
-        <span class="text-right font-mono text-[10px] text-muted-foreground">{{ total_worth }}</span>
+        <span class="text-right font-mono text-[11px] text-muted-foreground">{{ total_worth }}</span>
 
-        <span class="font-mono text-[10px] text-muted-foreground">{{ time_ago }}</span>
+        <span class="font-mono text-[11px] text-muted-foreground">{{ time_ago }}</span>
     </div>
 </template>
 

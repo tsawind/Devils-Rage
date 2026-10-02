@@ -78,10 +78,10 @@ function onRouteHover(hovered: boolean): void {
 
         <div class="flex min-w-0 items-center gap-1">
             <span class="truncate text-xs">{{ character.name }}</span>
-            <span v-if="is_docked" class="shrink-0 text-[10px] text-muted-foreground">(D)</span>
+            <span v-if="is_docked" class="shrink-0 text-[11px] text-muted-foreground">(D)</span>
             <Tooltip v-else-if="is_scanner">
                 <TooltipTrigger as-child>
-                    <span class="shrink-0 text-[10px] text-amber-400">(S)</span>
+                    <span class="shrink-0 text-[11px] text-amber-400">(S)</span>
                 </TooltipTrigger>
                 <TooltipContent>Scanner</TooltipContent>
             </Tooltip>
@@ -91,7 +91,7 @@ function onRouteHover(hovered: boolean): void {
             <TooltipTrigger as-child>
                 <div v-if="character.status?.ship_type" class="flex min-w-0 items-center gap-1">
                     <TypeImage :type_id="character.status.ship_type.id" :type_name="character.status.ship_type.name" class="size-4 shrink-0" />
-                    <span class="truncate font-mono text-[10px] text-muted-foreground">
+                    <span class="truncate font-mono text-[11px] text-muted-foreground">
                         {{ character.status.ship_type.name }}
                     </span>
                 </div>
@@ -126,9 +126,9 @@ function onRouteHover(hovered: boolean): void {
 
         <slot name="jumps" :next-hop="next_hop" :jump-count="jump_count" :jump-class="jump_class">
             <button v-element-hover="onRouteHover" class="flex min-w-0 cursor-pointer items-center gap-1.5 justify-self-end hover:text-foreground">
-                <span v-if="next_hop" class="truncate text-[10px] text-muted-foreground">{{ next_hop.name }}</span>
+                <span v-if="next_hop" class="truncate text-[11px] text-muted-foreground">{{ next_hop.name }}</span>
                 <span v-if="jump_count !== null" class="shrink-0 font-mono text-xs font-medium" :class="jump_class">{{ jump_count }}j</span>
-                <span v-else class="font-mono text-[10px] text-muted-foreground/60">--</span>
+                <span v-else class="font-mono text-[11px] text-muted-foreground/60">--</span>
             </button>
         </slot>
     </div>

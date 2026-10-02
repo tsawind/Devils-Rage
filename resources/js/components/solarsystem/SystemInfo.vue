@@ -60,10 +60,10 @@ const dotlanLink = computed(() => {
                         {{ displayAlias(map_solarsystem.alias) || system?.name }}
                         <span v-if="map_solarsystem.alias" class="text-muted-foreground">({{ system?.name }})</span>
                     </span>
-                    <span v-if="system?.effect?.name" class="shrink-0 text-[10px]" :class="effectColor">
+                    <span v-if="system?.effect?.name" class="shrink-0 text-[11px]" :class="effectColor">
                         {{ system.effect.name }}
                     </span>
-                    <span v-if="system?.is_shattered" class="shrink-0 text-[10px] text-amber-500">Shattered</span>
+                    <span v-if="system?.is_shattered" class="shrink-0 text-[11px] text-amber-500">Shattered</span>
                 </div>
                 <div v-if="map_solarsystem.occupier_alias" class="mt-1 text-[11px] text-muted-foreground">
                     Occupied by <span class="font-medium text-foreground">{{ map_solarsystem.occupier_alias }}</span>
@@ -94,7 +94,7 @@ const dotlanLink = computed(() => {
             <!-- Statics (wormhole only) -->
             <div v-if="system?.statics?.length" class="border-b border-border/50 px-3 py-2">
                 <div class="flex items-center gap-2">
-                    <span class="text-[10px] tracking-wider text-muted-foreground uppercase">Statics</span>
+                    <span class="text-[11px] tracking-wider text-muted-foreground uppercase">Statics</span>
                     <div class="flex gap-1.5">
                         <Popover v-for="(wh, idx) in system.statics" :key="idx">
                             <PopoverTrigger as-child>
@@ -117,7 +117,7 @@ const dotlanLink = computed(() => {
             <!-- Effect Details (wormhole only) -->
             <div v-if="system?.effect?.effects?.length" class="border-b border-border/50 px-3 py-2">
                 <div class="flex flex-col gap-1">
-                    <span class="text-[10px] tracking-wider text-muted-foreground uppercase">Effect</span>
+                    <span class="text-[11px] tracking-wider text-muted-foreground uppercase">Effect</span>
                     <div class="grid grid-cols-2 gap-x-4 gap-y-0.5">
                         <div v-for="effect in system.effect.effects" :key="effect.id" class="flex items-center justify-between text-[11px]">
                             <span class="truncate text-muted-foreground">{{ effect.name }}</span>
@@ -132,7 +132,7 @@ const dotlanLink = computed(() => {
             <!-- Sovereignty (k-space only) -->
             <div v-if="hasSovereignty" class="px-3 py-2">
                 <div class="flex flex-col gap-1.5">
-                    <span class="text-[10px] tracking-wider text-muted-foreground uppercase">Sovereignty</span>
+                    <span class="text-[11px] tracking-wider text-muted-foreground uppercase">Sovereignty</span>
                     <!-- Alliance -->
                     <div v-if="sovereignty?.alliance" class="flex items-center gap-2">
                         <img

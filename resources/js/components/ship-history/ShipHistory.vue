@@ -46,7 +46,7 @@ const shipHistory = computed(() => page.props.ship_history ?? []);
                     <TypeImage :type_id="entry.ship_type_id" class="size-5 shrink-0 rounded" :type_name="entry.ship_type?.name || ''" />
                     <div class="flex min-w-0 flex-1 flex-col">
                         <span class="truncate text-xs">{{ entry.name || entry.ship_type?.name || 'Unknown' }}</span>
-                        <span class="truncate font-mono text-[10px] text-muted-foreground">{{ entry.ship_type?.name }}</span>
+                        <span class="truncate font-mono text-[11px] text-muted-foreground">{{ entry.ship_type?.name }}</span>
                     </div>
                     <div class="flex items-center gap-1">
                         <CharacterImage
@@ -55,15 +55,15 @@ const shipHistory = computed(() => page.props.ship_history ?? []);
                             :character_name="entry.character.name"
                             class="size-4 shrink-0 rounded"
                         />
-                        <span class="max-w-20 truncate font-mono text-[10px] text-muted-foreground">{{ entry.character?.name ?? 'Unknown' }}</span>
+                        <span class="max-w-20 truncate font-mono text-[11px] text-muted-foreground">{{ entry.character?.name ?? 'Unknown' }}</span>
                     </div>
-                    <span class="font-mono text-[10px] text-muted-foreground" :title="format(new UTCDate(entry.updated_at), 'MMM dd, HH:mm')">
+                    <span class="font-mono text-[11px] text-muted-foreground" :title="format(new UTCDate(entry.updated_at), 'MMM dd, HH:mm')">
                         {{ formatTimeAgo(entry.updated_at) }}
                     </span>
                 </div>
             </template>
             <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">
-                <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">No ship history</p>
+                <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No ship history</p>
             </div>
         </MapPanelContent>
     </MapPanel>

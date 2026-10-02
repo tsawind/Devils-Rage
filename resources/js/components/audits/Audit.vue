@@ -148,7 +148,7 @@ const actor = computed(() => {
             :character_name="audit.character?.name"
             v-if="audit.character"
         />
-        <div v-else class="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-[10px] text-muted-foreground">S</div>
+        <div v-else class="flex size-5 shrink-0 items-center justify-center rounded bg-muted text-[11px] text-muted-foreground">S</div>
 
         <span class="flex-1 truncate text-xs text-muted-foreground" v-if="action === 'added'">
             <span class="text-foreground">{{ actor }}</span> added {{ systemLabel ?? 'system' }}
@@ -163,7 +163,7 @@ const actor = computed(() => {
             <span class="text-foreground">{{ actor }}</span> {{ updated_values }}
         </span>
 
-        <span class="font-mono text-[10px] text-muted-foreground" :title="formattedDate">{{ timeAgo }}</span>
+        <span class="font-mono text-[11px] text-muted-foreground" :title="formattedDate">{{ timeAgo }}</span>
     </div>
 </template>
 

@@ -286,14 +286,14 @@ function removeSignature(): void {
                     <span v-if="hole?.wormhole" class="ml-auto pl-3 font-mono text-xs text-muted-foreground">{{ hole.wormhole }}</span>
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent class="max-h-80 w-56 overflow-y-auto" @keydown.capture="handleTypeKeydown">
-                    <ContextMenuLabel class="text-[10px] font-normal text-muted-foreground">
+                    <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">
                         {{ typed ? `Search: ${typed.toUpperCase()} · Backspace to edit` : 'Type to search · 1-6, h, l, n, f also match class' }}
                     </ContextMenuLabel>
                     <ContextMenuItem v-for="type in typeGroups.here" :key="type.id" class="text-xs" @select="setType(type.id)">
                         <WormholeOption :wormhole="type" />
                     </ContextMenuItem>
                     <template v-if="typeGroups.other.length">
-                        <ContextMenuLabel class="text-[10px] font-normal text-muted-foreground">Other wormholes (not listed for this class)</ContextMenuLabel>
+                        <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">Other wormholes (not listed for this class)</ContextMenuLabel>
                         <ContextMenuItem v-for="type in typeGroups.other" :key="type.id" class="text-xs" @select="setType(type.id)">
                             <WormholeOption :wormhole="type" />
                         </ContextMenuItem>

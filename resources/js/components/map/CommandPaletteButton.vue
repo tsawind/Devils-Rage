@@ -15,7 +15,7 @@ const isMac = typeof navigator !== 'undefined' && navigator.userAgent.toUpperCas
     >
         <Search class="size-4 shrink-0" />
         <span class="flex-1 text-left">Search...</span>
-        <kbd class="shrink-0 rounded border border-border/50 px-1.5 py-0.5 font-mono text-[10px]">{{ isMac ? '⌘K' : 'Ctrl K' }}</kbd>
+        <kbd class="shrink-0 rounded border border-border/50 px-1.5 py-0.5 font-mono text-[11px]">{{ isMac ? '⌘K' : 'Ctrl K' }}</kbd>
     </button>
 </template>
 

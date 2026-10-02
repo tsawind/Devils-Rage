@@ -62,7 +62,7 @@ const stats = computed(() => [
             <div v-if="maps.length > 0" class="mt-8 grid grid-cols-3 divide-x divide-border/50 overflow-hidden rounded bg-card ring-1 ring-border">
                 <div v-for="stat in stats" :key="stat.label" class="px-5 py-4">
                     <div class="font-display text-2xl font-bold tracking-tight tabular-nums">{{ stat.value.toLocaleString() }}</div>
-                    <div class="mt-1 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">{{ stat.label }}</div>
+                    <div class="mt-1 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">{{ stat.label }}</div>
                 </div>
             </div>
 
@@ -102,7 +102,7 @@ const stats = computed(() => [
             <!-- Archived maps -->
             <div v-if="showArchived && archivedMaps.length > 0" class="mt-10">
                 <div class="flex items-center gap-3">
-                    <h2 class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Archived · {{ archivedMaps.length }}</h2>
+                    <h2 class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">Archived · {{ archivedMaps.length }}</h2>
                     <span class="h-px flex-1 bg-border/50" />
                 </div>
                 <div class="mt-5 grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4">

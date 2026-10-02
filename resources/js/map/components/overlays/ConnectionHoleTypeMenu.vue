@@ -109,21 +109,21 @@ function pick(entry: { type: TSignatureType; sideId: number }): void {
             <span class="ml-auto pl-3 font-mono text-xs text-muted-foreground">{{ current ?? '?' }}</span>
         </ContextMenuSubTrigger>
         <ContextMenuSubContent class="max-h-80 w-72 overflow-y-auto" @keydown.capture="handleKeydown">
-            <ContextMenuLabel class="text-[10px] font-normal text-muted-foreground">
+            <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">
                 {{ typed ? `Search: ${typed.toUpperCase()} · Backspace to edit` : 'Type to search · 1-6, h, l, n, f also match class' }}
             </ContextMenuLabel>
             <template v-if="groups.fits.length">
-                <ContextMenuLabel class="text-[10px] font-normal text-muted-foreground">Fits these two systems</ContextMenuLabel>
+                <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">Fits these two systems</ContextMenuLabel>
                 <ContextMenuItem v-for="entry in groups.fits" :key="entry.type.id" class="text-xs" @select="pick(entry)">
                     <WormholeOption :wormhole="entry.type" />
-                    <span class="ml-auto pl-2 text-[10px] text-muted-foreground">from {{ sideName(entry.sideId) }}</span>
+                    <span class="ml-auto pl-2 text-[11px] text-muted-foreground">from {{ sideName(entry.sideId) }}</span>
                 </ContextMenuItem>
             </template>
             <template v-if="groups.other.length">
-                <ContextMenuLabel class="text-[10px] font-normal text-muted-foreground">Other wormholes</ContextMenuLabel>
+                <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">Other wormholes</ContextMenuLabel>
                 <ContextMenuItem v-for="entry in groups.other" :key="entry.type.id" class="text-xs" @select="pick(entry)">
                     <WormholeOption :wormhole="entry.type" />
-                    <span class="ml-auto pl-2 text-[10px] text-muted-foreground">from {{ sideName(entry.sideId) }}</span>
+                    <span class="ml-auto pl-2 text-[11px] text-muted-foreground">from {{ sideName(entry.sideId) }}</span>
                 </ContextMenuItem>
             </template>
             <ContextMenuItem v-if="groups.fits.length + groups.other.length === 0" disabled class="text-xs">No types match</ContextMenuItem>

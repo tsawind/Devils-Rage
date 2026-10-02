@@ -166,7 +166,7 @@ const canResetCurrentBreakpoint = computed(() => {
                             <LayoutGrid class="size-4" />
                             <Badge
                                 v-if="hiddenCardIds.length"
-                                class="absolute -top-1 -right-1 size-4 justify-center rounded-full p-0 text-[10px] tabular-nums"
+                                class="absolute -top-1 -right-1 size-4 justify-center rounded-full p-0 text-[11px] tabular-nums"
                             >
                                 {{ hiddenCardIds.length }}
                             </Badge>
@@ -195,7 +195,7 @@ const canResetCurrentBreakpoint = computed(() => {
                                         <p class="text-sm font-medium">{{ REMOVABLE_CARD_LABELS[cardId] }}</p>
                                         <p class="text-xs text-muted-foreground">{{ REMOVABLE_CARD_DESCRIPTIONS[cardId] }}</p>
                                     </div>
-                                    <span class="mt-0.5 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">On layout</span>
+                                    <span class="mt-0.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">On layout</span>
                                 </div>
                             </template>
                         </div>

@@ -127,7 +127,7 @@ function resolveRoute(targetId: number | null): TResolvedSolarsystem[] {
             <template v-if="sorted_characters?.length">
                 <div class="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] text-sm">
                     <div
-                        class="col-span-full grid grid-cols-subgrid items-center gap-2 border-b border-border/50 bg-muted/50 px-3 py-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
+                        class="col-span-full grid grid-cols-subgrid items-center gap-2 border-b border-border/50 bg-muted/50 px-3 py-1.5 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase"
                     >
                         <div></div>
                         <div>Pilot</div>
@@ -148,7 +148,7 @@ function resolveRoute(targetId: number | null): TResolvedSolarsystem[] {
                 </div>
             </template>
             <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">
-                <p class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">No pilots online</p>
+                <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No pilots online</p>
             </div>
         </MapPanelContent>
     </MapPanel>

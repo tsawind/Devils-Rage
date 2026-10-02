@@ -937,7 +937,7 @@ function copyBookmark() {
         <!-- Name: the number this hole has or gets, or where it leads -->
         <div class="flex w-16 shrink-0 items-center gap-1 truncate font-mono text-xs" :title="armed_label ? `${name_title ?? ''} · ${armed_by_me ? 'armed by you: your next jump' : `armed by ${signature.armed_by_name ?? 'someone'}`}` : name_title">
             <span :class="name_class">{{ name_label }}</span>
-            <span v-if="armed_label" class="truncate rounded bg-red-500/20 px-1 font-sans text-[9px] leading-tight text-red-400">{{ armed_label }}</span>
+            <span v-if="armed_label" class="truncate rounded bg-red-500/20 px-1 font-sans text-[10px] leading-tight text-red-400">{{ armed_label }}</span>
         </div>
 
         <!-- Actions -->
@@ -1009,17 +1009,17 @@ function copyBookmark() {
 
                         <!-- Chain numbering -->
                         <DropdownMenuItem :disabled="is_k162 || (!signature.is_static && static_taken_by_other)" @select.prevent="handleToggleStatic" class="text-xs">
-                            <span class="mr-2 inline-flex size-3.5 items-center justify-center font-mono text-[10px] font-bold">S</span>
+                            <span class="mr-2 inline-flex size-3.5 items-center justify-center font-mono text-[11px] font-bold">S</span>
                             Static
                             <Check v-if="signature.is_static" class="ml-auto size-3.5" />
                         </DropdownMenuItem>
                         <DropdownMenuItem :disabled="is_k162" @select.prevent="handleToggleWandering" class="text-xs">
-                            <span class="mr-2 inline-flex size-3.5 items-center justify-center font-mono text-[10px] font-bold">W</span>
+                            <span class="mr-2 inline-flex size-3.5 items-center justify-center font-mono text-[11px] font-bold">W</span>
                             Wandering
                             <Check v-if="signature.is_wandering" class="ml-auto size-3.5" />
                         </DropdownMenuItem>
                         <DropdownMenuItem @select="handleSetNumber" class="text-xs">
-                            <span class="mr-2 inline-flex size-3.5 items-center justify-center font-mono text-[10px] font-bold">#</span>
+                            <span class="mr-2 inline-flex size-3.5 items-center justify-center font-mono text-[11px] font-bold">#</span>
                             Set number…
                             <span class="ml-auto font-mono text-muted-foreground">{{ signature.alias ?? planned_alias ?? '' }}</span>
                         </DropdownMenuItem>

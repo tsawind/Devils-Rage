@@ -50,9 +50,9 @@ function onHover(hovered: boolean) {
                 <template #jumps="{ nextHop, jumpCount, jumpClass }">
                     <RoutePopover :route="character.route">
                         <button class="flex min-w-0 cursor-pointer items-center gap-1.5 justify-self-end hover:text-foreground">
-                            <span v-if="nextHop" class="truncate text-[10px] text-muted-foreground">{{ nextHop.name }}</span>
+                            <span v-if="nextHop" class="truncate text-[11px] text-muted-foreground">{{ nextHop.name }}</span>
                             <span v-if="jumpCount !== null" class="shrink-0 font-mono text-xs font-medium" :class="jumpClass">{{ jumpCount }}j</span>
-                            <span v-else class="font-mono text-[10px] text-muted-foreground/60">--</span>
+                            <span v-else class="font-mono text-[11px] text-muted-foreground/60">--</span>
                         </button>
                     </RoutePopover>
                 </template>

@@ -45,7 +45,7 @@ const currentYear = format(new UTCDate(), 'yyyy');
                 </Link>
                 <div class="text-center">
                     <h1 class="font-display text-2xl font-bold tracking-tight text-foreground">WormholeSystems</h1>
-                    <p class="mt-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">EVE Online wormhole mapping</p>
+                    <p class="mt-1.5 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">EVE Online wormhole mapping</p>
                 </div>
             </div>
 
@@ -86,14 +86,14 @@ const currentYear = format(new UTCDate(), 'yyyy');
                         </a>
                     </Button>
 
-                    <p class="mt-3 text-center font-mono text-[10px] tracking-wider text-muted-foreground/70 uppercase">
+                    <p class="mt-3 text-center font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/70 uppercase">
                         ESI-secure · Official EVE Online SSO · Free to use
                     </p>
                 </div>
             </div>
 
             <!-- Footer -->
-            <div class="mt-8 text-center font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">
+            <div class="mt-8 text-center font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">
                 <p>© {{ currentYear }} WormholeSystems</p>
                 <p class="mt-1">EVE Online and the EVE logo are trademarks of CCP hf.</p>
             </div>

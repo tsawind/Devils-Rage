@@ -24,7 +24,7 @@ function handleRemove() {
 
 <template>
     <div :class="cn('flex h-9 shrink-0 items-center justify-between border-b border-border/50 bg-muted/30 px-3', props.class)">
-        <h3 class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+        <h3 class="font-sans font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">
             <slot />
         </h3>
         <div v-if="$slots.actions || (cardId && layoutEditMode())" class="flex items-center gap-2">

@@ -66,12 +66,12 @@ function pick(system: TMapSolarsystem, hole: TPendingHole, current: string | nul
         </ContextMenuSubTrigger>
         <ContextMenuSubContent class="max-h-80 w-72 overflow-y-auto">
             <template v-for="side in sides" :key="side.system.id">
-                <ContextMenuLabel class="text-[10px] font-normal text-muted-foreground">
+                <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">
                     In {{ name(side.system) }}{{ side.current ? ` (now ${side.current})` : '' }}
                 </ContextMenuLabel>
                 <ContextMenuItem v-for="hole in side.holes" :key="hole.id" class="text-xs" @select="pick(side.system, hole, side.current)">
                     <span class="font-mono font-semibold">{{ hole.signature_id?.slice(0, 3) ?? '???' }}</span>
-                    <span class="ml-auto pl-2 text-[10px] text-muted-foreground">{{ describe(hole) }}</span>
+                    <span class="ml-auto pl-2 text-[11px] text-muted-foreground">{{ describe(hole) }}</span>
                 </ContextMenuItem>
             </template>
         </ContextMenuSubContent>

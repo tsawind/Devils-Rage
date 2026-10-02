@@ -81,12 +81,12 @@ function onHover(hovered: boolean) {
                 <!-- Header -->
                 <div class="flex items-center justify-between gap-2 border-b border-border/50 bg-muted/30 px-3 py-2">
                     <div class="flex min-w-0 items-baseline gap-2">
-                        <span class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Route</span>
+                        <span class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">Route</span>
                         <span v-if="hasRoute" class="font-mono text-xs font-medium whitespace-nowrap">{{ jumpCount }} jumps</span>
                     </div>
                     <DropdownMenu v-if="user && destination">
                         <DropdownMenuTrigger as-child>
-                            <Button variant="secondary" size="sm" class="h-6 shrink-0 gap-1 px-2 text-[10px] whitespace-nowrap">
+                            <Button variant="secondary" size="sm" class="h-6 shrink-0 gap-1 px-2 text-[11px] whitespace-nowrap">
                                 <Navigation class="size-3" />
                                 Set Destination
                             </Button>
@@ -152,15 +152,15 @@ function onHover(hovered: boolean) {
 
                 <!-- Empty State -->
                 <div v-else class="flex items-center justify-center p-4">
-                    <span class="font-mono text-[10px] tracking-wider text-muted-foreground/60 uppercase">No route available</span>
+                    <span class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No route available</span>
                 </div>
 
                 <!-- Ignored Systems -->
                 <div v-if="ignored_systems.length" class="flex items-center justify-between border-t border-border/50 bg-muted/30 px-3 py-1.5">
-                    <span class="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+                    <span class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">
                         {{ ignored_systems.length }} {{ ignored_systems.length === 1 ? 'system' : 'systems' }} ignored
                     </span>
-                    <button @click="handleClearIgnoreList" class="text-[10px] whitespace-nowrap text-muted-foreground hover:text-foreground">
+                    <button @click="handleClearIgnoreList" class="text-[11px] whitespace-nowrap text-muted-foreground hover:text-foreground">
                         Clear
                     </button>
                 </div>

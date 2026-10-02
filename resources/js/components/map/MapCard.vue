@@ -54,7 +54,7 @@ function setPinned(value: boolean): void {
     >
         <!-- Panel header -->
         <div class="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-border/50 bg-muted/30 pr-1.5 pl-3">
-            <span class="flex min-w-0 items-center gap-1.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+            <span class="flex min-w-0 items-center gap-1.5 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">
                 <component :is="map.is_public ? Globe : Lock" class="size-3 shrink-0" />
                 <span class="truncate">map · {{ map.is_public ? 'public' : 'private' }}</span>
                 <Pin v-if="isPinned" class="size-3 shrink-0 text-orange-400" />
@@ -99,7 +99,7 @@ function setPinned(value: boolean): void {
             <h3 class="truncate font-display text-lg font-bold tracking-tight transition-colors group-hover/body:text-primary">
                 {{ map.name }}
             </h3>
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase">
                 <span class="inline-flex items-center gap-1.5">
                     <SatelliteDish class="size-3" />
                     {{ map.map_solarsystems_count }} systems
@@ -115,7 +115,7 @@ function setPinned(value: boolean): void {
         <div class="flex items-center justify-between gap-2 border-t border-border/50 px-3 py-2">
             <span
                 v-if="role"
-                class="inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] tracking-wider uppercase"
+                class="inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-sans font-semibold text-[11px] tracking-wider uppercase"
                 :class="role.class"
             >
                 <component :is="role.icon" class="size-3" />
@@ -126,7 +126,7 @@ function setPinned(value: boolean): void {
             <Dialog v-model:open="open">
                 <DialogTrigger as-child>
                     <button
-                        class="inline-flex shrink-0 items-center gap-1.5 rounded-sm border border-border/60 px-1.5 py-0.5 font-mono text-[10px] tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground"
+                        class="inline-flex shrink-0 items-center gap-1.5 rounded-sm border border-border/60 px-1.5 py-0.5 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase transition-colors hover:text-foreground"
                         :title="trackingAllowed ? 'Location sharing is on' : 'Location sharing is off'"
                     >
                         <span class="size-1.5 rounded-full" :class="trackingAllowed ? 'bg-green-500' : 'bg-red-500'" />

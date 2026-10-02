@@ -203,7 +203,7 @@ function onDrop(event: DragEvent) {
                                 <ImageUp class="size-4" />
                             </div>
                             <span class="text-xs font-medium text-foreground">Drag &amp; drop or click</span>
-                            <span class="text-[10px]">PNG, JPG, GIF or WebP · max 8 MB</span>
+                            <span class="text-[11px]">PNG, JPG, GIF or WebP · max 8 MB</span>
                         </div>
 
                         <div v-if="is_uploading" class="absolute inset-0 flex items-center justify-center bg-background/70">
