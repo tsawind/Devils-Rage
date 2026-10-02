@@ -717,9 +717,9 @@ function createNewSignature() {
                 class="flex items-baseline gap-2 border-b border-border/40 px-3 py-1.5"
                 :style="where_am_i.hex ? { borderLeft: `4px solid ${where_am_i.hex}` } : undefined"
             >
-                <span class="text-xl leading-none font-bold">{{ where_am_i.name }}</span>
-                <span v-if="where_am_i.chain" class="text-sm font-semibold" :style="{ color: where_am_i.hex ?? undefined }">{{ where_am_i.chain }}</span>
-                <span class="flex items-center gap-1 text-xs text-muted-foreground">
+                <span class="font-display text-[28px] leading-none font-bold">{{ where_am_i.name }}</span>
+                <span v-if="where_am_i.chain" class="font-display text-lg font-semibold" :style="{ color: where_am_i.hex ?? undefined }">{{ where_am_i.chain }}</span>
+                <span class="flex items-center gap-1 font-mono text-xs text-muted-foreground">
                     <SolarsystemClass :solarsystem_class="where_am_i.solarsystemClass" /> {{ where_am_i.jcode }}
                 </span>
                 <span v-if="where_am_i.unscanned > 0" class="ml-auto text-xs text-amber-400">{{ where_am_i.unscanned }} unscanned</span>

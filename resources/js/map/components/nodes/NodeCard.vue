@@ -170,14 +170,14 @@ function handleSubmit() {
         />
         <div
             v-if="isCombatHome"
-            class="pointer-events-none absolute -top-2.5 left-2 rounded px-1 text-[9px] leading-4 font-bold tracking-wide text-white uppercase"
+            class="pointer-events-none absolute -top-2.5 left-2 rounded px-1 font-display text-[11px] leading-4 font-bold tracking-wide text-white uppercase"
             :style="{ backgroundColor: chainHex ?? undefined }"
         >
             ⚔ Rage{{ chainLabel ? ` · ${chainLabel}` : '' }}
         </div>
         <div
             v-else-if="previousChain"
-            class="pointer-events-none absolute -top-2 right-2 rounded bg-card px-1 text-[9px] leading-3 opacity-70"
+            class="pointer-events-none absolute -top-2 right-2 rounded bg-card px-1 text-[11px] leading-3 opacity-70"
             :style="{ color: previousHex ?? undefined }"
             :title="`Kept when the ${previousChain} chain was cleared`"
         >
@@ -199,7 +199,7 @@ function handleSubmit() {
             </span>
         </div>
         <div v-else class="row-start-1 grid grid-cols-[auto_1fr_auto] items-center justify-center gap-x-1 px-2">
-            <SolarsystemClass :solarsystem_class="resolvedSolarsystem.class" />
+            <SolarsystemClass :solarsystem_class="resolvedSolarsystem.class" class="font-mono font-semibold" />
             <Popover :open="open" @update:open="(value) => open && (open = value)">
                 <PopoverAnchor class="col-start-2 row-start-1 min-w-0">
                     <SolarsystemName :map_solarsystem="system" :truncate="fixedWidth" />
@@ -260,7 +260,7 @@ function handleSubmit() {
                 :region="resolvedSolarsystem.region"
                 v-if="resolvedSolarsystem.region && !isWormholeClass(resolvedSolarsystem.class)"
             />
-            <SolarsystemStatics v-else-if="resolvedSolarsystem.statics" :statics="resolvedSolarsystem.statics" />
+            <SolarsystemStatics v-else-if="resolvedSolarsystem.statics" :statics="resolvedSolarsystem.statics" class="font-mono font-semibold" />
         </div>
         <SolarsystemPilots v-if="pilots.length && !compact" :pilots />
     </div>
