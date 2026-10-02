@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { combatColorHex } from '@/lib/combat';
-import { isFrigateHole, pipeWidth } from '@/lib/massEstimate';
+import { guessedHoleMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { wormholeMass } from '@/lib/wormholeMass';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
 import { CORNER_RADIUS, roundedElbowPath } from '@/map/core/geometry/paths';
@@ -50,7 +50,9 @@ const items = computed(() => {
         // Patch 13: a striped pipe sized by the hole's type (full mass, nothing jumped
         // yet), colored by its mass status, with a purple edge when end of life.
         // A K162 or unknown type keeps the thin dotted line.
-        const mass = wormholeMass(placeholder.wormhole);
+        // Patch 17: type not known yet: C5 / C6 holes draw as 3,300 M (3,000 M to highsec).
+        const guessed = placeholder.wormhole ? null : guessedHoleMass(parent.solarsystem?.class ?? null, placeholder.targetClass ?? null);
+        const mass = wormholeMass(placeholder.wormhole) ?? (guessed ? { total: guessed, maxJump: Number.POSITIVE_INFINITY } : null);
         const pipe = mass
             ? {
                   width: isFrigateHole(mass.maxJump) ? 2 : pipeWidth(mass.total * 1.1) * Math.min(scale, 1.5) * (compact ? 0.5 : 1),

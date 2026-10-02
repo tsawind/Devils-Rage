@@ -3,7 +3,7 @@ import EdgeBadges, { type EdgeIndicator } from '@/map/components/edges/EdgeBadge
 import { scalePoint } from '@/map/core/coords';
 import { useMinuteNow } from '@/composables/useMinuteNow';
 import { holeAge } from '@/lib/holeAge';
-import { describeEstimate, estimateMass, formatMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
+import { describeEstimate, estimateMass, formatMass, guessedHoleMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { edgePathAndCenter } from '@/map/core/geometry/paths';
 import type { EdgeGeometry } from '@/map/core/types';
@@ -27,6 +27,8 @@ type Props = {
     isLoop?: boolean;
     /** Pipes drawn this much thinner (patch 13: compact combat lanes). */
     pipeScale?: number;
+    /** Patch 17: the two systems' classes, for a guessed size while the hole's type is unknown. */
+    endClasses?: readonly [string | null, string | null] | null;
     scale: number;
 };
 
@@ -38,6 +40,7 @@ const {
     chainColor = null,
     isLoop = false,
     pipeScale = 1,
+    endClasses = null,
     scale,
 } = defineProps<Props>();
 
@@ -163,9 +166,17 @@ const holeType = computed(() => {
     return null;
 });
 
+/** Patch 17: no type known yet: C5 / C6 holes draw as 3,300 M (3,000 M to highsec); a frigate size stays thin. */
+const guessedMass = computed(() => {
+    if (isStargate.value || !connection || holeType.value || connection.ship_size === 'frigate' || !endClasses) return null;
+    return guessedHoleMass(endClasses[0], endClasses[1]);
+});
+
 const estimate = computed(() => {
-    if (isStargate.value || !connection || !holeType.value) return null;
-    return estimateMass({ totalMass: holeType.value.total_mass, jumped: connection.jumps_mass_sum, status: massStatus.value });
+    if (isStargate.value || !connection) return null;
+    const total = holeType.value?.total_mass ?? guessedMass.value;
+    if (!total) return null;
+    return estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, status: massStatus.value });
 });
 
 const pipe = computed(() => {
@@ -201,8 +212,11 @@ const pipeTitle = computed(() => {
     if (!connection) return undefined;
     const seen = age.value ? `${age.value.label}${age.value.likelyEol ? ' · likely EOL' : ''}` : null;
     const current = estimate.value;
-    if (!current || !holeType.value) return seen ?? undefined;
+    if (!current) return seen ?? undefined;
     const jumps = connection.jumps_count ?? 0;
+    if (!holeType.value) {
+        return `Type not known: guessed ${formatMass(guessedMass.value ?? 0)} kg hole · ${describeEstimate(current)} · ${jumps} ${jumps === 1 ? 'jump' : 'jumps'} logged${seen ? ` · ${seen}` : ''}`;
+    }
     return `${holeType.value.name}: ${describeEstimate(current)} · ${formatMass(holeType.value.total_mass)} kg hole · ${jumps} ${jumps === 1 ? 'jump' : 'jumps'} logged (${formatMass(connection.jumps_mass_sum ?? 0)} kg)${seen ? ` · ${seen}` : ''}`;
 });
 

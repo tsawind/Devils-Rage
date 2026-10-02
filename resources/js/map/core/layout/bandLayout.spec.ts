@@ -41,6 +41,30 @@ describe('computeBandLayout', () => {
         expect(result.bandOf.get(4)).toBe('main');
     });
 
+    it('patch 17: tighter spacing keeps rows exactly 90 apart and columns 280 apart', () => {
+        const nodes = [sys(DAISY, 'Daisy'), sys(2, 'A'), sys(3, 'B'), sys(4, 'A1'), sys(5, 'A0'), sys(6, 'A2')];
+        const result = computeBandLayout(
+            {
+                nodes,
+                edges: [
+                    { from: 1, to: 3 },
+                    { from: 1, to: 2 },
+                    { from: 2, to: 4 },
+                    { from: 2, to: 5 },
+                    { from: 2, to: 6 },
+                ],
+                homeId: DAISY,
+                compareNodes: byAlias(nodes),
+                reservedAlias: 'A',
+            },
+            { levelGap: 280, rowGap: 90 },
+        );
+        const p = result.positions;
+        expect(p.get(4)!.x - p.get(2)!.x).toBe(280);
+        expect(p.get(4)!.y - p.get(5)!.y).toBe(90);
+        expect(p.get(6)!.y - p.get(4)!.y).toBe(90);
+    });
+
     it('keeps a ghost row for Alpha when it is not mapped', () => {
         const nodes = [sys(DAISY, 'Daisy'), sys(3, 'B')];
         const result = computeBandLayout({ nodes, edges: [{ from: 1, to: 3 }], homeId: DAISY, compareNodes: byAlias(nodes), reservedAlias: 'A' });

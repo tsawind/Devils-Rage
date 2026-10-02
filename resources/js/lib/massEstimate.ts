@@ -80,3 +80,25 @@ export function describeEstimate(estimate: TMassEstimate): string {
     const value = (kg: number) => (kg / unit).toLocaleString('en-US', { maximumFractionDigits: billions ? 2 : 0 });
     return `about ${value(estimate.min)}–${value(estimate.max)} ${billions ? 'B' : 'M'} kg left`;
 }
+
+/**
+ * Patch 17: a size to draw while a hole's type isn't known (K162, "?", never typed).
+ * C5 / C6 to C5 / C6, lowsec or nullsec: 3,300 M kg; C5 / C6 to highsec: 3,000 M kg.
+ * Anything else: null (keeps the thin line until typed).
+ */
+export const GUESS_BIG_HOLE_MASS = 3_300_000_000;
+export const GUESS_HIGHSEC_HOLE_MASS = 3_000_000_000;
+
+export function guessedHoleMass(a: string | number | null | undefined, b: string | number | null | undefined): number | null {
+    const norm = (value: string | number | null | undefined) => String(value ?? '').toLowerCase().replace(/^c/, '');
+    const one = norm(a);
+    const two = norm(b);
+    const big = (value: string) => value === '5' || value === '6';
+    const pair = (x: string, y: string): number | null => {
+        if (!big(x)) return null;
+        if (big(y) || y === 'l' || y === 'n') return GUESS_BIG_HOLE_MASS;
+        if (y === 'h') return GUESS_HIGHSEC_HOLE_MASS;
+        return null;
+    };
+    return pair(one, two) ?? pair(two, one);
+}

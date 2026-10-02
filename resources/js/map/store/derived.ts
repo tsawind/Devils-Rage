@@ -92,6 +92,9 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
             gridSize: view.config.value.grid_size,
             // The tree layout always draws nodes at the fixed 180 width (see MapNode).
             nodeWidth: 180,
+            // Patch 17: main and side chains about 12% tighter (were 320 / 100).
+            levelGap: 280,
+            rowGap: 90,
             // Patch 15: rage lanes use readable full cards (alias, class, statics, a pilot).
             laneNodeWidth: 180,
             laneNodeHeight: 60,

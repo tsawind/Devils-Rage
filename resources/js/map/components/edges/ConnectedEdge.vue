@@ -70,6 +70,16 @@ const pipeScale = computed(() => {
     const inLane = (id: number) => layout.bandOf.get(id) === 'lane';
     return inLane(resolved.from_map_solarsystem_id) && inLane(resolved.to_map_solarsystem_id) ? 0.75 : 1;
 });
+/** Patch 17: both ends' classes, for a guessed pipe while the hole's type is unknown. */
+const endClasses = computed<readonly [string | null, string | null] | null>(() => {
+    const resolved = connection.value;
+    if (!resolved) return null;
+    const cls = (systemId: number) => {
+        const value = store.systems.get(systemId)?.solarsystem?.class;
+        return value === undefined || value === null ? null : String(value);
+    };
+    return [cls(resolved.from_map_solarsystem_id), cls(resolved.to_map_solarsystem_id)] as const;
+});
 const rallyDirection = computed<'forward' | 'reverse' | null>(() => store.rallyEdgeDirections.value.get(id) ?? null);
 
 function handleConnectionClick(event: MouseEvent): void {
@@ -95,6 +105,7 @@ function handleConnectionContextMenu(event: MouseEvent): void {
         :chain-color="chainColor"
         :is-loop="isLoop"
         :pipe-scale="pipeScale"
+        :end-classes="endClasses"
         :scale="store.scale.value"
         @connection-click="handleConnectionClick"
         @connection-context-menu="handleConnectionContextMenu"

@@ -134,7 +134,9 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
     const gridSize = options.gridSize ?? 20;
     const snap = (value: number): number => Math.round(value / gridSize) * gridSize;
     const levelGap = snap(options.levelGap ?? 320);
-    const rowGap = snap(options.rowGap ?? 100);
+    // Patch 17: rows snap to half a grid cell (the tree layout draws no grid), so 90 apart stays 90.
+    const snapRow = (value: number): number => Math.round(value / (gridSize / 2)) * (gridSize / 2);
+    const rowGap = snapRow(options.rowGap ?? 100);
     const laneColumnGap = snap(options.laneColumnGap ?? 100);
     const laneRowGap = snap(options.laneRowGap ?? 60);
     const laneNodeWidth = options.laneNodeWidth ?? 80;
@@ -362,7 +364,7 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
             }
         }
         for (const id of order) {
-            const point = { x: snap(marginX + depthOf.get(id)! * levelGap), y: snap(top + cross.get(id)! - minCross) };
+            const point = { x: snap(marginX + depthOf.get(id)! * levelGap), y: snapRow(top + cross.get(id)! - minCross) };
             bottom = Math.max(bottom, point.y);
             right = Math.max(right, point.x + nodeWidth);
             const ghost = ghostInfo.get(id);

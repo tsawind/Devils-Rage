@@ -1,4 +1,4 @@
-import { describeEstimate, estimateMass, formatMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
+import { describeEstimate, estimateMass, formatMass, guessedHoleMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { describe, expect, it } from 'vitest';
 
 const D845 = 5_000_000_000;
@@ -53,3 +53,28 @@ describe('patch 12: mass left on a wormhole', () => {
         expect(describeEstimate({ capacity: 5.5e9, min: 1.6e9, max: 2.6e9 })).toBe('about 1.6–2.6 B kg left');
     });
 });
+
+describe('guessedHoleMass (patch 17)', () => {
+    it('C5 / C6 to C5 / C6, lowsec or nullsec: 3,300 M', () => {
+        expect(guessedHoleMass('5', '6')).toBe(3_300_000_000);
+        expect(guessedHoleMass('6', '6')).toBe(3_300_000_000);
+        expect(guessedHoleMass('l', '5')).toBe(3_300_000_000);
+        expect(guessedHoleMass('6', 'n')).toBe(3_300_000_000);
+        expect(guessedHoleMass(5, 'C5')).toBe(3_300_000_000);
+    });
+
+    it('C5 / C6 to highsec: 3,000 M', () => {
+        expect(guessedHoleMass('5', 'h')).toBe(3_000_000_000);
+        expect(guessedHoleMass('h', '6')).toBe(3_000_000_000);
+    });
+
+    it('anything else: no guess', () => {
+        expect(guessedHoleMass('4', '5')).toBeNull();
+        expect(guessedHoleMass('3', 'h')).toBeNull();
+        expect(guessedHoleMass('l', 'n')).toBeNull();
+        expect(guessedHoleMass('5', 'unknown')).toBeNull();
+        expect(guessedHoleMass('5', null)).toBeNull();
+        expect(guessedHoleMass('12', '5')).toBeNull();
+    });
+});
+
