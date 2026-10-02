@@ -102,7 +102,7 @@ const items = computed(() => {
         // and wide pipes get longer stripes so they stay stripes, not dots.
         const [dash, gap] = pipe ? (pipe.width > 4 ? [16, 11] : [6, 6]) : [4, 4];
         const dashArray = pipe && rounded ? `${Math.max(dash - strokeWidth, strokeWidth * 0.5)},${gap + strokeWidth}` : `${dash},${gap}`;
-        const lineCap = pipe && rounded ? 'round' : 'butt';
+        const lineCap: 'round' | 'butt' = pipe && rounded ? 'round' : 'butt';
 
         return [
             {
