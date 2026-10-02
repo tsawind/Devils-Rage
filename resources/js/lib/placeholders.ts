@@ -62,6 +62,12 @@ export type TPlaceholder = {
     label: string;
     /** Shown below: "JOW · C4", "MVD · HS", "QXP · ?". */
     detail: string;
+    /** Patch 17: the signature's 3 letters ("JOW"), shown on a green pill; null with no ID yet. */
+    sigCode?: string | null;
+    /** Patch 17: the detail after the ID ("C4", "C5s", "?"). */
+    destination?: string;
+    /** Patch 17: the class the hole leads to (for a default pipe size while the type is unknown). */
+    targetClass?: string | null;
     isStatic: boolean;
     /** The hole's type ("D845"), null while unknown or a K162. */
     wormhole: string | null;
@@ -115,6 +121,9 @@ export function buildPlaceholders(
                 alias,
                 label: alias ? displayAlias(alias, formats.bookmark_alias_scheme) : limbo ? '' : '—',
                 detail: `${(hole.signature_id ?? '???').slice(0, 3)} · ${destination}${hole.is_static ? 's' : ''}`,
+                sigCode: hole.signature_id ? hole.signature_id.slice(0, 3) : null,
+                destination: `${destination}${hole.is_static ? 's' : ''}`,
+                targetClass: hole.target_class ?? null,
                 isStatic: hole.is_static,
                 wormhole: hole.wormhole,
                 massStatus: hole.mass_status ?? null,

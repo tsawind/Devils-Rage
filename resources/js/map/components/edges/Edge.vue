@@ -215,6 +215,15 @@ function getDashArray(): string | undefined {
 
 <template>
     <g pointer-events="visiblePainted" class="group text-neutral-300 dark:text-neutral-700">
+        <!-- Patch 17: a thin dark gap around the pipe, so a dotted pipe crossing it reads as passing under -->
+        <path
+            v-if="pipe"
+            :d="path.d"
+            fill="none"
+            :stroke-width="pipe.outline + 5"
+            stroke-linejoin="round"
+            class="pointer-events-none stroke-neutral-100 dark:stroke-neutral-950"
+        />
         <!-- Combat chain: a soft band in the chain's color behind the connection, so the chain reads as one colored path. -->
         <template v-if="chainColor">
             <path :d="path.d" :stroke="chainColor" fill="none" :stroke-width="isOrthogonal ? 9 : 14" stroke-opacity="0.18" stroke-linejoin="round" stroke-linecap="round" />

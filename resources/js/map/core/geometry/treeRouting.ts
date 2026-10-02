@@ -62,7 +62,10 @@ function blockedInColumn(source: Rect, target: Rect, column: Rect[]): boolean {
     return column.some((other) => other !== source && other !== target && other.minY < bottom && other.maxY > top);
 }
 
-type Column = { left: number; right: number };
+type Column = { left: number; right: number; members: Rect[] };
+
+/** Patch 17: a run's last straight stretch into a node is at least this long (no turn right on its corner). */
+export const MIN_STUB = 20;
 
 /**
  * A vertical run belongs in the lanes between columns, never inside one: crossing another
@@ -70,16 +73,21 @@ type Column = { left: number; right: number };
  * passes between count, and the shifted lane stays inside them, so an edge never runs past
  * the node it is heading for and doubles back.
  */
-function intoLane(x: number, columns: Column[], from: number, to: number): number {
+function intoLane(x: number, columns: Column[], from: number, to: number, top: number, bottom: number): number {
     const near = Math.min(from, to);
     const far = Math.max(from, to);
+    // Patch 17: keep a straight stub at both ends, so the run never turns right on a node's corner.
+    const stub = Math.min(MIN_STUB, (far - near) / 2);
     for (const column of columns) {
         if (column.right <= near || column.left >= far) continue;
+        // Patch 17: only nodes the vertical run actually passes count; a column of a lane
+        // far below (other bands line up differently) is not in the way.
+        if (!column.members.some((member) => member.minY < bottom && member.maxY > top)) continue;
         if (x > column.left - LANE_MARGIN / 2 && x < column.right + LANE_MARGIN) {
-            return clamp(column.right + LANE_MARGIN, near, far);
+            return clamp(column.right + LANE_MARGIN, near + stub, far - stub);
         }
     }
-    return x;
+    return clamp(x, near + stub, far - stub);
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -178,7 +186,7 @@ export function computeTreeEdgeGeometries(
         (byColumn.get(rect.minX) ?? byColumn.set(rect.minX, []).get(rect.minX)!).push(rect);
     }
     const columns: Column[] = [...byColumn.entries()]
-        .map(([left, members]) => ({ left, right: Math.max(...members.map((member) => member.maxX)) }))
+        .map(([left, members]) => ({ left, right: Math.max(...members.map((member) => member.maxX)), members }))
         .sort((a, b) => a.left - b.left);
     const columnRight = (left: number): number => columns.find((column) => column.left === left)?.right ?? left;
 
@@ -368,7 +376,14 @@ export function computeTreeEdgeGeometries(
     // The midpoint between two columns two apart lands exactly on the column between them.
     for (const item of routed) {
         if (item.detour || item.fromNormal.x === 0) continue;
-        item.bend = intoLane(item.bend ?? (item.from.x + item.to.x) / 2, columns, item.from.x, item.to.x);
+        item.bend = intoLane(
+            item.bend ?? (item.from.x + item.to.x) / 2,
+            columns,
+            item.from.x,
+            item.to.x,
+            Math.min(item.from.y, item.to.y),
+            Math.max(item.from.y, item.to.y),
+        );
     }
 
     return geometries;

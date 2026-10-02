@@ -1,5 +1,5 @@
 import { nodeRect } from '@/map/core/coords';
-import { computeTreeEdgeGeometries, edgeCenterConnection, LANE_MARGIN, PARALLEL_SPACING } from '@/map/core/geometry/treeRouting';
+import { computeTreeEdgeGeometries, edgeCenterConnection, LANE_MARGIN, MIN_STUB, PARALLEL_SPACING } from '@/map/core/geometry/treeRouting';
 import type { EdgeGeometry, EdgeInput, Rect, Vec2 } from '@/map/core/types';
 import { describe, expect, it } from 'vitest';
 
@@ -134,12 +134,37 @@ describe('computeTreeEdgeGeometries', () => {
         // even connected — it still has to be routed around.
         const rects = rectsAt({
             1: { x: 100, y: 100 },
-            2: { x: 420, y: 400 },
+            2: { x: 420, y: 150 },
             3: { x: 740, y: 200 },
         });
         const g = computeTreeEdgeGeometries([edge(10, 1, 3)], rects, new Map()).get(10);
 
         expect(bendOf(g)).toBe(rects.get(2)!.maxX + LANE_MARGIN);
+    });
+
+    it('patch 17: ignores a column whose nodes sit far above or below the run', () => {
+        // A lane far below starts between the two columns: it used to push the run onto the
+        // target's corner (Daisy → Alpha).
+        const rects = rectsAt({
+            1: { x: 100, y: 100 },
+            2: { x: 260, y: 900 },
+            3: { x: 420, y: 200 },
+        });
+        const g = computeTreeEdgeGeometries([edge(10, 1, 3)], rects, new Map()).get(10);
+        const from = elbow(g).from.x;
+        const to = elbow(g).to.x;
+        expect(bendOf(g)).toBe((from + to) / 2);
+    });
+
+    it('patch 17: never turns right on the target node edge', () => {
+        // The column in between is in the way, and steering past it would land on the target.
+        const rects = rectsAt({
+            1: { x: 100, y: 100 },
+            2: { x: 250, y: 150 },
+            3: { x: 420, y: 200 },
+        });
+        const g = computeTreeEdgeGeometries([edge(10, 1, 3)], rects, new Map()).get(10);
+        expect(bendOf(g)).toBeLessThanOrEqual(elbow(g).to.x - MIN_STUB);
     });
 });
 

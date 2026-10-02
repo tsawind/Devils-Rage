@@ -3,6 +3,7 @@ import { combatColorHex } from '@/lib/combat';
 import { isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { wormholeMass } from '@/lib/wormholeMass';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
+import { CORNER_RADIUS, roundedElbowPath } from '@/map/core/geometry/paths';
 import useUser from '@/composables/useUser';
 import { useMapStore } from '@/map/store/mapStore';
 import { show } from '@/routes/maps';
@@ -46,19 +47,6 @@ const items = computed(() => {
         const left = position.x - ANCHOR_OFFSET.x;
         const top = position.y - ANCHOR_OFFSET.y;
 
-        // Straight down when it sits under its system, else out of the system's right side.
-        let path: string;
-        if (left === parentLeft && top > parentTop) {
-            const x = (left + (compact ? 30 : 50)) * scale;
-            path = `M ${x} ${(parentTop + parentSize.height) * scale} V ${top * scale}`;
-        } else {
-            const startX = parentLeft + parentSize.width;
-            const startY = parentTop + parentSize.height / 2;
-            const endY = top + NODE_HEIGHT / 2;
-            const middleX = left > startX ? startX + Math.min(40, (left - startX) / 2) : startX + 20;
-            path = `M ${startX * scale} ${startY * scale} H ${middleX * scale} V ${endY * scale} H ${left * scale}`;
-        }
-
         // Patch 13: a striped pipe sized by the hole's type (full mass, nothing jumped
         // yet), colored by its mass status, with a purple edge when end of life.
         // A K162 or unknown type keeps the thin dotted line.
@@ -71,6 +59,40 @@ const items = computed(() => {
                   eolCritical: placeholder.lifetime === 'critical',
               }
             : null;
+        const strokeWidth = pipe?.width ?? 1.5;
+
+        // Patch 17: drawn from the box back to its system, so the stripes start whole at the
+        // box and stop a few px short of its border; corners curve like jumped connections.
+        const endGap = 3 + strokeWidth / 2;
+        let points: { x: number; y: number }[];
+        if (left === parentLeft && top > parentTop) {
+            // Straight down when it sits under its system.
+            const x = (left + (compact ? 30 : 50)) * scale;
+            points = [
+                { x, y: top * scale - endGap },
+                { x, y: (parentTop + parentSize.height) * scale },
+            ];
+        } else {
+            // Out of the system's right side, from its own spot: the upper part for holes level
+            // or above, the lower part for holes below (the jumped pipes use the middle).
+            const startX = parentLeft + parentSize.width;
+            const parentMid = parentTop + parentSize.height / 2;
+            let endY = top + NODE_HEIGHT / 2;
+            const startY = endY > parentMid + 1 ? parentTop + parentSize.height * 0.72 : parentTop + parentSize.height * 0.28;
+            // Nearly level: keep it a straight line, entering the box a little off its middle.
+            if (Math.abs(endY - startY) < NODE_HEIGHT / 2 - 4) endY = startY;
+            const middleX = left > startX ? startX + Math.min(40, (left - startX) / 2) : startX + 20;
+            points = [
+                { x: left * scale - endGap, y: endY * scale },
+                { x: middleX * scale, y: endY * scale },
+                { x: middleX * scale, y: startY * scale },
+                { x: startX * scale, y: startY * scale },
+            ];
+        }
+        const path = roundedElbowPath(points, Math.max(CORNER_RADIUS, strokeWidth));
+        // Round stripe ends add half the width at each end: shorten the dash to keep the look.
+        const [dash, gap] = pipe ? (pipe.width > 4 ? [16, 11] : [6, 6]) : [4, 4];
+        const dashArray = pipe ? `${Math.max(0.01, dash - strokeWidth)},${gap + strokeWidth}` : `${dash},${gap}`;
 
         return [
             {
@@ -78,6 +100,7 @@ const items = computed(() => {
                 hex,
                 path,
                 pipe,
+                dashArray,
                 tag: pipe?.eol ? { text: pipe.eolCritical ? 'EOL!' : 'EOL', x: (left - 6) * scale, y: (top + NODE_HEIGHT / 2) * scale } : null,
                 href: show(meta.slug, { mergeQuery: { solarsystem_id: parent.solarsystem_id } }),
                 style: {
@@ -147,7 +170,9 @@ const chips = computed(() => {
                         :stroke="item.pipe.eolCritical ? '#d946ef' : '#a855f7'"
                         :stroke-width="item.pipe.width + 4"
                         stroke-opacity="0.85"
-                        :stroke-dasharray="item.pipe.width > 4 ? '16,11' : '6,6'"
+                        :stroke-dasharray="item.dashArray"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
                     />
                     <path
                         :d="item.path"
@@ -155,7 +180,9 @@ const chips = computed(() => {
                         :stroke="item.pipe.color"
                         :stroke-width="item.pipe.width"
                         :stroke-opacity="item.pipe.eol ? 0.75 : 0.45"
-                        :stroke-dasharray="item.pipe.width > 4 ? '16,11' : '6,6'"
+                        :stroke-dasharray="item.dashArray"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
                     />
                 </template>
                 <path
@@ -195,18 +222,35 @@ const chips = computed(() => {
             :style="item.style"
         >
             <template v-if="item.compact">
-                <span class="flex w-full items-center justify-between gap-1 px-1.5">
-                    <span class="truncate font-bold" :style="{ fontSize: `${13 * item.fontScale}px` }">{{ item.label || '\u00a0' }}</span>
-                    <!-- Patch 16: the note sits inside the small box (it overlapped the box above) -->
-                    <span v-if="item.note" class="truncate font-medium text-amber-600 dark:text-amber-400" :style="{ fontSize: `${8 * item.fontScale}px` }">
-                        {{ item.note.replace(/^maybe /, '') }}
+                <span class="flex w-full min-w-0 items-center justify-between gap-1 px-1.5">
+                    <span class="flex min-w-0 items-center gap-1">
+                        <span v-if="item.label" class="truncate font-display font-semibold" :style="{ fontSize: `${13 * item.fontScale}px` }">{{ item.label }}</span>
+                        <!-- Patch 17: the signature ID, bigger, on green: a hole you can warp to -->
+                        <span
+                            v-if="item.sigCode"
+                            class="shrink-0 rounded-[3px] bg-green-800 px-1 font-mono leading-tight font-bold text-green-100"
+                            :style="{ fontSize: `${12 * item.fontScale}px` }"
+                            >{{ item.sigCode }}</span
+                        >
                     </span>
-                    <span v-else class="truncate font-mono text-muted-foreground" :style="{ fontSize: `${8 * item.fontScale}px` }">{{ item.detail }}</span>
+                    <!-- Patch 16: the note sits inside the small box (it overlapped the box above) -->
+                    <span v-if="item.note" class="truncate font-medium text-amber-600 dark:text-amber-400" :style="{ fontSize: `${10 * item.fontScale}px` }">
+                        {{ item.note.replace(/^maybe /, '').replace(/^\*/, '') }}
+                    </span>
+                    <span v-else class="truncate font-mono text-muted-foreground" :style="{ fontSize: `${10 * item.fontScale}px` }">{{
+                        item.sigCode ? item.destination : item.detail
+                    }}</span>
                 </span>
             </template>
             <template v-else>
-                <span class="font-medium" :style="{ fontSize: `${12 * item.fontScale}px` }">{{ item.label || '\u00a0' }}</span>
-                <span class="font-mono text-muted-foreground" :style="{ fontSize: `${10 * item.fontScale}px` }">{{ item.detail }}</span>
+                <span class="font-display font-semibold" :style="{ fontSize: `${13 * item.fontScale}px` }">{{ item.label || '\u00a0' }}</span>
+                <span v-if="item.sigCode" class="flex items-center gap-1 font-mono text-muted-foreground" :style="{ fontSize: `${11 * item.fontScale}px` }">
+                    <span class="rounded bg-green-800 px-1.5 leading-tight font-bold text-green-100" :style="{ fontSize: `${13 * item.fontScale}px` }">{{
+                        item.sigCode
+                    }}</span>
+                    · {{ item.destination }}
+                </span>
+                <span v-else class="font-mono text-muted-foreground" :style="{ fontSize: `${11 * item.fontScale}px` }">{{ item.detail }}</span>
             </template>
             <span
                 v-if="item.armed"
