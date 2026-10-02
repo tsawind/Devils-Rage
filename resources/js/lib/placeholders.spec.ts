@@ -115,6 +115,32 @@ describe('patch 18: an untyped hole may be the missing static', () => {
         const expected = buildPlaceholders(systems, FORMATS, new Set(), { connections: [], parentOf: new Map(), homeId: 1 }).filter((placeholder) => placeholder.expected);
         expect(expected.map((placeholder) => placeholder.label)).toEqual(['Alpha']);
     });
+
+    it('patch 18b fix: several untyped holes keep their own numbers; the static gets its box', () => {
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
+            { id: 1, alias: 'Daisy', solarsystem: { class: '5', statics: [{ name: 'V753', leads_to: 'c6' }] }, pending_holes: [
+                { id: 51, signature_id: 'NQI-100', alias: null, is_static: false, target_class: null, wormhole: null },
+                { id: 52, signature_id: 'RYT-200', alias: null, is_static: false, target_class: null, wormhole: null },
+                { id: 53, signature_id: 'VZF-300', alias: null, is_static: false, target_class: null, wormhole: null },
+            ] },
+        ];
+        const placeholders = buildPlaceholders(systems, FORMATS, new Set(), { connections: [], parentOf: new Map(), homeId: 1 });
+        const holes = placeholders.filter((placeholder) => !placeholder.expected);
+        expect(holes.some((placeholder) => placeholder.maybeStatic)).toBe(false);
+        expect(holes.some((placeholder) => placeholder.label.endsWith('?'))).toBe(false);
+        expect(placeholders.filter((placeholder) => placeholder.expected)).toHaveLength(1);
+    });
+
+    it('patch 18b fix: a lone untyped hole is not guessed while signatures are unscanned', () => {
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
+            { id: 1, alias: 'Daisy', uncategorized_signatures_count: 2, solarsystem: { class: '5', statics: [{ name: 'V753', leads_to: 'c6' }] }, pending_holes: [
+                { id: 51, signature_id: 'ICK-804', alias: null, is_static: false, target_class: null, wormhole: null },
+            ] },
+        ];
+        const placeholders = buildPlaceholders(systems, FORMATS, new Set(), { connections: [], parentOf: new Map(), homeId: 1 });
+        expect(placeholders.find((placeholder) => placeholder.signatureId === 51)!.maybeStatic).toBeFalsy();
+        expect(placeholders.filter((placeholder) => placeholder.expected)).toHaveLength(1);
+    });
 });
 
 describe('patch 15: folding unjumped holes in rage lanes', () => {

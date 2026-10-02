@@ -35,6 +35,8 @@ type TPlaceholderSystem = {
     combat_home?: boolean | null;
     solarsystem?: { class?: TStringedSolarsystemClass | null; statics?: { name: string; leads_to: string }[] | null } | null;
     pending_holes?: TPlaceholderHole[] | null;
+    /** Patch 18b fix: signatures not yet scanned down here (0 = fully scanned). */
+    uncategorized_signatures_count?: number | null;
 };
 
 /** A connection as the expected-statics check needs it (patch 13). */
@@ -283,9 +285,15 @@ function expectedStatics(
             return !target || target === 'unknown' || target === leadsTo.toLowerCase().replace(/^c/, '');
         };
         const untyped = holes.filter((hole) => hole.parentId === system.id && !hole.expected && !hole.wormhole && !hole.isStatic && !hole.maybeStatic);
+        // Patch 18b fix: only when it can't be anything else — the system is fully scanned, one static
+        // is missing, the way back can't be it, and exactly one untyped hole fits. Otherwise the holes
+        // keep their own numbers (A1, A2…) and the static gets its "not identified" box.
+        const fullyScanned = (system.uncategorized_signatures_count ?? 0) === 0;
         const stillMissing = unscanned.filter((candidate, index) => {
-            const hole = untyped.find((entry) => !entry.maybeStatic && fitsStatic(entry, candidate.leads_to));
-            if (!hole) return true;
+            const fitting = untyped.filter((entry) => !entry.maybeStatic && fitsStatic(entry, candidate.leads_to));
+            const backCouldBe = maybeBack.some((back) => back.toUpperCase() === candidate.name.toUpperCase());
+            if (!fullyScanned || unscanned.length !== 1 || backCouldBe || fitting.length !== 1) return true;
+            const hole = fitting[0];
             hole.maybeStatic = true;
             hole.note = `static? ${candidate.name}`;
             if (!limbo && index === 0 && slotFree) {
