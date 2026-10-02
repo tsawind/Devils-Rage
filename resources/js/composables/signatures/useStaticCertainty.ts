@@ -2,9 +2,7 @@ import { useCombat } from '@/composables/combat/useCombat';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { displayAlias, staticSlotAlias } from '@/lib/alias';
 import { visibleBookmarkName } from '@/lib/bookmark';
-import { shipSizeFromJumpMass } from '@/lib/shipSize';
-import { wormholeMass } from '@/lib/wormholeMass';
-import { mappedBelow, pendingHoleBookmark, renameChanges } from '@/map/holeBookmark';
+import { asStaticHole, mappedBelow, pendingHoleBookmark, renameChanges } from '@/map/holeBookmark';
 import { planPendingHoles } from '@/lib/placeholders';
 import { classCode, decideStatic, type TCertaintyHole, type TCertaintyWayBack } from '@/lib/staticCertainty';
 import { updateSignature } from '@/map/actions/updateSignature';
@@ -186,7 +184,7 @@ export function useStaticCertainty(store: MapStore): void {
                 signatureLabel: hole ? (hole.signature_id ?? 'This hole') : `The hole to ${displayAlias(name)}`,
                 from: name,
                 to: slot,
-                changes: renameChanges(store, system, signatureId, name, slot, true),
+                changes: renameChanges(store, system, signatureId, name, slot, true, staticName),
                 beyond,
                 choose: (choice) => {
                     certainAsk.value = null;
@@ -197,25 +195,8 @@ export function useStaticCertainty(store: MapStore): void {
                             lock_others: lockOthersFor(system, signatureId),
                             ...(linked ? { rename_system: true } : {}),
                         });
-                        // Patch 18b: the bookmark as it will be once marked: the static's type, class and size
-                        // (the hole itself may not have a type yet, which gave "  Alpha IHJ s").
-                        const leadsTo = (system.solarsystem.statics ?? []).find((candidate) => candidate.name.toUpperCase() === staticName.toUpperCase())?.leads_to ?? null;
-                        const targetClass = leadsTo ? ({ hs: 'h', ls: 'l', ns: 'n' } as Record<string, string>)[leadsTo] ?? leadsTo.replace(/^c/, '') : null;
-                        const mass = wormholeMass(staticName);
-                        const copy = hole
-                            ? pendingHoleBookmark(
-                                  store,
-                                  system,
-                                  {
-                                      ...hole,
-                                      wormhole: staticName,
-                                      target_class: (targetClass ?? hole.target_class) as typeof hole.target_class,
-                                      ship_size: hole.ship_size ?? (mass ? shipSizeFromJumpMass(mass.maxJump) : null),
-                                  },
-                                  slot,
-                                  true,
-                              )
-                            : '';
+                        // Patch 18b: the bookmark as it will be once marked (the static's type, class and size).
+                        const copy = hole ? pendingHoleBookmark(store, system, asStaticHole(system, hole, staticName), slot, true) : '';
                         if (copy) navigator.clipboard.writeText(copy).catch(() => undefined);
                         toast.success(`${staticName} is ${where}'s static · renamed to ${displayAlias(slot)}`, {
                             description: copy ? `Copied ${visibleBookmarkName(copy)}` : undefined,

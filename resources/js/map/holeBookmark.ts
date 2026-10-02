@@ -1,6 +1,8 @@
 import { aliasesBelow, suggestAlias } from '@/lib/alias';
 import { buildSignatureBookmark, formatBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
+import { shipSizeFromJumpMass } from '@/lib/shipSize';
+import { wormholeMass } from '@/lib/wormholeMass';
 import type { MapStore } from '@/map/store/mapStore';
 import type { TMapSolarsystem, TPendingHole } from '@/pages/maps';
 
@@ -70,6 +72,23 @@ export function holeAsSignature(hole: TPendingHole) {
  * `system` is renamed from → to (an unjumped hole, or a jumped one: then also
  * the far side's way back). Shown in the rename popups.
  */
+/**
+ * Patch 18b: a hole as it will be once marked as the system's static: the
+ * static's type, the class it leads to and its size (the hole itself may have
+ * no type yet).
+ */
+export function asStaticHole(system: TMapSolarsystem, hole: TPendingHole, staticName: string): TPendingHole {
+    const leadsTo = (system.solarsystem.statics ?? []).find((candidate) => candidate.name.toUpperCase() === staticName.toUpperCase())?.leads_to ?? null;
+    const targetClass = leadsTo ? (({ hs: 'h', ls: 'l', ns: 'n' }) as Record<string, string>)[leadsTo] ?? leadsTo.replace(/^c/, '') : null;
+    const mass = wormholeMass(staticName);
+    return {
+        ...hole,
+        wormhole: staticName,
+        target_class: (targetClass ?? hole.target_class) as TPendingHole['target_class'],
+        ship_size: hole.ship_size ?? (mass ? shipSizeFromJumpMass(mass.maxJump) : null),
+    };
+}
+
 export function renameChanges(
     store: MapStore,
     system: TMapSolarsystem,
@@ -77,12 +96,15 @@ export function renameChanges(
     fromAlias: string,
     toAlias: string,
     isStatic: boolean,
+    staticName?: string,
 ): { label: string; from: string; to: string }[] {
     const meta = store.meta.value;
     if (!meta) return [];
     const hole = system.pending_holes?.find((candidate) => candidate.id === signatureId);
     if (hole) {
-        return [{ label: 'In this system', from: pendingHoleBookmark(store, system, hole, fromAlias), to: pendingHoleBookmark(store, system, hole, toAlias, isStatic) }];
+        // Patch 18b: the new name shows the hole as it will be: the static's type, class and size.
+        const after = staticName ? asStaticHole(system, hole, staticName) : hole;
+        return [{ label: 'In this system', from: pendingHoleBookmark(store, system, hole, fromAlias), to: pendingHoleBookmark(store, system, after, toAlias, isStatic) }];
     }
 
     for (const connection of store.connections.values()) {
