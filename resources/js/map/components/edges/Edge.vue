@@ -7,7 +7,7 @@ import { guessHoleMass } from '@/map/holeGuess';
 import { describeEstimate, estimateMass, formatMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { edgePathAndCenter } from '@/map/core/geometry/paths';
-import type { EdgeGeometry } from '@/map/core/types';
+import type { EdgeGeometry, Vec2 } from '@/map/core/types';
 import type { TMapConnection } from '@/pages/maps';
 import type { TShipSize } from '@/types/models';
 import { computed } from 'vue';
@@ -33,8 +33,8 @@ type Props = {
     /** Patch 17/18: the two systems' classes (and the K162 side's), for a guessed size while the hole's type is unknown. */
     endClasses?: readonly [string | null, string | null] | null;
     k162Class?: string | null;
-    /** Patch 18b: this hole may be its system's static (two of the static's type). */
-    staticDoubt?: boolean;
+    /** Patch 18b: which end the static comes from; doubt = one of two holes of its type ("Static?"). */
+    staticEnd?: { side: 'from' | 'to'; doubt: boolean } | null;
     scale: number;
 };
 
@@ -48,7 +48,7 @@ const {
     pipeScale = 1,
     endClasses = null,
     k162Class = null,
-    staticDoubt = false,
+    staticEnd = null,
     haloOnly = false,
     scale,
 } = defineProps<Props>();
@@ -71,6 +71,33 @@ const path = computed(() => edgePathAndCenter(geometry, scale));
 
 const scaledFrom = computed(() => scalePoint(geometry.from, scale));
 const scaledTo = computed(() => scalePoint(geometry.to, scale));
+
+/**
+ * Patch 18b: the tiny "Static" / "Static?" label, just off the system the static
+ * comes from (not the K162 end), sitting above the pipe.
+ */
+const staticLabel = computed(() => {
+    if (!staticEnd) return null;
+    const atFrom = staticEnd.side === 'from';
+    const point = atFrom ? scaledFrom.value : scaledTo.value;
+    let normal: Vec2;
+    if (geometry.kind === 'elbow') normal = atFrom ? geometry.fromNormal : geometry.toNormal;
+    else {
+        const other = atFrom ? scaledTo.value : scaledFrom.value;
+        const length = Math.hypot(other.x - point.x, other.y - point.y) || 1;
+        normal = { x: (other.x - point.x) / length, y: (other.y - point.y) / length };
+    }
+    const lift = (pipe.value?.outline ?? 4) / 2 + 3;
+    const horizontal = Math.abs(normal.x) >= Math.abs(normal.y);
+    const anchor: 'start' | 'end' = normal.x >= 0 ? 'start' : 'end';
+    return {
+        x: point.x + normal.x * 6 + (horizontal ? 0 : 6),
+        y: horizontal ? point.y - lift : point.y + normal.y * 12,
+        anchor,
+        text: staticEnd.doubt ? 'Static?' : 'Static',
+        color: staticEnd.doubt ? 'var(--color-yellow-400)' : 'var(--color-green-400)',
+    };
+});
 
 /**
  * Stargates carry the column default of 'large' without it meaning anything,
@@ -99,11 +126,6 @@ const indicators = computed<EdgeIndicator[]>(() => {
             fill: 'var(--color-emerald-500)',
             stroke: 'var(--color-emerald-600)',
         });
-    }
-
-    // Patch 18b: a static and a wanderer of the same type: this one may be the static.
-    if (staticDoubt) {
-        items.push({ type: 'text', label: 'static?', fill: 'var(--color-amber-400)', stroke: 'var(--color-amber-600)' });
     }
 
     // Patch 18: the pipe's size is a guess.
@@ -344,6 +366,22 @@ function getDashArray(): string | undefined {
                 :class="rallyDirection === 'reverse' ? 'rally-route-animated-reverse' : 'rally-route-animated'"
             />
         </template>
+        <!-- Patch 18b: which system the static comes from -->
+        <text
+            v-if="staticLabel"
+            :x="staticLabel.x"
+            :y="staticLabel.y"
+            :text-anchor="staticLabel.anchor"
+            :fill="staticLabel.color"
+            font-size="9"
+            font-weight="600"
+            stroke="rgba(0,0,0,0.85)"
+            stroke-width="2.5"
+            paint-order="stroke"
+            class="pointer-events-none font-sans select-none"
+        >
+            {{ staticLabel.text }}
+        </text>
         <!-- Connection status indicators -->
         <EdgeBadges :indicators="indicators" :center="path.center" />
         <path
