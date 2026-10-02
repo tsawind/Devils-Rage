@@ -78,6 +78,8 @@ export type TPlaceholder = {
     lifetime: string | null;
     /** Patch 13: a static the system must have that nobody has scanned yet (no signature: signatureId 0). */
     expected?: boolean;
+    /** Patch 18: an untyped hole sitting in a missing static's slot ("Alpha?", "static? V753"). */
+    maybeStatic?: boolean;
     /** Patch 13: "maybe *return?" when the way back could be this static. */
     note?: string | null;
     /** Patch 13: armed as someone's next jump (red dashed outline). */
@@ -264,11 +266,39 @@ function expectedStatics(
             ...holes.filter((hole) => hole.parentId === system.id && hole.alias).map((hole) => hole.alias as string),
         ];
         const staticSlot = staticSlotAlias(system.alias, formats.bookmark_ignored_alias, Boolean(system.combat_home));
-        unscanned.forEach((candidate, index) => {
+        // Patch 18: the static's slot is only "used" by a hole of this system or a system linked to it
+        // (it went to Golf before because the name existed somewhere else in the chain).
+        const slotUsedHere = [
+            ...holes.filter((hole) => hole.parentId === system.id && !hole.expected && hole.alias).map((hole) => hole.alias as string),
+            ...touching.map((connection) =>
+                byId.get(connection.from_map_solarsystem_id === system.id ? connection.to_map_solarsystem_id : connection.from_map_solarsystem_id)?.alias ?? '',
+            ),
+        ].some((value) => value.toUpperCase() === staticSlot.toUpperCase());
+        let slotFree = !slotUsedHere;
+
+        // Patch 18: an untyped hole here could be the missing static: it takes the static's slot
+        // ("Alpha?") with a "static? V753" tag instead of a separate "not identified" box.
+        const fitsStatic = (hole: TPlaceholder, leadsTo: string): boolean => {
+            const target = (hole.targetClass ?? '').toLowerCase().replace(/^c/, '');
+            return !target || target === 'unknown' || target === leadsTo.toLowerCase().replace(/^c/, '');
+        };
+        const untyped = holes.filter((hole) => hole.parentId === system.id && !hole.expected && !hole.wormhole && !hole.isStatic && !hole.maybeStatic);
+        const stillMissing = unscanned.filter((candidate, index) => {
+            const hole = untyped.find((entry) => !entry.maybeStatic && fitsStatic(entry, candidate.leads_to));
+            if (!hole) return true;
+            hole.maybeStatic = true;
+            hole.note = `static? ${candidate.name}`;
+            if (!limbo && index === 0 && slotFree) {
+                hole.label = `${displayAlias(staticSlot, formats.bookmark_alias_scheme)}?`;
+                slotFree = false;
+            }
+            return false;
+        });
+        stillMissing.forEach((candidate, index) => {
             let alias: string | null = null;
             if (!limbo) {
                 alias =
-                    index === 0 && !taken.map((value) => value.toUpperCase()).includes(staticSlot.toUpperCase())
+                    index === 0 && slotFree
                         ? staticSlot
                         : suggestAlias({
                               parentAlias: system.alias,
@@ -289,7 +319,8 @@ function expectedStatics(
                 color: system.combat_color ?? null,
                 alias,
                 label: alias ? displayAlias(alias, formats.bookmark_alias_scheme) : limbo ? `static ${leadsTo}` : '—',
-                detail: `${candidate.name} → ${leadsTo} static · ${noteFor(candidate.name) ? 'not identified' : 'not scanned'}`,
+                // Patch 18: always "not identified" (the hole may well be in the list already).
+                detail: `${candidate.name} → ${leadsTo} static · not identified`,
                 isStatic: true,
                 wormhole: candidate.name,
                 massStatus: null,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { combatColorHex } from '@/lib/combat';
-import { guessedHoleMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
+import { isFrigateHole, pipeWidth } from '@/lib/massEstimate';
+import { guessHoleMass } from '@/map/holeGuess';
 import { wormholeMass } from '@/lib/wormholeMass';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
 import { CORNER_RADIUS, roundedElbowPath } from '@/map/core/geometry/paths';
@@ -49,18 +50,28 @@ const items = computed(() => {
 
         // Patch 13: a striped pipe sized by the hole's type (full mass, nothing jumped
         // yet), colored by its mass status, with a purple edge when end of life.
-        // A K162 or unknown type keeps the thin dotted line.
-        // Patch 17: type not known yet: C5 / C6 holes draw as 3,300 M (3,000 M to highsec).
-        const guessed = placeholder.wormhole || placeholder.shipSize === 'frigate' ? null : guessedHoleMass(parent.solarsystem?.class ?? null, placeholder.targetClass ?? null);
-        const mass = wormholeMass(placeholder.wormhole) ?? (guessed ? { total: guessed, maxJump: Number.POSITIVE_INFINITY } : null);
+        // Patch 18: a K162 or an untyped hole gets a guessed size ("≈"); only a hole with
+        // no known class at all keeps the thin dotted line, which now shows mass and EOL too.
+        const typeMass = wormholeMass(placeholder.wormhole);
+        const isK162 = (placeholder.wormhole ?? '').toUpperCase().startsWith('K162');
+        const parentClass = parent.solarsystem?.class === undefined || parent.solarsystem?.class === null ? null : String(parent.solarsystem.class);
+        const guessed =
+            typeMass || placeholder.shipSize === 'frigate' || (placeholder.wormhole && !isK162)
+                ? null
+                : guessHoleMass({ k162Class: isK162 ? parentClass : null, classes: [parentClass, placeholder.targetClass ?? null] });
+        const mass = typeMass ?? (guessed ? { total: guessed, maxJump: Number.POSITIVE_INFINITY } : null);
+        const massColor = placeholder.massStatus === 'critical' ? '#ef4444' : placeholder.massStatus === 'reduced' ? '#f59e0b' : null;
+        const eol = placeholder.lifetime === 'eol' || placeholder.lifetime === 'critical';
+        const eolCritical = placeholder.lifetime === 'critical';
         const pipe = mass
             ? {
                   width: isFrigateHole(mass.maxJump) ? 2 : pipeWidth(mass.total * 1.1) * Math.min(scale, 1.5) * (compact ? 0.5 : 1),
-                  color: placeholder.massStatus === 'critical' ? '#ef4444' : placeholder.massStatus === 'reduced' ? '#f59e0b' : '#a3a3a3',
-                  eol: placeholder.lifetime === 'eol' || placeholder.lifetime === 'critical',
-                  eolCritical: placeholder.lifetime === 'critical',
+                  color: massColor ?? '#a3a3a3',
+                  eol,
+                  eolCritical,
               }
             : null;
+        const tagParts = [guessed ? '≈' : null, eol ? (eolCritical ? 'EOL!' : 'EOL') : null].filter(Boolean);
         const strokeWidth = pipe?.width ?? 1.5;
 
         // Patch 17: drawn from the box back to its system, so the stripes start whole at the
@@ -112,15 +123,17 @@ const items = computed(() => {
                 pipe,
                 dashArray,
                 lineCap,
-                tag: pipe?.eol ? { text: pipe.eolCritical ? 'EOL!' : 'EOL', x: (left - 6) * scale, y: (top + NODE_HEIGHT / 2) * scale } : null,
+                tag: tagParts.length ? { text: tagParts.join(' '), eol, x: (left - 6) * scale, y: (top + NODE_HEIGHT / 2) * scale } : null,
+                // Patch 18: the thin dotted line (no class known) shows mass and EOL as well.
+                thin: { color: massColor, eol, eolCritical },
                 href: show(meta.slug, { mergeQuery: { solarsystem_id: parent.solarsystem_id } }),
                 style: {
                     transform: `translate(${left * scale}px, ${top * scale}px)`,
                     width: `${NODE_WIDTH * scale}px`,
                     height: `${NODE_HEIGHT * scale}px`,
                     ...(hex ? { borderColor: `${hex}b3` } : {}),
-                    // Expected statics (nothing scanned yet) are fainter than scanned holes.
-                    ...(placeholder.expected ? { opacity: '0.7', borderStyle: 'dotted' } : {}),
+                    // Patch 18: a static nobody has identified yet: faint green, like the signature pills.
+                    ...(placeholder.expected ? { borderStyle: 'dotted', borderColor: 'rgba(34, 197, 94, 0.55)', backgroundColor: 'rgba(12, 26, 16, 0.7)', color: '#dcfce7' } : {}),
                     // Patch 13: armed as someone's next jump.
                     ...(placeholder.armedBy ? { borderColor: '#ef4444', borderWidth: '2px', borderStyle: 'dashed' } : {}),
                 },
@@ -174,6 +187,17 @@ const chips = computed(() => {
         <svg class="absolute inset-0 h-full w-full overflow-visible" xmlns="http://www.w3.org/2000/svg">
             <template v-for="item in items" :key="`line-${item.nodeId}`">
                 <template v-if="item.pipe">
+                    <!-- Patch 18: a static nobody has identified yet: a soft green band under the stripes -->
+                    <path
+                        v-if="item.expected"
+                        :d="item.path"
+                        fill="none"
+                        stroke="#16a34a"
+                        :stroke-width="item.pipe.width + 8"
+                        stroke-opacity="0.22"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    />
                     <path
                         v-if="item.pipe.eol"
                         :d="item.path"
@@ -196,23 +220,34 @@ const chips = computed(() => {
                         stroke-linejoin="round"
                     />
                 </template>
-                <path
-                    v-else
-                    :d="item.path"
-                    fill="none"
-                    :stroke="item.hex ?? 'currentColor'"
-                    class="text-neutral-400 dark:text-neutral-600"
-                    stroke-width="1.5"
-                    stroke-dasharray="4,4"
-                    stroke-opacity="0.7"
-                />
+                <template v-else>
+                    <!-- Patch 18: the thin line shows EOL (purple edge) and mass (amber / red) too -->
+                    <path
+                        v-if="item.thin.eol"
+                        :d="item.path"
+                        fill="none"
+                        :stroke="item.thin.eolCritical ? '#d946ef' : '#a855f7'"
+                        stroke-width="5"
+                        stroke-dasharray="4,4"
+                        stroke-opacity="0.85"
+                    />
+                    <path
+                        :d="item.path"
+                        fill="none"
+                        :stroke="item.thin.color ?? item.hex ?? 'currentColor'"
+                        class="text-neutral-400 dark:text-neutral-600"
+                        :stroke-width="item.thin.color ? 2.5 : 1.5"
+                        stroke-dasharray="4,4"
+                        :stroke-opacity="item.thin.color ? 1 : 0.7"
+                    />
+                </template>
                 <text
                     v-if="item.tag"
                     :x="item.tag.x"
                     :y="item.tag.y"
                     text-anchor="end"
                     dominant-baseline="middle"
-                    :fill="item.tag.text === 'EOL!' ? '#d946ef' : '#a855f7'"
+                    :fill="item.tag.eol ? (item.tag.text.endsWith('EOL!') ? '#d946ef' : '#a855f7') : '#a8a29e'"
                     :font-size="10 * item.fontScale"
                     font-weight="600"
                 >

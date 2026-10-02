@@ -82,6 +82,13 @@ const endClasses = computed<readonly [string | null, string | null] | null>(() =
     };
     return [cls(resolved.from_map_solarsystem_id), cls(resolved.to_map_solarsystem_id)] as const;
 });
+/** Patch 18: the class of the system a K162 sits in (the real hole leads there). */
+const k162Class = computed<string | null>(() => {
+    const resolved = connection.value;
+    const k162 = resolved?.signatures?.find((signature) => (signature.wormhole?.name ?? '').toUpperCase().startsWith('K162'));
+    const value = k162 ? store.systems.get(k162.map_solarsystem_id)?.solarsystem?.class : null;
+    return value === undefined || value === null ? null : String(value);
+});
 const rallyDirection = computed<'forward' | 'reverse' | null>(() => store.rallyEdgeDirections.value.get(id) ?? null);
 
 function handleConnectionClick(event: MouseEvent): void {
@@ -108,6 +115,7 @@ function handleConnectionContextMenu(event: MouseEvent): void {
         :is-loop="isLoop"
         :pipe-scale="pipeScale"
         :end-classes="endClasses"
+        :k162-class="k162Class"
         :halo-only="haloOnly"
         :scale="store.scale.value"
         @connection-click="handleConnectionClick"

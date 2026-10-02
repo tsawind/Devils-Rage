@@ -3,7 +3,8 @@ import EdgeBadges, { type EdgeIndicator } from '@/map/components/edges/EdgeBadge
 import { scalePoint } from '@/map/core/coords';
 import { useMinuteNow } from '@/composables/useMinuteNow';
 import { holeAge } from '@/lib/holeAge';
-import { describeEstimate, estimateMass, formatMass, guessedHoleMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
+import { guessHoleMass } from '@/map/holeGuess';
+import { describeEstimate, estimateMass, formatMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { edgePathAndCenter } from '@/map/core/geometry/paths';
 import type { EdgeGeometry } from '@/map/core/types';
@@ -29,8 +30,9 @@ type Props = {
     pipeScale?: number;
     /** Patch 17: draw only the halo under the pipe (the first pass in the edge layer). */
     haloOnly?: boolean;
-    /** Patch 17: the two systems' classes, for a guessed size while the hole's type is unknown. */
+    /** Patch 17/18: the two systems' classes (and the K162 side's), for a guessed size while the hole's type is unknown. */
     endClasses?: readonly [string | null, string | null] | null;
+    k162Class?: string | null;
     scale: number;
 };
 
@@ -43,6 +45,7 @@ const {
     isLoop = false,
     pipeScale = 1,
     endClasses = null,
+    k162Class = null,
     haloOnly = false,
     scale,
 } = defineProps<Props>();
@@ -93,6 +96,11 @@ const indicators = computed<EdgeIndicator[]>(() => {
             fill: 'var(--color-emerald-500)',
             stroke: 'var(--color-emerald-600)',
         });
+    }
+
+    // Patch 18: the pipe's size is a guess.
+    if (guessedMass.value) {
+        items.push({ type: 'text', label: '≈', fill: 'var(--color-neutral-400)', stroke: 'var(--color-neutral-500)' });
     }
 
     const shipSizeLabel = getShipSizeLabel(connection?.ship_size);
@@ -169,10 +177,10 @@ const holeType = computed(() => {
     return null;
 });
 
-/** Patch 17: no type known yet: C5 / C6 holes draw as 3,300 M (3,000 M to highsec); a frigate size stays thin. */
+/** Patch 18: no type known yet: the smallest non-frigate hole that fits (see holeGuess); a frigate size stays thin. */
 const guessedMass = computed(() => {
     if (isStargate.value || !connection || holeType.value || connection.ship_size === 'frigate' || !endClasses) return null;
-    return guessedHoleMass(endClasses[0], endClasses[1]);
+    return guessHoleMass({ k162Class, classes: endClasses });
 });
 
 const estimate = computed(() => {

@@ -82,23 +82,26 @@ export function describeEstimate(estimate: TMassEstimate): string {
 }
 
 /**
- * Patch 17: a size to draw while a hole's type isn't known (K162, "?", never typed).
- * C5 / C6 to C5 / C6, lowsec or nullsec: 3,300 M kg; C5 / C6 to highsec: 3,000 M kg.
- * Anything else: null (keeps the thin line until typed).
+ * Patch 18 (replaces patch 17's C5/C6 rule): a size to draw while a hole's
+ * type isn't known. A K162 sits in the system the real hole leads into, so
+ * its size is the smallest non-frigate hole type leading into that class. An
+ * untyped hole could go either way: the smaller of both ends. Null when no
+ * class is known. Drawn with "≈" so it reads as a guess.
  */
-export const GUESS_BIG_HOLE_MASS = 3_300_000_000;
-export const GUESS_HIGHSEC_HOLE_MASS = 3_000_000_000;
+export type TGuessType = { name: string; target_class: string | null | undefined; total: number; maxJump: number };
 
-export function guessedHoleMass(a: string | number | null | undefined, b: string | number | null | undefined): number | null {
-    const norm = (value: string | number | null | undefined) => String(value ?? '').toLowerCase().replace(/^c/, '');
-    const one = norm(a);
-    const two = norm(b);
-    const big = (value: string) => value === '5' || value === '6';
-    const pair = (x: string, y: string): number | null => {
-        if (!big(x)) return null;
-        if (big(y) || y === 'l' || y === 'n') return GUESS_BIG_HOLE_MASS;
-        if (y === 'h') return GUESS_HIGHSEC_HOLE_MASS;
-        return null;
+export function estimateHoleMass(params: { k162Class?: string | null; classes: readonly (string | null | undefined)[]; types: readonly TGuessType[] }): number | null {
+    const norm = (value: string | null | undefined) => String(value ?? '').toLowerCase().replace(/^c/, '');
+    const into = (cls: string): number | null => {
+        let best: number | null = null;
+        for (const type of params.types) {
+            if (type.name.toUpperCase().startsWith('K162') || norm(type.target_class) !== cls) continue;
+            if (!(type.total > 0) || isFrigateHole(type.maxJump)) continue;
+            if (best === null || type.total < best) best = type.total;
+        }
+        return best;
     };
-    return pair(one, two) ?? pair(two, one);
+    const targets = params.k162Class ? [norm(params.k162Class)] : params.classes.map(norm);
+    const sizes = targets.filter((cls) => cls && cls !== 'unknown').map(into).filter((size): size is number => size !== null);
+    return sizes.length ? Math.min(...sizes) : null;
 }

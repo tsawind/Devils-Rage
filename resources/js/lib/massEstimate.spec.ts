@@ -1,4 +1,4 @@
-import { describeEstimate, estimateMass, formatMass, guessedHoleMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
+import { describeEstimate, estimateMass, formatMass, estimateHoleMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { describe, expect, it } from 'vitest';
 
 const D845 = 5_000_000_000;
@@ -54,27 +54,26 @@ describe('patch 12: mass left on a wormhole', () => {
     });
 });
 
-describe('guessedHoleMass (patch 17)', () => {
-    it('C5 / C6 to C5 / C6, lowsec or nullsec: 3,300 M', () => {
-        expect(guessedHoleMass('5', '6')).toBe(3_300_000_000);
-        expect(guessedHoleMass('6', '6')).toBe(3_300_000_000);
-        expect(guessedHoleMass('l', '5')).toBe(3_300_000_000);
-        expect(guessedHoleMass('6', 'n')).toBe(3_300_000_000);
-        expect(guessedHoleMass(5, 'C5')).toBe(3_300_000_000);
+describe('estimateHoleMass (patch 18)', () => {
+    const types = [
+        { name: 'H296', target_class: '5', total: 3_300_000_000, maxJump: 1_350_000_000 },
+        { name: 'N062', target_class: '5', total: 3_000_000_000, maxJump: 300_000_000 },
+        { name: 'E004', target_class: '5', total: 1_000_000_000, maxJump: 5_000_000 },
+        { name: 'D845', target_class: 'h', total: 5_000_000_000, maxJump: 375_000_000 },
+        { name: 'B274', target_class: 'h', total: 2_000_000_000, maxJump: 300_000_000 },
+        { name: 'K162', target_class: '5', total: 1, maxJump: 1 },
+    ];
+
+    it('a K162 takes the smallest non-frigate hole leading into its own system', () => {
+        expect(estimateHoleMass({ k162Class: '5', classes: ['5', 'h'], types })).toBe(3_000_000_000);
     });
 
-    it('C5 / C6 to highsec: 3,000 M', () => {
-        expect(guessedHoleMass('5', 'h')).toBe(3_000_000_000);
-        expect(guessedHoleMass('h', '6')).toBe(3_000_000_000);
+    it('an untyped hole takes the smaller of both ends', () => {
+        expect(estimateHoleMass({ classes: ['5', 'h'], types })).toBe(2_000_000_000);
     });
 
-    it('anything else: no guess', () => {
-        expect(guessedHoleMass('4', '5')).toBeNull();
-        expect(guessedHoleMass('3', 'h')).toBeNull();
-        expect(guessedHoleMass('l', 'n')).toBeNull();
-        expect(guessedHoleMass('5', 'unknown')).toBeNull();
-        expect(guessedHoleMass('5', null)).toBeNull();
-        expect(guessedHoleMass('12', '5')).toBeNull();
+    it('nothing known: no guess', () => {
+        expect(estimateHoleMass({ classes: [null, 'unknown'], types })).toBeNull();
+        expect(estimateHoleMass({ classes: ['3'], types })).toBeNull();
     });
 });
-

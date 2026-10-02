@@ -51,7 +51,7 @@ describe('patch 12: placeholder systems', () => {
         const expected = placeholders.filter((placeholder) => placeholder.expected);
         // Daisy's static is linked (H296 on Daisy's side) so only Alpha's is missing: A0, no note.
         expect(expected.map((placeholder) => placeholder.label)).toEqual(['A0']);
-        expect(expected[0].detail).toBe('V911 → C5 static · not scanned');
+        expect(expected[0].detail).toBe('V911 → C5 static · not identified');
         expect(expected[0].note).toBe(null);
     });
 
@@ -85,6 +85,35 @@ describe('patch 12: placeholder systems', () => {
             system.id === 3 ? { ...system, pending_holes: system.pending_holes!.map((hole) => ({ ...hole, is_static: true })) } : system,
         );
         expect(buildPlaceholders(markedSystems, FORMATS, new Set(), { connections, parentOf: new Map(), homeId: null }).filter((placeholder) => placeholder.expected)).toHaveLength(0);
+    });
+});
+
+describe('patch 18: an untyped hole may be the missing static', () => {
+    it('takes the static slot as "Alpha?" with a tag instead of a separate box', () => {
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
+            { id: 1, alias: 'Daisy', solarsystem: { class: '5', statics: [{ name: 'V753', leads_to: 'c6' }] }, pending_holes: [
+                { id: 50, signature_id: 'CPU-120', alias: 'B', is_static: false, target_class: 'l', wormhole: 'C140' },
+                { id: 51, signature_id: 'ICK-804', alias: null, is_static: false, target_class: null, wormhole: null },
+            ] },
+        ];
+        const placeholders = buildPlaceholders(systems, FORMATS, new Set(), { connections: [], parentOf: new Map(), homeId: 1 });
+        expect(placeholders.filter((placeholder) => placeholder.expected)).toHaveLength(0);
+        const ick = placeholders.find((placeholder) => placeholder.signatureId === 51)!;
+        expect(ick.label).toBe('Alpha?');
+        expect(ick.note).toBe('static? V753');
+        expect(ick.maybeStatic).toBe(true);
+    });
+
+    it('an untyped hole leading elsewhere is not the static; the box takes the static slot', () => {
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
+            { id: 1, alias: 'Daisy', solarsystem: { class: '5', statics: [{ name: 'V753', leads_to: 'c6' }] }, pending_holes: [
+                { id: 51, signature_id: 'ICK-804', alias: null, is_static: false, target_class: 'h', wormhole: null },
+            ] },
+            // A system elsewhere in the chain called Alpha no longer pushes the static box to another name.
+            { id: 9, alias: 'A', solarsystem: { class: '3', statics: [] }, pending_holes: [] },
+        ];
+        const expected = buildPlaceholders(systems, FORMATS, new Set(), { connections: [], parentOf: new Map(), homeId: 1 }).filter((placeholder) => placeholder.expected);
+        expect(expected.map((placeholder) => placeholder.label)).toEqual(['Alpha']);
     });
 });
 
