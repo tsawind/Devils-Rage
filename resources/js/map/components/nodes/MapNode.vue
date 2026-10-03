@@ -63,7 +63,13 @@ const pilots = computed<TCharacter[]>(() => {
     if (!current) {
         return [];
     }
-    return (page.props.map_characters ?? []).filter((character) => character.status?.solarsystem_id === current.solarsystem_id);
+    // One entry per character, even if a reload ever hands the same pilot over twice.
+    const seen = new Set<number>();
+    return (page.props.map_characters ?? []).filter((character) => {
+        if (character.status?.solarsystem_id !== current.solarsystem_id || seen.has(character.id)) return false;
+        seen.add(character.id);
+        return true;
+    });
 });
 
 const isActive = computed(() => {
