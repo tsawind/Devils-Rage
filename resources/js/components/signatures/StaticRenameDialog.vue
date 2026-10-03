@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog';
 import { usePopupCountdown } from '@/composables/combat/usePopupCountdown';
 import { visibleBookmarkName } from '@/lib/bookmark';
+import { clipboardAllowed } from '@/composables/useClipboardSetting';
 import { computed } from 'vue';
 
 /**
@@ -28,15 +29,20 @@ const props = defineProps<{
     description?: string | null;
     keepLabel?: string | null;
     renameLabel?: string | null;
+    /** Patch 20: renaming copies the new bookmark: offer "Rename, don't copy" too. */
+    copies?: boolean;
 }>();
 
 const open = defineModel<boolean>('open', { required: true });
 
 const emit = defineEmits<{
-    choose: [choice: 'rename' | 'keep'];
+    choose: [choice: 'rename' | 'rename-quiet' | 'keep'];
 }>();
 
-function choose(choice: 'rename' | 'keep'): void {
+/** Patch 20: with the Clipboard switch off nothing is copied anyway, so just "Rename". */
+const offerQuiet = computed(() => Boolean(props.copies) && clipboardAllowed());
+
+function choose(choice: 'rename' | 'rename-quiet' | 'keep'): void {
     if (!open.value) return;
     open.value = false;
     emit('choose', choice);
@@ -102,7 +108,10 @@ const { remaining, fraction } = usePopupCountdown(
                 <Button v-if="blocked" autofocus @click="choose('keep')">OK</Button>
                 <template v-else>
                     <Button variant="outline" autofocus @click="choose('keep')">{{ keepLabel ?? `Keep ${fromAlias}` }}</Button>
-                    <Button @click="choose('rename')">{{ renameLabel ?? `Rename to ${toAlias}` }}</Button>
+                    <div class="flex flex-wrap justify-end gap-2">
+                        <Button v-if="offerQuiet" variant="secondary" @click="choose('rename-quiet')">Rename, don't copy</Button>
+                        <Button @click="choose('rename')">{{ renameLabel ?? `Rename to ${toAlias}` }}{{ offerQuiet ? ' and copy' : '' }}</Button>
+                    </div>
                 </template>
             </DialogFooter>
         </DialogScrollContent>

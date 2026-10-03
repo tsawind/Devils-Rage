@@ -21,6 +21,7 @@ import PlaceholderLayer from '@/map/components/nodes/PlaceholderLayer.vue';
 import PlaceholderContextMenu from '@/map/components/overlays/PlaceholderContextMenu.vue';
 import ConnectionPopover from '@/map/components/overlays/ConnectionPopover.vue';
 import ClearChainDialog from '@/map/components/overlays/ClearChainDialog.vue';
+import ClearSideChainsDialog from '@/map/components/overlays/ClearSideChainsDialog.vue';
 import MapAddConnectionDialog from '@/map/components/overlays/MapAddConnectionDialog.vue';
 import MapConnectionContextMenu from '@/map/components/overlays/MapConnectionContextMenu.vue';
 import MapContextMenu from '@/map/components/overlays/MapContextMenu.vue';
@@ -290,6 +291,7 @@ whenever(Delete, () => {
     />
     <MapAddConnectionDialog />
     <ClearChainDialog />
+    <ClearSideChainsDialog />
     <StaticCertainDialog />
     <StaticConfirmDialog />
 </template>

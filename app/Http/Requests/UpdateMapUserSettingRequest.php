@@ -57,6 +57,7 @@ final class UpdateMapUserSettingRequest extends FormRequest
             'suggest_alias_enabled' => ['boolean'],
             'copy_bookmark_enabled' => ['boolean'],
             'follow_character_enabled' => ['boolean'],
+            'clipboard_enabled' => ['boolean'],
             'layout_breakpoints' => ['nullable', 'array'],
             'hidden_cards' => ['nullable', 'array'],
             'hidden_cards.*' => ['string', Rule::enum(RemovableCard::class)],

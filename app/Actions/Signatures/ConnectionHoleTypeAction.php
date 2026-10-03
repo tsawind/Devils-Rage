@@ -43,11 +43,9 @@ final readonly class ConnectionHoleTypeAction
         if (! in_array($sideId, [$connection->from_map_solarsystem_id, $connection->to_map_solarsystem_id], true)) {
             throw ValidationException::withMessages(['side' => 'That system is not on this connection.']);
         }
-        if (self::isK162($type)) {
-            throw ValidationException::withMessages(['type' => 'Pick the hole type; its far side is the K162.']);
-        }
+        $isK162 = self::isK162($type);
 
-        DB::transaction(function () use ($connection, $sideId, $type): void {
+        DB::transaction(function () use ($connection, $sideId, $type, $isK162): void {
             $fields = [
                 'signature_category_id' => $type->signature_category_id,
                 'signature_type_id' => $type->id,
@@ -71,18 +69,24 @@ final readonly class ConnectionHoleTypeAction
             }
 
             // Only one side can be the hole itself: a normal type on the far side gives way to its K162.
+            // Patch 20: a K162 set on this side leaves the far side's real type alone (only a second K162 goes).
             $others = Signature::query()
                 ->with('signatureType')
                 ->where('map_connection_id', $connection->id)
                 ->where('map_solarsystem_id', '!=', $sideId)
                 ->get();
             foreach ($others as $other) {
-                if ($other->signatureType instanceof SignatureType && ! self::isK162($other->signatureType)) {
+                if (! $other->signatureType instanceof SignatureType) {
+                    continue;
+                }
+                if (self::isK162($other->signatureType) === $isK162) {
                     $other->update(['signature_type_id' => null, 'wormhole_id' => null]);
                 }
             }
 
-            $this->fillFarSideK162Action->handle($connection->id);
+            if (! $isK162) {
+                $this->fillFarSideK162Action->handle($connection->id);
+            }
             $this->syncConnectionShipSizeAction->handle($signature);
         });
 

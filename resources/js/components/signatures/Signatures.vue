@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { connectionFlag } from '@/lib/chainNumbering';
+import { autoCopy, clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
 import PasteIcon from '@/components/icons/PasteIcon.vue';
 import PlusIcon from '@/components/icons/PlusIcon.vue';
 import TrashIcon from '@/components/icons/TrashIcon.vue';
@@ -33,7 +35,7 @@ import { signatureCategories } from '@/const/signatures';
 import { displayAlias, suggestAlias } from '@/lib/alias';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
 import { armAsOptions, armedSummary, myArmedHole, pasteArmDecision, type TArmAsOption } from '@/lib/arming';
-import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
+import { formatBookmarkName, isFrigateOnly, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases, combatColorHex, combatColorLabel } from '@/lib/combat';
 import { AUTO_LINK_WINDOW_MS, decideReturnHole, orderOpenConnections, type TReturnConnectionOption, type TReturnHoleOption, type TScanDistance } from '@/lib/returnHole';
 import type { TRawSignature } from '@/lib/SignatureParser';
@@ -502,6 +504,9 @@ function linkReturnHole(signature: TSignature, connection: TProcessedConnection,
             shipSize: connection.ship_size,
             massStatus: connection.mass_status,
             lifetime: connection.lifetime_status,
+            // Patch 20: the way back carries its hole's marker (k, s, w) and "frig".
+            classSuffix: connectionFlag({ is_static: signature.is_static, is_wandering: signature.is_wandering, wormholeName: signature.wormhole?.name }),
+            frigate: isFrigateOnly({ wormholeName: signature.wormhole?.name, shipSize: connection.ship_size, typeExtra: signature.signature_type?.extra }),
         },
         page.props.map,
         system.alias,
@@ -510,14 +515,16 @@ function linkReturnHole(signature: TSignature, connection: TProcessedConnection,
         map_system.value?.combat_color ?? null,
         Boolean(map_system.value?.combat_home),
     );
+    const copying = Boolean(name) && clipboardAllowed();
     if (name) {
-        navigator.clipboard.writeText(name).catch(() => undefined);
+        if (copying) void autoCopy(name);
         // This is the better way back (with the return signature): drop the held one.
         clearHeldWayBack();
     }
 
     toast.success(automatic ? `Linked ${signature.signature_id} as your return hole` : `Return hole ${signature.signature_id} linked`, {
-        description: name ? `Copied ${visibleBookmarkName(name)}` : undefined,
+        description: name ? (copying ? `Copied ${visibleBookmarkName(name)}` : `Way back: ${visibleBookmarkName(name)}`) : undefined,
+        ...(name && !copying ? { cancel: copyButton(name) } : {}),
         action: {
             label: 'Undo',
             onClick: () => updateSignature(signature, { map_connection_id: null, ...(previousTypeId === null ? { signature_type_id: null } : {}) }),

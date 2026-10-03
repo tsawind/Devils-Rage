@@ -1,6 +1,7 @@
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { ref } from 'vue';
 import { toast } from 'vue-sonner';
+import { clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
 
 /**
  * Patch 14: the way back after a jump. A browser can only write the clipboard
@@ -25,6 +26,12 @@ async function write(name: string): Promise<boolean> {
 
 /** Copy the way back now if the mapper has focus, else hold it until a click or paste. */
 export async function offerWayBack(name: string, label = 'way back'): Promise<void> {
+    // Patch 19: Clipboard off: the way back is only shown, with a Copy button (nothing is held).
+    if (!clipboardAllowed()) {
+        heldWayBack.value = null;
+        toast.info(`Your ${label}`, { description: visibleBookmarkName(name), action: copyButton(name), duration: 30_000 });
+        return;
+    }
     if (typeof document !== 'undefined' && document.hasFocus() && (await write(name))) {
         heldWayBack.value = null;
         toast.success('Copied your way back', { description: visibleBookmarkName(name) });

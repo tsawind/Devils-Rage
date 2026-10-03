@@ -23,8 +23,9 @@ import type { TMapUserSetting } from '@/types/models';
 import { Link } from '@inertiajs/vue3';
 import { useConnectionStatus } from '@laravel/echo-vue';
 import { ConnectionStatus } from 'laravel-echo';
-import { Eye, EyeOff, LayoutGrid, LocateFixed, Map as MapIcon, Settings, ShieldAlert, Wifi, WifiOff } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { ClipboardCopy, Crosshair, Eye, EyeOff, LayoutGrid, LocateFixed, Map as MapIcon, Redo2, Settings, ShieldAlert, Undo2, Wifi, WifiOff } from 'lucide-vue-next';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { canRedo, canUndo, handleUndoKeydown, redoLabel, redoLast, undoLabel, undoLast } from '@/composables/signatures/signatureUndo';
 import CommandPaletteButton from './CommandPaletteButton.vue';
 import TrackingSignatureDialog from './TrackingSignatureDialog.vue';
 
@@ -64,6 +65,17 @@ const {
     prompt_static_slot_alias,
     static_owner_id,
 } = useTracking();
+
+// Patch 19: the Clipboard switch (on by default; off = names show with a Copy button instead).
+const clipboard_on = computed(() => map_user_settings.clipboard_enabled !== false);
+function toggleClipboard(): void {
+    updateMapUserSettings(map.slug, { clipboard_enabled: !clipboard_on.value });
+}
+
+// Patch 20: Ctrl+Z / Ctrl+Y undo and redo your own signature edits.
+onMounted(() => window.addEventListener('keydown', handleUndoKeydown));
+onBeforeUnmount(() => window.removeEventListener('keydown', handleUndoKeydown));
+
 
 const { map_solarsystems } = useMapSolarsystems();
 
@@ -226,7 +238,7 @@ const settingsUrl = computed(() => {
                     class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors sm:px-2"
                     :class="
                         map_user_settings.tracking_allowed
-                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                            ? 'bg-green-700 text-white hover:bg-green-800 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30'
                             : 'bg-muted text-muted-foreground hover:bg-muted/80'
                     "
                 >
@@ -250,7 +262,7 @@ const settingsUrl = computed(() => {
                     @click="toggleTracking"
                     :disabled="!can_track"
                     class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:px-2"
-                    :class="is_tracking ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
+                    :class="is_tracking ? 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
                 >
                     <TrackingIcon class="size-3.5" />
                     <span class="hidden md:inline">Tracking</span>
@@ -272,44 +284,109 @@ const settingsUrl = computed(() => {
             </TooltipContent>
         </Tooltip>
 
-        <!-- Follow Toggle -->
+        <!-- Patch 19: Clipboard: off = the mapper never writes your clipboard on its own -->
         <Tooltip v-if="canEdit">
             <TooltipTrigger as-child>
                 <button
-                    @click="toggleFollow"
+                    @click="toggleClipboard"
                     class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors sm:px-2"
-                    :class="follow_enabled ? 'bg-sky-500/20 text-sky-400 hover:bg-sky-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
+                    :class="clipboard_on ? 'bg-violet-700 text-white hover:bg-violet-800 dark:bg-violet-500/20 dark:text-violet-300 dark:hover:bg-violet-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
                 >
-                    <LocateFixed class="size-3.5" />
-                    <span class="hidden md:inline">Follow</span>
+                    <ClipboardCopy class="size-3.5" />
+                    <span class="hidden md:inline">Clipboard</span>
                 </button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-                <p class="text-xs font-medium">Follow Pilot</p>
-                <p class="text-xs text-muted-foreground">
-                    {{ follow_enabled ? 'Enabled' : 'Disabled' }} - Select the system your character jumps into
+                <p class="text-xs font-medium">Clipboard</p>
+                <p class="max-w-xs text-xs text-muted-foreground">
+                    {{
+                        clipboard_on
+                            ? 'On - the mapper copies bookmark names for you (arming, type picks, renames, the way back)'
+                            : 'Off - the mapper never writes your clipboard on its own; names show with a Copy button'
+                    }}
                 </p>
             </TooltipContent>
         </Tooltip>
 
-        <!-- Patch 15: Center: keep the map on your system -->
-        <Tooltip>
-            <TooltipTrigger as-child>
-                <label
-                    class="flex cursor-pointer items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors select-none sm:px-2"
-                    :class="centerOnMe ? 'bg-sky-500/20 text-sky-400 hover:bg-sky-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
-                >
-                    <input type="checkbox" class="size-3 accent-sky-500" :checked="centerOnMe" @change="setCenterOnMe(!centerOnMe)" />
-                    <span class="hidden md:inline">Center</span>
-                </label>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-                <p class="text-xs font-medium">Center on me</p>
-                <p class="text-xs text-muted-foreground">
-                    {{ centerOnMe ? 'On' : 'Off' }} - Center the map on your system after every jump, and when it moves on the map (this browser)
-                </p>
-            </TooltipContent>
-        </Tooltip>
+        <!-- Patch 19: Follow and Center joined, each on/off by itself -->
+        <div
+            class="flex items-stretch overflow-hidden rounded transition-shadow"
+            :class="follow_enabled && centerOnMe ? 'shadow-[0_0_8px_rgba(56,189,248,0.45)]' : ''"
+        >
+            <Tooltip v-if="canEdit">
+                <TooltipTrigger as-child>
+                    <button
+                        @click="toggleFollow"
+                        class="flex items-center gap-1.5 px-1.5 py-1 text-xs transition-colors sm:px-2"
+                        :class="follow_enabled ? 'bg-sky-700 text-white hover:bg-sky-800 dark:bg-sky-500/30 dark:text-sky-200 dark:hover:bg-sky-500/40' : 'bg-sky-100 text-sky-800 hover:bg-sky-200 dark:bg-sky-950/60 dark:text-sky-600 dark:hover:bg-sky-900/60'"
+                    >
+                        <LocateFixed class="size-3.5" />
+                        <span class="hidden md:inline">Follow</span>
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                    <p class="text-xs font-medium">Follow Pilot</p>
+                    <p class="text-xs text-muted-foreground">
+                        {{ follow_enabled ? 'Enabled' : 'Disabled' }} - Select the system your character jumps into
+                    </p>
+                </TooltipContent>
+            </Tooltip>
+            <div class="w-px bg-sky-400/30" />
+            <Tooltip>
+                <TooltipTrigger as-child>
+                    <button
+                        @click="setCenterOnMe(!centerOnMe)"
+                        class="flex items-center gap-1.5 px-1.5 py-1 text-xs transition-colors sm:px-2"
+                        :class="centerOnMe ? 'bg-sky-700 text-white hover:bg-sky-800 dark:bg-sky-500/30 dark:text-sky-200 dark:hover:bg-sky-500/40' : 'bg-sky-100 text-sky-800 hover:bg-sky-200 dark:bg-sky-950/60 dark:text-sky-600 dark:hover:bg-sky-900/60'"
+                    >
+                        <Crosshair class="size-3.5" />
+                        <span class="hidden md:inline">Center</span>
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                    <p class="text-xs font-medium">Center on me</p>
+                    <p class="text-xs text-muted-foreground">
+                        {{ centerOnMe ? 'On' : 'Off' }} - Center the map on your system after every jump, and when it moves on the map (this browser)
+                    </p>
+                </TooltipContent>
+            </Tooltip>
+        </div>
+
+        <!-- Patch 20: undo / redo your own signature edits -->
+        <div v-if="canEdit" class="flex items-center gap-0.5">
+            <Tooltip>
+                <TooltipTrigger as-child>
+                    <button
+                        @click="undoLast()"
+                        :disabled="!canUndo"
+                        class="flex items-center rounded px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-label="Undo"
+                    >
+                        <Undo2 class="size-3.5" />
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                    <p class="text-xs font-medium">Undo{{ undoLabel ? `: ${undoLabel}` : '' }}</p>
+                    <p class="text-xs text-muted-foreground">Ctrl+Z · your own signature edits</p>
+                </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+                <TooltipTrigger as-child>
+                    <button
+                        @click="redoLast()"
+                        :disabled="!canRedo"
+                        class="flex items-center rounded px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                        aria-label="Redo"
+                    >
+                        <Redo2 class="size-3.5" />
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                    <p class="text-xs font-medium">Redo{{ redoLabel ? `: ${redoLabel}` : '' }}</p>
+                    <p class="text-xs text-muted-foreground">Ctrl+Y</p>
+                </TooltipContent>
+            </Tooltip>
+        </div>
 
         <!-- Threat Analysis Toggle -->
         <Tooltip>
@@ -319,7 +396,7 @@ const settingsUrl = computed(() => {
                     class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors sm:px-2"
                     :class="
                         map_user_settings.show_threat_level
-                            ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                            ? 'bg-red-700 text-white hover:bg-red-800 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
                             : 'bg-muted text-muted-foreground hover:bg-muted/80'
                     "
                 >

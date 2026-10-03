@@ -1,5 +1,6 @@
 import { aliasesBelow, suggestAlias } from '@/lib/alias';
-import { buildSignatureBookmark, formatBookmarkName } from '@/lib/bookmark';
+import { buildSignatureBookmark, formatBookmarkName, isFrigateOnly } from '@/lib/bookmark';
+import { connectionFlag } from '@/lib/chainNumbering';
 import { chainAliases } from '@/lib/combat';
 import { shipSizeFromJumpMass } from '@/lib/shipSize';
 import { wormholeMass } from '@/lib/wormholeMass';
@@ -221,6 +222,9 @@ export function wayBackBookmark(store: MapStore, system: TMapSolarsystem, parent
             shipSize: connection?.ship_size ?? null,
             massStatus: connection?.mass_status ?? null,
             lifetime: connection?.lifetime_status ?? 'healthy',
+            // Patch 20: the way back's own marker (k / s / w) once its type is known, and "frig".
+            classSuffix: wayBackSuffix(signature, connection, system.id),
+            frigate: isFrigateOnly({ wormholeName: signature?.wormhole?.name, shipSize: connection?.ship_size ?? null }),
         },
         meta,
         system.alias,
@@ -229,4 +233,18 @@ export function wayBackBookmark(store: MapStore, system: TMapSolarsystem, parent
         system.combat_color ?? null,
         Boolean(system.combat_home),
     );
+}
+
+/**
+ * Patch 20: the marker of the hole on this side of the way back: from its own
+ * type (k, or s / w when marked), or "k" when the far side holds a real type.
+ */
+function wayBackSuffix(
+    signature: { is_static?: boolean | null; is_wandering?: boolean | null; wormhole?: { name?: string | null } | null } | null,
+    connection: { signatures?: { map_solarsystem_id: number; wormhole?: { name?: string | null } | null }[] | null } | undefined,
+    systemId: number,
+): string | null {
+    if (signature?.wormhole?.name) return connectionFlag({ is_static: signature.is_static, is_wandering: signature.is_wandering, wormholeName: signature.wormhole.name }) || null;
+    const far = (connection?.signatures ?? []).find((candidate) => candidate.map_solarsystem_id !== systemId)?.wormhole?.name ?? '';
+    return far && !far.toUpperCase().startsWith('K162') ? 'k' : null;
 }

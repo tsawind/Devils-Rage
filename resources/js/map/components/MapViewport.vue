@@ -174,6 +174,7 @@ const mapContainerStyle = computed(() => {
     if (backgroundImageUrl.value && backgroundMode.value === 'grid') {
         return {
             ...baseStyle,
+            // Patch 20: hidden in light mode (CSS: .map-bg-image).
             backgroundImage: `linear-gradient(to right, rgba(0, 0, 0, 0.3) 1px, transparent 1px), linear-gradient(to bottom, rgba(0, 0, 0, 0.3) 1px, transparent 1px), url(${backgroundImageUrl.value})`,
             backgroundSize: `${cell} ${cell}, ${cell} ${cell}, cover`,
             backgroundRepeat: 'repeat, repeat, no-repeat',
@@ -266,8 +267,8 @@ function handleContextMenu(event: MouseEvent): void {
     >
         <div
             ref="surface"
-            class="relative h-full w-full overflow-hidden bg-neutral-100 dark:bg-neutral-950"
-            :class="{ 'cursor-grab': store.isTreeLayout.value }"
+            class="relative h-full w-full overflow-hidden bg-stone-100 dark:bg-neutral-950"
+            :class="{ 'cursor-grab': store.isTreeLayout.value, 'map-bg-image': Boolean(scrollableContainerStyle) }"
             :style="scrollableContainerStyle"
             @contextmenu="handleContextMenu"
         >
@@ -275,7 +276,7 @@ function handleContextMenu(event: MouseEvent): void {
                 <ContextMenuTrigger>
                     <div
                         class="relative grid h-full w-full overflow-hidden"
-                        :class="{ 'bg-grid': !store.isTreeLayout.value }"
+                        :class="{ 'bg-grid': !store.isTreeLayout.value, 'map-bg-image': Boolean(backgroundImageUrl) && backgroundMode === 'grid' }"
                         :style="mapContainerStyle"
                         @dragover.prevent
                     >

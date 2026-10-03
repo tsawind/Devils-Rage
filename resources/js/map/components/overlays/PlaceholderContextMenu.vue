@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { k162Hint, offersK162 } from '@/lib/k162';
+import { oftenSeenCounts, typeSections } from '@/lib/typeOrdering';
+import { autoCopy, copyButton } from '@/composables/useClipboardSetting';
 import {
     ContextMenuContent,
     ContextMenuItem,
@@ -15,7 +18,7 @@ import usePermission from '@/composables/usePermission';
 import useUser from '@/composables/useUser';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
-import { displayAlias, staticSlotAlias } from '@/lib/alias';
+import { displayAlias, staticSlotFor } from '@/lib/alias';
 import { armAsOptions, myArmedHole, typeSearchMatches } from '@/lib/arming';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
@@ -85,7 +88,7 @@ function askStatic(candidate: { name: string; leadsTo: string }): void {
         where: displayAlias(system.alias) || system.solarsystem.name,
         staticName: candidate.name,
         leadsTo: candidate.leadsTo.toUpperCase(),
-        slot: displayAlias(staticSlotAlias(system.alias, meta?.bookmark_ignored_alias, Boolean(system.combat_home))),
+        slot: displayAlias(staticSlotFor(system.alias, system.solarsystem.statics, candidate.name, meta?.bookmark_ignored_alias, Boolean(system.combat_home))),
         confirm: () => markStaticByHand(system.id, current.id, candidate.name, (current.wormhole ?? '').toUpperCase() !== candidate.name.toUpperCase()),
     };
 }
@@ -168,24 +171,22 @@ const wormholeCategoryId = signatureCategories.find((category) => category.code 
  */
 const typeGroups = computed(() => {
     const system = parent.value;
-    if (!system || wormholeCategoryId === null) return { here: [], other: [] };
-    const statics = (system.solarsystem.statics ?? []).map((candidate) => candidate.name.toUpperCase());
-    const matching = getTypesByCategory(wormholeCategoryId).filter((type) => typeSearchMatches(typed.value, type));
+    if (!system || wormholeCategoryId === null) return [];
+    const standing = system.solarsystem.class;
+    const all = getTypesByCategory(wormholeCategoryId);
     const spawnsHere = (type: { spawn_areas?: string[] | null; signature: string }) =>
-        Boolean(type.spawn_areas?.includes(system.solarsystem.class)) || type.signature === 'K162';
-    const here = matching
-        .filter(spawnsHere)
-        .toSorted(
-            (a, b) =>
-                Number(statics.includes(b.signature.toUpperCase())) - Number(statics.includes(a.signature.toUpperCase())) ||
-                Number(a.signature === 'K162') - Number(b.signature === 'K162') ||
-                classSortWeight(a.target_class) - classSortWeight(b.target_class) ||
-                a.signature.localeCompare(b.signature),
-        );
-    const other = matching
-        .filter((type) => !spawnsHere(type))
-        .toSorted((a, b) => classSortWeight(a.target_class) - classSortWeight(b.target_class) || a.signature.localeCompare(b.signature));
-    return { here, other };
+        Boolean(type.spawn_areas?.includes(standing)) || type.signature === 'K162';
+    // Patch 20: the same order as the signature list (statics, K162s, often seen, the rest, rare last).
+    return typeSections({
+        here: all.filter(spawnsHere).toSorted((a, b) => classSortWeight(a.target_class) - classSortWeight(b.target_class) || a.signature.localeCompare(b.signature)),
+        elsewhere: all.filter((type) => !spawnsHere(type)).toSorted((a, b) => classSortWeight(a.target_class) - classSortWeight(b.target_class) || a.signature.localeCompare(b.signature)),
+        staticNames: (system.solarsystem.statics ?? []).map((candidate) => candidate.name),
+        standingClass: standing,
+        query: typed.value,
+        counts: oftenSeenCounts(store.systems.values(), store.connections.values(), standing),
+        offers: (type) => offersK162(type, standing),
+        matches: (query, type) => typeSearchMatches(query, type),
+    });
 });
 
 /** Typing in the Type menu searches (letters, digits); Backspace deletes, Escape still closes. */
@@ -215,10 +216,11 @@ function setType(typeId: number): void {
             : '';
     updateSignature({ id: placeholder.signatureId } as TSignature, { signature_type_id: typeId, ...(lock ? { alias: lock } : {}) });
     if (name) {
-        navigator.clipboard
-            .writeText(name)
-            .then(() => toast.success(`${type?.signature ?? 'Type'} set · copied bookmark`, { description: visibleBookmarkName(name) }))
-            .catch(() => undefined);
+        void autoCopy(name).then((copied) =>
+            copied
+                ? toast.success(`${type?.signature ?? 'Type'} set · copied bookmark`, { description: visibleBookmarkName(name) })
+                : toast.success(`${type?.signature ?? 'Type'} set`, { description: visibleBookmarkName(name), action: copyButton(name) }),
+        );
     }
     // The type may make a static certain (everything scanned, nothing else can be it).
     requestStaticCheck(system.id, system);
@@ -316,18 +318,18 @@ function removeSignature(): void {
                 </ContextMenuSubTrigger>
                 <ContextMenuSubContent class="max-h-80 w-56 overflow-y-auto" @keydown.capture="handleTypeKeydown">
                     <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">
-                        {{ typed ? `Search: ${typed.toUpperCase()} · Backspace to edit` : 'Type to search · 1-6, h, l, n, f also match class' }}
+                        {{ typed ? `Search: ${typed.toUpperCase()} · Backspace to edit` : 'Type to search · 1-6, h, l, n, f lift that class to the top' }}
                     </ContextMenuLabel>
-                    <ContextMenuItem v-for="type in typeGroups.here" :key="type.id" class="text-xs" @select="setType(type.id)">
-                        <WormholeOption :wormhole="type" />
-                    </ContextMenuItem>
-                    <template v-if="typeGroups.other.length">
-                        <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">Other wormholes (not listed for this class)</ContextMenuLabel>
-                        <ContextMenuItem v-for="type in typeGroups.other" :key="type.id" class="text-xs" @select="setType(type.id)">
+                    <template v-for="group in typeGroups" :key="group.key">
+                        <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">{{ group.label }}</ContextMenuLabel>
+                        <ContextMenuItem v-for="type in group.items" :key="type.id" class="text-xs" @select="setType(type.id)">
                             <WormholeOption :wormhole="type" />
+                            <span v-if="parent && k162Hint(type, parent.solarsystem.class)" class="ml-auto pl-2 text-[11px] text-muted-foreground">
+                                {{ k162Hint(type, parent.solarsystem.class) }}
+                            </span>
                         </ContextMenuItem>
                     </template>
-                    <ContextMenuItem v-if="typeGroups.here.length + typeGroups.other.length === 0" disabled class="text-xs">No types match</ContextMenuItem>
+                    <ContextMenuItem v-if="typeGroups.length === 0" disabled class="text-xs">No types match</ContextMenuItem>
                 </ContextMenuSubContent>
             </ContextMenuSub>
             <ContextMenuSub>

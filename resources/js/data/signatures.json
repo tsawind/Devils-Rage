@@ -514,6 +514,46 @@
             "spawn_areas": ["1", "2", "3", "4", "5", "6", "13", "14", "15", "16", "17", "18", "h", "l", "n", "p"]
         },
         {
+            "id": 901,
+            "name": "K162 - C1/2/3",
+            "signature": "K162",
+            "signature_category_id": 1,
+            "category_name": "Wormhole",
+            "target_class": "unknown",
+            "extra": "C1/2/3",
+            "spawn_areas": ["1", "2", "3", "4", "5", "6"]
+        },
+        {
+            "id": 902,
+            "name": "K162 - C2/3",
+            "signature": "K162",
+            "signature_category_id": 1,
+            "category_name": "Wormhole",
+            "target_class": "unknown",
+            "extra": "C2/3",
+            "spawn_areas": ["1", "2", "3", "4", "5", "6"]
+        },
+        {
+            "id": 903,
+            "name": "K162 - C4/5",
+            "signature": "K162",
+            "signature_category_id": 1,
+            "category_name": "Wormhole",
+            "target_class": "unknown",
+            "extra": "C4/5",
+            "spawn_areas": ["1", "2", "3", "4", "5", "6"]
+        },
+        {
+            "id": 904,
+            "name": "K162 - Frigate",
+            "signature": "K162",
+            "signature_category_id": 1,
+            "category_name": "Wormhole",
+            "target_class": "unknown",
+            "extra": "frigate",
+            "spawn_areas": ["1", "2", "3", "4", "5", "6"]
+        },
+        {
             "id": 218,
             "name": "K329 - 0.0",
             "signature": "K329",

@@ -8,14 +8,16 @@ import { useTrackingSystems } from '@/composables/useTrackingSystems';
 import { useCombat } from '@/composables/combat/useCombat';
 import { offerWayBack } from '@/composables/signatures/wayBack';
 import useUser from '@/composables/useUser';
-import { aliasTargetKind, displayAlias, staticSlotAlias, suggestAlias } from '@/lib/alias';
+import { aliasTargetKind, displayAlias, staticSlotAlias, staticSlotAliasAt, suggestAlias } from '@/lib/alias';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
 import { jumpMatchesArm, myArmedHole } from '@/lib/arming';
-import { formatBookmarkName } from '@/lib/bookmark';
+import { formatBookmarkName, isFrigateOnly } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
 import { groupSignatureOptions } from '@/lib/signatureCompatibility';
 import { isWormholeSystem } from '@/lib/solarsystem';
 import { disarmSignature } from '@/map/actions/arm';
+import { requestStaticCheck } from '@/composables/signatures/useStaticCertainty';
+import { useMapStore } from '@/map/store/mapStore';
 import { createTracking, updateMapUserSettings, useMapSolarsystems } from '@/map/api';
 import { show } from '@/routes/maps';
 import { TLifetimeStatus, TMassStatus, TShipSize, TSignature } from '@/types/models';
@@ -45,6 +47,48 @@ export function useTracking() {
     const signatures = computed(() => origin_map_solarsystem.value?.signatures?.toSorted(sortSignatures));
     const possible_signatures = computed(() => groupSignatureOptions(signatures.value ?? [], target_solarsystem.value?.class).likely);
     const existing_map_solarsystem = computed(() => map_solarsystems.value.find((s) => s.solarsystem_id === target_solarsystem.value?.id));
+    /**
+     * Patch 20: a connection between the two systems already on the map (the way back, even when
+     * its signature on this side was never pasted): jumping along it never asks anything.
+     */
+    function connectedOnMap(): boolean {
+        const origin = origin_map_solarsystem.value;
+        const target = existing_map_solarsystem.value;
+        if (!origin || !target) return false;
+        let store;
+        try {
+            store = useMapStore();
+        } catch {
+            return false;
+        }
+        for (const connection of store.connections.values()) {
+            const ends = [connection.from_map_solarsystem_id, connection.to_map_solarsystem_id];
+            if (ends.includes(origin.id) && ends.includes(target.id)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Patch 20: any move that isn't through your armed hole disarms it (jumping back, another
+     * hole, a gate). Waits a moment so it doesn't cut off the jump's own requests.
+     */
+    function releaseArms(exceptSignatureId: number | null, leftLabel: string | null): void {
+        const me = user.value?.id ?? null;
+        if (me === null) return;
+        const mine: { id: number; name: string }[] = [];
+        for (const system of map_solarsystems.value) {
+            for (const hole of system.pending_holes ?? []) {
+                if (hole.armed_by_user_id !== me || hole.id === exceptSignatureId) continue;
+                mine.push({ id: hole.id, name: hole.alias ? displayAlias(hole.alias) : (hole.signature_id?.slice(0, 3) ?? 'your hole') });
+            }
+        }
+        if (mine.length === 0) return;
+        setTimeout(() => {
+            for (const hole of mine) disarmSignature(hole.id);
+        }, 4000);
+        toast.info(`${mine.map((hole) => hole.name).join(', ')} disarmed`, { description: leftLabel ? `You left ${leftLabel}.` : 'You moved without jumping it.' });
+    }
+
     const existing_connection = computed(() => {
         if (!existing_map_solarsystem.value) return null;
         return (
@@ -67,6 +111,14 @@ export function useTracking() {
     const static_slot_alias = computed(() =>
         staticSlotAlias(origin_map_solarsystem.value?.alias, page.props.map.bookmark_ignored_alias, origin_is_combat_home.value),
     );
+    const reserved_static_slots = computed(() => {
+        const origin = origin_map_solarsystem.value;
+        if (!origin || origin_map_system.value?.combat_color) return [];
+        const count = origin.solarsystem?.statics?.length ?? 1;
+        return Array.from({ length: count }, (_, index) =>
+            staticSlotAliasAt(origin.alias, index, page.props.map.bookmark_ignored_alias, origin_is_combat_home.value),
+        );
+    });
     const static_owner_id = computed(() => signatures.value?.find((signature) => signature.is_static)?.id ?? null);
     // The slot the jump prompt moves a hole to when Static is ticked. Combat chains never
     // switch a hole to 0 on their own (patch 12): the hole keeps its jump-order number.
@@ -114,7 +166,8 @@ export function useTracking() {
             targetIsWormhole,
             originIsWormhole: isWormholeSystem(origin.solarsystem),
             // Skip slots already reserved by other unjumped holes, and the static's slot.
-            aliases: [...known_aliases.value, ...planned_aliases.value.values(), static_slot_alias.value],
+            // Patch 20: every static's reserved slot (A0, A1 for two statics) stays free.
+            aliases: [...known_aliases.value, ...planned_aliases.value.values(), static_slot_alias.value, ...reserved_static_slots.value],
             scheme: page.props.map.bookmark_alias_scheme,
             targetKind: aliasTargetKind(targetIsWormhole, target.class),
             ignoredAlias: page.props.map.bookmark_ignored_alias,
@@ -176,10 +229,24 @@ export function useTracking() {
     }
 
     function performJump() {
+        const origin = origin_map_solarsystem.value;
+        const leftLabel = origin ? displayAlias(origin.alias) || origin.solarsystem?.name || null : null;
+        used_arm_id = null;
+        performJumpChoice();
+        releaseArms(used_arm_id, leftLabel);
+        // Patch 20: the hole you jumped may be the origin's static now (the same check as a paste),
+        // so a "maybe NRW?" box doesn't stay behind.
+        if (origin) requestStaticCheck(origin.id, map_solarsystems.value.find((system) => system.id === origin.id) ?? null);
+    }
+
+    let used_arm_id: number | null = null;
+
+    function performJumpChoice() {
         const target_solarsystem_id = target_solarsystem.value!.id;
 
-        // Already connected: the system is on the map, nothing to wait for.
-        if (existing_connection.value?.map_connection_id) {
+        // Already connected (patch 20: also a connection with no signature on this side, e.g. jumping
+        // back the way you came): the system is on the map, nothing to ask or wait for.
+        if (existing_connection.value?.map_connection_id || connectedOnMap()) {
             followInto(target_solarsystem_id);
 
             return;
@@ -250,6 +317,7 @@ export function useTracking() {
         }
 
         const alias = existing_map_solarsystem.value?.alias ? suggested_alias.value : (armed.alias ?? planned_aliases.value.get(armed.id) ?? suggested_alias.value);
+        used_arm_id = armed.id;
         toast.info(`Jumped armed ${label}${alias ? ` → ${displayAlias(alias)}` : ''}`, { description: 'Linked to the hole you armed, no prompt.' });
         handleSelectSignature({
             signatureId: armed.id,
@@ -275,9 +343,14 @@ export function useTracking() {
         const unidentified = candidates.filter((signature) => !isWormholeSignature(signature));
         const wormholes = candidates.filter((signature) => isWormholeSignature(signature));
 
-        if (candidates.length === 0) {
+        // Patch 20: no signature known to be a wormhole (nothing pasted, or only unscanned sigs):
+        // no prompt, nobody could tell which one it was. The sig fills in once it's identified.
+        if (wormholes.length === 0) {
             const alias = suggested_alias.value;
-            if (alias) toast.info(`New system ${displayAlias(alias)}`, { description: 'No scanned hole fits, so no signature was linked.' });
+            if (alias && !existing_map_solarsystem.value)
+                toast.info(`New system ${displayAlias(alias)}`, {
+                    description: unidentified.length ? 'No signature here is known to be a wormhole yet, so none was linked.' : 'No scanned hole fits, so no signature was linked.',
+                });
             handleSelectSignature({
                 signatureId: null,
                 alias: suggested_alias.value,
@@ -388,6 +461,9 @@ export function useTracking() {
             {
                 // The signature on this side of the hole isn't known yet.
                 signatureId: null,
+                // Patch 20: when the hole jumped is known not to be a K162, this side is its K162.
+                classSuffix: signature?.wormhole?.name && !signature.wormhole.name.toUpperCase().startsWith('K162') ? 'k' : null,
+                frigate: isFrigateOnly({ wormholeName: signature?.wormhole?.name, shipSize: signature?.ship_size, typeExtra: signature?.signature_type?.extra }),
                 shipSize: signature?.ship_size ?? null,
                 massStatus: signature?.mass_status ?? null,
                 lifetime: signature?.lifetime ?? 'healthy',

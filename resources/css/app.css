@@ -69,22 +69,22 @@
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
 
-    --color-hs: var(--color-green-500);
-    --color-ls: var(--color-orange-500);
-    --color-ns: var(--color-red-500);
-    --color-c1: var(--color-cyan-300);
-    --color-c2: var(--color-blue-500);
-    --color-c3: var(--color-purple-300);
-    --color-c4: var(--color-violet-500);
-    --color-c5: var(--color-orange-400);
-    --color-c6: var(--color-red-500);
-    --color-c12: var(--color-teal-300);
-    --color-c13: var(--color-fuchsia-400);
-    --color-c14: var(--color-rose-400);
-    --color-c15: var(--color-rose-400);
-    --color-c16: var(--color-rose-400);
-    --color-c17: var(--color-rose-400);
-    --color-c18: var(--color-rose-400);
+    --color-hs: var(--class-hs);
+    --color-ls: var(--class-ls);
+    --color-ns: var(--class-ns);
+    --color-c1: var(--class-c1);
+    --color-c2: var(--class-c2);
+    --color-c3: var(--class-c3);
+    --color-c4: var(--class-c4);
+    --color-c5: var(--class-c5);
+    --color-c6: var(--class-c6);
+    --color-c12: var(--class-c12);
+    --color-c13: var(--class-c13);
+    --color-c14: var(--class-drifter);
+    --color-c15: var(--class-drifter);
+    --color-c16: var(--class-drifter);
+    --color-c17: var(--class-drifter);
+    --color-c18: var(--class-drifter);
     --color-pochven: var(--color-red-700);
     --color-pulsar: var(--color-blue-500);
     --color-magnetar: var(--color-pink-500);
@@ -93,7 +93,7 @@
     --color-catalysmic-variable: var(--color-yellow-300);
     --color-red-giant: var(--color-red-500);
     --color-friendly: var(--color-blue-500);
-    --color-unknown: var(--color-neutral-300);
+    --color-unknown: var(--class-unknown);
     --color-hostile: var(--color-red-500);
     --color-unscanned: var(--color-cyan-500);
     --color-active: var(--color-orange-500);
@@ -138,25 +138,26 @@ html.dark {
 }
 
 :root {
-    --background: hsl(0 0% 100%);
-    --foreground: hsl(0 0% 3.9%);
-    --card: hsl(0 0% 100%);
-    --card-foreground: hsl(0 0% 3.9%);
-    --popover: hsl(0 0% 100%);
-    --popover-foreground: hsl(0 0% 3.9%);
-    --primary: hsl(0 0% 9%);
-    --primary-foreground: hsl(0 0% 98%);
-    --secondary: hsl(0 0% 92.1%);
-    --secondary-foreground: hsl(0 0% 9%);
-    --muted: hsl(0 0% 96.1%);
-    --muted-foreground: hsl(0 0% 45.1%);
-    --accent: hsl(0 0% 96.1%);
-    --accent-foreground: hsl(0 0% 9%);
+    /* Patch 20: light mode "Bone & Blood": warm off-white, solid cards, dark ink, deeper class colours. */
+    --background: hsl(36 33% 96%);
+    --foreground: hsl(20 14% 10%);
+    --card: hsl(36 40% 98.5%);
+    --card-foreground: hsl(20 14% 10%);
+    --popover: hsl(36 40% 98.5%);
+    --popover-foreground: hsl(20 14% 10%);
+    --primary: hsl(0 62% 32%);
+    --primary-foreground: hsl(36 40% 98%);
+    --secondary: hsl(34 22% 89%);
+    --secondary-foreground: hsl(20 14% 12%);
+    --muted: hsl(34 24% 91%);
+    --muted-foreground: hsl(24 8% 34%);
+    --accent: hsl(34 24% 91%);
+    --accent-foreground: hsl(20 14% 10%);
     --destructive: hsl(0 84.2% 60.2%);
     --destructive-foreground: hsl(0 0% 98%);
-    --border: hsl(0 0% 92.8%);
-    --input: hsl(0 0% 89.8%);
-    --ring: hsl(0 0% 3.9%);
+    --border: hsl(30 16% 82%);
+    --input: hsl(30 16% 80%);
+    --ring: hsl(0 62% 32%);
     --chart-1: hsl(12 76% 61%);
     --chart-2: hsl(173 58% 39%);
     --chart-3: hsl(197 37% 24%);
@@ -171,8 +172,22 @@ html.dark {
     --sidebar-accent-foreground: hsl(0 0% 30%);
     --sidebar-border: hsl(0 0% 91%);
     --sidebar-ring: hsl(217.2 91.2% 59.8%);
-    --sidebar: hsl(0 0% 98%);
-    --grid: hsl(0 0% 90%);
+    --sidebar: hsl(36 33% 96%);
+    --grid: hsl(30 18% 86%);
+
+    --class-hs: var(--color-green-700);
+    --class-ls: var(--color-orange-700);
+    --class-ns: var(--color-red-700);
+    --class-c1: var(--color-cyan-700);
+    --class-c2: var(--color-blue-700);
+    --class-c3: var(--color-purple-700);
+    --class-c4: var(--color-violet-700);
+    --class-c5: var(--color-orange-600);
+    --class-c6: var(--color-red-700);
+    --class-c12: var(--color-teal-700);
+    --class-c13: var(--color-fuchsia-700);
+    --class-drifter: var(--color-rose-700);
+    --class-unknown: var(--color-stone-500);
 }
 
 .dark {
@@ -210,6 +225,30 @@ html.dark {
     --sidebar-ring: hsl(217.2 91.2% 59.8%);
     --sidebar: hsl(240 5.9% 10%);
     --grid: hsl(0 0% 12%);
+
+    --class-hs: var(--color-green-500);
+    --class-ls: var(--color-orange-500);
+    --class-ns: var(--color-red-500);
+    --class-c1: var(--color-cyan-300);
+    --class-c2: var(--color-blue-500);
+    --class-c3: var(--color-purple-300);
+    --class-c4: var(--color-violet-500);
+    --class-c5: var(--color-orange-400);
+    --class-c6: var(--color-red-500);
+    --class-c12: var(--color-teal-300);
+    --class-c13: var(--color-fuchsia-400);
+    --class-drifter: var(--color-rose-400);
+    --class-unknown: var(--color-neutral-300);
+}
+
+/* Patch 20: light mode keeps the map calm: no background picture, a soft red wash on rage lanes. */
+html:not(.dark) .map-bg-image {
+    background-image: none !important;
+}
+html:not(.dark) .map-node-card {
+    box-shadow:
+        0 1px 2px rgb(68 40 20 / 0.12),
+        0 2px 6px rgb(68 40 20 / 0.08);
 }
 
 @layer base {

@@ -14,7 +14,7 @@ import { Data } from '@/lib/data';
 import { SHIP_SIZE_OPTIONS, shipSizeFromJumpMass } from '@/lib/shipSize';
 import { isK162 } from '@/lib/chainNumbering';
 import { groupSignatureOptions } from '@/lib/signatureCompatibility';
-import { displayAlias } from '@/lib/alias';
+import { displayAlias, staticSlotFor } from '@/lib/alias';
 import { aliasedSolarsystemLabel } from '@/lib/solarsystem';
 import { updateMapUserSettings } from '@/map/api';
 import { TMapSolarsystem } from '@/pages/maps';
@@ -159,7 +159,10 @@ const selectedSignature = computed(() => props.signatures?.find((s) => s.id === 
  * An identified wormhole type dictates the hole's ship size, so the select is
  * locked to it while such a signature is chosen.
  */
-const lockedShipSize = computed(() => shipSizeFromJumpMass(selectedSignature.value?.wormhole?.maximum_jump_mass));
+// Patch 20: a K162 frigate is frigate-sized too (its own type has no mass data).
+const lockedShipSize = computed<TShipSize | null>(() =>
+    (selectedSignature.value?.signature_type?.extra ?? '').toLowerCase() === 'frigate' ? 'frigate' : shipSizeFromJumpMass(selectedSignature.value?.wormhole?.maximum_jump_mass),
+);
 
 const effectiveShipSize = computed<TShipSize | 'auto'>(() => lockedShipSize.value ?? shipSize.value);
 
@@ -218,6 +221,15 @@ function buildSelection(signatureId: number | null) {
 // ---- Static / Wandering for the jumped hole --------------------------------
 
 const selectedIsK162 = computed(() => isK162(selectedSignature.value?.wormhole?.name));
+/** Patch 20: the slot the selected hole takes as a static: its own static's slot (B1 for the second static). */
+const selectedStaticSlot = computed(() => {
+    if (!props.staticSlotAlias) return null;
+    const origin = props.originMapSolarsystem;
+    if (!origin) return props.staticSlotAlias;
+    const typeName = selectedSignature.value?.wormhole?.name ?? null;
+    if (!typeName) return props.staticSlotAlias;
+    return staticSlotFor(origin.alias, origin.solarsystem?.statics, typeName, page.props.map.bookmark_ignored_alias, Boolean(origin.combat_home));
+});
 const staticTakenByOther = computed(() => props.staticOwnerId != null && props.staticOwnerId !== selectedSignatureId.value);
 
 function setStatic(checked: boolean): void {
@@ -225,9 +237,10 @@ function setStatic(checked: boolean): void {
     if (checked) isWandering.value = false;
 
     // Ticking Static moves the hole to the reserved static slot; unticking gives it back.
-    if (alias.value === autoAlias.value && props.staticSlotAlias) {
+    const slot = selectedStaticSlot.value;
+    if (alias.value === autoAlias.value && slot) {
         const planned = selectedSignature.value ? props.plannedAliases?.get(selectedSignature.value.id) : undefined;
-        alias.value = checked ? props.staticSlotAlias : planned && planned !== props.staticSlotAlias ? planned : (props.suggestedAlias ?? '');
+        alias.value = checked ? slot : planned && planned !== slot ? planned : (props.suggestedAlias ?? '');
         autoAlias.value = alias.value;
     }
 }
@@ -401,7 +414,7 @@ const selectedShipSizeOption = computed(() => shipSizeOptions.find((option) => o
                             :disabled="!selectedSignature || selectedIsK162 || staticTakenByOther"
                             @change="setStatic(($event.target as HTMLInputElement).checked)"
                         />
-                        Static <span class="text-muted-foreground">{{ staticSlotAlias ? `(takes ${staticSlotAlias})` : '(keeps its number)' }}</span>
+                        Static <span class="text-muted-foreground">{{ selectedStaticSlot ? `(takes ${displayAlias(selectedStaticSlot)})` : '(keeps its number)' }}</span>
                     </label>
                     <label class="flex items-center gap-2" :class="{ 'opacity-50': !selectedSignature || selectedIsK162 }">
                         <input

@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import { isDark } from '@/composables/useIsDark';
 import { combatColorHex } from '@/lib/combat';
 import { isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { guessHoleMass } from '@/map/holeGuess';
+import { getTypesByCategory, signatureCategories, signatureTypeById } from '@/const/signatures';
+import { k162ShipSize } from '@/lib/k162';
+import { SHIP_SIZE_LETTERS, shipSizeFromJumpMass } from '@/lib/shipSize';
 import { wormholeMass } from '@/lib/wormholeMass';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
 import { CORNER_RADIUS, roundedElbowPath } from '@/map/core/geometry/paths';
@@ -24,6 +28,28 @@ const FULL_WIDTH = 180;
 /** Patch 16: wider small boxes in rage lanes, so the note fits inside. */
 const COMPACT_WIDTH = 100;
 const FULL_HEIGHT = 40;
+
+const wormholeTypes = getTypesByCategory(signatureCategories.find((category) => category.code === 'wormhole')?.id ?? 0);
+
+/**
+ * Patch 20: the size letter of a dotted pipe when it is known: a typed hole's own
+ * size (arrow away: it spawned here), a K162's size worked out from the wormhole data
+ * (arrow toward you), a K162 frigate S. Unknown or guessed: no letter.
+ */
+function knownSize(placeholder: { wormhole: string | null; signatureTypeId?: number | null; targetClass?: string | null }, parentClass: string | null): { letter: string; arrow: string } | null {
+    const name = (placeholder.wormhole ?? '').toUpperCase();
+    if (!name) return null;
+    if (name !== 'K162') {
+        const mass = wormholeMass(name);
+        const size = mass ? shipSizeFromJumpMass(mass.maxJump) : null;
+        return size ? { letter: SHIP_SIZE_LETTERS[size], arrow: '↗' } : null;
+    }
+    const type =
+        (placeholder.signatureTypeId ? signatureTypeById.get(placeholder.signatureTypeId) : null) ??
+        ({ id: 0, signature: 'K162', target_class: placeholder.targetClass ?? null, extra: null } as const);
+    const size = k162ShipSize(type, parentClass, wormholeTypes);
+    return size ? { letter: SHIP_SIZE_LETTERS[size], arrow: '↙' } : null;
+}
 
 const items = computed(() => {
     const layout = store.bandLayout.value;
@@ -66,7 +92,7 @@ const items = computed(() => {
         const pipe = mass
             ? {
                   width: isFrigateHole(mass.maxJump) ? 2 : pipeWidth(mass.total * 1.1) * Math.min(scale, 1.5) * (compact ? 0.5 : 1),
-                  color: massColor ?? '#a3a3a3',
+                  color: massColor ?? (isDark.value ? '#a3a3a3' : '#57534e'),
                   eol,
                   eolCritical,
               }
@@ -109,6 +135,15 @@ const items = computed(() => {
             ];
         }
         const path = roundedElbowPath(points, Math.max(CORNER_RADIUS, strokeWidth));
+        // Patch 20: the size pill sits on the last straight stretch before the box.
+        const size = placeholder.expected ? null : knownSize(placeholder, parentClass);
+        const badge = size
+            ? {
+                  text: `${size.letter} ${size.arrow}`,
+                  x: (points[0].x + points[1].x) / 2,
+                  y: (points[0].y + points[1].y) / 2,
+              }
+            : null;
         // Round stripe ends add half the width at each end: the dash is shortened by the width,
         // and wide pipes get longer stripes so they stay stripes, not dots.
         const [dash, gap] = pipe ? (pipe.width > 4 ? [16, 11] : [6, 6]) : [4, 4];
@@ -123,6 +158,7 @@ const items = computed(() => {
                 pipe,
                 dashArray,
                 lineCap,
+                badge,
                 tag: tagParts.length ? { text: tagParts.join(' '), eol, x: (left - 6) * scale, y: (top + NODE_HEIGHT / 2) * scale } : null,
                 // Patch 18: the thin dotted line (no class known) shows mass and EOL as well.
                 thin: { color: massColor, eol, eolCritical },
@@ -235,12 +271,34 @@ const chips = computed(() => {
                         :d="item.path"
                         fill="none"
                         :stroke="item.thin.color ?? item.hex ?? 'currentColor'"
-                        class="text-neutral-400 dark:text-neutral-600"
+                        class="text-stone-600 dark:text-neutral-600"
                         :stroke-width="item.thin.color ? 2.5 : 1.5"
                         stroke-dasharray="4,4"
                         :stroke-opacity="item.thin.color ? 1 : 0.7"
                     />
                 </template>
+                <g v-if="item.badge">
+                    <rect
+                        :x="item.badge.x - 15 * item.fontScale"
+                        :y="item.badge.y - 7 * item.fontScale"
+                        :width="30 * item.fontScale"
+                        :height="14 * item.fontScale"
+                        :rx="7 * item.fontScale"
+                        class="fill-neutral-100 stroke-neutral-400 dark:fill-neutral-900 dark:stroke-neutral-600"
+                        stroke-width="1"
+                    />
+                    <text
+                        :x="item.badge.x"
+                        :y="item.badge.y"
+                        text-anchor="middle"
+                        dominant-baseline="central"
+                        class="fill-neutral-700 font-mono dark:fill-neutral-200"
+                        :font-size="9 * item.fontScale"
+                        font-weight="600"
+                    >
+                        {{ item.badge.text }}
+                    </text>
+                </g>
                 <text
                     v-if="item.tag"
                     :x="item.tag.x"
@@ -264,7 +322,7 @@ const chips = computed(() => {
             :only="['map', 'selected_map_solarsystem', 'map_navigation', 'map_characters', 'eve_scout_connections', 'threat_analysis']"
             :data-placeholder-id="item.signatureId > 0 ? item.signatureId : undefined"
             :title="item.title"
-            class="pointer-events-auto absolute top-0 left-0 flex flex-col items-center justify-center rounded border border-dashed border-neutral-400 bg-white/40 leading-tight text-neutral-600 transition-colors hover:bg-white/80 dark:border-neutral-600 dark:bg-neutral-900/40 dark:text-neutral-300 dark:hover:bg-neutral-900/80"
+            class="pointer-events-auto absolute top-0 left-0 flex flex-col items-center justify-center rounded border border-dashed border-stone-500 bg-[#fbf7ef] leading-tight text-stone-800 transition-colors hover:bg-white dark:border-neutral-600 dark:bg-neutral-900/40 dark:text-neutral-300 dark:hover:bg-neutral-900/80"
             :style="item.style"
         >
             <template v-if="item.compact">

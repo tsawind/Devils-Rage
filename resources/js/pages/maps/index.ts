@@ -130,6 +130,8 @@ export type TPendingHole = {
     is_wandering: boolean;
     target_class: TStringedSolarsystemClass | null;
     wormhole: string | null;
+    /** Patch 20: the exact signature type (grouped K162s, K162 frigate). */
+    signature_type_id?: number | null;
     /** Patch 13: shown on the striped pipe. */
     mass_status?: TMassStatus | null;
     lifetime?: TLifetimeStatus | null;

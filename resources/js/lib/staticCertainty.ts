@@ -50,9 +50,13 @@ export type TCertaintyInput = {
     unpastedLeadsTo?: string[];
 };
 
+export type TCertaintyMark = { signatureId: number; staticName: string; setType: boolean };
+
 export type TCertaintyResult = {
-    /** Mark this signature as the static (setType: also save the static's type on it). */
-    mark: { signatureId: number; staticName: string; setType: boolean } | null;
+    /** Mark this signature as the static (setType: also save the static's type on it). The first of `marks`. */
+    mark: TCertaintyMark | null;
+    /** Patch 20: every static that is certain now (a system can have two or three). */
+    marks: TCertaintyMark[];
     /** Everything is scanned but more than one hole could be the static. */
     ambiguous: { staticName: string; signatureIds: number[] } | null;
     /** Statics the way back could be ("maybe *return?"). */
@@ -83,10 +87,34 @@ export function wayBackCouldBe(statics: readonly TCertaintyStatic[], wayBack: TC
 
 export function decideStatic(input: TCertaintyInput): TCertaintyResult {
     const maybeBack = wayBackCouldBe(input.statics, input.wayBack);
-    const result: TCertaintyResult = { mark: null, ambiguous: null, wayBackCouldBe: maybeBack };
+    const result: TCertaintyResult = { mark: null, marks: [], ambiguous: null, wayBackCouldBe: maybeBack };
 
-    // One static per system in our numbering: nothing to do once a hole is marked.
-    if (input.holes.some((hole) => hole.isStatic)) return result;
+    // Patch 20: a system can have two or three statics. Each one marked already is accounted for
+    // (by its type; a marked hole with no type accounts for any one), the rest are still checked.
+    const markedTypes = input.holes.filter((hole) => hole.isStatic).map((hole) => (hole.typeName ? hole.typeName.toUpperCase() : null));
+    const open: TCertaintyStatic[] = [];
+    {
+        const typed = markedTypes.filter((name): name is string => name !== null);
+        let untyped = markedTypes.length - typed.length;
+        const seenNames = new Set<string>();
+        for (const candidate of input.statics) {
+            const name = candidate.name.toUpperCase();
+            if (seenNames.has(name)) continue;
+            seenNames.add(name);
+            const index = typed.indexOf(name);
+            if (index !== -1) {
+                typed.splice(index, 1);
+                continue;
+            }
+            open.push(candidate);
+        }
+        // Marked holes with no type cover the open statics one each (in order).
+        while (untyped > 0 && open.length) {
+            open.shift();
+            untyped--;
+        }
+    }
+    if (open.length === 0) return result;
 
     // Patch 18b: every signature must be categorised; untyped wormholes now count as candidates
     // (a static always exists, so the only untyped hole left is it), instead of blocking the check.
@@ -94,40 +122,53 @@ export function decideStatic(input: TCertaintyInput): TCertaintyResult {
     const allTyped = input.holes.every((hole) => hole.linked || Boolean(hole.typeName));
 
     const wayBackId = input.wayBack?.signatureId ?? null;
-    const seen = new Set<string>();
-    for (const staticHole of input.statics) {
-        const name = staticHole.name.toUpperCase();
-        if (seen.has(name)) continue;
-        seen.add(name);
+    // Holes already marked (or just marked for another static) can't be this one.
+    const used = new Set<number>(input.holes.filter((hole) => hole.isStatic).map((hole) => hole.signatureId));
+    const free = (signatureId: number) => !used.has(signatureId);
 
-        const candidates = input.holes
-            .filter((hole) =>
-                hole.typeName
-                    ? hole.typeName.toUpperCase() === name && !isK162(hole.typeName)
-                    : // A jumped hole with no type could be it when it leads to the static's class.
-                      hole.linked && Boolean(hole.leadsTo) && hole.leadsTo === staticHole.leadsTo,
-            )
-            .map((hole) => hole.signatureId);
-        // Patch 18b: an unjumped hole with no type could be it, unless it's known to lead elsewhere.
-        for (const hole of input.holes) {
-            if (!hole.linked && !hole.typeName && (!hole.leadsTo || hole.leadsTo === staticHole.leadsTo)) candidates.push(hole.signatureId);
-        }
-        const backIsCandidate = maybeBack.some((candidate) => candidate.toUpperCase() === name);
-        // The way back could be it: a candidate too, even before its signature is pasted (-1 then).
-        if (backIsCandidate && !candidates.includes(wayBackId ?? -1)) candidates.push(wayBackId ?? -1);
-        // So could a hole jumped from here whose signature was never pasted.
-        if ((input.unpastedLeadsTo ?? []).includes(staticHole.leadsTo)) candidates.push(-1);
+    let progress = true;
+    const remaining = [...open];
+    // Settle one static at a time and look again: marking one can leave the next with a single candidate.
+    while (progress && remaining.length) {
+        progress = false;
+        for (const staticHole of [...remaining]) {
+            const name = staticHole.name.toUpperCase();
+            const candidates = input.holes
+                .filter((hole) => free(hole.signatureId))
+                .filter((hole) =>
+                    hole.typeName
+                        ? hole.typeName.toUpperCase() === name && !isK162(hole.typeName)
+                        : // A jumped hole with no type could be it when it leads to the static's class.
+                          hole.linked && Boolean(hole.leadsTo) && hole.leadsTo === staticHole.leadsTo,
+                )
+                .map((hole) => hole.signatureId);
+            // Patch 18b: an unjumped hole with no type could be it, unless it's known to lead elsewhere.
+            for (const hole of input.holes) {
+                if (!free(hole.signatureId)) continue;
+                if (!hole.linked && !hole.typeName && (!hole.leadsTo || hole.leadsTo === staticHole.leadsTo)) candidates.push(hole.signatureId);
+            }
+            const backIsCandidate = maybeBack.some((candidate) => candidate.toUpperCase() === name);
+            // The way back could be it: a candidate too, even before its signature is pasted (-1 then).
+            if (backIsCandidate && (wayBackId === null || free(wayBackId)) && !candidates.includes(wayBackId ?? -1)) candidates.push(wayBackId ?? -1);
+            // So could a hole jumped from here whose signature was never pasted.
+            if ((input.unpastedLeadsTo ?? []).includes(staticHole.leadsTo)) candidates.push(-1);
 
-        if (candidates.length === 1 && candidates[0] !== -1) {
-            const signatureId = candidates[0];
-            const hole = input.holes.find((candidate) => candidate.signatureId === signatureId);
-            result.mark = { signatureId, staticName: staticHole.name, setType: !hole?.typeName };
-            return result;
-        }
-        // Only said when every hole has a type (untyped holes are usually just not typed yet).
-        if (candidates.length > 1 && allTyped && !result.ambiguous) {
-            result.ambiguous = { staticName: staticHole.name, signatureIds: candidates.filter((id) => id !== -1) };
+            if (candidates.length === 1 && candidates[0] !== -1) {
+                const signatureId = candidates[0];
+                const hole = input.holes.find((candidate) => candidate.signatureId === signatureId);
+                result.marks.push({ signatureId, staticName: staticHole.name, setType: !hole?.typeName });
+                used.add(signatureId);
+                remaining.splice(remaining.indexOf(staticHole), 1);
+                progress = true;
+                continue;
+            }
+            // Only said when every hole has a type (untyped holes are usually just not typed yet).
+            if (candidates.length > 1 && allTyped && !result.ambiguous) {
+                result.ambiguous = { staticName: staticHole.name, signatureIds: candidates.filter((id) => id !== -1) };
+            }
         }
     }
+    result.mark = result.marks[0] ?? null;
+    if (result.ambiguous && result.marks.some((mark) => mark.staticName === result.ambiguous?.staticName)) result.ambiguous = null;
     return result;
 }

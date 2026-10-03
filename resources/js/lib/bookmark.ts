@@ -4,6 +4,8 @@ import { connectionFlag } from '@/lib/chainNumbering';
 import { combatColorLabel } from '@/lib/combat';
 import { TResolvedSolarsystem } from '@/pages/maps';
 import { TSignature, TStringedSolarsystemClass } from '@/types/models';
+import { k162RangeLabel } from '@/lib/k162';
+import { wormholeMass } from '@/lib/wormholeMass';
 
 type BookmarkSolarsystem = Pick<TResolvedSolarsystem, 'class' | 'name'> & {
     region?: { name?: string | null } | null;
@@ -44,7 +46,22 @@ export type TBookmarkContext = {
     wormholeCode?: string | null;
     /** Appended to `{class}`: "s" static, "w" wandering, "k" K162 (see `connectionFlag`). */
     classSuffix?: string | null;
+    /** Patch 20: only frigates fit: " frig" after the class (`·C2·frig`). */
+    frigate?: boolean | null;
+    /** Patch 20: a grouped K162's classes ("C4/5") stand in for an unknown `{class}`. */
+    classRange?: string | null;
 };
+
+/** Patch 20: the word added after the class of a frigate-only hole. */
+const FRIGATE_MARK = 'frig';
+
+/** Patch 20: whether a hole only lets frigates through (its type, a K162 frigate, or its ship size). */
+export function isFrigateOnly(params: { wormholeName?: string | null; shipSize?: string | null; typeExtra?: string | null }): boolean {
+    if ((params.typeExtra ?? '').toLowerCase() === 'frigate') return true;
+    if (params.shipSize === 'frigate') return true;
+    const mass = wormholeMass(params.wormholeName ?? null);
+    return Boolean(mass && mass.maxJump <= 5_000_000);
+}
 
 /**
  * The placeholder tokens that may appear in a bookmark format template. Kept in
@@ -201,7 +218,7 @@ export function getBookmarkTokenValues(
         here: hereTokenValue(hereAlias, useCallsigns),
         hereclass: hereClass ? getBookmarkClassString({ class: hereClass, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
-        class: `${getBookmarkClassString(system.solarsystem)}${context.classSuffix ?? ''}`,
+        class: `${getBookmarkClassString(system.solarsystem)}${context.classSuffix ?? ''}${context.frigate ? ` ${FRIGATE_MARK}` : ''}`,
         name: system.solarsystem.name,
         region: system.solarsystem.region?.name ?? '',
         occupier: system.occupier_alias ?? '',
@@ -298,6 +315,8 @@ export function formatBookmarkName(
     const values = getBookmarkTokenValues(system, context, hereAlias, hereClass, useCallsigns);
 
     if (isReturn) {
+        // Patch 20: the way back carries its hole's marker too ("C4k", "C5s"), plus "frig".
+        if (values.hereclass) values.hereclass = `${values.hereclass}${context.classSuffix ?? ''}${context.frigate ? ` ${FRIGATE_MARK}` : ''}`;
         // A way back inside a combat chain: both ends in the same chain (the combat home counts for its own chain).
         const color = hereChain && system.combat_color === hereChain ? combatColorLabel(hereChain) : null;
         if (color && useCallsigns) {
@@ -359,7 +378,7 @@ function knownTargetClass(targetClass: string | null | undefined): TStringedSola
 export function buildSignatureBookmark(params: {
     signature: Pick<TSignature, 'signature_id' | 'ship_size' | 'mass_status' | 'lifetime'> & {
         wormhole?: { name?: string | null } | null;
-        signature_type?: { target_class?: string | null } | null;
+        signature_type?: { target_class?: string | null; extra?: string | null; signature?: string | null } | null;
         is_static?: boolean | null;
         is_wandering?: boolean | null;
     };
@@ -380,6 +399,10 @@ export function buildSignatureBookmark(params: {
         lifetime: signature.lifetime,
         wormholeCode: signature.wormhole?.name,
         classSuffix: connectionFlag({ is_static: signature.is_static, is_wandering: signature.is_wandering, wormholeName: signature.wormhole?.name }),
+        frigate: isFrigateOnly({ wormholeName: signature.wormhole?.name, shipSize: signature.ship_size, typeExtra: signature.signature_type?.extra }),
+        classRange: k162RangeLabel(
+            signature.signature_type ? { id: 0, signature: signature.signature_type.signature ?? signature.wormhole?.name ?? null, extra: signature.signature_type.extra, target_class: signature.signature_type.target_class } : null,
+        ),
     };
 
     if (connectionTarget) {
@@ -434,7 +457,7 @@ export function buildSignatureBookmark(params: {
         here: hereTokenValue(currentSystem.alias, useCallsigns),
         hereclass: currentSystem.class ? getBookmarkClassString({ class: currentSystem.class, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
-        class: `${knownClass ? getBookmarkClassString({ class: knownClass, name: '' }) : ''}${context.classSuffix ?? ''}`,
+        class: `${knownClass ? getBookmarkClassString({ class: knownClass, name: '' }) : (context.classRange ?? '')}${context.classSuffix ?? ''}${context.frigate ? ` ${FRIGATE_MARK}` : ''}`,
         name: '',
         region: '',
         occupier: '',

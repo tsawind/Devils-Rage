@@ -1,6 +1,6 @@
 import { signatureCategories } from '@/const/signatures';
 import { isWormholeClass } from '@/const/solarsystemClasses';
-import { planSignatureAliases, TAliasScheme } from '@/lib/alias';
+import { planSignatureAliases, staticIndexOf, TAliasScheme } from '@/lib/alias';
 import { TSignature, TStringedSolarsystemClass } from '@/types/models';
 
 /** Whether a signature is categorised as a wormhole, whichever shape the data arrived in. */
@@ -27,7 +27,7 @@ export function planAliasesForSystem(params: {
     system:
         | {
               alias?: string | null;
-              solarsystem?: { class?: TStringedSolarsystemClass | null } | null;
+              solarsystem?: { class?: TStringedSolarsystemClass | null; statics?: { name: string; leads_to: string }[] | null } | null;
               /** A combat home numbers its holes 1, 2, 3 (static 0). */
               combat_home?: boolean | null;
               /** In a combat chain: holes are numbered in jump order. */
@@ -49,6 +49,7 @@ export function planAliasesForSystem(params: {
         ignoredAlias: formats.bookmark_ignored_alias,
         combatHome: Boolean(system.combat_home),
         limbo: Boolean(system.combat_color),
+        staticCount: system.solarsystem?.statics?.length ?? 1,
         signatures: signatures.map((signature) => {
             const targetClass = signature.signature_type?.target_class ?? null;
             const knownClass = targetClass && targetClass !== 'unknown' ? targetClass : null;
@@ -58,6 +59,7 @@ export function planAliasesForSystem(params: {
                 isConnected: Boolean(signature.map_connection_id),
                 lockedAlias: signature.alias ?? null,
                 isStatic: Boolean(signature.is_static),
+                staticIndex: signature.is_static ? staticIndexOf(system.solarsystem?.statics, signature.signature_type?.signature ?? signature.wormhole?.name) : null,
                 targetIsWormhole: !knownClass || isWormholeClass(knownClass as TStringedSolarsystemClass),
                 targetClass: knownClass,
                 reserveOnly: Boolean(signature.deleted),

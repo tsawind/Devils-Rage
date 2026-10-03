@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { recordSignatureDelete, recordSignatureEdit } from '@/composables/signatures/signatureUndo';
 import TrashIcon from '@/components/icons/TrashIcon.vue';
 import MapConnectionInput from '@/components/signatures/MapConnectionInput.vue';
 import SignatureTimeDetails from '@/components/signatures/SignatureTimeDetails.vue';
@@ -29,7 +30,8 @@ import usePermission from '@/composables/usePermission';
 import { useShowMap } from '@/composables/useShowMap';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
-import { aliasesBelow, aliasForSlot, displayAlias, isIgnoredAlias, staticSlotAlias, suggestAlias } from '@/lib/alias';
+import { aliasesBelow, aliasForSlot, displayAlias, isIgnoredAlias, staticSlotFor, suggestAlias } from '@/lib/alias';
+import { autoCopy, clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
 import type { TArmAsOption } from '@/lib/arming';
 import { buildSignatureBookmark, formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases, combatColorLabel } from '@/lib/combat';
@@ -188,6 +190,20 @@ function getCategoryAbbrev(name?: string | null): string {
 }
 
 function handleChange(data: Record<string, FormDataConvertible>) {
+    // Patch 20: your own edits can be undone (Ctrl+Z / the Undo button).
+    const label =
+        'signature_type_id' in data
+            ? 'type'
+            : 'signature_category_id' in data
+              ? 'category'
+              : 'mass_status' in data
+                ? 'mass'
+                : 'lifetime' in data
+                  ? 'life'
+                  : 'is_static' in data || 'is_wandering' in data
+                    ? 'static / wandering'
+                    : 'number';
+    recordSignatureEdit(signature, data, label);
     updateSignature(signature, data);
 }
 
@@ -201,6 +217,7 @@ function recheckStatic(): void {
 }
 
 function handleDelete() {
+    recordSignatureDelete(signature);
     deleteSignature(signature);
     recheckStatic();
 }
@@ -422,7 +439,7 @@ function descendantsOf(alias: string): string[] {
     );
 }
 
-function handleRenameChoice(choice: 'rename' | 'keep'): void {
+function handleRenameChoice(choice: 'rename' | 'rename-quiet' | 'keep'): void {
     const base = pending_static.value;
     if (choice === 'keep' || rename_beyond.value.length > 0) {
         // Keep its name: lock it, or the static would take the static's slot on its own.
@@ -433,8 +450,12 @@ function handleRenameChoice(choice: 'rename' | 'keep'): void {
 
     const name = staticBookmarkName(static_slot.value);
     handleChange({ ...base, alias: static_slot.value, lock_others: lockOthers(), ...(forward_target_alias.value ? { rename_system: true } : {}) });
-    navigator.clipboard.writeText(name).catch(() => undefined);
-    toast.success(`Renamed to ${displayAlias(static_slot.value)}`, { description: `Copied ${visibleBookmarkName(name)}` });
+    const copying = choice === 'rename' && clipboardAllowed();
+    if (copying) void autoCopy(name);
+    toast.success(`Renamed to ${displayAlias(static_slot.value)}`, {
+        description: copying ? `Copied ${visibleBookmarkName(name)}` : `New name ${visibleBookmarkName(name)}`,
+        ...(copying ? {} : { action: copyButton(name), duration: 15_000 }),
+    });
 }
 
 // ---- Chain numbering: Static / Wandering / hand-set number ----------------
@@ -486,7 +507,16 @@ const forward_target_alias = computed(() => {
     return parentId === target.id ? null : (target.alias ?? null);
 });
 
-const static_slot = computed(() => staticSlotAlias(selected_map_solarsystem.alias, page.props.map.bookmark_ignored_alias, is_combat_home.value));
+// Patch 20: each static has its own slot (the second static takes 1, not 0).
+const static_slot = computed(() =>
+    staticSlotFor(
+        selected_map_solarsystem.alias,
+        selected_map_solarsystem.solarsystem?.statics,
+        signature.wormhole?.name ?? null,
+        page.props.map.bookmark_ignored_alias,
+        is_combat_home.value,
+    ),
+);
 const static_taken_by_other = computed(() => static_owner_id != null && static_owner_id !== signature.id);
 
 /**
@@ -662,11 +692,11 @@ const rename_ask_changes = computed(() => {
 
 const rename_ask_beyond = computed(() => (rename_ask.value ? descendantsOf(rename_ask.value.from) : []));
 
-function handleRenameAsk(choice: 'rename' | 'keep'): void {
+function handleRenameAsk(choice: 'rename' | 'rename-quiet' | 'keep'): void {
     const ask = rename_ask.value;
     const blocked = rename_ask_beyond.value.length > 0;
     rename_ask.value = null;
-    if (ask && choice === 'rename' && !blocked) ask.onRename();
+    if (ask && choice !== 'keep' && !blocked) ask.onRename();
 }
 
 /** The next free number in this system, for a hole that stops being the static. */
@@ -911,6 +941,7 @@ function copyBookmark() {
                 :other_options="otherWormholeTypes"
                 :current_class="current_class"
                 :static_signatures="static_signatures"
+                :standing_class="selected_map_solarsystem.solarsystem.class"
             />
             <SignatureTypeInput
                 v-else
@@ -1096,6 +1127,7 @@ function copyBookmark() {
             :changes="rename_changes"
             :beyond="rename_beyond"
             :countdown-seconds="popup_seconds"
+            copies
             @choose="handleRenameChoice"
         />
 

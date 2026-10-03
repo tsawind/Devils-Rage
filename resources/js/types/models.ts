@@ -303,6 +303,8 @@ export type TMapUserSetting = {
     suggest_alias_enabled: boolean;
     copy_bookmark_enabled: boolean;
     follow_character_enabled: boolean;
+    /** Patch 19: off = the mapper never writes the clipboard on its own (shows a Copy button instead). */
+    clipboard_enabled?: boolean;
     layout_breakpoints?: Record<string, any> | null;
     hidden_cards: string[] | null;
     show_threat_level: boolean;

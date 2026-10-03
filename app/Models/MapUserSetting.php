@@ -35,6 +35,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $suggest_alias_enabled
  * @property bool $copy_bookmark_enabled
  * @property bool $follow_character_enabled
+ * @property bool $clipboard_enabled
  * @property bool $combat_mode
  * @property string|null $combat_color
  * @property array|null $layout_breakpoints
@@ -66,6 +67,9 @@ final class MapUserSetting extends Model
         'suggest_alias_enabled' => true,
         'copy_bookmark_enabled' => true,
         'compact_signature_list' => true,
+        // Patch 19: every toolbar toggle starts on.
+        'follow_character_enabled' => true,
+        'clipboard_enabled' => true,
     ];
 
     /**
@@ -109,6 +113,7 @@ final class MapUserSetting extends Model
             'suggest_alias_enabled' => 'boolean',
             'copy_bookmark_enabled' => 'boolean',
             'follow_character_enabled' => 'boolean',
+            'clipboard_enabled' => 'boolean',
             'layout_breakpoints' => 'array',
             'hidden_cards' => 'array',
             'show_threat_level' => 'boolean',

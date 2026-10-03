@@ -15,7 +15,18 @@ final readonly class SyncConnectionShipSizeAction
      */
     public function handle(Signature $signature): void
     {
-        if ($signature->wormhole_id === null || $signature->map_connection_id === null) {
+        if ($signature->map_connection_id === null) {
+            return;
+        }
+
+        // Patch 20: a "K162 - Frigate" only lets frigates through.
+        if (mb_strtolower((string) $signature->signatureType?->extra) === 'frigate') {
+            $signature->mapConnection?->update(['ship_size' => ShipSize::Frigate]);
+
+            return;
+        }
+
+        if ($signature->wormhole_id === null) {
             return;
         }
 

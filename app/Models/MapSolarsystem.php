@@ -172,6 +172,8 @@ final class MapSolarsystem extends Model
                 'is_wandering' => (bool) $signature->is_wandering,
                 'target_class' => $signature->signatureType?->target_class?->value,
                 'wormhole' => $signature->wormhole?->name,
+                // Patch 20: the exact type (grouped K162s such as "K162 - C4/5", or "K162 - Frigate").
+                'signature_type_id' => $signature->signature_type_id,
                 // Patch 13: striped pipes show the hole's mass status and EOL.
                 'mass_status' => $signature->mass_status,
                 'lifetime' => $signature->lifetime,

@@ -1,6 +1,7 @@
 import { useCombat } from '@/composables/combat/useCombat';
+import { useClipboardSetting } from '@/composables/useClipboardSetting';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
-import { displayAlias, staticSlotAlias } from '@/lib/alias';
+import { displayAlias, staticSlotFor } from '@/lib/alias';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { asStaticHole, mappedBelow, pendingHoleBookmark, renameChanges } from '@/map/holeBookmark';
 import { planPendingHoles } from '@/lib/placeholders';
@@ -33,9 +34,19 @@ export type TCertainAsk = {
     to: string;
     changes: { label: string; from: string; to: string }[];
     beyond: string[];
-    choose: (choice: 'rename' | 'keep') => void;
+    /** Patch 20: "rename-quiet" renames without touching the clipboard. */
+    choose: (choice: 'rename' | 'rename-quiet' | 'keep') => void;
 };
 export const certainAsk = ref<TCertainAsk | null>(null);
+/** Patch 20: a second static settled at the same time waits its turn (one popup at a time). */
+const askQueue: TCertainAsk[] = [];
+function showAsk(ask: TCertainAsk): void {
+    if (certainAsk.value) askQueue.push(ask);
+    else certainAsk.value = ask;
+}
+function nextAsk(): void {
+    certainAsk.value = askQueue.shift() ?? null;
+}
 /**
  * Patch 18b: "★ This is the static" from the map asks first (a wandering hole
  * can look the same); StaticConfirmDialog shows this.
@@ -111,6 +122,7 @@ export function certaintyInputFor(store: MapStore, system: TMapSolarsystem) {
 
 /** Mounted once with the map: runs the requested checks as the updates arrive. */
 export function useStaticCertainty(store: MapStore): void {
+    const { clipboardAllowed } = useClipboardSetting();
     // Combat mode never stops you with a popup: the static is marked and keeps its name.
     const { is_combat } = useCombat();
     const wormholeCategoryId = signatureCategories.find((category) => category.code === 'wormhole')?.id ?? null;
@@ -123,9 +135,9 @@ export function useStaticCertainty(store: MapStore): void {
         if (!system || !system.solarsystem.statics?.length) return;
 
         const result = decideStatic(certaintyInputFor(store, system));
-        if (result.mark) {
-            applyMark(system, result.mark, false);
-        } else if (result.ambiguous) {
+        // Patch 20: every static that is certain now (two statics can settle with one paste).
+        for (const mark of result.marks) applyMark(system, mark, false);
+        if (!result.marks.length && result.ambiguous) {
             // Said once per system and set of holes, not again on every change.
             const key = `${result.ambiguous.staticName}:${result.ambiguous.signatureIds.toSorted((a, b) => a - b).join(',')}`;
             if (toldAmbiguous.get(mapSolarsystemId) === key) return;
@@ -162,7 +174,8 @@ export function useStaticCertainty(store: MapStore): void {
             const payload = { is_static: true, is_wandering: false, ...(type ? { signature_type_id: type.id } : {}) };
             const where = displayAlias(system.alias) || system.solarsystem.name;
             const meta = store.meta.value;
-            const slot = staticSlotAlias(system.alias, meta?.bookmark_ignored_alias, Boolean(system.combat_home));
+            // Patch 20: each static has its own slot (B0 for the first, B1 for the second).
+            const slot = staticSlotFor(system.alias, system.solarsystem.statics, staticName, meta?.bookmark_ignored_alias, Boolean(system.combat_home));
             const name = currentName(system, signatureId);
 
             // Combat chains keep their jump-order numbers; a hole already named for the slot (or unnamed) changes nothing.
@@ -178,17 +191,16 @@ export function useStaticCertainty(store: MapStore): void {
             const hole = system.pending_holes?.find((candidate) => candidate.id === signatureId);
             const linked = !hole;
             const beyond = mappedBelow(store, system, name).map((alias) => displayAlias(alias));
-            // One question at a time: an unanswered earlier one is answered Keep (marked, name kept).
-            certainAsk.value?.choose('keep');
-            certainAsk.value = {
+            // One question at a time (patch 20: queued, not answered Keep).
+            showAsk({
                 signatureLabel: hole ? (hole.signature_id ?? 'This hole') : `The hole to ${displayAlias(name)}`,
                 from: name,
                 to: slot,
                 changes: renameChanges(store, system, signatureId, name, slot, true, staticName),
                 beyond,
                 choose: (choice) => {
-                    certainAsk.value = null;
-                    if (choice === 'rename' && beyond.length === 0) {
+                    nextAsk();
+                    if ((choice === 'rename' || choice === 'rename-quiet') && beyond.length === 0) {
                         updateSignature({ id: signatureId } as TSignature, {
                             ...payload,
                             alias: slot,
@@ -197,10 +209,14 @@ export function useStaticCertainty(store: MapStore): void {
                         });
                         // Patch 18b: the bookmark as it will be once marked (the static's type, class and size).
                         const copy = hole ? pendingHoleBookmark(store, system, asStaticHole(system, hole, staticName), slot, true) : '';
-                        if (copy) navigator.clipboard.writeText(copy).catch(() => undefined);
+                        const quiet = choice === 'rename-quiet' || !clipboardAllowed();
+                        if (copy && !quiet) navigator.clipboard.writeText(copy).catch(() => undefined);
                         toast.success(`${staticName} is ${where}'s static · renamed to ${displayAlias(slot)}`, {
-                            description: copy ? `Copied ${visibleBookmarkName(copy)}` : undefined,
+                            description: copy ? (quiet ? `New name ${visibleBookmarkName(copy)}` : `Copied ${visibleBookmarkName(copy)}`) : undefined,
                             action: undoAction(signatureId, setType, hole?.alias ?? null),
+                            // Patch 20: renamed without copying: copy it from the toast if you want it after all.
+                            ...(copy && quiet ? { cancel: { label: '⧉ Copy', onClick: () => navigator.clipboard.writeText(copy).catch(() => undefined) } } : {}),
+                            ...(copy && quiet ? { duration: 15_000 } : {}),
                         });
                         return;
                     }
@@ -211,7 +227,7 @@ export function useStaticCertainty(store: MapStore): void {
                         action: undoAction(signatureId, setType, hole?.alias ?? null),
                     });
                 },
-            };
+            });
         }
     }
 

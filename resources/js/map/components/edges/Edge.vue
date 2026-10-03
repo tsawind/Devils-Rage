@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isDark } from '@/composables/useIsDark';
 import EdgeBadges, { type EdgeIndicator } from '@/map/components/edges/EdgeBadges.vue';
 import { scalePoint } from '@/map/core/coords';
 import { useMinuteNow } from '@/composables/useMinuteNow';
@@ -224,7 +225,8 @@ const pipe = computed(() => {
     const current = estimate.value;
     if (!current) return null;
     const factor = Math.min(scale, 1.5) * pipeScale;
-    const color = massStatus.value === 'critical' ? '#ef4444' : massStatus.value === 'reduced' ? '#f59e0b' : '#a3a3a3';
+    // Patch 20: dark ink pipes in light mode.
+    const color = massStatus.value === 'critical' ? '#ef4444' : massStatus.value === 'reduced' ? '#f59e0b' : isDark.value ? '#a3a3a3' : '#57534e';
     // Frigate holes always draw thin, whatever their mass (patch 13).
     const width = (mass: number) => (isFrigateHole(holeType.value?.maximum_jump_mass) ? (mass > 0 ? 2 : 0) : pipeWidth(mass) * factor);
     return {
@@ -278,9 +280,9 @@ function getDashArray(): string | undefined {
         fill="none"
         :stroke-width="(pipe?.outline ?? 0) + 5"
         stroke-linejoin="round"
-        class="pointer-events-none stroke-neutral-100 dark:stroke-neutral-950"
+        class="pointer-events-none stroke-stone-100 dark:stroke-neutral-950"
     />
-    <g v-else pointer-events="visiblePainted" class="group text-neutral-300 dark:text-neutral-700">
+    <g v-else pointer-events="visiblePainted" class="group text-stone-600 dark:text-neutral-700">
         <!-- Combat chain: a soft band in the chain's color behind the connection, so the chain reads as one colored path. -->
         <template v-if="chainColor">
             <path :d="path.d" :stroke="chainColor" fill="none" :stroke-width="isOrthogonal ? 9 : 14" stroke-opacity="0.18" stroke-linejoin="round" stroke-linecap="round" />
@@ -289,7 +291,7 @@ function getDashArray(): string | undefined {
         <!-- Mass pipe: outline = size when new, light band = could be up to, solid core = at least -->
         <template v-if="pipe">
             <path :d="path.d" stroke="currentColor" fill="none" :stroke-width="pipe.outline" stroke-opacity="0.5" stroke-linejoin="round" class="pointer-events-none" />
-            <path :d="path.d" fill="none" :stroke-width="pipe.hollow" stroke-linejoin="round" class="pointer-events-none stroke-neutral-100 dark:stroke-neutral-950" />
+            <path :d="path.d" fill="none" :stroke-width="pipe.hollow" stroke-linejoin="round" class="pointer-events-none stroke-stone-100 dark:stroke-neutral-950" />
             <path v-if="pipe.max > 0" :d="path.d" :stroke="pipe.color" fill="none" :stroke-width="pipe.max" stroke-opacity="0.35" stroke-linejoin="round" class="pointer-events-none" />
             <path v-if="pipe.min > 0" :d="path.d" :stroke="pipe.color" fill="none" :stroke-width="pipe.min" stroke-linejoin="round" class="pointer-events-none" />
         </template>
@@ -316,7 +318,7 @@ function getDashArray(): string | undefined {
             :stroke-dasharray="getDashArray()"
             :data-lifetime="lifetime"
             :data-highlighted="isOnRoute"
-            class="cursor-pointer text-neutral-300 transition-colors duration-200 ease-in-out group-hover:text-neutral-200 dark:text-neutral-700 dark:group-hover:text-neutral-600"
+            class="cursor-pointer text-stone-600 transition-colors duration-200 ease-in-out group-hover:text-stone-500 dark:text-neutral-700 dark:group-hover:text-neutral-600"
         />
         <path
             v-if="!isStargate && massStatus !== 'fresh'"

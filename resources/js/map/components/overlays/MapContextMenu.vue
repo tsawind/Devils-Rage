@@ -16,6 +16,7 @@ import { NumberField, NumberFieldContent, NumberFieldDecrement, NumberFieldIncre
 import { type TComboboxSection } from '@/lib/comboboxSections';
 import { combatColorHex, combatColorLabel } from '@/lib/combat';
 import { openClearChain } from '@/map/actions/clearChain';
+import { openClearSideChains, sideChainSummaries } from '@/map/actions/clearSideChains';
 import { cleanMapSolarsystems } from '@/map/actions/cleanMapSolarsystems';
 import { getClearableMapSolarsystems } from '@/map/actions/clearableMapSolarsystems';
 import { createMapSolarsystem } from '@/map/actions/createMapSolarsystem';
@@ -61,6 +62,10 @@ const combat_chains = computed(() => {
         hex: combatColorHex(color) ?? '#888888',
     }));
 });
+
+/** Patch 19: the side chains on the map, for "Clear side chains ▸". */
+const side_chains = computed(() => sideChainSummaries(store));
+const side_chain_systems = computed(() => side_chains.value.reduce((total, chain) => total + chain.removeIds.length, 0));
 
 const is_clearing_map = ref(false);
 const is_cleaning_map = ref(false);
@@ -140,6 +145,26 @@ function handleConfirmClean() {
             Clear {{ chain.label }} chain
             <span class="ml-auto pl-3 text-xs text-muted-foreground">{{ chain.count }}</span>
         </ContextMenuItem>
+        <!-- Patch 19: clear one side chain, several, or all of them -->
+        <ContextMenuSub v-if="side_chains.length">
+            <ContextMenuSubTrigger>
+                <Eraser class="size-4" />
+                Clear side chains
+            </ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+                <ContextMenuItem @select="openClearSideChains(side_chains.map((chain) => chain.rootId))">
+                    All side chains
+                    <span class="ml-auto pl-3 text-xs text-muted-foreground">{{ side_chain_systems }}</span>
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem v-for="chain in side_chains" :key="chain.rootId" @select="openClearSideChains([chain.rootId])">
+                    {{ chain.name }}
+                    <span class="ml-auto pl-3 text-xs text-muted-foreground">
+                        {{ chain.removeIds.length }}{{ chain.pinned ? ` · ${chain.pinned} pinned` : '' }}
+                    </span>
+                </ContextMenuItem>
+            </ContextMenuSubContent>
+        </ContextMenuSub>
         <ContextMenuItem @select="is_clearing_map = true" :disabled="clearable_count === 0" class="text-destructive focus:text-destructive">
             <Trash2 class="size-4" />
             Clear map

@@ -1,6 +1,8 @@
 import { isWormholeClass } from '@/const/solarsystemClasses';
-import { displayAlias, planSignatureAliases, staticSlotAlias, suggestAlias, type TAliasScheme } from '@/lib/alias';
+import { displayAlias, orderStatics, planSignatureAliases, staticIndexOf, staticSlotAlias, staticSlotAliasAt, suggestAlias, type TAliasScheme } from '@/lib/alias';
 import { chainAliases } from '@/lib/combat';
+import { signatureTypeById } from '@/const/signatures';
+import { isK162Frigate, k162RangeLabel } from '@/lib/k162';
 import { classCode, wayBackCouldBe } from '@/lib/staticCertainty';
 import type { TStringedSolarsystemClass } from '@/types/models';
 
@@ -21,6 +23,8 @@ type TPlaceholderHole = {
     is_static: boolean;
     target_class: TStringedSolarsystemClass | null;
     wormhole: string | null;
+    /** Patch 20: the exact type (grouped K162s, K162 frigate). */
+    signature_type_id?: number | null;
     mass_status?: string | null;
     lifetime?: string | null;
     armed_by_user_id?: number | null;
@@ -88,6 +92,8 @@ export type TPlaceholder = {
     isStatic: boolean;
     /** The hole's type ("D845"), null while unknown or a K162. */
     wormhole: string | null;
+    /** Patch 20: the exact signature type (a grouped K162 "C4/5", a K162 frigate). */
+    signatureTypeId?: number | null;
     massStatus: string | null;
     lifetime: string | null;
     /** Patch 13: a static the system must have that nobody has scanned yet (no signature: signatureId 0). */
@@ -131,7 +137,9 @@ export function buildPlaceholders(
         const planned = planPendingHoles(systems, system, formats, holes);
         for (const hole of holes.toSorted((a, b) => a.id - b.id)) {
             const alias = hole.alias ?? planned.get(hole.id) ?? null;
-            const destination = holeDestination(hole.target_class);
+            // Patch 20: a grouped K162 shows its range where the "?" was ("C4/5").
+            const type = hole.signature_type_id ? (signatureTypeById.get(hole.signature_type_id) ?? null) : null;
+            const destination = k162RangeLabel(type) ?? holeDestination(hole.target_class);
             result.push({
                 nodeId: placeholderNodeId(hole.id),
                 signatureId: hole.id,
@@ -143,9 +151,11 @@ export function buildPlaceholders(
                 sigCode: hole.signature_id ? hole.signature_id.slice(0, 3) : null,
                 destination: `${destination}${hole.is_static ? 's' : ''}`,
                 targetClass: hole.target_class ?? null,
-                shipSize: hole.ship_size ?? null,
+                // Patch 20: a K162 frigate is always frigate-thin.
+                shipSize: isK162Frigate(type) ? 'frigate' : (hole.ship_size ?? null),
                 isStatic: hole.is_static,
                 wormhole: hole.wormhole,
+                signatureTypeId: hole.signature_type_id ?? null,
                 massStatus: hole.mass_status ?? null,
                 lifetime: hole.lifetime ?? null,
                 armedBy: hole.armed_by_user_id ?? null,
@@ -175,12 +185,15 @@ export function planPendingHoles(
         ignoredAlias: formats.bookmark_ignored_alias,
         combatHome: Boolean(system.combat_home),
         limbo: Boolean(system.combat_color),
+        // Patch 20: one reserved slot per static (A0, A1…); other holes start after them.
+        staticCount: system.solarsystem?.statics?.length ?? 1,
         signatures: holes.map((hole) => ({
             id: hole.id,
             isWormhole: true,
             isConnected: false,
             lockedAlias: hole.alias,
             isStatic: hole.is_static,
+            staticIndex: hole.is_static ? staticIndexOf(system.solarsystem?.statics, hole.wormhole) : null,
             targetIsWormhole: !hole.target_class || hole.target_class === 'unknown' || isWormholeClass(hole.target_class),
             // Same as the signature list's planner: an unknown class counts as not known.
             targetClass: hole.target_class && hole.target_class !== 'unknown' ? hole.target_class : null,
@@ -298,16 +311,30 @@ function expectedStatics(
             ...chainAliases(systems, system),
             ...holes.filter((hole) => hole.parentId === system.id && hole.alias).map((hole) => hole.alias as string),
         ];
-        const staticSlot = staticSlotAlias(system.alias, formats.bookmark_ignored_alias, Boolean(system.combat_home));
-        // Patch 18: the static's slot is only "used" by a hole of this system or a system linked to it
+        // Patch 20: each static has its own reserved slot, in orderStatics order (A0, A1…).
+        const ordered = orderStatics(statics);
+        const slotOf = (name: string): string =>
+            staticSlotAliasAt(
+                system.alias,
+                Math.max(
+                    ordered.findIndex((entry) => entry.name.toUpperCase() === name.toUpperCase()),
+                    0,
+                ),
+                formats.bookmark_ignored_alias,
+                Boolean(system.combat_home),
+            );
+        const reservedSlots = ordered.map((entry) => slotOf(entry.name));
+        // Patch 18: a static's slot is only "used" by a hole of this system or a system linked to it
         // (it went to Golf before because the name existed somewhere else in the chain).
-        const slotUsedHere = [
-            ...holes.filter((hole) => hole.parentId === system.id && !hole.expected && hole.alias).map((hole) => hole.alias as string),
-            ...touching.map((connection) =>
-                byId.get(connection.from_map_solarsystem_id === system.id ? connection.to_map_solarsystem_id : connection.from_map_solarsystem_id)?.alias ?? '',
-            ),
-        ].some((value) => value.toUpperCase() === staticSlot.toUpperCase());
-        let slotFree = !slotUsedHere;
+        const usedHere = new Set(
+            [
+                ...holes.filter((hole) => hole.parentId === system.id && !hole.expected && hole.alias).map((hole) => hole.alias as string),
+                ...touching.map((connection) =>
+                    byId.get(connection.from_map_solarsystem_id === system.id ? connection.to_map_solarsystem_id : connection.from_map_solarsystem_id)?.alias ?? '',
+                ),
+            ].map((value) => value.toUpperCase()),
+        );
+        const slotFreeFor = (name: string): boolean => !usedHere.has(slotOf(name).toUpperCase());
 
         // Patch 18: an untyped hole here could be the missing static: it takes the static's slot
         // ("Alpha?") with a "static? V753" tag instead of a separate "not identified" box.
@@ -329,28 +356,31 @@ function expectedStatics(
             const hole = fitting[0];
             hole.maybeStatic = true;
             hole.note = `static? ${candidate.name}`;
-            if (!limbo && index === 0 && slotFree) {
-                hole.label = `${displayAlias(staticSlot, formats.bookmark_alias_scheme)}?`;
-                slotFree = false;
+            void index;
+            if (!limbo && slotFreeFor(candidate.name)) {
+                hole.label = `${displayAlias(slotOf(candidate.name), formats.bookmark_alias_scheme)}?`;
+                usedHere.add(slotOf(candidate.name).toUpperCase());
             }
             return false;
         });
         stillMissing.forEach((candidate, index) => {
             let alias: string | null = null;
             if (!limbo) {
-                alias =
-                    index === 0 && slotFree
-                        ? staticSlot
-                        : suggestAlias({
+                alias = slotFreeFor(candidate.name)
+                    ? slotOf(candidate.name)
+                    : suggestAlias({
                               parentAlias: system.alias,
                               targetIsWormhole: true,
                               originIsWormhole: true,
-                              aliases: taken,
+                              aliases: [...taken, ...reservedSlots],
                               scheme: formats.bookmark_alias_scheme,
                               ignoredAlias: formats.bookmark_ignored_alias,
                               combatHome: Boolean(system.combat_home),
                           });
-                if (alias) taken.push(alias);
+                if (alias) {
+                    taken.push(alias);
+                    usedHere.add(alias.toUpperCase());
+                }
             }
             const leadsTo = candidate.leads_to.toUpperCase();
             result.push({

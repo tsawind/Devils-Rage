@@ -15,7 +15,7 @@ watch(certainAsk, (ask) => (open.value = ask !== null), { immediate: true });
 
 const ask = computed(() => certainAsk.value);
 
-function handleChoose(choice: 'rename' | 'keep'): void {
+function handleChoose(choice: 'rename' | 'rename-quiet' | 'keep'): void {
     ask.value?.choose(choice);
 }
 </script>
@@ -30,6 +30,7 @@ function handleChoose(choice: 'rename' | 'keep'): void {
         :changes="ask.changes"
         :beyond="ask.beyond"
         :countdown-seconds="popup_seconds"
+        copies
         description="Every signature is scanned and nothing else can be it, so it is marked as the static either way. Renaming means you change these bookmarks in game; keeping leaves every name as it is."
         @choose="handleChoose"
     />

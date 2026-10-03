@@ -287,6 +287,8 @@ export type TAliasPlanSignature = {
     lockedAlias?: string | null;
     /** Marked as the system's static: takes the reserved static slot (A in home, 0 elsewhere). */
     isStatic?: boolean;
+    /** Patch 20: which of the system's statics it is (orderStatics order), when its type says so. */
+    staticIndex?: number | null;
     /** Whether the hole leads to wormhole space; unknown destinations count as wormhole space. */
     targetIsWormhole?: boolean;
     /** The known destination class, if identified ("unknown"/null otherwise). */
@@ -313,6 +315,61 @@ export function chainPrefix(parentAlias: string | null | undefined, ignoredAlias
 export function staticSlotAlias(parentAlias: string | null | undefined, ignoredAlias?: string | null, combatHome = false): string {
     const isHome = usesHomeLetters(parentAlias, ignoredAlias, combatHome);
     return `${chainPrefix(parentAlias, ignoredAlias, combatHome)}${slotsFor(isHome).staticSlot}`;
+}
+
+/**
+ * Patch 20: the order a system's statics take their reserved slots in:
+ * highsec, lowsec, nullsec, then C1 … C6 (anything else after).
+ */
+const STATIC_ORDER = ['hs', 'ls', 'ns', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6'];
+
+export function orderStatics<T extends { leads_to?: string | null; leadsTo?: string | null; name: string }>(statics: readonly T[] | null | undefined): T[] {
+    const rank = (value: T) => {
+        const code = (value.leads_to ?? value.leadsTo ?? '').toLowerCase();
+        const index = STATIC_ORDER.indexOf(code);
+        return index === -1 ? STATIC_ORDER.length : index;
+    };
+    const seen = new Set<string>();
+    return (statics ?? [])
+        .filter((value) => {
+            const name = value.name.toUpperCase();
+            if (seen.has(name)) return false;
+            seen.add(name);
+            return true;
+        })
+        .toSorted((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+}
+
+/**
+ * Patch 20: the alias reserved for a system's n-th static (0-based, in
+ * `orderStatics` order): "A0", "A1" … elsewhere; Alpha, Bravo … in home.
+ */
+export function staticSlotAliasAt(parentAlias: string | null | undefined, index: number, ignoredAlias?: string | null, combatHome = false): string {
+    const { staticSlot, slots } = slotsFor(usesHomeLetters(parentAlias, ignoredAlias, combatHome));
+    const sequence = staticSlot + slots;
+    return `${chainPrefix(parentAlias, ignoredAlias, combatHome)}${sequence[Math.min(Math.max(index, 0), sequence.length - 1)]}`;
+}
+
+/** Patch 20: the index of a static type among the system's statics (orderStatics order), or -1. */
+export function staticIndexOf(statics: readonly { name: string; leads_to?: string | null; leadsTo?: string | null }[] | null | undefined, typeName: string | null | undefined): number {
+    const name = (typeName ?? '').trim().toUpperCase();
+    if (!name) return -1;
+    return orderStatics(statics).findIndex((value) => value.name.toUpperCase() === name);
+}
+
+/**
+ * Patch 20: the slot a static of type `typeName` takes in a system: its own
+ * reserved slot (A0 for the first static, A1 for the second…), or slot 0 when
+ * the type isn't one of the system's statics (or unknown).
+ */
+export function staticSlotFor(
+    parentAlias: string | null | undefined,
+    statics: readonly { name: string; leads_to?: string | null; leadsTo?: string | null }[] | null | undefined,
+    typeName: string | null | undefined,
+    ignoredAlias?: string | null,
+    combatHome = false,
+): string {
+    return staticSlotAliasAt(parentAlias, Math.max(staticIndexOf(statics, typeName), 0), ignoredAlias, combatHome);
 }
 
 /**
@@ -355,6 +412,12 @@ export function planSignatureAliases(params: {
      * wait in "limbo" without a number, the static included.
      */
     limbo?: boolean;
+    /**
+     * Patch 20: how many statics the system has. The first that many slots
+     * (0, 1… / Alpha, Bravo…) are kept for them, so a second static is A1
+     * and the other holes start at A2.
+     */
+    staticCount?: number;
 }): Map<number, string> {
     const planned = new Map<number, string>();
     const wormholes = params.signatures.filter((signature) => signature.isWormhole).toSorted((a, b) => a.id - b.id);
@@ -366,7 +429,6 @@ export function planSignatureAliases(params: {
     const combatHome = Boolean(params.combatHome);
     const prefix = chainPrefix(params.parentAlias, params.ignoredAlias, combatHome);
     const { staticSlot: staticChar, slots } = slotsFor(usesHomeLetters(params.parentAlias, params.ignoredAlias, combatHome));
-    const staticSlot = `${prefix}${staticChar}`;
     const taken = new Set(params.aliases.map((alias) => alias.trim().toUpperCase()));
 
     // Every locked number is taken, whatever the signature is now (a hole later
@@ -380,19 +442,28 @@ export function planSignatureAliases(params: {
 
     const unnumbered = wormholes.filter((signature) => !planned.has(signature.id) && !signature.isConnected && !signature.reserveOnly);
 
+    // Patch 20: the first `staticCount` slots are kept for the statics (one each, in orderStatics order).
+    const sequence = staticChar + slots;
+    const reservedCount = params.limbo ? 0 : Math.max(1, Math.min(params.staticCount ?? 1, sequence.length - 1));
+    const reserved = [...sequence.slice(0, reservedCount)].map((char) => `${prefix}${char}`);
+
     // Combat chains never hand the static its 0 on their own (patch 12): it waits
     // in limbo like any other hole, until a scanner renames it by hand.
-    const staticHole = params.limbo ? undefined : unnumbered.find((signature) => signature.isStatic);
-    if (staticHole && !taken.has(staticSlot)) {
-        planned.set(staticHole.id, staticSlot);
-        taken.add(staticSlot);
+    const staticHoles = params.limbo ? [] : unnumbered.filter((signature) => signature.isStatic);
+    // Statics whose type tells their slot first, then any others into the first free reserved slot.
+    for (const signature of staticHoles.toSorted((a, b) => Number(a.staticIndex == null) - Number(b.staticIndex == null))) {
+        const own = signature.staticIndex != null && signature.staticIndex >= 0 && signature.staticIndex < reserved.length ? reserved[signature.staticIndex] : null;
+        const slot = own && !taken.has(own) ? own : own ? null : (reserved.find((candidate) => !taken.has(candidate)) ?? null);
+        if (!slot) continue;
+        planned.set(signature.id, slot);
+        taken.add(slot);
     }
 
     for (const signature of unnumbered) {
         if (planned.has(signature.id) || params.limbo) continue;
 
         let index = 0;
-        while (index < slots.length - 1 && taken.has(`${prefix}${slots[index]}`)) {
+        while (index < slots.length - 1 && (taken.has(`${prefix}${slots[index]}`) || reserved.includes(`${prefix}${slots[index]}`))) {
             index++;
         }
 
