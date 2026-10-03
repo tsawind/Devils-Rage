@@ -26,10 +26,15 @@ type Props = {
 const { indicators, center } = defineProps<Props>();
 
 const totalWidth = computed(() => {
-    const count = indicators.length;
-    if (count === 0) return 0;
-    const arrows = indicators.filter((indicator) => indicator.type === 'text' && indicator.arrowAngle != null).length;
-    return count * 18 + arrows * 12 + 8;
+    if (indicators.length === 0) return 0;
+    // Patch 20: text badges are as wide as their label ("≈ XL" needs more room than "L").
+    return (
+        indicators.reduce((total, indicator) => {
+            if (indicator.type !== 'text') return total + 18;
+            const label = (indicator.label ?? '').length;
+            return total + Math.max(18, label * 9 + 4) + (indicator.arrowAngle != null ? 12 : 0);
+        }, 0) + 8
+    );
 });
 </script>
 
@@ -46,7 +51,7 @@ const totalWidth = computed(() => {
             class="flex h-full items-center justify-center gap-0.5 rounded-full border border-neutral-300 bg-white px-1 dark:border-neutral-700 dark:bg-neutral-900"
         >
             <template v-for="(indicator, i) in indicators" :key="i">
-                <span v-if="indicator.type === 'text'" class="flex items-center text-[13px] leading-none font-bold" :style="{ color: indicator.fill }">
+                <span v-if="indicator.type === 'text'" class="flex items-center text-[13px] leading-none font-bold whitespace-nowrap" :style="{ color: indicator.fill }">
                     {{ indicator.label }}
                     <ArrowRight
                         v-if="indicator.arrowAngle != null"
