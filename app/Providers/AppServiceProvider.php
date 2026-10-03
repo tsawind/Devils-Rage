@@ -54,6 +54,8 @@ final class AppServiceProvider extends ServiceProvider
 
         Vite::useAggressivePrefetching();
 
+        $this->ensureStorageLink();
+
         if (! app()->environment(['local', 'testing'])) {
             URL::forceHttps();
         }
@@ -135,5 +137,24 @@ final class AppServiceProvider extends ServiceProvider
                 return false;
             }
         ));
+    }
+
+    /**
+     * Devil's Rage: uploads (the map background) live in the storage volume, which
+     * survives rebuilds, but the public/storage link lives in the image and is lost
+     * on every rebuild. Recreate it on boot so `storage:link` isn't needed by hand.
+     */
+    private function ensureStorageLink(): void
+    {
+        $link = public_path('storage');
+        if (is_link($link) || file_exists($link)) {
+            return;
+        }
+
+        try {
+            @symlink(storage_path('app/public'), $link);
+        } catch (\Throwable) {
+            // Not fatal: `php artisan storage:link` still works by hand.
+        }
     }
 }
