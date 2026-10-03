@@ -1,5 +1,5 @@
 import { nodeRect } from '@/map/core/coords';
-import { computeTreeEdgeGeometries, edgeCenterConnection, LANE_MARGIN, MIN_STUB, PARALLEL_SPACING } from '@/map/core/geometry/treeRouting';
+import { computeTreeEdgeGeometries as routeWithExits, edgeCenterConnection, LANE_MARGIN, MIN_STUB, PARALLEL_SPACING } from '@/map/core/geometry/treeRouting';
 import type { EdgeGeometry, EdgeInput, Rect, Vec2 } from '@/map/core/types';
 import { describe, expect, it } from 'vitest';
 
@@ -12,6 +12,9 @@ function rectAt(anchor: Vec2): Rect {
 function rectsAt(anchors: Record<number, Vec2>): Map<number, Rect> {
     return new Map(Object.entries(anchors).map(([id, anchor]) => [Number(id), rectAt(anchor)]));
 }
+
+/** These tests cover the side-exit corridors; the top/bottom exits (patch 20) have their own tests. */
+const computeTreeEdgeGeometries = (...args: Parameters<typeof routeWithExits>) => routeWithExits(args[0], args[1], args[2], { exits: false });
 
 function edge(id: number, sourceId: number, targetId: number): EdgeInput {
     return { id, sourceId, targetId };

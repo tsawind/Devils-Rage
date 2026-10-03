@@ -186,6 +186,8 @@ export function computeTreeEdgeGeometries(
     edges: EdgeInput[],
     rects: ReadonlyMap<number, Rect>,
     anchors: ReadonlyMap<number, Vec2>,
+    /** Patch 20: pipes up/down a column leave out of the top/bottom (off: always the side). */
+    options: { exits?: boolean } = {},
 ): Map<number, EdgeGeometry> {
     const geometries = new Map<number, EdgeGeometry>();
     const routed: RoutedEdge[] = [];
@@ -231,7 +233,7 @@ export function computeTreeEdgeGeometries(
         geometries.set(edge.id, item);
     }
 
-    planEdgeExits(routed, [...rects.values()]);
+    if (options.exits !== false) planEdgeExits(routed, [...rects.values()]);
 
     // Fan out the endpoints that share a node edge so parallel lines don't overlap.
     const sharedEdges = new Map<string, Port[]>();

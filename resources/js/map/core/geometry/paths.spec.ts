@@ -121,7 +121,8 @@ describe('edgePathAndCenter', () => {
                 CORNER_RADIUS,
             ),
         );
-        expect(center).toEqual({ x: 60, y: 80 });
+        // Patch 20: the pill sits on the last stretch, 36 px before the far system.
+        expect(center).toEqual({ x: 164, y: 160 });
     });
 
     it('defaults the elbow to the scaled midpoint when bend is null', () => {
@@ -134,7 +135,7 @@ describe('edgePathAndCenter', () => {
             toNormal: { x: -1, y: 0 },
             bend: null,
         };
-        expect(edgePathAndCenter(geometry, 2).center).toEqual({ x: 100, y: 0 });
+        expect(edgePathAndCenter(geometry, 2).center).toEqual({ x: 164, y: 0 });
     });
 });
 
