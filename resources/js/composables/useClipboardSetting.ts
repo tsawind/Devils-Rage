@@ -9,7 +9,7 @@ import { usePage } from '@inertiajs/vue3';
  */
 export function clipboardAllowed(): boolean {
     try {
-        const settings = (usePage().props as { map_user_settings?: { clipboard_enabled?: boolean } }).map_user_settings;
+        const settings = (usePage().props as unknown as { map_user_settings?: { clipboard_enabled?: boolean } }).map_user_settings;
         return settings?.clipboard_enabled !== false;
     } catch {
         return true;

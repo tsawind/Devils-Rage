@@ -4,7 +4,7 @@ import { updateSignature } from '@/map/actions/updateSignature';
 import type { TSignature } from '@/types/models';
 import type { FormDataConvertible } from '@inertiajs/core';
 import { router, usePage } from '@inertiajs/vue3';
-import { computed, ref } from 'vue';
+import { computed, shallowRef } from 'vue';
 import { toast } from 'vue-sonner';
 
 /**
@@ -27,8 +27,8 @@ type TDelete = { kind: 'delete'; label: string; mapSolarsystemId: number; snapsh
 type TEntry = TEdit | TDelete;
 
 const LIMIT = 20;
-const undoStack = ref<TEntry[]>([]);
-const redoStack = ref<TEntry[]>([]);
+const undoStack = shallowRef<TEntry[]>([]);
+const redoStack = shallowRef<TEntry[]>([]);
 
 function push(entry: TEntry): void {
     undoStack.value = [...undoStack.value.slice(-(LIMIT - 1)), entry];
@@ -37,7 +37,7 @@ function push(entry: TEntry): void {
 
 /** The signature as the page has it now (the selected system's list), if it is there. */
 function currentSignature(signatureId: number): TSignature | null {
-    const props = usePage().props as { selected_map_solarsystem?: { signatures?: TSignature[] | null } | null };
+    const props = usePage().props as unknown as { selected_map_solarsystem?: { signatures?: TSignature[] | null } | null };
     return props.selected_map_solarsystem?.signatures?.find((candidate) => candidate.id === signatureId) ?? null;
 }
 
@@ -101,7 +101,7 @@ function apply(entry: TEntry, direction: 'undo' | 'redo'): boolean {
             preserveState: true,
             only: ['map', 'selected_map_solarsystem'],
             onSuccess: () => {
-                const props = usePage().props as { selected_map_solarsystem?: { signatures?: TSignature[] | null } | null };
+                const props = usePage().props as unknown as { selected_map_solarsystem?: { signatures?: TSignature[] | null } | null };
                 const back = props.selected_map_solarsystem?.signatures?.find((candidate) => candidate.signature_id && candidate.signature_id === snapshot.signature_id);
                 if (back && (snapshot.alias || snapshot.is_static || snapshot.is_wandering)) {
                     updateSignature(back, { alias: snapshot.alias ?? null, is_static: Boolean(snapshot.is_static), is_wandering: Boolean(snapshot.is_wandering) });
