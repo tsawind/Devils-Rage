@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Signatures;
 
+use App\Actions\MapConnections\BroadcastMapConnectionAction;
 use App\Actions\MapConnections\SyncConnectionShipSizeAction;
 use App\Enums\ConnectionType;
 use App\Events\Signatures\SignatureUpdatedEvent;
@@ -33,6 +34,7 @@ final readonly class ConnectionHoleTypeAction
         private FillFarSideK162Action $fillFarSideK162Action,
         private SyncConnectionShipSizeAction $syncConnectionShipSizeAction,
         private MapBroadcaster $mapBroadcaster,
+        private BroadcastMapConnectionAction $broadcastMapConnectionAction,
     ) {}
 
     /**
@@ -206,6 +208,8 @@ final readonly class ConnectionHoleTypeAction
             }
         }
         broadcast(new SignatureUpdatedEvent($connection->map_id));
+        // Patch 20: the pipe (type, size, K162 side) updates for everyone at once.
+        $this->broadcastMapConnectionAction->handle($connection);
     }
 
     private static function isK162(SignatureType $type): bool

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Tracking;
 
+use App\Actions\MapConnections\BroadcastMapConnectionAction;
 use App\Actions\MapConnections\CreateMapConnectionAction;
 use App\Actions\MapSolarsystem\StoreMapSolarsystemAction;
 use App\Actions\MapSolarsystem\UpdateMapSolarsystemAction;
@@ -49,6 +50,7 @@ final readonly class StoreTrackingAction
         private UpdateSignatureAction $updateSignatureAction,
         private FillFarSideK162Action $fillFarSideK162Action,
         private MapBroadcaster $mapBroadcaster,
+        private BroadcastMapConnectionAction $broadcastMapConnectionAction,
         #[Config('map.max_size.x')]
         private int $max_x,
         #[Config('map.max_size.y')]
@@ -147,6 +149,10 @@ final readonly class StoreTrackingAction
 
                 // The hole is jumped: everyone's map drops its placeholder (patch 12).
                 $this->mapBroadcaster->signaturesChanged($origin);
+
+                // Patch 20: the connection was sent before its hole was linked; send it again
+                // with the hole (type, size, static), so others don't see a bare "≈" pipe.
+                $this->broadcastMapConnectionAction->handle($connection);
             }
 
         }, 10);

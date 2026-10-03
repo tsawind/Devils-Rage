@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Actions\Signatures;
 
+use App\Actions\MapConnections\BroadcastMapConnectionAction;
 use App\Actions\MapConnections\SyncConnectionShipSizeAction;
 use App\Actions\MapSolarsystem\UpdateMapSolarsystemAction;
 use App\Data\SignatureData;
 use App\Enums\LifetimeStatus;
 use App\Enums\MassStatus;
 use App\Events\Signatures\SignatureUpdatedEvent;
+use App\Models\MapConnection;
 use App\Models\MapSolarsystem;
 use App\Models\Signature;
 use App\Models\SignatureType;
@@ -26,6 +28,7 @@ final readonly class UpdateSignatureAction
         private SyncConnectionShipSizeAction $syncConnectionShipSizeAction,
         private UpdateMapSolarsystemAction $updateMapSolarsystemAction,
         private FillFarSideK162Action $fillFarSideK162Action,
+        private BroadcastMapConnectionAction $broadcastMapConnectionAction,
     ) {}
 
     /**
@@ -37,6 +40,7 @@ final readonly class UpdateSignatureAction
             $this->lockOthers($signature, $data);
             $this->guardChainNumbering($signature, $data);
             $previousAlias = $signature->alias;
+            $previousConnectionId = $signature->map_connection_id;
 
             $updateData = $data->toArray();
             // Not columns: whether the linked system follows a confirmed rename; numbers to lock elsewhere.
@@ -62,6 +66,7 @@ final readonly class UpdateSignatureAction
             broadcast(new SignatureUpdatedEvent($signature->mapSolarsystem->map_id))->toOthers();
 
             $this->mapBroadcaster->signaturesChanged($signature->mapSolarsystem);
+            $this->broadcastConnections([$previousConnectionId, $signature->map_connection_id]);
 
             return $signature;
         });
@@ -242,5 +247,22 @@ final readonly class UpdateSignatureAction
             $signature_lifetime_severity >= $connection_lifetime_severity => $signature->lifetime,
             default => $signature->mapConnection->lifetime,
         };
+    }
+
+    /**
+     * Patch 20: a jumped hole's type, static mark, mass or life lives on its
+     * connection too (pipe size, "Static" tag, ≈ guess). Re-send those
+     * connections so everyone else's map updates without a refresh.
+     *
+     * @param  array<int, int|null>  $connectionIds
+     */
+    private function broadcastConnections(array $connectionIds): void
+    {
+        foreach (array_unique(array_filter($connectionIds)) as $connectionId) {
+            $connection = MapConnection::query()->find($connectionId);
+            if ($connection instanceof MapConnection) {
+                $this->broadcastMapConnectionAction->handle($connection);
+            }
+        }
     }
 }
