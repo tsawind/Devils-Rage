@@ -4,7 +4,7 @@ import EdgeBadges, { type EdgeIndicator } from '@/map/components/edges/EdgeBadge
 import { scalePoint } from '@/map/core/coords';
 import { useMinuteNow } from '@/composables/useMinuteNow';
 import { holeAge } from '@/lib/holeAge';
-import { guessHoleMass } from '@/map/holeGuess';
+import { guessHole } from '@/map/holeGuess';
 import { describeEstimate, estimateMass, formatMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { edgePathAndCenter } from '@/map/core/geometry/paths';
@@ -129,9 +129,10 @@ const indicators = computed<EdgeIndicator[]>(() => {
         });
     }
 
-    // Patch 18: the pipe's size is a guess.
+    // Patch 18: the pipe's size is a guess (patch 20: with the size when the possible holes agree).
     if (guessedMass.value) {
-        items.push({ type: 'text', label: '≈', fill: 'var(--color-neutral-400)', stroke: 'var(--color-neutral-500)' });
+        const sized = !connection?.ship_size && guess.value?.size ? ` ${SHIP_SIZE_LETTERS[guess.value.size]}` : '';
+        items.push({ type: 'text', label: `≈${sized}`, fill: 'var(--color-neutral-400)', stroke: 'var(--color-neutral-500)' });
     }
 
     const shipSizeLabel = getShipSizeLabel(connection?.ship_size);
@@ -208,11 +209,18 @@ const holeType = computed(() => {
     return null;
 });
 
-/** Patch 18: no type known yet: the smallest non-frigate hole that fits (see holeGuess); a frigate size stays thin. */
-const guessedMass = computed(() => {
+/**
+ * Patch 18: no type known yet: a guessed pipe; a frigate size stays thin.
+ * Patch 20: from the hole types that fit both ends (and which end is the K162):
+ * one left = "probably N432" drawn as that type, several of one size = that size.
+ */
+const guess = computed(() => {
     if (isStargate.value || !connection || holeType.value || connection.ship_size === 'frigate' || !endClasses) return null;
-    return guessHoleMass({ k162Class, classes: endClasses });
+    const [fromClass, toClass] = endClasses;
+    const spawnClass = k162Class ? (k162Class === fromClass ? toClass : fromClass) : null;
+    return guessHole({ k162Class, spawnClasses: spawnClass ? [spawnClass] : null, endClasses });
 });
+const guessedMass = computed(() => guess.value?.total ?? null);
 
 const estimate = computed(() => {
     if (isStargate.value || !connection) return null;
@@ -258,7 +266,8 @@ const pipeTitle = computed(() => {
     if (!current) return seen ?? undefined;
     const jumps = connection.jumps_count ?? 0;
     if (!holeType.value) {
-        return `Type not known: guessed ${formatMass(guessedMass.value ?? 0)} kg hole · ${describeEstimate(current)} · ${jumps} ${jumps === 1 ? 'jump' : 'jumps'} logged${seen ? ` · ${seen}` : ''}`;
+        const probably = guess.value?.name ? `probably ${guess.value.name} (only hole that fits; frigate holes aside) · ` : '';
+        return `Type not known: ${probably}guessed ${formatMass(guessedMass.value ?? 0)} kg hole · ${describeEstimate(current)} · ${jumps} ${jumps === 1 ? 'jump' : 'jumps'} logged${seen ? ` · ${seen}` : ''}`;
     }
     return `${holeType.value.name}: ${describeEstimate(current)} · ${formatMass(holeType.value.total_mass)} kg hole · ${jumps} ${jumps === 1 ? 'jump' : 'jumps'} logged (${formatMass(connection.jumps_mass_sum ?? 0)} kg)${seen ? ` · ${seen}` : ''}`;
 });

@@ -2,9 +2,9 @@
 import { isDark } from '@/composables/useIsDark';
 import { combatColorHex } from '@/lib/combat';
 import { isFrigateHole, pipeWidth } from '@/lib/massEstimate';
-import { guessHoleMass } from '@/map/holeGuess';
+import { guessHole } from '@/map/holeGuess';
 import { getTypesByCategory, signatureCategories, signatureTypeById } from '@/const/signatures';
-import { k162ShipSize } from '@/lib/k162';
+import { isK162Frigate, k162Classes, k162ShipSize } from '@/lib/k162';
 import { SHIP_SIZE_LETTERS, shipSizeFromJumpMass } from '@/lib/shipSize';
 import { wormholeMass } from '@/lib/wormholeMass';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
@@ -81,10 +81,18 @@ const items = computed(() => {
         const typeMass = wormholeMass(placeholder.wormhole);
         const isK162 = (placeholder.wormhole ?? '').toUpperCase().startsWith('K162');
         const parentClass = parent.solarsystem?.class === undefined || parent.solarsystem?.class === null ? null : String(parent.solarsystem.class);
+        // Patch 20: a K162 is sized from the holes that come from its far side (the class picked:
+        // "K162 C2/3", "K162 C5"), into the class it sits in, so the pipe matches its badge.
+        const holeTypeInfo = placeholder.signatureTypeId ? (signatureTypeById.get(placeholder.signatureTypeId) ?? null) : null;
+        const farClasses = isK162 ? (holeTypeInfo ? k162Classes(holeTypeInfo) : placeholder.targetClass && placeholder.targetClass !== 'unknown' ? [placeholder.targetClass] : []) : [];
         const guessed =
-            typeMass || placeholder.shipSize === 'frigate' || (placeholder.wormhole && !isK162)
+            typeMass || placeholder.shipSize === 'frigate' || isK162Frigate(holeTypeInfo) || (placeholder.wormhole && !isK162)
                 ? null
-                : guessHoleMass({ k162Class: isK162 ? parentClass : null, classes: [parentClass, placeholder.targetClass ?? null] });
+                : (guessHole(
+                      isK162
+                          ? { k162Class: parentClass, spawnClasses: farClasses }
+                          : { endClasses: [parentClass, placeholder.targetClass ?? null] },
+                  )?.total ?? null);
         const mass = typeMass ?? (guessed ? { total: guessed, maxJump: Number.POSITIVE_INFINITY } : null);
         const massColor = placeholder.massStatus === 'critical' ? '#ef4444' : placeholder.massStatus === 'reduced' ? '#f59e0b' : null;
         const eol = placeholder.lifetime === 'eol' || placeholder.lifetime === 'critical';

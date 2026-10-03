@@ -105,3 +105,52 @@ export function estimateHoleMass(params: { k162Class?: string | null; classes: r
     const sizes = targets.filter((cls) => cls && cls !== 'unknown').map(into).filter((size): size is number => size !== null);
     return sizes.length ? Math.min(...sizes) : null;
 }
+
+/**
+ * Patch 20: the hole types that could make a pipe whose type isn't known,
+ * from what the map knows: both ends' classes, and which end is the K162
+ * (the hole spawned on the other end). A picked K162 range ("C2/3") narrows
+ * the far side the same way. Frigate holes and special holes (Thera,
+ * drifters, Pochven: they carry `extra`) are left out.
+ *
+ * One type left: the pipe is drawn as that type ("probably N432"). Several
+ * of one size: that size. Otherwise null (the caller keeps the old guess).
+ */
+export type TPossibleType = TGuessType & { spawn_areas?: readonly string[] | null; extra?: string | null };
+
+export function possibleHoleTypes(params: {
+    /** The class the K162 sits in (the hole leads there), when known. */
+    k162Class?: string | null;
+    /** Where the hole spawned (the far side's class, or a picked range), when known. */
+    spawnClasses?: readonly string[] | null;
+    /** Both ends' classes (a jumped connection), for when neither side's type is known. */
+    endClasses?: readonly (string | null | undefined)[] | null;
+    types: readonly TPossibleType[];
+}): TPossibleType[] {
+    const norm = (value: string | null | undefined) => String(value ?? '').toLowerCase().replace(/^c(?=\d)/, '');
+    const usable = params.types.filter(
+        (type) => !type.name.toUpperCase().startsWith('K162') && !type.extra && type.total > 0 && !isFrigateHole(type.maxJump),
+    );
+    const spawnsIn = (type: TPossibleType, cls: string) => (type.spawn_areas ?? []).some((area) => norm(area) === cls);
+    const into = params.k162Class ? norm(params.k162Class) : null;
+    const from = (params.spawnClasses ?? []).map(norm).filter((cls) => cls && cls !== 'unknown');
+
+    if (into && into !== 'unknown') {
+        if (from.length === 0) return [];
+        return usable.filter((type) => norm(type.target_class) === into && from.some((cls) => spawnsIn(type, cls)));
+    }
+    const [a, b] = (params.endClasses ?? []).map(norm);
+    if (!a || !b || a === 'unknown' || b === 'unknown') return [];
+    return usable.filter((type) => (spawnsIn(type, a) && norm(type.target_class) === b) || (spawnsIn(type, b) && norm(type.target_class) === a));
+}
+
+/** Patch 20: what the candidates say about the hole: its type when only one fits, its size when they agree. */
+export function guessFromCandidates(candidates: readonly TPossibleType[]): { total: number; name: string | null; maxJump: number } | null {
+    if (candidates.length === 0) return null;
+    const names = [...new Set(candidates.map((type) => type.name.toUpperCase()))];
+    const sizeOf = (jump: number) => (jump <= 62_000_000 ? 'medium' : jump < 2_000_000_000 ? 'large' : 'xlarge');
+    const sizes = new Set(candidates.map((type) => sizeOf(type.maxJump)));
+    if (sizes.size !== 1) return null;
+    const smallest = candidates.reduce((best, type) => (type.total < best.total ? type : best));
+    return { total: smallest.total, name: names.length === 1 ? names[0] : null, maxJump: smallest.maxJump };
+}

@@ -24,17 +24,33 @@ export function parseSignal(value: string | null | undefined): number | null {
     return Number.isFinite(amount) ? amount : null;
 }
 
+/**
+ * Patch 20: a probe scanner row that isn't a cosmic signature or anomaly
+ * (its scan group, the second column, is Ship, Deployable, Structure, Drone…).
+ * Rows with no scan group (older or hand-made pastes) are kept.
+ */
+export function isNonSignatureRow(row: readonly string[]): boolean {
+    const group = (row[1] ?? '').trim();
+    if (!group) return false;
+    return !/signat|anomal|аномал|сигнат/i.test(group);
+}
+
 class SignatureParser {
     parseSignatures(text: string): TRawSignature[] {
         if (!text) {
             return [] satisfies TRawSignature[];
         }
 
-        return text
+        const rows = text
             .split('\n')
-            .map((sig) => sig.split('\t'))
-            .map((sig) => this.parseSignature(sig))
-            .filter((sig): sig is TRawSignature => sig !== null);
+            .filter((line) => line.trim() !== '')
+            .map((sig) => sig.split('\t'));
+        // Patch 20: ships, deployables, structures, drones… in the probe scanner are not signatures.
+        const kept = rows.filter((row) => !isNonSignatureRow(row));
+        const skipped = rows.length - kept.length;
+        if (skipped > 0) toast.info(`Ignored ${skipped} ship${skipped === 1 ? '' : 's'} / deployable${skipped === 1 ? '' : 's'}`, { description: 'Only cosmic signatures and anomalies are kept.' });
+
+        return kept.map((sig) => this.parseSignature(sig)).filter((sig): sig is TRawSignature => sig !== null);
     }
 
     parseSignature(signature: string[]): TRawSignature | null {
