@@ -79,8 +79,32 @@ export function edgePathAndCenter(geometry: EdgeGeometry, scale: number): { d: s
         to,
         bend: geometry.bend === null ? null : geometry.bend * scale,
     });
+    const points = [
+        ...(geometry.start ? [scalePoint(geometry.start.point, scale)] : []),
+        from,
+        corners[0],
+        corners[1],
+        to,
+        ...(geometry.end ? [scalePoint(geometry.end.point, scale)] : []),
+    ];
     return {
-        d: roundedElbowPath([from, corners[0], corners[1], to], CORNER_RADIUS),
-        center: midpoint(corners[0], corners[1]),
+        d: roundedElbowPath(points, CORNER_RADIUS),
+        center: farStretchPoint(points),
     };
+}
+
+/**
+ * Patch 20: one pill per pipe, on its last straight stretch before the system
+ * further right (the far system), so pills on pipes sharing a trunk don't
+ * stack up in the middle.
+ */
+export function farStretchPoint(points: Vec2[]): Vec2 {
+    const pts = points.filter((point, i) => i === 0 || Math.hypot(point.x - points[i - 1].x, point.y - points[i - 1].y) > 0.01);
+    if (pts.length < 2) return pts[0] ?? { x: 0, y: 0 };
+    const last = pts.length - 1;
+    const [end, before] = pts[last].x >= pts[0].x ? [pts[last], pts[last - 1]] : [pts[0], pts[1]];
+    const length = Math.hypot(end.x - before.x, end.y - before.y);
+    if (length < 76) return midpoint(end, before);
+    const t = 36 / length;
+    return { x: end.x + (before.x - end.x) * t, y: end.y + (before.y - end.y) * t };
 }

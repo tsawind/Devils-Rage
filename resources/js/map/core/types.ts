@@ -35,4 +35,10 @@ export type EdgeGeometry =
           fromNormal: Vec2;
           toNormal: Vec2;
           bend: number | null;
+          /**
+           * Patch 20: the pipe leaves its box out of the top or bottom edge here and drops
+           * (or rises) to `from` before the usual elbow; `end` the same at the `to` end.
+           */
+          start?: { point: Vec2; normal: Vec2 } | null;
+          end?: { point: Vec2; normal: Vec2 } | null;
       };

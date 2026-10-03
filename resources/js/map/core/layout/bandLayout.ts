@@ -39,6 +39,12 @@ export type BandLayoutNode = {
     placeholder?: boolean | null;
     /** Patch 16: an armed placeholder: in a lane it's laid out like the next system (below its parent, full size). */
     armed?: boolean | null;
+    /**
+     * Patch 20: rows this system keeps for its holes in the bands, even before they are
+     * scanned (its expected statics plus one spare), so a new hole fills a row that was
+     * already there instead of pushing everything below it down.
+     */
+    reserve?: number | null;
 };
 
 export type BandLayoutInput = {
@@ -75,6 +81,8 @@ export type BandLayoutOptions = {
     /** A node's size, for the band and lane outlines. */
     nodeWidth?: number;
     nodeHeight?: number;
+    /** Patch 20: empty rows above the main band, so home doesn't sit in the top corner. */
+    homeTopRows?: number;
 };
 
 export type BandGhost = {
@@ -133,9 +141,10 @@ export function isLoopEdge(parentOf: ReadonlyMap<number, number>, from: number, 
 export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOptions = {}): BandLayoutResult {
     const gridSize = options.gridSize ?? 20;
     const snap = (value: number): number => Math.round(value / gridSize) * gridSize;
-    const levelGap = snap(options.levelGap ?? 320);
     // Patch 17: rows snap to half a grid cell (the tree layout draws no grid), so 90 apart stays 90.
-    const snapRow = (value: number): number => Math.round(value / (gridSize / 2)) * (gridSize / 2);
+    // Patch 20: a quarter cell, so 85 apart stays 85 and columns 250 apart stay 250.
+    const snapRow = (value: number): number => Math.round(value / (gridSize / 4)) * (gridSize / 4);
+    const levelGap = snapRow(options.levelGap ?? 320);
     const rowGap = snapRow(options.rowGap ?? 100);
     const laneColumnGap = snap(options.laneColumnGap ?? 100);
     const laneRowGap = snap(options.laneRowGap ?? 60);
@@ -348,7 +357,22 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
     const lanes: BandLane[] = [];
     let cursorY = marginY;
 
-    const placeTree = (root: number, childrenOf: Map<number, number[]>, top: number): { bottom: number; right: number } => {
+    let spareId = GHOST_BASE * 3;
+    const spares = new Set<number>();
+    const placeTree = (root: number, tree: Map<number, number[]>, top: number): { bottom: number; right: number } => {
+        // Patch 20: spare (invisible) child slots up to each system's reserve, last in its list.
+        const childrenOf = new Map<number, number[]>();
+        for (const [id, children] of tree) {
+            const reserve = ghostInfo.has(id) ? 0 : (byId.get(id)?.reserve ?? 0);
+            const list = [...children];
+            while (list.length < reserve) {
+                spareId += 1;
+                spares.add(spareId);
+                childrenOf.set(spareId, []);
+                list.push(spareId);
+            }
+            childrenOf.set(id, list);
+        }
         const cross = reingoldTilford(root, childrenOf, rowGap);
         let minCross = Infinity;
         for (const value of cross.values()) minCross = Math.min(minCross, value);
@@ -364,7 +388,11 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
             }
         }
         for (const id of order) {
-            const point = { x: snap(marginX + depthOf.get(id)! * levelGap), y: snapRow(top + cross.get(id)! - minCross) };
+            const point = { x: snapRow(marginX + depthOf.get(id)! * levelGap), y: snapRow(top + cross.get(id)! - minCross) };
+            if (spares.has(id)) {
+                bottom = Math.max(bottom, point.y);
+                continue;
+            }
             bottom = Math.max(bottom, point.y);
             right = Math.max(right, point.x + nodeWidth);
             const ghost = ghostInfo.get(id);
@@ -462,6 +490,8 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
     // Main band, with the lanes that hang off it.
     let mainBand: BandRect | null = null;
     if (homeId !== null && mainTree) {
+        // Patch 20: home starts a few rows down (not further right), with room above it.
+        cursorY += Math.max(0, options.homeTopRows ?? 0) * rowGap;
         const { bottom, right } = placeTree(homeId, mainTree, cursorY);
         const linked = placeLinkedLanes('main', new Set(mainTree.keys()), bottom + rowGap);
         const bandBottom = Math.max(bottom - anchorY + nodeHeight, linked.bottom);

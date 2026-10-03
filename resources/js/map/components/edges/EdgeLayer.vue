@@ -2,9 +2,8 @@
 import { useMapBackground } from '@/composables/useMapBackground';
 import ConnectedEdge from '@/map/components/edges/ConnectedEdge.vue';
 import Edge from '@/map/components/edges/Edge.vue';
-import { nodeRect } from '@/map/core/coords';
-import { computeTreeEdgeGeometries } from '@/map/core/geometry/treeRouting';
-import type { EdgeGeometry, EdgeInput, Rect, Vec2 } from '@/map/core/types';
+import type { EdgeGeometry, Vec2 } from '@/map/core/types';
+import { useTreeGeometries } from '@/map/store/treeGeometries';
 import { useMapStore } from '@/map/store/mapStore';
 import type { TMapConnection } from '@/pages/maps';
 import { useElementSize } from '@vueuse/core';
@@ -39,41 +38,9 @@ const { width: viewBoxWidth, height: viewBoxHeight } = useElementSize(container)
 const connectionIds = computed(() => [...store.connections.keys()]);
 
 // The tree layout routes all edges in one global pass (its fan-out spacing needs
-// every edge that shares a node); each ConnectedEdge then picks its entry. In the
-// free layout this stays null and never tracks the entity maps, so per-edge
-// geometry computeds are the only readers of the drag hot path.
-const treeGeometries = computed<Map<number, EdgeGeometry> | null>(() => {
-    if (!store.isLayoutLocked.value) return null;
-
-    const edges: EdgeInput[] = [];
-    for (const connection of store.connections.values()) {
-        edges.push({ id: connection.id, sourceId: connection.from_map_solarsystem_id, targetId: connection.to_map_solarsystem_id });
-    }
-
-    // Every measured node, not just the connected ones: the router keeps runs out of
-    // the columns they pass, so it has to see whatever could be in the way.
-    const rects = new Map<number, Rect>();
-    const anchors = new Map<number, Vec2>();
-    for (const nodeId of store.systems.keys()) {
-        const anchor = store.renderPosition(nodeId);
-        if (!anchor) continue;
-        anchors.set(nodeId, anchor);
-        const size = store.nodeSizes.get(nodeId);
-        if (size) {
-            rects.set(nodeId, nodeRect(anchor, size));
-        }
-    }
-
-    // Placeholder systems (patch 12) are in the way too.
-    const layout = store.bandLayout.value;
-    for (const placeholder of store.placeholders.value) {
-        const anchor = layout?.positions.get(placeholder.nodeId);
-        const compact = layout?.bandOf.get(placeholder.nodeId) === 'lane' && !placeholder.armedBy;
-        if (anchor) rects.set(placeholder.nodeId, nodeRect(anchor, compact ? { width: 100, height: 26 } : { width: 180, height: 40 }));
-    }
-
-    return computeTreeEdgeGeometries(edges, rects, anchors);
-});
+// every edge that shares a node); each ConnectedEdge then picks its entry. Patch 20:
+// shared with the dotted pipes (see useTreeGeometries).
+const treeGeometries = useTreeGeometries(store);
 
 const pendingGeometry = computed<EdgeGeometry | null>(() => {
     if (!pendingFrom || !pendingTo) return null;

@@ -80,9 +80,14 @@ const scaledTo = computed(() => scalePoint(geometry.to, scale));
 const staticLabel = computed(() => {
     if (!staticEnd) return null;
     const atFrom = staticEnd.side === 'from';
-    const point = atFrom ? scaledFrom.value : scaledTo.value;
+    let point = atFrom ? scaledFrom.value : scaledTo.value;
     let normal: Vec2;
-    if (geometry.kind === 'elbow') normal = atFrom ? geometry.fromNormal : geometry.toNormal;
+    // Patch 20: a pipe that leaves out of the top/bottom: the label sits by that exit.
+    const exit = geometry.kind === 'elbow' ? (atFrom ? geometry.start : geometry.end) : null;
+    if (exit) {
+        point = scalePoint(exit.point, scale);
+        normal = exit.normal;
+    } else if (geometry.kind === 'elbow') normal = atFrom ? geometry.fromNormal : geometry.toNormal;
     else {
         const other = atFrom ? scaledTo.value : scaledFrom.value;
         const length = Math.hypot(other.x - point.x, other.y - point.y) || 1;

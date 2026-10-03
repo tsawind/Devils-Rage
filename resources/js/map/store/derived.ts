@@ -1,9 +1,10 @@
 import { computeBandLayout, isLoopEdge, type BandLayoutInput, type BandLayoutResult } from '@/map/core/layout/bandLayout';
 import { buildPlaceholders, foldLaneHoles, type TPlaceholder } from '@/lib/placeholders';
 import { compareSystems } from '@/map/core/sorting';
+import { isWormholeClass } from '@/const/solarsystemClasses';
 import type { Vec2 } from '@/map/core/types';
 import { TMap, TMapConnection, TMapSolarsystem, TSolarsystem } from '@/pages/maps';
-import { computed, type ComputedRef, type Ref, type ShallowRef } from 'vue';
+import { computed, shallowRef, watch, type ComputedRef, type Ref, type ShallowRef } from 'vue';
 import type { EntityState } from './entities';
 import type { ViewState } from './viewState';
 
@@ -98,8 +99,10 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
             // The tree layout always draws nodes at the fixed 180 width (see MapNode).
             nodeWidth: 180,
             // Patch 17: main and side chains about 12% tighter (were 320 / 100).
-            levelGap: 280,
-            rowGap: 90,
+            // Patch 20: 250 / 85 (pipes now leave out of a system's top and bottom too).
+            levelGap: 250,
+            rowGap: 85,
+            homeTopRows: 4,
             // Patch 15: rage lanes use readable full cards (alias, class, statics, a pilot).
             laneNodeWidth: 180,
             laneNodeHeight: 60,
@@ -108,10 +111,53 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         });
     });
 
+    /**
+     * Patch 20: when the layout changes, systems slide to their new spots over a third
+     * of a second instead of jumping, so your eye can follow what moved. Everything
+     * that draws (cards, pipes, dotted boxes) reads these positions.
+     */
+    const slide = shallowRef<{ from: Map<number, Vec2>; to: Map<number, Vec2>; t: number } | null>(null);
+    let frame: number | null = null;
+    watch(
+        () => bandLayout.value?.positions ?? null,
+        (to, previous) => {
+            if (frame !== null && typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(frame);
+            frame = null;
+            if (!to) {
+                slide.value = null;
+                return;
+            }
+            const from = currentPositions() ?? previous;
+            if (!from || typeof requestAnimationFrame === 'undefined' || !isTreeLayout.value) {
+                slide.value = { from: to, to, t: 1 };
+                return;
+            }
+            const started = performance.now();
+            const duration = 320;
+            slide.value = { from, to, t: 0 };
+            const step = (now: number): void => {
+                const t = Math.min(1, (now - started) / duration);
+                slide.value = { from, to, t };
+                frame = t < 1 ? requestAnimationFrame(step) : null;
+            };
+            frame = requestAnimationFrame(step);
+        },
+        { flush: 'sync' },
+    );
+
+    function currentPositions(): Map<number, Vec2> | null {
+        const state = slide.value;
+        if (!state) return null;
+        return state.t >= 1 ? state.to : interpolate(state.from, state.to, state.t);
+    }
+
     /** Base-unit tree positions: the band layout's, when the tree layout is active. */
     const treePositions: ComputedRef<Map<number, Vec2> | null> = computed(() => {
         if (!isTreeLayout.value) return null;
-        return bandLayout.value?.positions ?? null;
+        const target = bandLayout.value?.positions ?? null;
+        const state = slide.value;
+        if (!target || !state || state.to !== target || state.t >= 1) return target;
+        return interpolate(state.from, state.to, state.t);
     });
 
     /** Connections that aren't how either end was found: drawn as dashed loop lines (patch 12). */
@@ -261,6 +307,8 @@ function toBandInput(entities: EntityState, metaValue: TMapMeta, placeholders: r
                 color: system.combat_color ?? null,
                 home: Boolean(system.combat_home),
                 pinned: Boolean(system.pinned),
+                // Patch 20: wormhole systems keep rows for their statics plus one spare.
+                reserve: isWormholeClass(system.solarsystem?.class ?? null) ? (system.solarsystem?.statics?.length ?? 1) + 1 : 0,
             })),
             // Placeholders sit where the system will appear, in their parent's chain.
             ...placeholders.map((placeholder) => ({
@@ -289,4 +337,15 @@ function toBandInput(entities: EntityState, metaValue: TMapMeta, placeholders: r
             return compareSystems(systemA, systemB);
         },
     };
+}
+
+/** Patch 20: positions part way (eased) from one layout to the next; new systems appear at their spot. */
+function interpolate(from: ReadonlyMap<number, Vec2>, to: ReadonlyMap<number, Vec2>, t: number): Map<number, Vec2> {
+    const eased = 1 - Math.pow(1 - t, 3);
+    const result = new Map<number, Vec2>();
+    for (const [id, target] of to) {
+        const start = from.get(id);
+        result.set(id, start ? { x: start.x + (target.x - start.x) * eased, y: start.y + (target.y - start.y) * eased } : target);
+    }
+    return result;
 }

@@ -161,7 +161,16 @@ type RoutedEdge = Extract<EdgeGeometry, { kind: 'elbow' }> & {
     /** Perpendicular distance and signed offset of the far end, for ordering the fan. */
     distance: number;
     signed: number;
+    /**
+     * Patch 20: which end leaves its box out of the top/bottom edge instead of the side,
+     * and whether it then runs straight to the other box ('direct') or steps into the
+     * column gap first ('stepped').
+     */
+    exit?: { at: 'from' | 'to'; mode: 'direct' | 'stepped'; boxEdgeX: number } | null;
 };
+
+/** Patch 20: at most this many pipes leave one box out of its top (and as many out of its bottom). */
+export const MAX_EDGE_EXITS = 4;
 
 /**
  * Tree-layout routing, a global pass over all edges: connects facing box edges (or sends
@@ -222,6 +231,8 @@ export function computeTreeEdgeGeometries(
         geometries.set(edge.id, item);
     }
 
+    planEdgeExits(routed, [...rects.values()]);
+
     // Fan out the endpoints that share a node edge so parallel lines don't overlap.
     const sharedEdges = new Map<string, Port[]>();
     const register = (endpoint: Vec2, normal: Vec2, box: Rect, other: Rect): void => {
@@ -230,8 +241,8 @@ export function computeTreeEdgeGeometries(
         (sharedEdges.get(key) ?? sharedEdges.set(key, []).get(key)!).push(port);
     };
     for (const item of routed) {
-        register(item.from, item.fromNormal, item.sourceBox, item.targetBox);
-        register(item.to, item.toNormal, item.targetBox, item.sourceBox);
+        if (item.exit?.at !== 'from') register(item.from, item.fromNormal, item.sourceBox, item.targetBox);
+        if (item.exit?.at !== 'to') register(item.to, item.toNormal, item.targetBox, item.sourceBox);
     }
     const spreadCount = new Map<Vec2, number>();
     for (const ports of sharedEdges.values()) {
@@ -246,7 +257,7 @@ export function computeTreeEdgeGeometries(
     // a few pixels. Where the quiet end is this edge's alone, it follows the busy one
     // instead: entering off-centre reads better than a kink that means nothing.
     for (const item of routed) {
-        if (item.detour) continue;
+        if (item.detour || item.exit) continue;
         const horizontal = item.fromNormal.x !== 0;
         const level = horizontal
             ? Math.abs(item.sourceBox.centerY - item.targetBox.centerY) < 0.5
@@ -268,7 +279,7 @@ export function computeTreeEdgeGeometries(
     // so they all have to be packed together or they lie on top of each other.
     const fans = new Map<string, RoutedEdge[]>();
     for (const item of routed) {
-        if (item.detour) continue;
+        if (item.detour || item.exit?.mode === 'direct') continue;
         const horizontal = item.fromNormal.x !== 0;
         const sourceFirst = horizontal ? item.sourceBox.centerX <= item.targetBox.centerX : item.sourceBox.centerY <= item.targetBox.centerY;
         const primary = sourceFirst ? item.sourceBox : item.targetBox;
@@ -276,7 +287,7 @@ export function computeTreeEdgeGeometries(
         const along = horizontal ? other.centerY - primary.centerY : other.centerX - primary.centerX;
         item.distance = Math.abs(along);
         item.signed = along;
-        const across = horizontal ? [item.from.x, item.to.x] : [item.from.y, item.to.y];
+        const across = horizontal ? edgeXs(item) : [item.from.y, item.to.y];
         const key = `${horizontal ? 'h' : 'v'}|${Math.min(...across)},${Math.max(...across)}`;
         (fans.get(key) ?? fans.set(key, []).get(key)!).push(item);
     }
@@ -316,7 +327,7 @@ export function computeTreeEdgeGeometries(
 
         // One corridor, so one set of lines: measured from its near edge, not from each
         // run's own direction, or a run drawn leftward would count its lanes backwards.
-        const ends = group.flatMap((item) => (horizontal ? [item.from.x, item.to.x] : [item.from.y, item.to.y]));
+        const ends = group.flatMap((item) => (horizontal ? edgeXs(item) : [item.from.y, item.to.y]));
         const near = Math.min(...ends);
         const far = Math.max(...ends);
 
@@ -376,16 +387,98 @@ export function computeTreeEdgeGeometries(
 
     // The midpoint between two columns two apart lands exactly on the column between them.
     for (const item of routed) {
-        if (item.detour || item.fromNormal.x === 0) continue;
-        item.bend = intoLane(
-            item.bend ?? (item.from.x + item.to.x) / 2,
-            columns,
-            item.from.x,
-            item.to.x,
-            Math.min(item.from.y, item.to.y),
-            Math.max(item.from.y, item.to.y),
-        );
+        if (item.detour || item.fromNormal.x === 0 || item.exit?.mode === 'direct') continue;
+        const [fromX, toX] = edgeXs(item);
+        item.bend = intoLane(item.bend ?? (fromX + toX) / 2, columns, fromX, toX, Math.min(item.from.y, item.to.y), Math.max(item.from.y, item.to.y));
     }
 
     return geometries;
+}
+
+/** The x of each end as the corridor sees it: an end that leaves out of the top/bottom counts as its box's side. */
+function edgeXs(item: RoutedEdge): [number, number] {
+    return [item.exit?.at === 'from' ? item.exit.boxEdgeX : item.from.x, item.exit?.at === 'to' ? item.exit.boxEdgeX : item.to.x];
+}
+
+/**
+ * Patch 20: a pipe to a system in the next column up or down leaves its box out
+ * of the top or bottom edge near the right corner (the left side is for the pipe
+ * coming in), so pipes no longer all crowd out of the right middle. The nearest
+ * system's pipe leaves closest to the corner; further ones further in, so they
+ * nest without crossing. When the way up/down is clear it runs straight to the
+ * other system; when a box sits right above/below, it steps out into the gap
+ * and joins the column gap like before. No room: the right side, as before.
+ */
+function planEdgeExits(routed: RoutedEdge[], rects: Rect[]): void {
+    type Entry = { item: RoutedEdge; left: Rect; right: Rect; up: boolean; at: 'from' | 'to'; dy: number };
+    const groups = new Map<string, Entry[]>();
+    for (const item of routed) {
+        if (item.detour || item.fromNormal.x === 0) continue;
+        const reversed = item.sourceBox.centerX > item.targetBox.centerX;
+        const left = reversed ? item.targetBox : item.sourceBox;
+        const right = reversed ? item.sourceBox : item.targetBox;
+        // Only across a real column gap (not the small boxes right beside a rage-lane system).
+        if (!(right.minX - left.maxX >= 30)) continue;
+        const dy = right.centerY - left.centerY;
+        // Level (or nearly): straight out of the right side.
+        if (Math.abs(dy) < (left.maxY - left.minY) / 2 + 4) continue;
+        const up = dy < 0;
+        const key = `${left.minX},${left.minY}|${up ? 'up' : 'down'}`;
+        (groups.get(key) ?? groups.set(key, []).get(key)!).push({ item, left, right, up, at: reversed ? 'to' : 'from', dy: Math.abs(dy) });
+    }
+
+    const crossesV = (x: number, y1: number, y2: number, skip: Rect[]): boolean =>
+        rects.some((rect) => !skip.includes(rect) && rect.minX - 3 < x && rect.maxX + 3 > x && rect.minY < Math.max(y1, y2) && rect.maxY > Math.min(y1, y2));
+    const crossesH = (y: number, x1: number, x2: number, skip: Rect[]): boolean =>
+        rects.some((rect) => !skip.includes(rect) && rect.minY - 3 < y && rect.maxY + 3 > y && rect.minX < Math.max(x1, x2) && rect.maxX > Math.min(x1, x2));
+
+    for (const entries of groups.values()) {
+        entries.sort((a, b) => a.dy - b.dy);
+        let stepped = 0;
+        entries.forEach((entry, index) => {
+            const { item, left, right, up, at } = entry;
+            if (index >= MAX_EDGE_EXITS) return;
+            const x = left.maxX - 14 - index * PARALLEL_SPACING;
+            if (x < left.minX + (left.maxX - left.minX) / 2) return;
+            const edgeY = up ? left.minY : left.maxY;
+            const direction = up ? -1 : 1;
+            const targetY = right.centerY;
+            const skip = [left, right];
+
+            let joinY: number;
+            let mode: 'direct' | 'stepped';
+            if (!crossesV(x, edgeY, targetY, skip) && !crossesH(targetY, x, right.minX, skip)) {
+                joinY = targetY;
+                mode = 'direct';
+            } else {
+                // The room before the next box above/below, at this x.
+                let room = Infinity;
+                for (const rect of rects) {
+                    if (skip.includes(rect) || rect.minX - 3 >= x || rect.maxX + 3 <= x) continue;
+                    const distance = up ? edgeY - rect.maxY : rect.minY - edgeY;
+                    if (distance >= 0) room = Math.min(room, distance);
+                }
+                const offset = 10 + stepped * 8;
+                if (offset > room - 10) return;
+                joinY = edgeY + direction * offset;
+                if (crossesH(joinY, x, left.maxX, skip)) return;
+                mode = 'stepped';
+                stepped++;
+            }
+
+            const point = { x, y: joinY };
+            const exitEnd = { point: { x, y: edgeY }, normal: { x: 0, y: direction } };
+            if (at === 'from') {
+                item.from = point;
+                item.fromNormal = { x: 1, y: 0 };
+                item.start = exitEnd;
+            } else {
+                item.to = point;
+                item.toNormal = { x: 1, y: 0 };
+                item.end = exitEnd;
+            }
+            item.exit = { at, mode, boxEdgeX: left.maxX };
+            if (mode === 'direct') item.bend = (item.from.x + item.to.x) / 2;
+        });
+    }
 }

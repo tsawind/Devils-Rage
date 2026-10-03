@@ -7,6 +7,9 @@ import SolarsystemDragHandle from '@/map/components/solarsystem/SolarsystemDragH
 import { ANCHOR_OFFSET, scalePoint } from '@/map/core/coords';
 import { useNodeMeasurement } from '@/map/interactions/measure';
 import { useMapStore } from '@/map/store/mapStore';
+import { wayBackBookmark } from '@/map/holeBookmark';
+import { visibleBookmarkName } from '@/lib/bookmark';
+import { toast } from 'vue-sonner';
 import { TShowMapProps } from '@/pages/maps';
 import { show } from '@/routes/maps';
 import { AppPageProps } from '@/types';
@@ -101,6 +104,37 @@ const fixedWidth = computed(() => store.isTreeLayout.value || store.isConstantWi
 /** Patch 15: rage-lane systems are full readable cards again (patch 13 drew them small). */
 const compact = computed(() => false);
 
+/**
+ * Patch 20: the way back to the system this one was found from (its sig on this side),
+ * shown as a green pill on the card. Not for home or systems with no parent.
+ */
+const wayBack = computed<{ code: string | null } | null>(() => {
+    const current = system.value;
+    if (!current || !store.isTreeLayout.value) return null;
+    const parentId = store.bandLayout.value?.parentOf.get(current.id);
+    if (parentId === undefined) return null;
+    for (const connection of store.connections.values()) {
+        const ends = [connection.from_map_solarsystem_id, connection.to_map_solarsystem_id];
+        if (!ends.includes(current.id) || !ends.includes(parentId) || connection.type === 'stargate') continue;
+        const signature = (connection.signatures ?? []).find((candidate) => candidate.map_solarsystem_id === current.id);
+        return { code: signature?.signature_id ? signature.signature_id.slice(0, 3) : null };
+    }
+    return null;
+});
+
+function copyWayBack(): void {
+    const current = system.value;
+    const parentId = current ? store.bandLayout.value?.parentOf.get(current.id) : undefined;
+    const parent = parentId !== undefined ? store.systems.get(parentId) : undefined;
+    if (!current || !parent) return;
+    const name = wayBackBookmark(store, current, parent);
+    if (!name) return;
+    navigator.clipboard
+        .writeText(name)
+        .then(() => toast.success('Copied your way back', { description: visibleBookmarkName(name) }))
+        .catch(() => undefined);
+}
+
 const canWrite = computed(() => page.props.permission === 'member' || page.props.permission === 'manager');
 
 const linkHref = computed(() => {
@@ -173,6 +207,8 @@ onBeforeUnmount(() => {
                             :is-rally="isRally"
                             :fixed-width="fixedWidth"
                             :threat-level="threatLevel"
+                            :way-back="wayBack"
+                            @copy-way-back="copyWayBack"
                             :is-dead-end="isDeadEnd"
                             :compact="compact"
                         />

@@ -8,7 +8,8 @@ import { isK162Frigate, k162Classes, k162ShipSize } from '@/lib/k162';
 import { SHIP_SIZE_LETTERS, shipSizeFromJumpMass } from '@/lib/shipSize';
 import { wormholeMass } from '@/lib/wormholeMass';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
-import { CORNER_RADIUS, roundedElbowPath } from '@/map/core/geometry/paths';
+import { CORNER_RADIUS, elbowCorners, farStretchPoint, roundedElbowPath } from '@/map/core/geometry/paths';
+import { useTreeGeometries } from '@/map/store/treeGeometries';
 import useUser from '@/composables/useUser';
 import { useMapStore } from '@/map/store/mapStore';
 import { show } from '@/routes/maps';
@@ -23,6 +24,7 @@ import { computed } from 'vue';
  */
 const store = useMapStore();
 const user = useUser();
+const routed = useTreeGeometries(store);
 
 const FULL_WIDTH = 180;
 /** Patch 16: wider small boxes in rage lanes, so the note fits inside. */
@@ -58,7 +60,7 @@ const items = computed(() => {
     const scale = store.scale.value;
 
     return store.placeholders.value.flatMap((placeholder) => {
-        const position = layout.positions.get(placeholder.nodeId);
+        const position = store.renderPosition(placeholder.nodeId);
         const parentPosition = store.renderPosition(placeholder.parentId);
         const parent = store.systems.get(placeholder.parentId);
         if (!position || !parentPosition || !parent) return [];
@@ -108,50 +110,47 @@ const items = computed(() => {
         const tagParts = [guessed ? '≈' : null, eol ? (eolCritical ? 'EOL!' : 'EOL') : null].filter(Boolean);
         const strokeWidth = pipe?.width ?? 1.5;
 
-        // Patch 17: drawn from the box back to its system, so the stripes start whole at the
-        // box and stop a few px short of its border; corners curve like jumped connections.
-        // Where the last straight stretch is too short for that (small lane boxes sit just
-        // 10 px beside their system), the stripes keep square ends and touch the box as before.
+        // Patch 20: routed with the jumped pipes (same exits out of the top / right / bottom,
+        // same column gaps), then drawn from the box back to its system so the stripes start
+        // whole at the box and stop a few px short of its border (patch 17).
         const wantedGap = 3 + strokeWidth / 2;
         let rounded = true;
         let points: { x: number; y: number }[];
-        if (left === parentLeft && top > parentTop) {
-            // Straight down when it sits under its system.
-            const x = (left + (compact ? 30 : 50)) * scale;
-            const room = (top - (parentTop + parentSize.height)) * scale;
-            rounded = room > wantedGap + 6;
+        const geometry = routed.value?.get(placeholder.nodeId);
+        if (geometry && geometry.kind === 'elbow') {
+            const from = { x: geometry.from.x * scale, y: geometry.from.y * scale };
+            const to = { x: geometry.to.x * scale, y: geometry.to.y * scale };
+            const corners = elbowCorners({ ...geometry, from, to, bend: geometry.bend === null ? null : geometry.bend * scale });
+            const scaled = (point: { x: number; y: number }) => ({ x: point.x * scale, y: point.y * scale });
             points = [
-                { x, y: top * scale - (rounded ? wantedGap : 0) },
-                { x, y: (parentTop + parentSize.height) * scale },
-            ];
+                ...(geometry.start ? [scaled(geometry.start.point)] : []),
+                from,
+                corners[0],
+                corners[1],
+                to,
+                ...(geometry.end ? [scaled(geometry.end.point)] : []),
+            ].filter((point, i, all) => i === 0 || Math.hypot(point.x - all[i - 1].x, point.y - all[i - 1].y) > 0.01);
+            // The router goes system → box: draw box → system.
+            points.reverse();
         } else {
-            // Out of the system's right side, from its own spot: the upper part for holes level
-            // or above, the lower part for holes below (the jumped pipes use the middle).
-            const startX = parentLeft + parentSize.width;
-            const parentMid = parentTop + parentSize.height / 2;
-            let endY = top + NODE_HEIGHT / 2;
-            const startY = endY > parentMid + 1 ? parentTop + parentSize.height * 0.8 : parentTop + parentSize.height * 0.2;
-            // Nearly level: keep it a straight line, entering the box a little off its middle.
-            if (Math.abs(endY - startY) < NODE_HEIGHT / 2 - 4) endY = startY;
-            const middleX = left > startX ? startX + Math.min(40, (left - startX) / 2) : startX + 20;
-            rounded = (left - middleX) * scale > wantedGap + 6;
             points = [
-                { x: left * scale - (rounded ? wantedGap : 0), y: endY * scale },
-                { x: middleX * scale, y: endY * scale },
-                { x: middleX * scale, y: startY * scale },
-                { x: startX * scale, y: startY * scale },
+                { x: left * scale, y: (top + NODE_HEIGHT / 2) * scale },
+                { x: (parentLeft + parentSize.width) * scale, y: (parentTop + parentSize.height / 2) * scale },
             ];
+        }
+        if (points.length >= 2) {
+            const [first, second] = points;
+            const length = Math.hypot(second.x - first.x, second.y - first.y);
+            rounded = length > wantedGap + 6;
+            if (rounded) {
+                points[0] = { x: first.x + ((second.x - first.x) / length) * wantedGap, y: first.y + ((second.y - first.y) / length) * wantedGap };
+            }
         }
         const path = roundedElbowPath(points, Math.max(CORNER_RADIUS, strokeWidth));
         // Patch 20: the size pill sits on the last straight stretch before the box.
         const size = placeholder.expected ? null : knownSize(placeholder, parentClass);
-        const badge = size
-            ? {
-                  text: `${size.letter} ${size.arrow}`,
-                  x: (points[0].x + points[1].x) / 2,
-                  y: (points[0].y + points[1].y) / 2,
-              }
-            : null;
+        const badgeAt = points.length >= 2 ? farStretchPoint(points) : null;
+        const badge = size && badgeAt ? { text: `${size.letter} ${size.arrow}`, x: badgeAt.x, y: badgeAt.y } : null;
         // Round stripe ends add half the width at each end: the dash is shortened by the width,
         // and wide pipes get longer stripes so they stay stripes, not dots.
         const [dash, gap] = pipe ? (pipe.width > 4 ? [16, 11] : [6, 6]) : [4, 4];

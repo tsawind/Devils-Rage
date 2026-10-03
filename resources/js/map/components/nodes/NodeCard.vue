@@ -35,6 +35,7 @@ const {
     threatLevel = null,
     isDeadEnd = false,
     compact = false,
+    wayBack = null,
 } = defineProps<{
     system: TMapSolarsystem;
     pilots: TCharacter[];
@@ -49,7 +50,11 @@ const {
     isDeadEnd?: boolean;
     /** A combat lane system (patch 13, rage scanning): small, the number big, J-code and class tiny. */
     compact?: boolean;
+    /** Patch 20: the way back to the system it was found from: its sig ("XWE"), or null code until pasted. */
+    wayBack?: { code: string | null } | null;
 }>();
+
+const emit = defineEmits<{ copyWayBack: [] }>();
 
 // ---- Combat chains ------------------------------------------------------------
 const chainHex = computed(() => combatColorHex(system.combat_color));
@@ -256,11 +261,35 @@ function handleSubmit() {
                     </template>
                 </SolarsystemSovereignty>
             </div>
-            <SolarsystemRegion
-                :region="resolvedSolarsystem.region"
-                v-if="resolvedSolarsystem.region && !isWormholeClass(resolvedSolarsystem.class)"
-            />
-            <SolarsystemStatics v-else-if="resolvedSolarsystem.statics" :statics="resolvedSolarsystem.statics" class="font-mono font-semibold" />
+            <!-- Patch 20: the way back's sig bottom left (green pill; faint *??? until pasted); k-space's region follows it -->
+            <div v-if="wayBack" class="col-span-3 row-start-2 flex min-w-0 items-center gap-1">
+                <button
+                    type="button"
+                    class="shrink-0 rounded-[3px] px-1 font-mono text-[11px] leading-[13px] font-bold"
+                    :class="wayBack.code ? 'bg-green-800 text-green-100 hover:bg-green-700' : 'border border-dashed border-green-700/70 text-green-600/70'"
+                    :title="wayBack.code ? `Way back ${wayBack.code}: click to copy its bookmark` : 'Way back not pasted yet'"
+                    @click.prevent.stop="wayBack.code && emit('copyWayBack')"
+                >
+                    *{{ wayBack.code ?? '???' }}
+                </button>
+                <span
+                    v-if="resolvedSolarsystem.region && !isWormholeClass(resolvedSolarsystem.class)"
+                    class="min-w-0 truncate text-xs text-muted-foreground"
+                    >{{ resolvedSolarsystem.region.name }}</span
+                >
+                <SolarsystemStatics
+                    v-else-if="resolvedSolarsystem.statics"
+                    :statics="resolvedSolarsystem.statics"
+                    class="ml-auto !col-span-1 font-mono font-semibold"
+                />
+            </div>
+            <template v-else>
+                <SolarsystemRegion
+                    :region="resolvedSolarsystem.region"
+                    v-if="resolvedSolarsystem.region && !isWormholeClass(resolvedSolarsystem.class)"
+                />
+                <SolarsystemStatics v-else-if="resolvedSolarsystem.statics" :statics="resolvedSolarsystem.statics" class="font-mono font-semibold" />
+            </template>
         </div>
         <SolarsystemPilots v-if="pilots.length && !compact" :pilots />
     </div>
