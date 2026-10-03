@@ -62,7 +62,7 @@ describe('WormholeTypeInput', () => {
         const wrapper = mountInput();
         await openPopup(wrapper);
 
-        const search = document.body.querySelector('input[placeholder="Search types"]') as HTMLInputElement;
+        const search = document.body.querySelector('input[placeholder^="Search"]') as HTMLInputElement;
         search.value = 'H296';
         search.dispatchEvent(new Event('input', { bubbles: true }));
         await flushVirtualizer();

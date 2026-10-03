@@ -602,7 +602,7 @@ describe('class suffix: static s, wandering w, K162 k', () => {
         expect(name).toBe(' 1 SOF C6s');
     });
 
-    it('return bookmarks are unchanged: "  * 1 JOW C6"', () => {
+    it('return bookmarks carry the hole marker (patch 20): "  * 1 JOW C6k"', () => {
         const name = buildSignatureBookmark({
             signature: baseSignature({ signature_id: 'JOW-849', wormhole: { name: 'K162' } }),
             currentSystem: { alias: '1', class: '6' },
@@ -611,7 +611,7 @@ describe('class suffix: static s, wandering w, K162 k', () => {
             formats: { ...formats, bookmark_format_return: '{_}{_}*{_}{here} {sig} {hereclass}' },
             detectReturn: true,
         });
-        expect(name).toBe('  * 1 JOW C6');
+        expect(name).toBe('  * 1 JOW C6k');
     });
 });
 
