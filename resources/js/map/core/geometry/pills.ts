@@ -138,3 +138,25 @@ export function placePills(requests: readonly PillRequest[], obstacles: readonly
     }
     return spots;
 }
+
+/** Patch 21b: room between a pill and the system it sits next to. */
+export const PILL_SYSTEM_GAP = 4;
+
+/**
+ * Patch 21b: the pill sits right next to the system the pipe runs into (the end
+ * further right), on the pipe's last straight stretch, like a label on that
+ * system's doorway. `width` / `height` / `gap` are in the same units as `points`.
+ */
+export function pillNextToSystem(points: Vec2[], width: number, height: number, gap = PILL_SYSTEM_GAP): Vec2 | null {
+    const pts = cornersOf(points);
+    if (pts.length < 2) return pts[0] ?? null;
+    const farAtEnd = pts[pts.length - 1].x >= pts[0].x;
+    const end = farAtEnd ? pts[pts.length - 1] : pts[0];
+    const before = farAtEnd ? pts[pts.length - 2] : pts[1];
+    const length = Math.hypot(end.x - before.x, end.y - before.y) || 1;
+    const direction = { x: (end.x - before.x) / length, y: (end.y - before.y) / length };
+    const half = Math.abs(direction.x) >= Math.abs(direction.y) ? width / 2 : height / 2;
+    // Never further back than the stretch itself goes.
+    const back = Math.min(gap + half, length);
+    return { x: end.x - direction.x * back, y: end.y - direction.y * back };
+}

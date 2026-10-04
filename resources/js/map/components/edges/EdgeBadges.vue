@@ -17,9 +17,11 @@ type Props = {
     /** Patch 21: the pill opens the pipe's details. */
     clickable?: boolean;
     title?: string;
+    /** Patch 21b: the pill grows and shrinks with the map's zoom. */
+    scale?: number;
 };
 
-const { indicators, center, dot = false, clickable = false, title } = defineProps<Props>();
+const { indicators, center, dot = false, clickable = false, title, scale = 1 } = defineProps<Props>();
 
 const emit = defineEmits<{ (e: 'open', event: MouseEvent): void }>();
 
@@ -33,14 +35,14 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
 <template>
     <g v-if="indicators.length && dot" :class="clickable ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'" @click.stop="(event) => emit('open', event)" @pointerdown.stop>
         <title v-if="title">{{ title }}</title>
-        <circle :cx="center.x" :cy="center.y" r="6" :fill="dotColor" class="stroke-white dark:stroke-neutral-900" stroke-width="1.5" />
+        <circle :cx="center.x" :cy="center.y" :r="6 * scale" :fill="dotColor" class="stroke-white dark:stroke-neutral-900" stroke-width="1.5" />
     </g>
     <foreignObject
         v-else-if="indicators.length"
-        :x="center.x - size.width / 2"
-        :y="center.y - size.height / 2"
-        :width="size.width"
-        :height="size.height"
+        :x="center.x - (size.width * scale) / 2"
+        :y="center.y - (size.height * scale) / 2"
+        :width="size.width * scale"
+        :height="size.height * scale"
         :class="clickable ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'"
         @click.stop="(event) => emit('open', event)"
         @pointerdown.stop
@@ -48,7 +50,8 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
         <!-- Patch 21: stacked: size + arrow (and icons), type, Static, EOL -->
         <div
             :title="title"
-            class="flex h-full flex-col items-center justify-center rounded-[9px] border border-neutral-300 bg-white px-1 hover:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-500"
+            :style="{ width: `${size.width}px`, height: `${size.height}px`, transform: `scale(${scale})`, transformOrigin: '0 0' }"
+            class="flex flex-col items-center justify-center rounded-[9px] border border-neutral-300 bg-white px-1 hover:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-500"
         >
             <div v-for="(line, row) in lines" :key="row" class="flex h-[14px] items-center justify-center gap-0.5 whitespace-nowrap">
                 <template v-for="(indicator, i) in line" :key="i">

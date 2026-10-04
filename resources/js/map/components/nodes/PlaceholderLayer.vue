@@ -323,6 +323,7 @@ const chips = computed(() => {
                     :indicators="item.pill.parts"
                     :center="item.pill.center"
                     :dot="item.pill.dot"
+                    :scale="store.scale.value"
                     clickable
                     title="Click for details"
                     @open="(event) => openDetails(event, item.nodeId)"

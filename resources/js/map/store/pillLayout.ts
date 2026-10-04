@@ -1,14 +1,14 @@
 import { elbowPoints } from '@/map/core/geometry/paths';
-import { placePills, type PillBox, type PillRequest, type PillSpot } from '@/map/core/geometry/pills';
+import { pillNextToSystem, PILL_SYSTEM_GAP, type PillSpot } from '@/map/core/geometry/pills';
 import type { MapStore } from '@/map/store/mapStore';
-import { treeRects, useTreeGeometries } from '@/map/store/treeGeometries';
+import { useTreeGeometries } from '@/map/store/treeGeometries';
 import { computed, shallowReactive, type ComputedRef } from 'vue';
 
 /**
- * Patch 21: one pass placing every pipe's pill on the tree map (jumped pipes by
- * connection id, dotted ones by placeholder node id), clear of bends, system
- * boxes and each other. Each pipe reports how wide its pill is; null in the
- * free layout (pills then sit at the pipe's middle as before).
+ * Patch 21: where every pipe's pill goes on the tree map (jumped pipes by
+ * connection id, dotted ones by placeholder node id). Patch 21b: right next to
+ * the system the pipe runs into, sized with the zoom. Each pipe reports its
+ * pill's size (at zoom 1); null in the free layout (pills sit mid-pipe there).
  */
 type TPillSize = { width: number; height: number };
 
@@ -44,19 +44,15 @@ export function usePillSpots(store: MapStore): ComputedRef<Map<number, PillSpot>
         if (!routed) return null;
         const scale = store.scale.value;
         const sizes = pillSizes(store);
-        const obstacles: PillBox[] = [...treeRects(store).rects.values()].map((rect) => ({
-            minX: rect.minX * scale,
-            minY: rect.minY * scale,
-            maxX: rect.maxX * scale,
-            maxY: rect.maxY * scale,
-        }));
-        const requests: PillRequest[] = [];
+        // Patch 21b: pills grow and shrink with the zoom, and sit right next to the system the pipe runs into.
+        const spots = new Map<number, PillSpot>();
         for (const [id, size] of sizes) {
             const geometry = routed.get(id);
             if (!geometry || geometry.kind !== 'elbow') continue;
-            requests.push({ id, points: elbowPoints(geometry, scale), width: size.width, height: size.height });
+            const at = pillNextToSystem(elbowPoints(geometry, scale), size.width * scale, size.height * scale, PILL_SYSTEM_GAP * scale);
+            if (at) spots.set(id, { ...at, dot: false });
         }
-        return placePills(requests, obstacles);
+        return spots;
     });
     spotsCache.set(store, spots);
     return spots;

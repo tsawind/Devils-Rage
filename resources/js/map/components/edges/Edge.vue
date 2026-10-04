@@ -393,6 +393,7 @@ function getDashArray(): string | undefined {
             :indicators="indicators"
             :center="pill.center"
             :dot="pill.dot"
+            :scale="scale"
             :clickable="Boolean(connection)"
             :title="pipeTitle"
             @open="(event) => emit('connectionClick', event)"

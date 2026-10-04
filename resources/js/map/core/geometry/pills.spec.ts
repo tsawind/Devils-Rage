@@ -1,4 +1,4 @@
-import { placePills, PILL_BEND_CLEAR, PILL_CLEAR } from '@/map/core/geometry/pills';
+import { pillNextToSystem, placePills, PILL_BEND_CLEAR, PILL_CLEAR, PILL_SYSTEM_GAP } from '@/map/core/geometry/pills';
 import { describe, expect, it } from 'vitest';
 
 const box = (minX: number, minY: number, maxX: number, maxY: number) => ({ minX, minY, maxX, maxY });
@@ -118,5 +118,43 @@ describe('patch 21: pills', () => {
             [],
         );
         expect(spots.get(1)).toEqual({ x: 35, y: 0, dot: false });
+    });
+});
+
+describe('patch 21b: pills sit right next to the system the pipe runs into', () => {
+    it('on the last stretch, just short of the far system', () => {
+        const at = pillNextToSystem(
+            [
+                { x: 0, y: 0 },
+                { x: 40, y: 0 },
+                { x: 40, y: 100 },
+                { x: 200, y: 100 },
+            ],
+            40,
+            20,
+        );
+        expect(at).toEqual({ x: 200 - PILL_SYSTEM_GAP - 20, y: 100 });
+    });
+
+    it('works whichever way the pipe is stored', () => {
+        const at = pillNextToSystem(
+            [
+                { x: 200, y: 100 },
+                { x: 40, y: 100 },
+                { x: 40, y: 0 },
+                { x: 0, y: 0 },
+            ],
+            40,
+            20,
+        );
+        expect(at).toEqual({ x: 200 - PILL_SYSTEM_GAP - 20, y: 100 });
+    });
+
+    it('scales with the zoom (sizes passed in screen pixels)', () => {
+        const points = [
+            { x: 0, y: 0 },
+            { x: 300, y: 0 },
+        ];
+        expect(pillNextToSystem(points, 80, 40, 8)).toEqual({ x: 300 - 8 - 40, y: 0 });
     });
 });
