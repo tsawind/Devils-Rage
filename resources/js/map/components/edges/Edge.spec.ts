@@ -66,3 +66,25 @@ describe('Edge ship size badge', () => {
         ).toBe('');
     });
 });
+
+describe('patch 21: Static and EOL inside the pill', () => {
+    it('puts the static in the pill, in green', () => {
+        const wrapper = mount(Edge, { props: { geometry, connection: connection(), staticEnd: { side: 'from', doubt: false }, scale: 1 } });
+        const pill = wrapper.find('foreignObject');
+        expect(pill.text()).toContain('Static');
+        expect(pill.find('.bg-green-800').exists()).toBe(true);
+        // No separate floating "Static" label any more.
+        expect(wrapper.findAll('text').some((text) => text.text().includes('Static'))).toBe(false);
+    });
+
+    it('shows end of life as EOL (EOL! when critical) inside the pill', () => {
+        expect(badgeText({ lifetime_status: 'eol' })).toContain('EOL');
+        expect(badgeText({ lifetime_status: 'critical' })).toContain('EOL!');
+    });
+
+    it('clicking the pill opens the pipe details', async () => {
+        const wrapper = mount(Edge, { props: { geometry, connection: connection(), scale: 1 } });
+        await wrapper.find('foreignObject').trigger('click');
+        expect(wrapper.emitted('connectionClick')).toHaveLength(1);
+    });
+});

@@ -4,7 +4,7 @@ import EdgeBadges from '@/map/components/edges/EdgeBadges.vue';
 import { badgeWidth, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
 import { scalePoint } from '@/map/core/coords';
 import { setPillWidth, usePillSpots } from '@/map/store/pillLayout';
-import { useMapStore } from '@/map/store/mapStore';
+import { tryUseMapStore } from '@/map/store/mapStore';
 import { useMinuteNow } from '@/composables/useMinuteNow';
 import { holeAge } from '@/lib/holeAge';
 import { guessHole } from '@/map/holeGuess';
@@ -255,12 +255,13 @@ const pipeTitle = computed(() => {
 
 // ---- Pill (patch 21) ---------------------------------------------------------------
 // One pill per pipe, placed with all the others (clear of bends, boxes and other pills).
-const store = useMapStore();
-const pillSpots = usePillSpots(store);
-const pillId = computed(() => (connection && !haloOnly ? geometry.id : null));
+const store = tryUseMapStore();
+const pillSpots = store ? usePillSpots(store) : null;
+const pillId = computed(() => (store && connection && !haloOnly ? geometry.id : null));
 watch(
     [pillId, () => badgeWidth(indicators.value)],
     ([id, width], previous) => {
+        if (!store) return;
         const before = previous?.[0] ?? null;
         if (before !== null && before !== id) setPillWidth(store, before, null);
         if (id !== null) setPillWidth(store, id, width);
@@ -268,10 +269,10 @@ watch(
     { immediate: true },
 );
 onBeforeUnmount(() => {
-    if (pillId.value !== null) setPillWidth(store, pillId.value, null);
+    if (store && pillId.value !== null) setPillWidth(store, pillId.value, null);
 });
 const pill = computed(() => {
-    const spot = pillId.value !== null ? pillSpots.value?.get(pillId.value) : null;
+    const spot = pillId.value !== null ? pillSpots?.value?.get(pillId.value) : null;
     return spot ? { center: { x: spot.x, y: spot.y }, dot: spot.dot } : { center: path.value.center, dot: false };
 });
 

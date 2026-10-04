@@ -66,6 +66,11 @@ export function provideMapStore(store: MapStore): void {
     currentStore.value = store;
 }
 
+/** Patch 21: the store when there is one (a pipe drawn on its own, e.g. in a test, has none). */
+export function tryUseMapStore(): MapStore | null {
+    return (getCurrentInstance() ? inject(MAP_STORE_KEY, null) : null) ?? currentStore.value;
+}
+
 export function useMapStore(): MapStore {
     const store = (getCurrentInstance() ? inject(MAP_STORE_KEY, null) : null) ?? currentStore.value;
     if (!store) {

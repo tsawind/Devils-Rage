@@ -89,7 +89,7 @@ final readonly class MapUndoSnapshots
             'connections' => $connections->map(fn (MapConnection $row): array => $row->getAttributes())->values()->all(),
             'signatures' => $signatures->map(fn (Signature $row): array => $row->getAttributes())->values()->all(),
             'jumps' => $jumps->map(fn (MapConnectionJump $row): array => $row->getAttributes())->values()->all(),
-            'prune_system_ids' => $prune ? array_values(array_map(intval(...), $signatureSystemIds)) : [],
+            'prune_system_ids' => $prune ? array_map(intval(...), $signatureSystemIds) : [],
         ], CarbonImmutable::now()->addHours(self::KEEP_HOURS));
     }
 
@@ -216,7 +216,9 @@ final readonly class MapUndoSnapshots
                     ->whereNotIn('id', $keptSignatureIds)
                     ->where('created_at', '>=', CarbonImmutable::parse($snapshot['taken_at']))
                     ->get()
-                    ->each(fn (Signature $signature): ?bool => $signature->deleteQuietly());
+                    ->each(function (Signature $signature): void {
+                        $signature->deleteQuietly();
+                    });
             }
 
             return $counts;
