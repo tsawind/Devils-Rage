@@ -102,7 +102,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
             // Patch 20: 250 / 85 (pipes now leave out of a system's top and bottom too).
             levelGap: 250,
             rowGap: 85,
-            homeTopRows: 4,
+            homeTopRows: 2,
             // Patch 15: rage lanes use readable full cards (alias, class, statics, a pilot).
             laneNodeWidth: 180,
             laneNodeHeight: 60,
