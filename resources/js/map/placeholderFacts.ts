@@ -13,19 +13,22 @@ const wormholeTypes = getTypesByCategory(signatureCategories.find((category) => 
  * size (arrow away: it spawned here), a K162's size worked out from the wormhole data
  * (arrow toward you), a K162 frigate S. Unknown or guessed: no letter.
  */
-export function knownSize(placeholder: { wormhole: string | null; signatureTypeId?: number | null; targetClass?: string | null }, parentClass: string | null): { letter: string; arrow: string } | null {
+export function knownSize(
+    placeholder: { wormhole: string | null; signatureTypeId?: number | null; targetClass?: string | null },
+    parentClass: string | null,
+): { letter: string; arrow: 'away' | 'toward' } | null {
     const name = (placeholder.wormhole ?? '').toUpperCase();
     if (!name) return null;
     if (name !== 'K162') {
         const mass = wormholeMass(name);
         const size = mass ? shipSizeFromJumpMass(mass.maxJump) : null;
-        return size ? { letter: SHIP_SIZE_LETTERS[size], arrow: '↗' } : null;
+        return size ? { letter: SHIP_SIZE_LETTERS[size], arrow: 'away' } : null;
     }
     const type =
         (placeholder.signatureTypeId ? signatureTypeById.get(placeholder.signatureTypeId) : null) ??
         ({ id: 0, signature: 'K162', target_class: placeholder.targetClass ?? null, extra: null } as const);
     const size = k162ShipSize(type, parentClass, wormholeTypes);
-    return size ? { letter: SHIP_SIZE_LETTERS[size], arrow: '↙' } : null;
+    return size ? { letter: SHIP_SIZE_LETTERS[size], arrow: 'toward' } : null;
 }
 
 /** Patch 21: what the map knows about an unjumped hole: its type, the size it must be, or a guess. */

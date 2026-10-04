@@ -10,28 +10,29 @@ import { computed, shallowReactive, type ComputedRef } from 'vue';
  * boxes and each other. Each pipe reports how wide its pill is; null in the
  * free layout (pills then sit at the pipe's middle as before).
  */
-const PILL_HEIGHT = 20;
+type TPillSize = { width: number; height: number };
 
-const widthsCache = new WeakMap<MapStore, Map<number, number>>();
+const widthsCache = new WeakMap<MapStore, Map<number, TPillSize>>();
 const spotsCache = new WeakMap<MapStore, ComputedRef<Map<number, PillSpot> | null>>();
 
-/** The pill widths reported by each pipe, in screen pixels (0 or missing = no pill). */
-export function pillWidths(store: MapStore): Map<number, number> {
-    let widths = widthsCache.get(store);
-    if (!widths) {
-        widths = shallowReactive(new Map<number, number>());
-        widthsCache.set(store, widths);
+/** The pill sizes reported by each pipe, in screen pixels (missing = no pill). */
+export function pillSizes(store: MapStore): Map<number, TPillSize> {
+    let sizes = widthsCache.get(store);
+    if (!sizes) {
+        sizes = shallowReactive(new Map<number, TPillSize>());
+        widthsCache.set(store, sizes);
     }
-    return widths;
+    return sizes;
 }
 
-export function setPillWidth(store: MapStore, id: number, width: number | null): void {
-    const widths = pillWidths(store);
-    if (!width) {
-        if (widths.has(id)) widths.delete(id);
+export function setPillSize(store: MapStore, id: number, size: TPillSize | null): void {
+    const sizes = pillSizes(store);
+    if (!size || !size.width) {
+        if (sizes.has(id)) sizes.delete(id);
         return;
     }
-    if (widths.get(id) !== width) widths.set(id, width);
+    const current = sizes.get(id);
+    if (current?.width !== size.width || current?.height !== size.height) sizes.set(id, size);
 }
 
 export function usePillSpots(store: MapStore): ComputedRef<Map<number, PillSpot> | null> {
@@ -42,7 +43,7 @@ export function usePillSpots(store: MapStore): ComputedRef<Map<number, PillSpot>
         const routed = geometries.value;
         if (!routed) return null;
         const scale = store.scale.value;
-        const widths = pillWidths(store);
+        const sizes = pillSizes(store);
         const obstacles: PillBox[] = [...treeRects(store).rects.values()].map((rect) => ({
             minX: rect.minX * scale,
             minY: rect.minY * scale,
@@ -50,10 +51,10 @@ export function usePillSpots(store: MapStore): ComputedRef<Map<number, PillSpot>
             maxY: rect.maxY * scale,
         }));
         const requests: PillRequest[] = [];
-        for (const [id, width] of widths) {
+        for (const [id, size] of sizes) {
             const geometry = routed.get(id);
-            if (!geometry || geometry.kind !== 'elbow' || !width) continue;
-            requests.push({ id, points: elbowPoints(geometry, scale), width, height: PILL_HEIGHT });
+            if (!geometry || geometry.kind !== 'elbow') continue;
+            requests.push({ id, points: elbowPoints(geometry, scale), width: size.width, height: size.height });
         }
         return placePills(requests, obstacles);
     });

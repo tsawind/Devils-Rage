@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { isDark } from '@/composables/useIsDark';
 import EdgeBadges from '@/map/components/edges/EdgeBadges.vue';
-import { badgeWidth, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
+import { badgeSize, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
 import { scalePoint } from '@/map/core/coords';
-import { setPillWidth, usePillSpots } from '@/map/store/pillLayout';
+import { setPillSize, usePillSpots } from '@/map/store/pillLayout';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import { useMinuteNow } from '@/composables/useMinuteNow';
 import { holeAge } from '@/lib/holeAge';
@@ -123,8 +123,15 @@ const indicators = computed<EdgeIndicator[]>(() => {
             label: shipSizeLabel,
             fill: 'var(--color-neutral-500)',
             stroke: 'var(--color-neutral-600)',
-            arrowAngle: arrowAngle.value,
+            // Patch 21: a plain left / right arrow (from where it opened toward its K162 exit).
+            arrow: arrowAngle.value === null ? null : Math.abs(arrowAngle.value) <= 90 ? 'right' : 'left',
         });
+    }
+
+    // Patch 21: the hole's type on the second line of the pill.
+    const typeName = holeType.value?.name ?? ((connection?.signatures ?? []).some((signature) => signature.wormhole?.name?.startsWith('K162')) ? 'K162' : null);
+    if (typeName && !isStargate.value) {
+        items.push({ type: 'text', role: 'type', label: typeName, fill: 'var(--color-neutral-500)', stroke: 'var(--color-neutral-600)' });
     }
 
     if (massStatus.value && massStatus.value !== 'fresh') {
@@ -259,17 +266,17 @@ const store = tryUseMapStore();
 const pillSpots = store ? usePillSpots(store) : null;
 const pillId = computed(() => (store && connection && !haloOnly ? geometry.id : null));
 watch(
-    [pillId, () => badgeWidth(indicators.value)],
-    ([id, width], previous) => {
+    [pillId, () => badgeSize(indicators.value)],
+    ([id, size], previous) => {
         if (!store) return;
         const before = previous?.[0] ?? null;
-        if (before !== null && before !== id) setPillWidth(store, before, null);
-        if (id !== null) setPillWidth(store, id, width);
+        if (before !== null && before !== id) setPillSize(store, before, null);
+        if (id !== null) setPillSize(store, id, size);
     },
     { immediate: true },
 );
 onBeforeUnmount(() => {
-    if (store && pillId.value !== null) setPillWidth(store, pillId.value, null);
+    if (store && pillId.value !== null) setPillSize(store, pillId.value, null);
 });
 const pill = computed(() => {
     const spot = pillId.value !== null ? pillSpots?.value?.get(pillId.value) : null;

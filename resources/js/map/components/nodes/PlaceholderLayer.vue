@@ -2,16 +2,17 @@
 import { isDark } from '@/composables/useIsDark';
 import { combatColorHex } from '@/lib/combat';
 import { isFrigateHole, pipeWidth } from '@/lib/massEstimate';
+import { isK162Frigate } from '@/lib/k162';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
 import { CORNER_RADIUS, elbowCorners, farStretchPoint, roundedElbowPath } from '@/map/core/geometry/paths';
 import EdgeBadges from '@/map/components/edges/EdgeBadges.vue';
-import { badgeWidth, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
+import { badgeSize, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
 import { openPlaceholderDetails } from '@/map/components/overlays/placeholderDetails';
 import { copyPlaceholderBookmark } from '@/map/holeBookmark';
 import usePermission from '@/composables/usePermission';
 import type { TPlaceholder } from '@/lib/placeholders';
-import { pillWidths, setPillWidth, usePillSpots } from '@/map/store/pillLayout';
+import { pillSizes, setPillSize, usePillSpots } from '@/map/store/pillLayout';
 import { holeFacts } from '@/map/placeholderFacts';
 import { useTreeGeometries } from '@/map/store/treeGeometries';
 import useUser from '@/composables/useUser';
@@ -46,11 +47,14 @@ function pillParts(placeholder: TPlaceholder, facts: ReturnType<typeof holeFacts
     } else if (placeholder.maybeStatic) {
         parts.push({ type: 'static', label: 'Static?', strong: true, fill: 'var(--color-yellow-600)', stroke: 'var(--color-yellow-700)' });
     }
-    const typeName = placeholder.wormhole ? placeholder.wormhole.toUpperCase() : facts.isK162 ? 'K162' : null;
-    if (typeName) parts.push({ type: 'text', label: typeName, ...neutral });
-    if (facts.size) parts.push({ type: 'text', label: `${facts.size.letter}${facts.size.arrow}`, ...neutral });
+    // Patch 21: stacked: the size with a plain arrow (away = it opened here, toward = the K162 side), then the type.
+    if (facts.size) parts.push({ type: 'text', label: facts.size.letter, arrow: facts.size.arrow === 'away' ? 'right' : 'left', ...neutral });
     else if (facts.guess?.size) parts.push({ type: 'text', label: `≈ ${SHIP_SIZE_LETTERS[facts.guess.size]}`, fill: 'var(--color-neutral-400)', stroke: 'var(--color-neutral-500)' });
-    else if (!parts.length) parts.push({ type: 'text', label: facts.guess ? '≈' : '?', fill: 'var(--color-neutral-400)', stroke: 'var(--color-neutral-500)' });
+    else if (facts.guess) parts.push({ type: 'text', label: '≈', fill: 'var(--color-neutral-400)', stroke: 'var(--color-neutral-500)' });
+    // Kept short so the pill fits between two columns (the K162's range is in the details).
+    const typeName = isK162Frigate(facts.holeTypeInfo) ? 'K162 frig' : placeholder.wormhole ? placeholder.wormhole.toUpperCase() : facts.isK162 ? 'K162' : null;
+    if (typeName) parts.push({ type: 'text', role: 'type', label: typeName, ...neutral });
+    if (!parts.length) parts.push({ type: 'text', label: '?', fill: 'var(--color-neutral-400)', stroke: 'var(--color-neutral-500)' });
     if (placeholder.massStatus === 'reduced' || placeholder.massStatus === 'critical') {
         const critical = placeholder.massStatus === 'critical';
         parts.push({ type: 'weight', fill: critical ? 'var(--color-red-500)' : 'var(--color-amber-500)', stroke: critical ? 'var(--color-red-600)' : 'var(--color-amber-600)' });
@@ -77,11 +81,11 @@ const pills = computed(() => {
 watch(
     pills,
     (current) => {
-        const widths = pillWidths(store);
-        for (const id of [...widths.keys()]) {
-            if (id < 0 && !current.has(id)) setPillWidth(store, id, null);
+        const sizes = pillSizes(store);
+        for (const id of [...sizes.keys()]) {
+            if (id < 0 && !current.has(id)) setPillSize(store, id, null);
         }
-        for (const [id, parts] of current) setPillWidth(store, id, badgeWidth(parts));
+        for (const [id, parts] of current) setPillSize(store, id, badgeSize(parts));
     },
     { immediate: true },
 );

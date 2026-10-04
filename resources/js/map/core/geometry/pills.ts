@@ -24,7 +24,7 @@ export type PillRequest = {
 export type PillSpot = { x: number; y: number; dot: boolean };
 
 /** Clear room between a pill and the bend (or end) of its stretch. */
-export const PILL_BEND_CLEAR = 12;
+export const PILL_BEND_CLEAR = 6;
 /** Clear room between a pill and a system box, or another pill. */
 export const PILL_CLEAR = 4;
 /** A pill that has no room shrinks to a dot this big. */
