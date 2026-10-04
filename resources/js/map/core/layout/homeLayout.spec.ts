@@ -50,6 +50,19 @@ describe('patch 22: the home layout', () => {
         expect(p(8).y - p(7).y).toBe(85);
     });
 
+    it('beyond the lanes, no empty spare rows: a system sits in the middle of the holes it has (patch 22c)', () => {
+        // Alpha (2) with A4 (6), which keeps 3 rows but has only two holes (7, 8).
+        const grown = layout(
+            [{ id: 1 }, { id: 2, reserve: 3 }, { id: 6, reserve: 3 }, { id: 7, placeholder: true }, { id: 8, placeholder: true }],
+            [[1, 2], [2, 6], [6, 7], [6, 8]],
+        );
+        const p = (id: number) => grown.positions.get(id)!;
+        expect(p(6).y).toBe(p(2).y);
+        expect(p(6).y).toBeGreaterThan(p(7).y);
+        expect(p(6).y).toBeLessThan(p(8).y);
+        expect(p(8).y - p(7).y).toBe(85);
+    });
+
     it("nothing overlaps: the next hole up sits beyond the previous hole's whole tree", () => {
         const grown = layout(
             [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 6 }, { id: 7 }],

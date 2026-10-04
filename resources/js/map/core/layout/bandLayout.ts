@@ -450,22 +450,12 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         for (const rect of sub.rects) into.rects.push({ x0: rect.x0 + dx, x1: rect.x1 + dx, y0: rect.y0 + dy, y1: rect.y1 + dy });
         into.lanes.push(...sub.lanes);
     };
-    const isHub = (id: number, root: number): boolean => id === root || (Boolean(byId.get(id)?.pinned) && !ghostInfo.has(id) && !spares.has(id));
-    const childrenWithSpares = (id: number, tree: Map<number, number[]>, hub: boolean): number[] => {
-        const list = [...(tree.get(id) ?? [])];
-        const reserve = hub || ghostInfo.has(id) ? 0 : (byId.get(id)?.reserve ?? 0);
-        while (list.length < reserve) {
-            spareId += 1;
-            spares.add(spareId);
-            list.push(spareId);
-        }
-        return list;
-    };
-    /** A system and everything found from it, relative to it (it sits at 0,0). */
+    const isHub = (id: number, root: number): boolean => id === root || (Boolean(byId.get(id)?.pinned) && !ghostInfo.has(id));
+    /** A system and everything found from it, relative to it (it sits at 0,0). Patch 22c: no spare rows, chains pack tight. */
     const layoutSub = (id: number, tree: Map<number, number[]>, root: number): HubSub => {
         const hub = isHub(id, root);
         const sub: HubSub = { pos: new Map([[id, { x: 0, y: 0 }]]), rects: [boxRect(0, 0)], lanes: [] };
-        const children = childrenWithSpares(id, tree, hub);
+        const children = tree.get(id) ?? [];
         if (hub) {
             // Holes alternate up and down (the first, usually the static, goes up), each in its own lane.
             const sides: { d: 1 | -1; list: number[] }[] = [
@@ -492,7 +482,7 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
                     const laneTop = side.d < 0 ? dy + nodeHeight : nodeHeight;
                     const laneBottom = side.d < 0 ? 0 : dy;
                     sub.rects.push({ x0: dx, x1: dx + 30, y0: Math.min(laneTop, laneBottom), y1: Math.max(laneTop, laneBottom) });
-                    if (!spares.has(child) && !ghostInfo.has(child)) sub.lanes.push([child, id]);
+                    if (!ghostInfo.has(child)) sub.lanes.push([child, id]);
                 });
             }
             return sub;
@@ -528,7 +518,6 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
             const at = { x: originX + point.x, y: originY + point.y };
             bottom = Math.max(bottom, at.y);
             right = Math.max(right, at.x + nodeWidth);
-            if (spares.has(id)) continue;
             const ghost = ghostInfo.get(id);
             if (ghost) ghosts.push({ key: `ghost-${id}`, position: at, label: ghost.label, note: ghost.note, color: ghost.color });
             else positions.set(id, at);
