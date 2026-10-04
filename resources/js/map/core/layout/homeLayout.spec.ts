@@ -63,6 +63,43 @@ describe('patch 22: the home layout', () => {
         expect(p(8).y - p(7).y).toBe(85);
     });
 
+    describe('patch 22d: boxes slide toward where they came from', () => {
+        // Alpha (2) above with A3 (12) and A4 (13) hanging below Daisy's row; Delta (3) below with
+        // D0 (20, its hole D00 30) and D2 (21, holes 50 and 51).
+        const nodes: BandLayoutNode[] = [1, 2, 3, 12, 13, 20, 21, 30].map((id) => ({ id }));
+        for (const id of [43, 44, 45, 46, 47, 48, 50, 51]) nodes.push({ id, placeholder: true });
+        const edges: [number, number][] = [[1, 2], [1, 3], [2, 12], [2, 13], [12, 43], [12, 44], [12, 45], [12, 46], [13, 47], [13, 48], [3, 20], [3, 21], [20, 30], [21, 50], [21, 51]];
+        const slid = layout(nodes, edges);
+        const p = (id: number) => slid.positions.get(id)!;
+
+        it("Delta comes up to the hub gap, as close as Alpha is above, while its holes stay clear of Alpha's chain", () => {
+            expect(p(3).y - p(1).y).toBe(p(1).y - p(2).y);
+            expect(p(30).y).toBeGreaterThan(p(48).y);
+        });
+
+        it('a system with holes follows its parent, but never more than one row past its first hole', () => {
+            expect(p(20).y).toBe(p(3).y);
+            expect(p(21).y).toBeGreaterThanOrEqual(p(50).y - 85);
+        });
+
+        it('D4 moves up off the middle of its holes, never more than one row past the first', () => {
+            // Delta (3): D0 (20) with four holes, then D4 (22) with three holes packed below them.
+            const kids: [number, number][] = [70, 71, 72, 73].map((id) => [20, id] as [number, number]).concat([80, 81, 82].map((id) => [22, id] as [number, number]));
+            const far = layout(
+                [1, 2, 3, 20, 22, 70, 71, 72, 73, 80, 81, 82].map((id) => ({ id })),
+                [[1, 2], [1, 3], [3, 20], [3, 22], ...kids],
+            );
+            const q = (id: number) => far.positions.get(id)!;
+            expect(q(22).y).toBeLessThan(q(81).y);
+            expect(q(22).y).toBeGreaterThanOrEqual(q(80).y - 85);
+            expect(q(80).y).toBe(q(73).y + 85);
+        });
+
+        it('a box stops at the box above it in its column', () => {
+            expect(p(21).y - p(20).y).toBeGreaterThanOrEqual(85);
+        });
+    });
+
     it("nothing overlaps: the next hole up sits beyond the previous hole's whole tree", () => {
         const grown = layout(
             [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 6 }, { id: 7 }],

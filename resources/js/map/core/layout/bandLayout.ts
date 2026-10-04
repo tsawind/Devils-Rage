@@ -504,10 +504,46 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         }
         return sub;
     };
+    /**
+     * Patch 22d: each system's box slides toward the system it came from (its own holes stay put),
+     * until it meets another box in its column. A hub's holes stop at the hub gap; any other system
+     * with holes goes at most one row past its first (or last) hole. Leaves don't move.
+     */
+    const slideTowardParents = (root: number, tree: Map<number, number[]>, pos: Map<number, Vec2>): void => {
+        const order = [root];
+        for (let index = 0; index < order.length; index++) {
+            const parent = order[index];
+            const parentAt = pos.get(parent)!;
+            for (const id of tree.get(parent) ?? []) {
+                const at = pos.get(id);
+                if (!at) continue;
+                order.push(id);
+                const kids = (tree.get(id) ?? []).map((kid) => pos.get(kid)?.y).filter((y): y is number => y !== undefined);
+                let target: number;
+                if (isHub(parent, root)) {
+                    target = parentAt.y + (at.y < parentAt.y ? -hubGap : hubGap);
+                } else if (kids.length > 0) {
+                    target = Math.min(Math.max(parentAt.y, Math.min(...kids) - rowGap), Math.max(...kids) + rowGap);
+                } else {
+                    continue;
+                }
+                if (target === at.y) continue;
+                const down = target > at.y;
+                let y = target;
+                for (const [other, point] of pos) {
+                    if (other === id || Math.abs(point.x - at.x) >= nodeWidth) continue;
+                    if (down && point.y > at.y) y = Math.min(y, point.y - rowGap);
+                    if (!down && point.y < at.y) y = Math.max(y, point.y + rowGap);
+                }
+                if (down ? y > at.y : y < at.y) pos.set(id, { x: at.x, y });
+            }
+        }
+    };
     /** Places one hub tree with its top at `top` (the hub further down when its holes above need the room). */
     const placeHubTree = (root: number, tree: Map<number, number[]>, top: number, hubY: number): { bottom: number; right: number } => {
         const sub = layoutSub(root, tree, root);
-        const minY = Math.min(...sub.rects.map((rect) => rect.y0));
+        slideTowardParents(root, tree, sub.pos);
+        const minY = Math.min(...[...sub.pos.values()].map((point) => point.y));
         const minX = Math.min(...sub.rects.map((rect) => rect.x0));
         const originY = snapRow(Math.max(hubY, top - minY));
         // Room is always kept for the hub's leftmost lane, so a new hole never shifts it right.
@@ -522,7 +558,6 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
             if (ghost) ghosts.push({ key: `ghost-${id}`, position: at, label: ghost.label, note: ghost.note, color: ghost.color });
             else positions.set(id, at);
         }
-        for (const rect of sub.rects) bottom = Math.max(bottom, originY + rect.y0);
         for (const [child, hubId] of sub.lanes) {
             const at = positions.get(child);
             // The pipe runs 15 in from the hole's left edge (anchors sit 40 in from it).
