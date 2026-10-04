@@ -1,6 +1,6 @@
 import SignatureArmController from '@/actions/App/Http/Controllers/SignatureArmController';
 import { router } from '@inertiajs/vue3';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 /**
  * Patch 13: arm a hole as your next jump (it takes `alias`), "Arm as" another

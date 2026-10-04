@@ -9,7 +9,7 @@ import { useNodeMeasurement } from '@/map/interactions/measure';
 import { useMapStore } from '@/map/store/mapStore';
 import { wayBackBookmark } from '@/map/holeBookmark';
 import { visibleBookmarkName } from '@/lib/bookmark';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 import { TShowMapProps } from '@/pages/maps';
 import { show } from '@/routes/maps';
 import { AppPageProps } from '@/types';

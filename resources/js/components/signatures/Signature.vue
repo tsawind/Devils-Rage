@@ -48,7 +48,7 @@ import { syncRefs } from '@vueuse/core';
 import { Check, Cloud, Copy, Crosshair, Database, Fan, Flag, Gem, Heart, Landmark, MoreVertical, Shield, Swords } from 'lucide-vue-next';
 import { AcceptableValue } from 'reka-ui';
 import { type Component, computed, nextTick, ref, toRef } from 'vue';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 const {
     signature,

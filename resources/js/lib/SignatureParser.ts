@@ -2,7 +2,7 @@ import { signatureCategories, signatureTypes } from '@/const/signatures';
 import { distanceFromScanRow, TScanDistance } from '@/lib/returnHole';
 import { TSignatureCategory, TSignatureType } from '@/types/models';
 import { UTCDate } from '@date-fns/utc';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 export type TRawSignature = {
     signature_id: string;

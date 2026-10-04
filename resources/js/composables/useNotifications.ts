@@ -1,7 +1,8 @@
 import { AppPageProps } from '@/types';
 import { router, usePage } from '@inertiajs/vue3';
 import { watch } from 'vue';
-import { Action, toast } from 'vue-sonner';
+import { Action, toast as sonner } from 'vue-sonner';
+import { isSignatureMessage, signatureToast } from '@/lib/signatureToast';
 
 export type TNotification = {
     id?: string;
@@ -39,6 +40,19 @@ export function useNotifications() {
 
                 last_notification_id = notification.id ?? null;
 
+                // Patch 21: signature messages show in their own column.
+                if (isSignatureMessage(notification.title, notification.message)) {
+                    const method = (['success', 'error', 'warning', 'info'] as const).find((type) => type === notification.type);
+                    const action = getToastAction(notification.action);
+                    const signatureOptions = {
+                        description: notification.message,
+                        action: action ? { label: String(action.label), onClick: (event: MouseEvent) => action.onClick(event) } : undefined,
+                    };
+                    if (method) signatureToast[method](notification.title, signatureOptions);
+                    else signatureToast(notification.title, signatureOptions);
+                    return;
+                }
+                const toast = sonner;
                 const options = {
                     description: notification.message,
                     action: getToastAction(notification.action),

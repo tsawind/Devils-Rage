@@ -11,7 +11,7 @@ import type { MapStore } from '@/map/store/mapStore';
 import type { TMapSolarsystem } from '@/pages/maps';
 import type { TSignature } from '@/types/models';
 import { onBeforeUnmount, ref, watch } from 'vue';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 /**
  * Patch 13: a hole is only marked the static once it is certain (see

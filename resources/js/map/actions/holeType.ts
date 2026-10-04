@@ -1,6 +1,6 @@
 import ConnectionHoleTypeController from '@/actions/App/Http/Controllers/ConnectionHoleTypeController';
 import { router } from '@inertiajs/vue3';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 /** Patch 14: type a jumped hole from the map (it goes on the side it spawned from; the other side becomes the K162). */
 export function setConnectionHoleType(connectionId: number, mapSolarsystemId: number, signatureTypeId: number, onSuccess?: () => void): void {

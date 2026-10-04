@@ -17,6 +17,8 @@ export type EdgeInput = {
     id: number;
     sourceId: number;
     targetId: number;
+    /** Patch 21: how wide the pipe is drawn (base units), so pipes leaving one box keep apart. */
+    width?: number;
 };
 
 /**

@@ -73,13 +73,19 @@ export function edgePathAndCenter(geometry: EdgeGeometry, scale: number): { d: s
         return { d: curvePath(from, to), center: midpoint(from, to) };
     }
 
-    const corners = elbowCorners({
-        ...geometry,
-        from,
-        to,
-        bend: geometry.bend === null ? null : geometry.bend * scale,
-    });
-    const points = [
+    const points = elbowPoints(geometry, scale);
+    return {
+        d: roundedElbowPath(points, CORNER_RADIUS),
+        center: farStretchPoint(points),
+    };
+}
+
+/** Patch 21: an elbow's corner points in screen pixels (the top/bottom exit included). */
+export function elbowPoints(geometry: Extract<EdgeGeometry, { kind: 'elbow' }>, scale: number): Vec2[] {
+    const from = scalePoint(geometry.from, scale);
+    const to = scalePoint(geometry.to, scale);
+    const corners = elbowCorners({ ...geometry, from, to, bend: geometry.bend === null ? null : geometry.bend * scale });
+    return [
         ...(geometry.start ? [scalePoint(geometry.start.point, scale)] : []),
         from,
         corners[0],
@@ -87,10 +93,6 @@ export function edgePathAndCenter(geometry: EdgeGeometry, scale: number): { d: s
         to,
         ...(geometry.end ? [scalePoint(geometry.end.point, scale)] : []),
     ];
-    return {
-        d: roundedElbowPath(points, CORNER_RADIUS),
-        center: farStretchPoint(points),
-    };
 }
 
 /**

@@ -129,7 +129,7 @@ function laneOrder(precedes: ReadonlySet<number>[]): number[] {
     return position;
 }
 
-type Port = { endpoint: Vec2; normal: Vec2; box: Rect; sortKey: number };
+type Port = { endpoint: Vec2; normal: Vec2; box: Rect; sortKey: number; width?: number };
 
 /**
  * Fans out connections that share a node edge so parallel lines don't overlap:
@@ -141,8 +141,25 @@ function spreadSharedEdges(ports: Port[]): void {
     const alongY = ports[0].normal.x !== 0;
     const box = ports[0].box;
     const extent = alongY ? box.maxY - box.minY : box.maxX - box.minX;
-    const spacing = Math.min(PARALLEL_SPACING, (extent * 0.7) / (ports.length - 1));
     ports.sort((a, b) => a.sortKey - b.sortKey);
+    // Patch 21: pipes of known width keep apart by half of each plus a gap (squeezed to fit the edge).
+    if (ports.some((port) => port.width !== undefined)) {
+        const widths = ports.map((port) => port.width ?? 8);
+        const steps = widths.slice(1).map((width, i) => Math.max(PARALLEL_SPACING, widths[i] / 2 + EXIT_GAP + width / 2));
+        const total = steps.reduce((sum, step) => sum + step, 0);
+        const squeeze = Math.min(1, (extent * 0.9) / total);
+        let at = -(total * squeeze) / 2;
+        ports.forEach((port, i) => {
+            if (i > 0) at += steps[i - 1] * squeeze;
+            if (alongY) {
+                port.endpoint.y += at;
+            } else {
+                port.endpoint.x += at;
+            }
+        });
+        return;
+    }
+    const spacing = Math.min(PARALLEL_SPACING, (extent * 0.7) / (ports.length - 1));
     ports.forEach((port, i) => {
         const offset = (i - (ports.length - 1) / 2) * spacing;
         if (alongY) {
@@ -167,10 +184,19 @@ type RoutedEdge = Extract<EdgeGeometry, { kind: 'elbow' }> & {
      * column gap first ('stepped').
      */
     exit?: { at: 'from' | 'to'; mode: 'direct' | 'stepped'; boxEdgeX: number } | null;
+    /** Patch 21: the drawn width of the pipe (base units), when known. */
+    width?: number;
 };
 
-/** Patch 20: at most this many pipes leave one box out of its top (and as many out of its bottom). */
-export const MAX_EDGE_EXITS = 4;
+/** Patch 20/21: at most this many pipes leave one box out of its top (and as many out of its bottom). */
+export const MAX_EDGE_EXITS = 8;
+/** Patch 21: room kept from a box's corner, and between two pipes leaving the same edge (plus half of each pipe). */
+export const EXIT_CORNER = 12;
+export const EXIT_GAP = 4;
+/** Patch 21: the bottom edge keeps clear of the way-back pill in the box's bottom-left corner. */
+export const WAY_BACK_CLEAR = 56;
+/** Width assumed for a pipe whose width is not given. */
+const DEFAULT_WIDTH = 8;
 
 /**
  * Tree-layout routing, a global pass over all edges: connects facing box edges (or sends
@@ -228,6 +254,7 @@ export function computeTreeEdgeGeometries(
             detour,
             distance: 0,
             signed: 0,
+            width: edge.width,
         };
         routed.push(item);
         geometries.set(edge.id, item);
@@ -237,14 +264,14 @@ export function computeTreeEdgeGeometries(
 
     // Fan out the endpoints that share a node edge so parallel lines don't overlap.
     const sharedEdges = new Map<string, Port[]>();
-    const register = (endpoint: Vec2, normal: Vec2, box: Rect, other: Rect): void => {
-        const port: Port = { endpoint, normal, box, sortKey: normal.x !== 0 ? other.centerY : other.centerX };
+    const register = (endpoint: Vec2, normal: Vec2, box: Rect, other: Rect, width?: number): void => {
+        const port: Port = { endpoint, normal, box, sortKey: normal.x !== 0 ? other.centerY : other.centerX, width };
         const key = `${box.centerX},${box.centerY}|${normal.x},${normal.y}`;
         (sharedEdges.get(key) ?? sharedEdges.set(key, []).get(key)!).push(port);
     };
     for (const item of routed) {
-        if (item.exit?.at !== 'from') register(item.from, item.fromNormal, item.sourceBox, item.targetBox);
-        if (item.exit?.at !== 'to') register(item.to, item.toNormal, item.targetBox, item.sourceBox);
+        if (item.exit?.at !== 'from') register(item.from, item.fromNormal, item.sourceBox, item.targetBox, item.width);
+        if (item.exit?.at !== 'to') register(item.to, item.toNormal, item.targetBox, item.sourceBox, item.width);
     }
     const spreadCount = new Map<Vec2, number>();
     for (const ports of sharedEdges.values()) {
@@ -368,8 +395,27 @@ export function computeTreeEdgeGeometries(
         }
         const position = laneOrder(precedes);
 
-        for (const item of group) {
-            item.bend = near + ((far - near) * (position[laneOf.get(item.id)!] + 1)) / (lanes.length + 1);
+        // Patch 21: with pipe widths known, lanes sit side by side by their widths (a gap
+        // between the widest pipe of each), centred in the corridor, so thick trunks never
+        // lie on each other; squeezed evenly when the corridor is too narrow for all of them.
+        if (group.some((item) => item.width !== undefined)) {
+            const laneWidth = lanes.map((members) => Math.max(...members.map((member) => member.width ?? DEFAULT_WIDTH)));
+            const bySlot = [...laneWidth.keys()].sort((a, b) => position[a] - position[b]);
+            const needed = laneWidth.reduce((total, width) => total + width, 0) + EXIT_GAP * (lanes.length - 1);
+            const squeeze = Math.min(1, (far - near - 8) / needed);
+            let cursor = (near + far) / 2 - (needed * squeeze) / 2;
+            const centre = new Map<number, number>();
+            for (const lane of bySlot) {
+                centre.set(lane, cursor + (laneWidth[lane] * squeeze) / 2);
+                cursor += (laneWidth[lane] + EXIT_GAP) * squeeze;
+            }
+            for (const item of group) {
+                item.bend = centre.get(laneOf.get(item.id)!)!;
+            }
+        } else {
+            for (const item of group) {
+                item.bend = near + ((far - near) * (position[laneOf.get(item.id)!] + 1)) / (lanes.length + 1);
+            }
         }
     }
 
@@ -404,12 +450,16 @@ function edgeXs(item: RoutedEdge): [number, number] {
 
 /**
  * Patch 20: a pipe to a system in the next column up or down leaves its box out
- * of the top or bottom edge near the right corner (the left side is for the pipe
- * coming in), so pipes no longer all crowd out of the right middle. The nearest
- * system's pipe leaves closest to the corner; further ones further in, so they
- * nest without crossing. When the way up/down is clear it runs straight to the
- * other system; when a box sits right above/below, it steps out into the gap
- * and joins the column gap like before. No room: the right side, as before.
+ * of the top or bottom edge (the left side is for the pipe coming in), so pipes
+ * no longer all crowd out of the right middle. The nearest system's pipe leaves
+ * closest to the right corner; further ones further left, so they nest without
+ * crossing. When the way up/down is clear it runs straight to the other system;
+ * when a box sits right above/below, it steps out into the gap and joins the
+ * column gap like before. No room: the right side, as before.
+ *
+ * Patch 21: pipes keep apart by their width (half of each plus a gap), may use the
+ * whole edge up to the left corner, and the bottom edge keeps clear of the way-back
+ * pill. Stepped runs stack by their widths too.
  */
 function planEdgeExits(routed: RoutedEdge[], rects: Rect[]): void {
     type Entry = { item: RoutedEdge; left: Rect; right: Rect; up: boolean; at: 'from' | 'to'; dy: number };
@@ -429,19 +479,27 @@ function planEdgeExits(routed: RoutedEdge[], rects: Rect[]): void {
         (groups.get(key) ?? groups.set(key, []).get(key)!).push({ item, left, right, up, at: reversed ? 'to' : 'from', dy: Math.abs(dy) });
     }
 
-    const crossesV = (x: number, y1: number, y2: number, skip: Rect[]): boolean =>
-        rects.some((rect) => !skip.includes(rect) && rect.minX - 3 < x && rect.maxX + 3 > x && rect.minY < Math.max(y1, y2) && rect.maxY > Math.min(y1, y2));
-    const crossesH = (y: number, x1: number, x2: number, skip: Rect[]): boolean =>
-        rects.some((rect) => !skip.includes(rect) && rect.minY - 3 < y && rect.maxY + 3 > y && rect.minX < Math.max(x1, x2) && rect.maxX > Math.min(x1, x2));
+    const crossesV = (x: number, half: number, y1: number, y2: number, skip: Rect[]): boolean =>
+        rects.some((rect) => !skip.includes(rect) && rect.minX - 3 - half < x && rect.maxX + 3 + half > x && rect.minY < Math.max(y1, y2) && rect.maxY > Math.min(y1, y2));
+    const crossesH = (y: number, half: number, x1: number, x2: number, skip: Rect[]): boolean =>
+        rects.some((rect) => !skip.includes(rect) && rect.minY - 3 - half < y && rect.maxY + 3 + half > y && rect.minX < Math.max(x1, x2) && rect.maxX > Math.min(x1, x2));
 
     for (const entries of groups.values()) {
         entries.sort((a, b) => a.dy - b.dy);
-        let stepped = 0;
-        entries.forEach((entry, index) => {
-            const { item, left, right, up, at } = entry;
-            if (index >= MAX_EDGE_EXITS) return;
-            const x = left.maxX - 14 - index * PARALLEL_SPACING;
-            if (x < left.minX + (left.maxX - left.minX) / 2) return;
+        const { left, up } = entries[0];
+        // The right edge of the next pipe out of this edge, and the leftmost it may reach.
+        let cursor = left.maxX - EXIT_CORNER;
+        const leftmost = left.minX + (up ? EXIT_CORNER : WAY_BACK_CLEAR);
+        // How far into the gap the next stepped run goes (its near side).
+        let depth = 6;
+        let placed = 0;
+        for (const entry of entries) {
+            const { item, right, at } = entry;
+            if (placed >= MAX_EDGE_EXITS) break;
+            const width = item.width ?? DEFAULT_WIDTH;
+            const half = width / 2;
+            const x = cursor - half;
+            if (x - half < leftmost) break;
             const edgeY = up ? left.minY : left.maxY;
             const direction = up ? -1 : 1;
             const targetY = right.centerY;
@@ -449,23 +507,23 @@ function planEdgeExits(routed: RoutedEdge[], rects: Rect[]): void {
 
             let joinY: number;
             let mode: 'direct' | 'stepped';
-            if (!crossesV(x, edgeY, targetY, skip) && !crossesH(targetY, x, right.minX, skip)) {
+            if (!crossesV(x, half, edgeY, targetY, skip) && !crossesH(targetY, half, x, right.minX, skip)) {
                 joinY = targetY;
                 mode = 'direct';
             } else {
                 // The room before the next box above/below, at this x.
                 let room = Infinity;
                 for (const rect of rects) {
-                    if (skip.includes(rect) || rect.minX - 3 >= x || rect.maxX + 3 <= x) continue;
+                    if (skip.includes(rect) || rect.minX - 3 - half >= x || rect.maxX + 3 + half <= x) continue;
                     const distance = up ? edgeY - rect.maxY : rect.minY - edgeY;
                     if (distance >= 0) room = Math.min(room, distance);
                 }
-                const offset = 10 + stepped * 8;
-                if (offset > room - 10) return;
+                const offset = depth + half;
+                if (offset + half + 4 > room) continue;
                 joinY = edgeY + direction * offset;
-                if (crossesH(joinY, x, left.maxX, skip)) return;
+                if (crossesH(joinY, half, x, left.maxX, skip)) continue;
                 mode = 'stepped';
-                stepped++;
+                depth += width + EXIT_GAP;
             }
 
             const point = { x, y: joinY };
@@ -481,6 +539,8 @@ function planEdgeExits(routed: RoutedEdge[], rects: Rect[]): void {
             }
             item.exit = { at, mode, boxEdgeX: left.maxX };
             if (mode === 'direct') item.bend = (item.from.x + item.to.x) / 2;
-        });
+            cursor = x - half - EXIT_GAP;
+            placed++;
+        }
     }
 }

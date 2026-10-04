@@ -26,7 +26,7 @@ import type { TPlaceholder } from '@/lib/placeholders';
 import { disarmSignature } from '@/map/actions/arm';
 import { deleteSignature } from '@/map/actions/deleteSignature';
 import { updateSignature } from '@/map/actions/updateSignature';
-import { claimFor, holeAsSignature, pendingHoleBookmark } from '@/map/holeBookmark';
+import { claimFor, copyPlaceholderBookmark, holeAsSignature, pendingHoleBookmark } from '@/map/holeBookmark';
 import { useMapStore } from '@/map/store/mapStore';
 import { show } from '@/routes/maps';
 import type { TSignature } from '@/types/models';
@@ -35,7 +35,7 @@ import { UTCDate } from '@date-fns/utc';
 import { router } from '@inertiajs/vue3';
 import { Check, ClipboardCopy, Crosshair, Fan, Hourglass, ListTree, Scale, Star, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 /**
  * Right-click a placeholder system: arm it as your next jump (patch 13), or
@@ -59,14 +59,7 @@ const claim = computed(() => (parent.value && hole.value ? claimFor(store, paren
 const bookmark = computed(() => (parent.value && hole.value ? pendingHoleBookmark(store, parent.value, hole.value, claim.value) : ''));
 
 function copyBookmark(): void {
-    const name = bookmark.value;
-    if (!name) return;
-    navigator.clipboard.writeText(name).catch(() => undefined);
-    // Copying locks the number, so it never shifts under a bookmark saved in game.
-    if (canEdit.value && hole.value && !hole.value.alias && claim.value) {
-        updateSignature({ id: placeholder.signatureId } as TSignature, { alias: claim.value });
-    }
-    toast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(name) });
+    copyPlaceholderBookmark(store, placeholder, canEdit.value);
 }
 
 // ---- Patch 18b: the static ------------------------------------------------------

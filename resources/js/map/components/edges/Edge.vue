@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { isDark } from '@/composables/useIsDark';
-import EdgeBadges, { type EdgeIndicator } from '@/map/components/edges/EdgeBadges.vue';
+import EdgeBadges from '@/map/components/edges/EdgeBadges.vue';
+import { badgeWidth, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
 import { scalePoint } from '@/map/core/coords';
+import { setPillWidth, usePillSpots } from '@/map/store/pillLayout';
+import { useMapStore } from '@/map/store/mapStore';
 import { useMinuteNow } from '@/composables/useMinuteNow';
 import { holeAge } from '@/lib/holeAge';
 import { guessHole } from '@/map/holeGuess';
 import { describeEstimate, estimateMass, formatMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { edgePathAndCenter } from '@/map/core/geometry/paths';
-import type { EdgeGeometry, Vec2 } from '@/map/core/types';
+import type { EdgeGeometry } from '@/map/core/types';
 import type { TMapConnection } from '@/pages/maps';
 import type { TShipSize } from '@/types/models';
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, watch } from 'vue';
 
 type Props = {
     geometry: EdgeGeometry;
@@ -74,38 +77,6 @@ const scaledFrom = computed(() => scalePoint(geometry.from, scale));
 const scaledTo = computed(() => scalePoint(geometry.to, scale));
 
 /**
- * Patch 18b: the tiny "Static" / "Static?" label, just off the system the static
- * comes from (not the K162 end), sitting above the pipe.
- */
-const staticLabel = computed(() => {
-    if (!staticEnd) return null;
-    const atFrom = staticEnd.side === 'from';
-    let point = atFrom ? scaledFrom.value : scaledTo.value;
-    let normal: Vec2;
-    // Patch 20: a pipe that leaves out of the top/bottom: the label sits by that exit.
-    const exit = geometry.kind === 'elbow' ? (atFrom ? geometry.start : geometry.end) : null;
-    if (exit) {
-        point = scalePoint(exit.point, scale);
-        normal = exit.normal;
-    } else if (geometry.kind === 'elbow') normal = atFrom ? geometry.fromNormal : geometry.toNormal;
-    else {
-        const other = atFrom ? scaledTo.value : scaledFrom.value;
-        const length = Math.hypot(other.x - point.x, other.y - point.y) || 1;
-        normal = { x: (other.x - point.x) / length, y: (other.y - point.y) / length };
-    }
-    const lift = (pipe.value?.outline ?? 4) / 2 + 3;
-    const horizontal = Math.abs(normal.x) >= Math.abs(normal.y);
-    const anchor: 'start' | 'end' = normal.x >= 0 ? 'start' : 'end';
-    return {
-        x: point.x + normal.x * 6 + (horizontal ? 0 : 6),
-        y: horizontal ? point.y - lift : point.y + normal.y * 12,
-        anchor,
-        text: staticEnd.doubt ? 'Static?' : 'Static',
-        color: staticEnd.doubt ? 'var(--color-yellow-400)' : 'var(--color-green-400)',
-    };
-});
-
-/**
  * Stargates carry the column default of 'large' without it meaning anything,
  * so only wormholes get a size letter.
  */
@@ -117,6 +88,11 @@ function getShipSizeLabel(size?: TShipSize | null): string | null {
 
 const indicators = computed<EdgeIndicator[]>(() => {
     const items: EdgeIndicator[] = [];
+
+    // Patch 21: the static sits inside the pill, in green ("Static?" in yellow when in doubt).
+    if (staticEnd) {
+        items.push({ type: 'static', label: staticEnd.doubt ? 'Static?' : 'Static', strong: staticEnd.doubt, fill: 'var(--color-green-700)', stroke: 'var(--color-green-800)' });
+    }
 
     if (isStargate.value) {
         items.push({
@@ -159,12 +135,12 @@ const indicators = computed<EdgeIndicator[]>(() => {
         });
     }
 
-    if (lifetime.value && lifetime.value !== 'healthy') {
-        items.push({
-            type: 'clock',
-            fill: lifetime.value === 'critical' ? 'var(--color-red-500)' : 'var(--color-purple-500)',
-            stroke: lifetime.value === 'critical' ? 'var(--color-red-600)' : 'var(--color-purple-600)',
-        });
+    // Patch 21: end of life inside the pill, in purple ("EOL!" when critical).
+    if (lifetime.value === 'eol' || lifetime.value === 'critical') {
+        const critical = lifetime.value === 'critical';
+        items.push({ type: 'eol', label: critical ? 'EOL!' : 'EOL', strong: critical, fill: critical ? 'var(--color-fuchsia-600)' : 'var(--color-purple-700)', stroke: 'var(--color-purple-800)' });
+    } else if (lifetime.value && lifetime.value !== 'healthy') {
+        items.push({ type: 'clock', fill: 'var(--color-purple-500)', stroke: 'var(--color-purple-600)' });
     }
     // Patch 16: a faint clock once the hole is near the end of its type's lifetime and nobody checked.
     else if (age.value?.likelyEol) {
@@ -277,6 +253,27 @@ const pipeTitle = computed(() => {
     return `${holeType.value.name}: ${describeEstimate(current)} · ${formatMass(holeType.value.total_mass)} kg hole · ${jumps} ${jumps === 1 ? 'jump' : 'jumps'} logged (${formatMass(connection.jumps_mass_sum ?? 0)} kg)${seen ? ` · ${seen}` : ''}`;
 });
 
+// ---- Pill (patch 21) ---------------------------------------------------------------
+// One pill per pipe, placed with all the others (clear of bends, boxes and other pills).
+const store = useMapStore();
+const pillSpots = usePillSpots(store);
+const pillId = computed(() => (connection && !haloOnly ? geometry.id : null));
+watch(
+    [pillId, () => badgeWidth(indicators.value)],
+    ([id, width], previous) => {
+        if (previous && previous[0] !== null && previous[0] !== id) setPillWidth(store, previous[0], null);
+        if (id !== null) setPillWidth(store, id, width);
+    },
+    { immediate: true },
+);
+onBeforeUnmount(() => {
+    if (pillId.value !== null) setPillWidth(store, pillId.value, null);
+});
+const pill = computed(() => {
+    const spot = pillId.value !== null ? pillSpots.value?.get(pillId.value) : null;
+    return spot ? { center: { x: spot.x, y: spot.y }, dot: spot.dot } : { center: path.value.center, dot: false };
+});
+
 function getDashArray(): string | undefined {
     if (!massStatus.value) return '0';
     if (lifetime.value === 'eol' || lifetime.value === 'critical') return '2,6';
@@ -382,24 +379,15 @@ function getDashArray(): string | undefined {
                 :class="rallyDirection === 'reverse' ? 'rally-route-animated-reverse' : 'rally-route-animated'"
             />
         </template>
-        <!-- Patch 18b: which system the static comes from -->
-        <text
-            v-if="staticLabel"
-            :x="staticLabel.x"
-            :y="staticLabel.y"
-            :text-anchor="staticLabel.anchor"
-            :fill="staticLabel.color"
-            font-size="9"
-            font-weight="600"
-            stroke="rgba(0,0,0,0.85)"
-            stroke-width="2.5"
-            paint-order="stroke"
-            class="pointer-events-none font-sans select-none"
-        >
-            {{ staticLabel.text }}
-        </text>
         <!-- Connection status indicators -->
-        <EdgeBadges :indicators="indicators" :center="path.center" />
+        <EdgeBadges
+            :indicators="indicators"
+            :center="pill.center"
+            :dot="pill.dot"
+            :clickable="Boolean(connection)"
+            :title="pipeTitle"
+            @open="(event) => emit('connectionClick', event)"
+        />
         <path
             :d="path.d"
             stroke="transparent"

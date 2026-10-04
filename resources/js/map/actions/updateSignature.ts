@@ -2,7 +2,7 @@ import Signatures from '@/routes/signatures';
 import { TSignature } from '@/types/models';
 import type { FormDataConvertible } from '@inertiajs/core';
 import { router } from '@inertiajs/vue3';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 export function updateSignature(signature: TSignature, data: Record<string, FormDataConvertible>): void {
     return router.put(Signatures.update(signature.id).url, data, {

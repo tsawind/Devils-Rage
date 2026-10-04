@@ -54,6 +54,35 @@ describe('patch 20: pipes leave out of the top and bottom', () => {
         expect(g.from.y).toBeLessThan(below.minY);
     });
 
+    it('patch 21: thick pipes out of one edge keep apart by their widths', () => {
+        const up = { 1: { x: 100, y: 400 }, 2: { x: 350, y: 30 }, 3: { x: 350, y: 115 }, 4: { x: 350, y: 200 } };
+        const geometries = computeTreeEdgeGeometries(
+            [
+                { id: 20, sourceId: 1, targetId: 2, width: 30 },
+                { id: 21, sourceId: 1, targetId: 3, width: 30 },
+                { id: 22, sourceId: 1, targetId: 4, width: 30 },
+            ],
+            rects(up),
+            new Map(),
+        );
+        const xs = [20, 21, 22].map((id) => elbow(geometries.get(id)).start?.point.x).filter((x): x is number => x !== undefined).sort((a, b) => a - b);
+        expect(xs.length).toBeGreaterThanOrEqual(2);
+        for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(34);
+        // The nearest system's pipe still leaves closest to the right corner.
+        expect(elbow(geometries.get(22)).start?.point.x).toBe(Math.max(...xs));
+    });
+
+    it('patch 21: the bottom edge keeps clear of the way-back pill', () => {
+        const down = { 1: { x: 100, y: 0 }, ...Object.fromEntries([1, 2, 3, 4, 5, 6].map((i) => [i + 1, { x: 350, y: i * 85 }])) };
+        const edges = [1, 2, 3, 4, 5, 6].map((i) => ({ id: 30 + i, sourceId: 1, targetId: i + 1, width: 20 }));
+        const geometries = computeTreeEdgeGeometries(edges, rects(down), new Map());
+        const box = nodeRect(down[1], SIZE);
+        for (const edge of edges) {
+            const start = elbow(geometries.get(edge.id)).start;
+            if (start) expect(start.point.x - 10).toBeGreaterThanOrEqual(box.minX + 56);
+        }
+    });
+
     it('puts the pill on the last stretch before the far system', () => {
         const point = farStretchPoint([
             { x: 0, y: 0 },

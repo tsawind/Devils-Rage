@@ -10,7 +10,7 @@ import { linkedForwardBookmark, wayBackBookmark } from '@/map/holeBookmark';
 import { useMapStore } from '@/map/store/mapStore';
 import { Brush, Check, Copy } from 'lucide-vue-next';
 import { computed } from 'vue';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 /**
  * Patch 14: cleanup rows for the system you are looking at (top of its

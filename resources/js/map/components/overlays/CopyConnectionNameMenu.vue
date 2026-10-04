@@ -6,7 +6,7 @@ import { useMapStore } from '@/map/store/mapStore';
 import { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { Copy } from 'lucide-vue-next';
 import { computed } from 'vue';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 const { map_connection } = defineProps<{
     map_connection: TMapConnection & { source: TMapSolarsystem; target: TMapSolarsystem };

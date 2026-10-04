@@ -23,7 +23,7 @@ import { show } from '@/routes/maps';
 import { TLifetimeStatus, TMassStatus, TShipSize, TSignature } from '@/types/models';
 import { router } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 export function useTracking() {
     const character = useActiveMapCharacter();

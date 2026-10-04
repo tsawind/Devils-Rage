@@ -1,57 +1,70 @@
 <script lang="ts">
-/** One badge in the cluster drawn at the connection's centre. */
-export type EdgeIndicator = {
-    type: 'text' | 'clock' | 'weight' | 'gate' | 'preserve';
-    label?: string;
-    /** Text badges: an arrow after the label pointing this way (screen degrees), e.g. which way a hole goes. */
-    arrowAngle?: number | null;
-    fill: string;
-    stroke: string;
-    /** Patch 16: a guess (likely EOL), drawn faint. */
-    faint?: boolean;
-};
+export type { EdgeIndicator } from '@/map/components/edges/badgeWidth';
 </script>
 
 <script setup lang="ts">
+import { badgeWidth, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
 import type { Vec2 } from '@/map/core/types';
 import { ArrowRight, Clock, Heart, Orbit, Weight } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 type Props = {
     indicators: EdgeIndicator[];
-    /** Centre of the badge cluster in screen pixels (already scaled). */
+    /** Centre of the pill in screen pixels (already scaled). */
     center: Vec2;
+    /** Patch 21: no room for the whole pill: a small dot in its main colour. */
+    dot?: boolean;
+    /** Patch 21: the pill opens the pipe's details. */
+    clickable?: boolean;
+    title?: string;
 };
 
-const { indicators, center } = defineProps<Props>();
+const { indicators, center, dot = false, clickable = false, title } = defineProps<Props>();
 
-const totalWidth = computed(() => {
-    if (indicators.length === 0) return 0;
-    // Patch 20: text badges are as wide as their label ("≈ XL" needs more room than "L").
-    return (
-        indicators.reduce((total, indicator) => {
-            if (indicator.type !== 'text') return total + 18;
-            const label = (indicator.label ?? '').length;
-            return total + Math.max(18, label * 9 + 4) + (indicator.arrowAngle != null ? 12 : 0);
-        }, 0) + 8
-    );
-});
+const emit = defineEmits<{ (e: 'open', event: MouseEvent): void }>();
+
+const totalWidth = computed(() => badgeWidth(indicators));
+
+/** The dot's colour: Static green, else EOL purple, else the first part's. */
+const dotColor = computed(() => (indicators.find((item) => item.type === 'static') ?? indicators.find((item) => item.type === 'eol') ?? indicators[0])?.fill ?? 'var(--color-neutral-500)');
 </script>
 
 <template>
+    <g v-if="indicators.length && dot" :class="clickable ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'" @click.stop="(event) => emit('open', event)" @pointerdown.stop>
+        <title v-if="title">{{ title }}</title>
+        <circle :cx="center.x" :cy="center.y" r="6" :fill="dotColor" class="stroke-white dark:stroke-neutral-900" stroke-width="1.5" />
+    </g>
     <foreignObject
-        v-if="indicators.length"
+        v-else-if="indicators.length"
         :x="center.x - totalWidth / 2"
         :y="center.y - 10"
         :width="totalWidth"
         height="20"
-        class="pointer-events-none"
+        :class="clickable ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'"
+        @click.stop="(event) => emit('open', event)"
+        @pointerdown.stop
     >
         <div
-            class="flex h-full items-center justify-center gap-0.5 rounded-full border border-neutral-300 bg-white px-1 dark:border-neutral-700 dark:bg-neutral-900"
+            :title="title"
+            class="flex h-full items-center justify-center gap-0.5 rounded-full border border-neutral-300 bg-white px-1 hover:border-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-500"
         >
             <template v-for="(indicator, i) in indicators" :key="i">
-                <span v-if="indicator.type === 'text'" class="flex items-center text-[13px] leading-none font-bold whitespace-nowrap" :style="{ color: indicator.fill }">
+                <!-- Patch 21: Static (green) and EOL (purple) sit inside the pill -->
+                <span
+                    v-if="indicator.type === 'static' || indicator.type === 'eol'"
+                    class="rounded-full px-1.5 text-[10px] leading-[14px] font-bold whitespace-nowrap"
+                    :class="
+                        indicator.type === 'static'
+                            ? indicator.strong
+                                ? 'bg-yellow-700 text-yellow-100'
+                                : 'bg-green-800 text-green-100'
+                            : indicator.strong
+                              ? 'bg-fuchsia-600 text-white'
+                              : 'bg-purple-700 text-purple-100'
+                    "
+                    >{{ indicator.label }}</span
+                >
+                <span v-else-if="indicator.type === 'text'" class="flex items-center text-[13px] leading-none font-bold whitespace-nowrap" :style="{ color: indicator.fill }">
                     {{ indicator.label }}
                     <ArrowRight
                         v-if="indicator.arrowAngle != null"

@@ -2,19 +2,23 @@
 import { isDark } from '@/composables/useIsDark';
 import { combatColorHex } from '@/lib/combat';
 import { isFrigateHole, pipeWidth } from '@/lib/massEstimate';
-import { guessHole } from '@/map/holeGuess';
-import { getTypesByCategory, signatureCategories, signatureTypeById } from '@/const/signatures';
-import { isK162Frigate, k162Classes, k162ShipSize } from '@/lib/k162';
-import { SHIP_SIZE_LETTERS, shipSizeFromJumpMass } from '@/lib/shipSize';
-import { wormholeMass } from '@/lib/wormholeMass';
+import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
 import { CORNER_RADIUS, elbowCorners, farStretchPoint, roundedElbowPath } from '@/map/core/geometry/paths';
+import EdgeBadges from '@/map/components/edges/EdgeBadges.vue';
+import { badgeWidth, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
+import { openPlaceholderDetails } from '@/map/components/overlays/placeholderDetails';
+import { copyPlaceholderBookmark } from '@/map/holeBookmark';
+import usePermission from '@/composables/usePermission';
+import type { TPlaceholder } from '@/lib/placeholders';
+import { pillWidths, setPillWidth, usePillSpots } from '@/map/store/pillLayout';
+import { holeFacts } from '@/map/placeholderFacts';
 import { useTreeGeometries } from '@/map/store/treeGeometries';
 import useUser from '@/composables/useUser';
 import { useMapStore } from '@/map/store/mapStore';
 import { show } from '@/routes/maps';
 import { Link } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 
 /**
  * Placeholder systems (patch 12): a dashed system for every wormhole signature
@@ -25,32 +29,70 @@ import { computed } from 'vue';
 const store = useMapStore();
 const user = useUser();
 const routed = useTreeGeometries(store);
+const pillSpots = usePillSpots(store);
+const { canEdit } = usePermission();
 
 const FULL_WIDTH = 180;
 /** Patch 16: wider small boxes in rage lanes, so the note fits inside. */
 const COMPACT_WIDTH = 100;
 const FULL_HEIGHT = 40;
 
-const wormholeTypes = getTypesByCategory(signatureCategories.find((category) => category.code === 'wormhole')?.id ?? 0);
-
-/**
- * Patch 20: the size letter of a dotted pipe when it is known: a typed hole's own
- * size (arrow away: it spawned here), a K162's size worked out from the wormhole data
- * (arrow toward you), a K162 frigate S. Unknown or guessed: no letter.
- */
-function knownSize(placeholder: { wormhole: string | null; signatureTypeId?: number | null; targetClass?: string | null }, parentClass: string | null): { letter: string; arrow: string } | null {
-    const name = (placeholder.wormhole ?? '').toUpperCase();
-    if (!name) return null;
-    if (name !== 'K162') {
-        const mass = wormholeMass(name);
-        const size = mass ? shipSizeFromJumpMass(mass.maxJump) : null;
-        return size ? { letter: SHIP_SIZE_LETTERS[size], arrow: '↗' } : null;
+/** Patch 21: the parts of a dotted pipe's pill: Static, its type, its size (or a guess), mass, EOL. */
+function pillParts(placeholder: TPlaceholder, facts: ReturnType<typeof holeFacts>): EdgeIndicator[] {
+    const neutral = { fill: 'var(--color-neutral-500)', stroke: 'var(--color-neutral-600)' };
+    const parts: EdgeIndicator[] = [];
+    if (placeholder.isStatic || placeholder.expected) {
+        parts.push({ type: 'static', label: 'Static', fill: 'var(--color-green-700)', stroke: 'var(--color-green-800)' });
+    } else if (placeholder.maybeStatic) {
+        parts.push({ type: 'static', label: 'Static?', strong: true, fill: 'var(--color-yellow-600)', stroke: 'var(--color-yellow-700)' });
     }
-    const type =
-        (placeholder.signatureTypeId ? signatureTypeById.get(placeholder.signatureTypeId) : null) ??
-        ({ id: 0, signature: 'K162', target_class: placeholder.targetClass ?? null, extra: null } as const);
-    const size = k162ShipSize(type, parentClass, wormholeTypes);
-    return size ? { letter: SHIP_SIZE_LETTERS[size], arrow: '↙' } : null;
+    const typeName = placeholder.wormhole ? placeholder.wormhole.toUpperCase() : facts.isK162 ? 'K162' : null;
+    if (typeName) parts.push({ type: 'text', label: typeName, ...neutral });
+    if (facts.size) parts.push({ type: 'text', label: `${facts.size.letter}${facts.size.arrow}`, ...neutral });
+    else if (facts.guess?.size) parts.push({ type: 'text', label: `≈ ${SHIP_SIZE_LETTERS[facts.guess.size]}`, fill: 'var(--color-neutral-400)', stroke: 'var(--color-neutral-500)' });
+    else if (!parts.length) parts.push({ type: 'text', label: facts.guess ? '≈' : '?', fill: 'var(--color-neutral-400)', stroke: 'var(--color-neutral-500)' });
+    if (placeholder.massStatus === 'reduced' || placeholder.massStatus === 'critical') {
+        const critical = placeholder.massStatus === 'critical';
+        parts.push({ type: 'weight', fill: critical ? 'var(--color-red-500)' : 'var(--color-amber-500)', stroke: critical ? 'var(--color-red-600)' : 'var(--color-amber-600)' });
+    }
+    if (placeholder.lifetime === 'eol' || placeholder.lifetime === 'critical') {
+        const critical = placeholder.lifetime === 'critical';
+        parts.push({ type: 'eol', label: critical ? 'EOL!' : 'EOL', strong: critical, fill: critical ? 'var(--color-fuchsia-600)' : 'var(--color-purple-700)', stroke: 'var(--color-purple-800)' });
+    }
+    return parts;
+}
+
+/** Patch 21: every dotted pipe's pill parts, by placeholder node id (kept apart from the drawing, which moves with zoom). */
+const pills = computed(() => {
+    const result = new Map<number, EdgeIndicator[]>();
+    if (!store.isTreeLayout.value) return result;
+    for (const placeholder of store.placeholders.value) {
+        const parent = store.systems.get(placeholder.parentId);
+        if (parent) result.set(placeholder.nodeId, pillParts(placeholder, holeFacts(placeholder, parent)));
+    }
+    return result;
+});
+
+// Each dotted pipe reports its pill's width, so all pills are placed together (see usePillSpots).
+watch(
+    pills,
+    (current) => {
+        const widths = pillWidths(store);
+        for (const id of [...widths.keys()]) {
+            if (id < 0 && !current.has(id)) setPillWidth(store, id, null);
+        }
+        for (const [id, parts] of current) setPillWidth(store, id, badgeWidth(parts));
+    },
+    { immediate: true },
+);
+
+function openDetails(event: MouseEvent, nodeId: number): void {
+    openPlaceholderDetails.value = { nodeId, x: event.clientX, y: event.clientY };
+}
+
+/** Patch 21: clicking the green signature ID copies the hole's bookmark (like right-click → Copy bookmark). */
+function copyBookmark(placeholder: TPlaceholder): void {
+    copyPlaceholderBookmark(store, placeholder, canEdit.value);
 }
 
 const items = computed(() => {
@@ -80,21 +122,9 @@ const items = computed(() => {
         // yet), colored by its mass status, with a purple edge when end of life.
         // Patch 18: a K162 or an untyped hole gets a guessed size ("≈"); only a hole with
         // no known class at all keeps the thin dotted line, which now shows mass and EOL too.
-        const typeMass = wormholeMass(placeholder.wormhole);
-        const isK162 = (placeholder.wormhole ?? '').toUpperCase().startsWith('K162');
-        const parentClass = parent.solarsystem?.class === undefined || parent.solarsystem?.class === null ? null : String(parent.solarsystem.class);
-        // Patch 20: a K162 is sized from the holes that come from its far side (the class picked:
-        // "K162 C2/3", "K162 C5"), into the class it sits in, so the pipe matches its badge.
-        const holeTypeInfo = placeholder.signatureTypeId ? (signatureTypeById.get(placeholder.signatureTypeId) ?? null) : null;
-        const farClasses = isK162 ? (holeTypeInfo ? k162Classes(holeTypeInfo) : placeholder.targetClass && placeholder.targetClass !== 'unknown' ? [placeholder.targetClass] : []) : [];
-        const guessed =
-            typeMass || placeholder.shipSize === 'frigate' || isK162Frigate(holeTypeInfo) || (placeholder.wormhole && !isK162)
-                ? null
-                : (guessHole(
-                      isK162
-                          ? { k162Class: parentClass, spawnClasses: farClasses }
-                          : { endClasses: [parentClass, placeholder.targetClass ?? null] },
-                  )?.total ?? null);
+        const facts = holeFacts(placeholder, parent);
+        const typeMass = facts.typeMass;
+        const guessed = facts.guess?.total ?? null;
         const mass = typeMass ?? (guessed ? { total: guessed, maxJump: Number.POSITIVE_INFINITY } : null);
         const massColor = placeholder.massStatus === 'critical' ? '#ef4444' : placeholder.massStatus === 'reduced' ? '#f59e0b' : null;
         const eol = placeholder.lifetime === 'eol' || placeholder.lifetime === 'critical';
@@ -107,7 +137,6 @@ const items = computed(() => {
                   eolCritical,
               }
             : null;
-        const tagParts = [guessed ? '≈' : null, eol ? (eolCritical ? 'EOL!' : 'EOL') : null].filter(Boolean);
         const strokeWidth = pipe?.width ?? 1.5;
 
         // Patch 20: routed with the jumped pipes (same exits out of the top / right / bottom,
@@ -147,10 +176,11 @@ const items = computed(() => {
             }
         }
         const path = roundedElbowPath(points, Math.max(CORNER_RADIUS, strokeWidth));
-        // Patch 20: the size pill sits on the last straight stretch before the box.
-        const size = placeholder.expected ? null : knownSize(placeholder, parentClass);
-        const badgeAt = points.length >= 2 ? farStretchPoint(points) : null;
-        const badge = size && badgeAt ? { text: `${size.letter} ${size.arrow}`, x: badgeAt.x, y: badgeAt.y } : null;
+        // Patch 21: every dotted pipe has a pill, placed with all the others (clear of bends, boxes, pills).
+        const spot = pillSpots.value?.get(placeholder.nodeId);
+        const fallback = points.length >= 2 ? farStretchPoint(points) : null;
+        const pillAt = spot ?? (fallback ? { ...fallback, dot: false } : null);
+        const pill = pillAt ? { parts: pills.value.get(placeholder.nodeId) ?? [], center: { x: pillAt.x, y: pillAt.y }, dot: pillAt.dot } : null;
         // Round stripe ends add half the width at each end: the dash is shortened by the width,
         // and wide pipes get longer stripes so they stay stripes, not dots.
         const [dash, gap] = pipe ? (pipe.width > 4 ? [16, 11] : [6, 6]) : [4, 4];
@@ -165,8 +195,7 @@ const items = computed(() => {
                 pipe,
                 dashArray,
                 lineCap,
-                badge,
-                tag: tagParts.length ? { text: tagParts.join(' '), eol, x: (left - 6) * scale, y: (top + NODE_HEIGHT / 2) * scale } : null,
+                pill,
                 // Patch 18: the thin dotted line (no class known) shows mass and EOL as well.
                 thin: { color: massColor, eol, eolCritical },
                 href: show(meta.slug, { mergeQuery: { solarsystem_id: parent.solarsystem_id } }),
@@ -284,40 +313,16 @@ const chips = computed(() => {
                         :stroke-opacity="item.thin.color ? 1 : 0.7"
                     />
                 </template>
-                <g v-if="item.badge">
-                    <rect
-                        :x="item.badge.x - 15 * item.fontScale"
-                        :y="item.badge.y - 7 * item.fontScale"
-                        :width="30 * item.fontScale"
-                        :height="14 * item.fontScale"
-                        :rx="7 * item.fontScale"
-                        class="fill-neutral-100 stroke-neutral-400 dark:fill-neutral-900 dark:stroke-neutral-600"
-                        stroke-width="1"
-                    />
-                    <text
-                        :x="item.badge.x"
-                        :y="item.badge.y"
-                        text-anchor="middle"
-                        dominant-baseline="central"
-                        class="fill-neutral-700 font-mono dark:fill-neutral-200"
-                        :font-size="9 * item.fontScale"
-                        font-weight="600"
-                    >
-                        {{ item.badge.text }}
-                    </text>
-                </g>
-                <text
-                    v-if="item.tag"
-                    :x="item.tag.x"
-                    :y="item.tag.y"
-                    text-anchor="end"
-                    dominant-baseline="middle"
-                    :fill="item.tag.eol ? (item.tag.text.endsWith('EOL!') ? '#d946ef' : '#a855f7') : '#a8a29e'"
-                    :font-size="10 * item.fontScale"
-                    font-weight="600"
-                >
-                    {{ item.tag.text }}
-                </text>
+                <!-- Patch 21: every dotted pipe's pill (Static, type, size, mass, EOL); click for details -->
+                <EdgeBadges
+                    v-if="item.pill && item.pill.parts.length"
+                    :indicators="item.pill.parts"
+                    :center="item.pill.center"
+                    :dot="item.pill.dot"
+                    clickable
+                    title="Click for details"
+                    @open="(event) => openDetails(event, item.nodeId)"
+                />
             </template>
         </svg>
         <Link
@@ -339,8 +344,11 @@ const chips = computed(() => {
                         <!-- Patch 17: the signature ID, bigger, on green: a hole you can warp to -->
                         <span
                             v-if="item.sigCode"
-                            class="shrink-0 rounded-[3px] bg-green-800 px-1 font-mono leading-tight font-bold text-green-100"
+                            role="button"
+                            title="Copy bookmark"
+                            class="shrink-0 cursor-copy rounded-[3px] bg-green-800 px-1 font-mono leading-tight font-bold text-green-100 hover:bg-green-700"
                             :style="{ fontSize: `${12 * item.fontScale}px` }"
+                            @click.stop.prevent="copyBookmark(item)"
                             >{{ item.sigCode }}</span
                         >
                     </span>
@@ -356,9 +364,14 @@ const chips = computed(() => {
             <template v-else>
                 <span class="font-display font-semibold" :style="{ fontSize: `${13 * item.fontScale}px` }">{{ item.label || '\u00a0' }}</span>
                 <span v-if="item.sigCode" class="flex items-center gap-1 font-mono text-muted-foreground" :style="{ fontSize: `${11 * item.fontScale}px` }">
-                    <span class="rounded bg-green-800 px-1.5 leading-tight font-bold text-green-100" :style="{ fontSize: `${13 * item.fontScale}px` }">{{
-                        item.sigCode
-                    }}</span>
+                    <span
+                        role="button"
+                        title="Copy bookmark"
+                        class="cursor-copy rounded bg-green-800 px-1.5 leading-tight font-bold text-green-100 hover:bg-green-700"
+                        :style="{ fontSize: `${13 * item.fontScale}px` }"
+                        @click.stop.prevent="copyBookmark(item)"
+                        >{{ item.sigCode }}</span
+                    >
                     · {{ item.destination }}
                 </span>
                 <span v-else class="font-mono text-muted-foreground" :style="{ fontSize: `${11 * item.fontScale}px` }">{{ item.detail }}</span>

@@ -1,6 +1,6 @@
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { ref } from 'vue';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 import { clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
 
 /**

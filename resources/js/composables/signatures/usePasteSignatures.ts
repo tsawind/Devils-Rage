@@ -10,7 +10,7 @@ import { TSignature } from '@/types/models';
 import { useEcho } from '@laravel/echo-vue';
 import { useEventListener } from '@vueuse/core';
 import { computed, type MaybeRefOrGetter, ref, toValue, watch } from 'vue';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 export function usePasteSignatures(
     map_solarsystem: MaybeRefOrGetter<TSelectedMapSolarsystem | null>,

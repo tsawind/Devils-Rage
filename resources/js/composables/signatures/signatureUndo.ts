@@ -5,7 +5,7 @@ import type { TSignature } from '@/types/models';
 import type { FormDataConvertible } from '@inertiajs/core';
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, shallowRef } from 'vue';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 /**
  * Patch 20: a small personal Undo / Redo for your own signature edits

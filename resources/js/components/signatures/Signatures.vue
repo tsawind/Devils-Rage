@@ -50,7 +50,7 @@ import type { TSignature } from '@/types/models';
 import { useEventListener, useLocalStorage, useNow } from '@vueuse/core';
 import { ArrowDown, ArrowUp, CircleHelp, Cloud, Database, Fan, Flag, Gem, Landmark, Rows2, Rows3, Shield, Swords } from 'lucide-vue-next';
 import { type Component, computed, nextTick, ref, watch } from 'vue';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 const props = defineProps<{
     map_solarsystem: TResolvedSelectedMapSolarsystem | null;

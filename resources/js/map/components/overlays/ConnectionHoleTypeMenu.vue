@@ -16,7 +16,7 @@ import type { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import type { TSignatureType } from '@/types/models';
 import { Fan } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 
 /**
  * Patch 14: right-click a jumped connection → Type. Lists the hole types,

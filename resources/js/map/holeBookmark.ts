@@ -1,11 +1,15 @@
 import { aliasesBelow, suggestAlias } from '@/lib/alias';
-import { buildSignatureBookmark, formatBookmarkName, isFrigateOnly } from '@/lib/bookmark';
+import { buildSignatureBookmark, formatBookmarkName, isFrigateOnly, visibleBookmarkName } from '@/lib/bookmark';
 import { connectionFlag } from '@/lib/chainNumbering';
 import { chainAliases } from '@/lib/combat';
 import { shipSizeFromJumpMass } from '@/lib/shipSize';
 import { wormholeMass } from '@/lib/wormholeMass';
+import type { TPlaceholder } from '@/lib/placeholders';
+import { signatureToast } from '@/lib/signatureToast';
+import { updateSignature } from '@/map/actions/updateSignature';
 import type { MapStore } from '@/map/store/mapStore';
 import type { TMapSolarsystem, TPendingHole } from '@/pages/maps';
+import type { TSignature } from '@/types/models';
 
 /**
  * An unjumped hole as the map knows it (patch 12/13): its system, and the
@@ -247,4 +251,23 @@ function wayBackSuffix(
     if (signature?.wormhole?.name) return connectionFlag({ is_static: signature.is_static, is_wandering: signature.is_wandering, wormholeName: signature.wormhole.name }) || null;
     const far = (connection?.signatures ?? []).find((candidate) => candidate.map_solarsystem_id !== systemId)?.wormhole?.name ?? '';
     return far && !far.toUpperCase().startsWith('K162') ? 'k' : null;
+}
+
+/**
+ * Patch 21: copy an unjumped hole's bookmark (right-click → Copy bookmark, or a
+ * click on its green signature ID). Copying locks the number, so it never shifts
+ * under a bookmark saved in game.
+ */
+export function copyPlaceholderBookmark(store: MapStore, placeholder: TPlaceholder, canEdit: boolean): void {
+    const parent = store.systems.get(placeholder.parentId);
+    const hole = parent?.pending_holes?.find((candidate) => candidate.id === placeholder.signatureId);
+    if (!parent || !hole) return;
+    const claim = claimFor(store, parent, hole, placeholder.alias);
+    const name = pendingHoleBookmark(store, parent, hole, claim);
+    if (!name) return;
+    navigator.clipboard.writeText(name).catch(() => undefined);
+    if (canEdit && !hole.alias && claim) {
+        updateSignature({ id: placeholder.signatureId } as TSignature, { alias: claim });
+    }
+    signatureToast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(name) });
 }

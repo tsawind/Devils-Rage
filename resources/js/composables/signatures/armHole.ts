@@ -2,7 +2,7 @@ import { displayAlias, type TAliasScheme } from '@/lib/alias';
 import { buildSignatureBookmark, visibleBookmarkName, type TBookmarkFormats } from '@/lib/bookmark';
 import { armSignature } from '@/map/actions/arm';
 import type { TStringedSolarsystemClass } from '@/types/models';
-import { toast } from 'vue-sonner';
+import { signatureToast as toast } from '@/lib/signatureToast';
 import { autoCopy, clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
 
 /**
