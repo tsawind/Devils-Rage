@@ -106,6 +106,21 @@ watch(
         }, SETTLE_MS);
     },
 );
+// Patch 22: the layout moved everything by the same amount (home layout growing upward):
+// scroll by it too, once the canvas has grown, so home stays put on screen.
+watch(
+    () => store.scrollShift.value,
+    (shift) => {
+        if (!shift) return;
+        nextTick(() => {
+            const element = surface.value;
+            if (!element) return;
+            element.scrollLeft += shift.dx * store.scale.value;
+            element.scrollTop += shift.dy * store.scale.value;
+        });
+    },
+);
+
 // A request made before the map was on screen (page load with Center on).
 onMounted(() => nextTick(() => scrollToCenter('auto', true)));
 onBeforeUnmount(() => {

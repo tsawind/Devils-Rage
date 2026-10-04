@@ -108,6 +108,8 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
             laneNodeHeight: 60,
             laneColumnGap: 300,
             laneRowGap: 80,
+            // Patch 22: the home layout, unless switched off in this browser.
+            homeLayout: view.homeLayout.value,
         });
     });
 
@@ -127,7 +129,18 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
                 slide.value = null;
                 return;
             }
-            const from = currentPositions() ?? previous;
+            let from = currentPositions() ?? previous;
+            // Patch 22: home moved (more rows needed above it): everything moved with it. Scroll
+            // by the same amount instead of sliding, so home stays still on screen.
+            const anchorId = bandLayout.value?.anchorId ?? null;
+            const before = anchorId !== null ? from?.get(anchorId) : undefined;
+            const after = anchorId !== null ? to.get(anchorId) : undefined;
+            if (from && before && after && (before.x !== after.x || before.y !== after.y)) {
+                const dx = after.x - before.x;
+                const dy = after.y - before.y;
+                from = new Map([...from].map(([id, point]) => [id, { x: point.x + dx, y: point.y + dy }]));
+                view.scrollShift.value = { dx, dy, seq: (view.scrollShift.value?.seq ?? 0) + 1 };
+            }
             if (!from || typeof requestAnimationFrame === 'undefined' || !isTreeLayout.value) {
                 slide.value = { from: to, to, t: 1 };
                 return;

@@ -239,6 +239,28 @@ export function computeTreeEdgeGeometries(
             }
             continue;
         }
+        // Patch 22: a hub's hole: one straight lane from the middle of the hub to the hole's box.
+        if (edge.lane && (edge.lane.hubId === edge.sourceId || edge.lane.hubId === edge.targetId)) {
+            const hubAtSource = edge.lane.hubId === edge.sourceId;
+            const hub = hubAtSource ? sourceBox : targetBox;
+            const hole = hubAtSource ? targetBox : sourceBox;
+            const up = hole.centerY < hub.centerY;
+            const hubEnd = { x: edge.lane.x, y: hub.centerY };
+            const holeEnd = { x: edge.lane.x, y: up ? hole.maxY : hole.minY };
+            const towardHole = { x: 0, y: up ? -1 : 1 };
+            const towardHub = { x: 0, y: up ? 1 : -1 };
+            geometries.set(edge.id, {
+                id: edge.id,
+                kind: 'elbow',
+                from: hubAtSource ? hubEnd : holeEnd,
+                to: hubAtSource ? holeEnd : hubEnd,
+                fromNormal: hubAtSource ? towardHole : towardHub,
+                toNormal: hubAtSource ? towardHub : towardHole,
+                bend: null,
+                pillAt: hubAtSource ? 'to' : 'from',
+            });
+            continue;
+        }
         const detour = sourceBox.minX === targetBox.minX && blockedInColumn(sourceBox, targetBox, byColumn.get(sourceBox.minX) ?? []);
         const ends = detour ? detourConnection(sourceBox, targetBox) : edgeCenterConnection(sourceBox, targetBox);
         const item: RoutedEdge = {

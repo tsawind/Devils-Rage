@@ -74,15 +74,29 @@ export function useTreeGeometries(store: MapStore): ComputedRef<Map<number, Edge
         if (!store.isLayoutLocked.value) return null;
 
         const edges: EdgeInput[] = [];
+        // Patch 22: a hub's holes get their straight lanes.
+        const hubLanes = store.bandLayout.value?.hubLanes;
+        const laneFor = (a: number, b: number) => {
+            const lane = hubLanes?.get(b);
+            if (lane && lane.hubId === a) return lane;
+            const reverse = hubLanes?.get(a);
+            return reverse && reverse.hubId === b ? reverse : null;
+        };
         for (const connection of store.connections.values()) {
-            edges.push({ id: connection.id, sourceId: connection.from_map_solarsystem_id, targetId: connection.to_map_solarsystem_id, width: connectionWidth(connection) });
+            edges.push({
+                id: connection.id,
+                sourceId: connection.from_map_solarsystem_id,
+                targetId: connection.to_map_solarsystem_id,
+                width: connectionWidth(connection),
+                lane: laneFor(connection.from_map_solarsystem_id, connection.to_map_solarsystem_id),
+            });
         }
 
         const { rects, anchors, compact } = treeRects(store);
         for (const placeholder of store.placeholders.value) {
             if (!anchors.has(placeholder.nodeId)) continue;
             const width = approximatePipeWidth(wormholeMass(placeholder.wormhole)?.total ?? null, placeholder.shipSize, compact.has(placeholder.nodeId) ? 0.5 : 1.1);
-            edges.push({ id: placeholder.nodeId, sourceId: placeholder.parentId, targetId: placeholder.nodeId, width });
+            edges.push({ id: placeholder.nodeId, sourceId: placeholder.parentId, targetId: placeholder.nodeId, width, lane: laneFor(placeholder.parentId, placeholder.nodeId) });
         }
 
         return computeTreeEdgeGeometries(edges, rects, anchors);

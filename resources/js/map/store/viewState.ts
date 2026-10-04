@@ -9,6 +9,16 @@ export type Marquee = { start: Vec2; end: Vec2 };
 export type ViewState = ReturnType<typeof createViewState>;
 
 const SHOW_PLACEHOLDERS_KEY = 'map-show-unjumped-holes';
+/** Patch 22: the home layout (on unless switched off in this browser). */
+const HOME_LAYOUT_KEY = 'map-home-layout';
+
+function readHomeLayout(): boolean {
+    try {
+        return typeof window === 'undefined' || window.localStorage.getItem(HOME_LAYOUT_KEY) !== '0';
+    } catch {
+        return true;
+    }
+}
 
 function readShowPlaceholders(): boolean {
     try {
@@ -46,6 +56,24 @@ export function createViewState() {
             // Storage unavailable: the switch still works for this visit.
         }
     }
+
+    /** Patch 22: the home layout (hubs with straight lanes); remembered per browser, on by default. */
+    const homeLayout: Ref<boolean> = ref(readHomeLayout());
+
+    function setHomeLayout(value: boolean): void {
+        homeLayout.value = value;
+        try {
+            window.localStorage.setItem(HOME_LAYOUT_KEY, value ? '1' : '0');
+        } catch {
+            // Storage unavailable: the switch still works for this visit.
+        }
+    }
+
+    /**
+     * Patch 22: when the layout moves everything by the same amount (holes above home need
+     * more rows), the map scrolls by it too, so home stays still on screen. Base units.
+     */
+    const scrollShift: ShallowRef<{ dx: number; dy: number; seq: number } | null> = shallowRef(null);
 
     /** Patch 15: rage-lane systems whose unjumped holes are opened (folded into a chip otherwise). */
     const openedHoleParents: ShallowRef<ReadonlySet<number>> = shallowRef(new Set<number>());
@@ -101,6 +129,9 @@ export function createViewState() {
         userLayoutOverride,
         showPlaceholders,
         setShowPlaceholders,
+        homeLayout,
+        setHomeLayout,
+        scrollShift,
         openedHoleParents,
         toggleHoleParent,
         currentSystemId,

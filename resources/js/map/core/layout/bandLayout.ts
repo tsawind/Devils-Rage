@@ -83,6 +83,13 @@ export type BandLayoutOptions = {
     nodeHeight?: number;
     /** Patch 20: empty rows above the main band, so home doesn't sit in the top corner. */
     homeTopRows?: number;
+    /**
+     * Patch 22: the home layout. Home, the first system of each side chain and every
+     * pinned system are hubs: their holes leave in straight lanes up and down, side by
+     * side, each further hole one lane left; everything beyond uses the usual tree
+     * style, growing away from the hub (up for holes above, down for holes below).
+     */
+    homeLayout?: boolean;
 };
 
 export type BandGhost = {
@@ -121,7 +128,17 @@ export type BandLayoutResult = {
     /** Which band each system is in. */
     bandOf: Map<number, 'main' | 'side' | 'lane'>;
     sideChains: BandSideChain[];
+    /** Patch 22: a hub's hole → the hub and the x of its straight lane (base units, the pipe's centre). */
+    hubLanes: Map<number, { hubId: number; x: number }>;
+    /** Patch 22: the system the map keeps still on screen when the layout grows (home, in the home layout). */
+    anchorId: number | null;
 };
+
+/** Patch 22: a hub's first hole sits this far right of the hub, each further hole one lane step left. */
+export const HUB_FIRST_LANE = 135;
+export const HUB_LANE_STEP = 45;
+/** Lanes up (and down) before holes start sharing the last one. */
+export const HUB_MAX_LANES = 5;
 
 const GHOST_BASE = 1_000_000_000;
 
@@ -405,6 +422,120 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         return { bottom, right };
     };
 
+    // --- Patch 22: the home layout -------------------------------------------------
+    const hubLanes = new Map<number, { hubId: number; x: number }>();
+    type HubRect = { x0: number; x1: number; y0: number; y1: number };
+    type HubSub = { pos: Map<number, Vec2>; rects: HubRect[]; lanes: [number, number][] };
+    const boxGap = rowGap - nodeHeight;
+    // Room between a hub and its first hole up or down: the cards are taller than nodeHeight, and the pill sits there.
+    const hubGap = nodeHeight + 85;
+    const boxRect = (x: number, y: number): HubRect => ({ x0: x, x1: x + nodeWidth, y0: y, y1: y + nodeHeight });
+    /**
+     * How far (y) to move `sub` from `start`, in direction `d`, so none of its boxes
+     * overlaps a box of `placed` it shares any x with (one-sided contour packing).
+     */
+    const packOffset = (placed: HubRect[], sub: HubRect[], dx: number, start: number, d: 1 | -1): number => {
+        let t = start;
+        for (const s of sub) {
+            for (const a of placed) {
+                if (s.x0 + dx >= a.x1 || s.x1 + dx <= a.x0) continue;
+                if (d < 0) t = Math.min(t, a.y0 - boxGap - s.y1);
+                else t = Math.max(t, a.y1 + boxGap - s.y0);
+            }
+        }
+        return t;
+    };
+    const mergeSub = (into: HubSub, sub: HubSub, dx: number, dy: number): void => {
+        for (const [id, point] of sub.pos) into.pos.set(id, { x: point.x + dx, y: point.y + dy });
+        for (const rect of sub.rects) into.rects.push({ x0: rect.x0 + dx, x1: rect.x1 + dx, y0: rect.y0 + dy, y1: rect.y1 + dy });
+        into.lanes.push(...sub.lanes);
+    };
+    const isHub = (id: number, root: number): boolean => id === root || (Boolean(byId.get(id)?.pinned) && !ghostInfo.has(id) && !spares.has(id));
+    const childrenWithSpares = (id: number, tree: Map<number, number[]>, hub: boolean): number[] => {
+        const list = [...(tree.get(id) ?? [])];
+        const reserve = hub || ghostInfo.has(id) ? 0 : (byId.get(id)?.reserve ?? 0);
+        while (list.length < reserve) {
+            spareId += 1;
+            spares.add(spareId);
+            list.push(spareId);
+        }
+        return list;
+    };
+    /** A system and everything found from it, relative to it (it sits at 0,0). */
+    const layoutSub = (id: number, tree: Map<number, number[]>, root: number, d: 1 | -1): HubSub => {
+        const hub = isHub(id, root);
+        const sub: HubSub = { pos: new Map([[id, { x: 0, y: 0 }]]), rects: [boxRect(0, 0)], lanes: [] };
+        const children = childrenWithSpares(id, tree, hub);
+        if (hub) {
+            // Holes alternate up and down (the first, usually the static, goes up), each in its own lane.
+            const sides: { d: 1 | -1; list: number[] }[] = [
+                { d: -1, list: children.filter((_, index) => index % 2 === 0) },
+                { d: 1, list: children.filter((_, index) => index % 2 === 1) },
+            ];
+            for (const side of sides) {
+                // How far this side's trees reach so far: each next hole sits beyond the previous hole's whole tree.
+                let reach = side.d < 0 ? 0 : nodeHeight;
+                side.list.forEach((child, index) => {
+                    const lane = Math.min(index, HUB_MAX_LANES - 1);
+                    const dx = HUB_FIRST_LANE - lane * HUB_LANE_STEP;
+                    const childSub = layoutSub(child, tree, root, side.d);
+                    const start =
+                        index === 0
+                            ? side.d * hubGap
+                            : side.d < 0
+                              ? reach - boxGap - Math.max(...childSub.rects.map((rect) => rect.y1))
+                              : reach + boxGap - Math.min(...childSub.rects.map((rect) => rect.y0));
+                    const dy = snapRow(packOffset(sub.rects, childSub.rects, dx, start, side.d));
+                    mergeSub(sub, childSub, dx, dy);
+                    for (const rect of childSub.rects) reach = side.d < 0 ? Math.min(reach, rect.y0 + dy) : Math.max(reach, rect.y1 + dy);
+                    // The lane itself: nothing else may sit on it between the hub and the hole.
+                    const laneTop = side.d < 0 ? dy + nodeHeight : nodeHeight;
+                    const laneBottom = side.d < 0 ? 0 : dy;
+                    sub.rects.push({ x0: dx, x1: dx + 30, y0: Math.min(laneTop, laneBottom), y1: Math.max(laneTop, laneBottom) });
+                    if (!spares.has(child) && !ghostInfo.has(child)) sub.lanes.push([child, id]);
+                });
+            }
+            return sub;
+        }
+        // The usual tree: the first child level with its parent, the others stacked away from the hub.
+        let previous: number | null = null;
+        for (const child of children) {
+            const childSub = layoutSub(child, tree, root, d);
+            const start = previous === null ? 0 : previous + d * rowGap;
+            const dy = snapRow(packOffset(sub.rects, childSub.rects, levelGap, start, d));
+            mergeSub(sub, childSub, levelGap, dy);
+            previous = dy;
+        }
+        return sub;
+    };
+    /** Places one hub tree with its top at `top` (the hub further down when its holes above need the room). */
+    const placeHubTree = (root: number, tree: Map<number, number[]>, top: number, hubY: number): { bottom: number; right: number } => {
+        const sub = layoutSub(root, tree, root, 1);
+        const minY = Math.min(...sub.rects.map((rect) => rect.y0));
+        const minX = Math.min(...sub.rects.map((rect) => rect.x0));
+        const originY = snapRow(Math.max(hubY, top - minY));
+        // Room is always kept for the hub's leftmost lane, so a new hole never shifts it right.
+        const originX = snapRow(marginX + Math.max((HUB_MAX_LANES - 1) * HUB_LANE_STEP - HUB_FIRST_LANE, -minX));
+        let bottom = top;
+        let right = marginX;
+        for (const [id, point] of sub.pos) {
+            const at = { x: originX + point.x, y: originY + point.y };
+            bottom = Math.max(bottom, at.y);
+            right = Math.max(right, at.x + nodeWidth);
+            if (spares.has(id)) continue;
+            const ghost = ghostInfo.get(id);
+            if (ghost) ghosts.push({ key: `ghost-${id}`, position: at, label: ghost.label, note: ghost.note, color: ghost.color });
+            else positions.set(id, at);
+        }
+        for (const rect of sub.rects) bottom = Math.max(bottom, originY + rect.y0);
+        for (const [child, hubId] of sub.lanes) {
+            const at = positions.get(child);
+            // The pipe runs 15 in from the hole's left edge (anchors sit 40 in from it).
+            if (at) hubLanes.set(child, { hubId, x: at.x - anchorX + 15 });
+        }
+        return { bottom, right };
+    };
+
     /** One lane at (left, top): first child straight down, every other child a new column to the right. */
     const placeLane = (color: string, left: number, top: number, parentId: number | null): { right: number; bottom: number } => {
         const lane = laneTrees.get(color)!;
@@ -491,8 +622,10 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
     let mainBand: BandRect | null = null;
     if (homeId !== null && mainTree) {
         // Patch 20: home starts a few rows down (not further right), with room above it.
-        cursorY += Math.max(0, options.homeTopRows ?? 0) * rowGap;
-        const { bottom, right } = placeTree(homeId, mainTree, cursorY);
+        const homeY = cursorY + Math.max(0, options.homeTopRows ?? 0) * rowGap;
+        // Patch 22: in the home layout home keeps its spot; holes above it fill the rows above.
+        if (!options.homeLayout) cursorY = homeY;
+        const { bottom, right } = options.homeLayout ? placeHubTree(homeId, mainTree, cursorY, homeY) : placeTree(homeId, mainTree, cursorY);
         const linked = placeLinkedLanes('main', new Set(mainTree.keys()), bottom + rowGap);
         const bandBottom = Math.max(bottom - anchorY + nodeHeight, linked.bottom);
         mainBand = bandRect(cursorY, bandBottom, Math.max(right, linked.right + anchorX));
@@ -531,7 +664,7 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         let sideBottom = cursorY;
         let sideRight = marginX;
         for (const { root, tree } of sideTrees) {
-            const { bottom, right } = placeTree(root, tree, cursorY);
+            const { bottom, right } = options.homeLayout ? placeHubTree(root, tree, cursorY, cursorY) : placeTree(root, tree, cursorY);
             const linked = placeLinkedLanes('side', new Set(tree.keys()), bottom + rowGap);
             const blockBottom = Math.max(bottom - anchorY + nodeHeight, linked.bottom);
             sideBottom = blockBottom;
@@ -562,7 +695,7 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         parkX += levelGap / 2;
     }
 
-    return { positions, ghosts, lanes, mainBand, sideBand, combatBand, parentOf, bandOf, sideChains };
+    return { positions, ghosts, lanes, mainBand, sideBand, combatBand, parentOf, bandOf, sideChains, hubLanes, anchorId: options.homeLayout ? homeId : null };
 }
 
 /** Patch 15: unjumped holes beside a rage-lane system (compact 100×26, stacked down; patch 16: 10 px clear of the next column). */

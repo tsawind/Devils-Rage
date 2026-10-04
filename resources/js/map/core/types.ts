@@ -19,6 +19,8 @@ export type EdgeInput = {
     targetId: number;
     /** Patch 21: how wide the pipe is drawn (base units), so pipes leaving one box keep apart. */
     width?: number;
+    /** Patch 22: a hub's hole: a straight lane at this x, from the middle of the hub to the hole's box. */
+    lane?: { x: number; hubId: number } | null;
 };
 
 /**
@@ -43,4 +45,6 @@ export type EdgeGeometry =
            */
           start?: { point: Vec2; normal: Vec2 } | null;
           end?: { point: Vec2; normal: Vec2 } | null;
+          /** Patch 22: which end the pill sits by (a hub lane: the hole's end); default the end further right. */
+          pillAt?: 'from' | 'to';
       };

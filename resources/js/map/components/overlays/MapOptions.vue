@@ -11,7 +11,7 @@ import { TMapBackgroundMode, useMapBackground } from '@/composables/useMapBackgr
 import { updateMapUserSettings } from '@/map/actions/updateMapUserSettings';
 import { useMapStore } from '@/map/store/mapStore';
 import { router } from '@inertiajs/vue3';
-import { CircleDashed, ImageUp, Loader2, Trash2, Waypoints, Workflow } from 'lucide-vue-next';
+import { CircleDashed, Home as House, ImageUp, Loader2, Trash2, Waypoints, Workflow } from 'lucide-vue-next';
 import { computed, ref, useTemplateRef, type Component } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -155,6 +155,22 @@ function onDrop(event: DragEvent) {
                 </Button>
             </TooltipTrigger>
             <TooltipContent>{{ store.showPlaceholders.value ? 'Hide' : 'Show' }} unjumped holes</TooltipContent>
+        </Tooltip>
+        <!-- Patch 22: the home layout (hubs with straight lanes), on unless switched off here -->
+        <Tooltip v-if="effective_layout === 'tree'" :delay-duration="300">
+            <TooltipTrigger as-child>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-8 w-8 rounded-full"
+                    :class="store.homeLayout.value ? 'bg-white text-foreground shadow-sm dark:bg-neutral-700' : 'text-neutral-600 dark:text-neutral-400'"
+                    :aria-pressed="store.homeLayout.value"
+                    @click="store.setHomeLayout(!store.homeLayout.value)"
+                >
+                    <House class="size-4" />
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent>Home layout: {{ store.homeLayout.value ? 'on (click for the old layout)' : 'off (click to turn on)' }}</TooltipContent>
         </Tooltip>
         <Popover>
             <PopoverTrigger as-child>

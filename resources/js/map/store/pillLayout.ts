@@ -49,7 +49,10 @@ export function usePillSpots(store: MapStore): ComputedRef<Map<number, PillSpot>
         for (const [id, size] of sizes) {
             const geometry = routed.get(id);
             if (!geometry || geometry.kind !== 'elbow') continue;
-            const at = pillNextToSystem(elbowPoints(geometry, scale), size.width * scale, size.height * scale, PILL_SYSTEM_GAP * scale);
+            // Patch 22: a hub lane's pill sits by the hole, whichever way the pipe is stored.
+            const points = elbowPoints(geometry, scale);
+            if (geometry.pillAt === 'from') points.reverse();
+            const at = pillNextToSystem(points, size.width * scale, size.height * scale, PILL_SYSTEM_GAP * scale);
             if (at) spots.set(id, { ...at, dot: false });
         }
         return spots;
