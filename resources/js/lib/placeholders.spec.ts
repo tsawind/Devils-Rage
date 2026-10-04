@@ -156,6 +156,22 @@ describe('patch 18: an untyped hole may be the missing static', () => {
     });
 });
 
+describe('patch 22d fix: unidentified statics never share an id', () => {
+    it('a six-static system and the next system get eight different boxes', () => {
+        const statics = ['C1', 'C2', 'C3', 'C4', 'C5', 'C6'].map((leads_to, index) => ({ name: `X${index}0${index}`, leads_to }));
+        const systems: Parameters<typeof buildPlaceholders>[0] = [
+            { id: 1, alias: 'Daisy', solarsystem: { class: '5', statics: [] }, pending_holes: [] },
+            { id: 7, alias: 'A3', solarsystem: { class: '5', statics }, pending_holes: [] },
+            { id: 8, alias: 'A4', solarsystem: { class: '4', statics: [{ name: 'C247', leads_to: 'c3' }, { name: 'U574', leads_to: 'c6' }] }, pending_holes: [] },
+        ];
+        const ids = buildPlaceholders(systems, FORMATS, new Set(), { connections: [7, 8].map((to) => ({ from_map_solarsystem_id: 1, to_map_solarsystem_id: to, type: null, signatures: [] })), parentOf: new Map([[7, 1], [8, 1]]), homeId: 1 })
+            .filter((placeholder) => placeholder.expected)
+            .map((placeholder) => placeholder.nodeId);
+        expect(ids).toHaveLength(8);
+        expect(new Set(ids).size).toBe(8);
+    });
+});
+
 describe('patch 18b: a static and a wanderer of the same type', () => {
     it('two W237 holes: no expected box, both tagged "static?"', () => {
         const systems: Parameters<typeof buildPlaceholders>[0] = [

@@ -384,7 +384,8 @@ function expectedStatics(
             }
             const leadsTo = candidate.leads_to.toUpperCase();
             result.push({
-                nodeId: -(EXPECTED_BASE + system.id * 4 + index),
+                // Room for 32 statics per system: a 6-static system (index 4, 5) shared ids with the next system's first two boxes.
+                nodeId: -(EXPECTED_BASE + system.id * 32 + index),
                 signatureId: 0,
                 parentId: system.id,
                 color: system.combat_color ?? null,
