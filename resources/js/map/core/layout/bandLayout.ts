@@ -86,8 +86,8 @@ export type BandLayoutOptions = {
     /**
      * Patch 22: the home layout. Home, the first system of each side chain and every
      * pinned system are hubs: their holes leave in straight lanes up and down, side by
-     * side, each further hole one lane left; everything beyond uses the usual tree
-     * style, growing away from the hub (up for holes above, down for holes below).
+     * side, each further hole one lane left; everything beyond is laid out as before
+     * (patch 22b), each hole's tree kept clear of the others.
      */
     homeLayout?: boolean;
 };
@@ -462,7 +462,7 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         return list;
     };
     /** A system and everything found from it, relative to it (it sits at 0,0). */
-    const layoutSub = (id: number, tree: Map<number, number[]>, root: number, d: 1 | -1): HubSub => {
+    const layoutSub = (id: number, tree: Map<number, number[]>, root: number): HubSub => {
         const hub = isHub(id, root);
         const sub: HubSub = { pos: new Map([[id, { x: 0, y: 0 }]]), rects: [boxRect(0, 0)], lanes: [] };
         const children = childrenWithSpares(id, tree, hub);
@@ -478,7 +478,7 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
                 side.list.forEach((child, index) => {
                     const lane = Math.min(index, HUB_MAX_LANES - 1);
                     const dx = HUB_FIRST_LANE - lane * HUB_LANE_STEP;
-                    const childSub = layoutSub(child, tree, root, side.d);
+                    const childSub = layoutSub(child, tree, root);
                     const start =
                         index === 0
                             ? side.d * hubGap
@@ -497,20 +497,26 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
             }
             return sub;
         }
-        // The usual tree: the first child level with its parent, the others stacked away from the hub.
-        let previous: number | null = null;
+        // The usual tree, as the old layout draws it: children stacked top to bottom, each
+        // packed against the ones above it, the parent centred on them (patch 22b).
+        const placed: { childSub: HubSub; dy: number }[] = [];
+        const siblingRects: HubRect[] = [];
         for (const child of children) {
-            const childSub = layoutSub(child, tree, root, d);
-            const start = previous === null ? 0 : previous + d * rowGap;
-            const dy = snapRow(packOffset(sub.rects, childSub.rects, levelGap, start, d));
-            mergeSub(sub, childSub, levelGap, dy);
-            previous = dy;
+            const childSub = layoutSub(child, tree, root);
+            const start = placed.length === 0 ? 0 : placed[placed.length - 1].dy + rowGap;
+            const dy = packOffset(siblingRects, childSub.rects, 0, start, 1);
+            for (const rect of childSub.rects) siblingRects.push({ ...rect, y0: rect.y0 + dy, y1: rect.y1 + dy });
+            placed.push({ childSub, dy });
+        }
+        if (placed.length > 0) {
+            const centre = snapRow((placed[0].dy + placed[placed.length - 1].dy) / 2);
+            for (const { childSub, dy } of placed) mergeSub(sub, childSub, levelGap, dy - centre);
         }
         return sub;
     };
     /** Places one hub tree with its top at `top` (the hub further down when its holes above need the room). */
     const placeHubTree = (root: number, tree: Map<number, number[]>, top: number, hubY: number): { bottom: number; right: number } => {
-        const sub = layoutSub(root, tree, root, 1);
+        const sub = layoutSub(root, tree, root);
         const minY = Math.min(...sub.rects.map((rect) => rect.y0));
         const minX = Math.min(...sub.rects.map((rect) => rect.x0));
         const originY = snapRow(Math.max(hubY, top - minY));

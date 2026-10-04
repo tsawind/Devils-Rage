@@ -36,17 +36,18 @@ describe('patch 22: the home layout', () => {
         expect(daisy.anchorId).toBe(1);
     });
 
-    it('a hole above grows its chain upward, away from home', () => {
-        // Alpha (2) with its chain A1 (6) and two more holes (7, 8).
+    it('beyond the lanes, chains are laid out as before (the parent centred on its children)', () => {
+        // Alpha (2) with its chain A0 (6) and two more holes (7, 8).
         const grown = layout(
             [{ id: 1 }, { id: 2 }, { id: 6 }, { id: 7 }, { id: 8 }],
             [[1, 2], [2, 6], [2, 7], [2, 8]],
         );
         const p = (id: number) => grown.positions.get(id)!;
-        expect(p(6).y).toBe(p(2).y);
         expect(p(6).x - p(2).x).toBe(250);
-        expect(p(7).y).toBeLessThan(p(2).y);
-        expect(p(8).y).toBeLessThan(p(7).y);
+        expect(p(6).y).toBeLessThan(p(2).y);
+        expect(p(7).y).toBe(p(2).y);
+        expect(p(8).y).toBeGreaterThan(p(2).y);
+        expect(p(8).y - p(7).y).toBe(85);
     });
 
     it("nothing overlaps: the next hole up sits beyond the previous hole's whole tree", () => {
@@ -83,8 +84,8 @@ describe('patch 22: the home layout', () => {
         expect(result.hubLanes.get(4)?.hubId).toBe(3);
         expect(result.hubLanes.get(5)?.hubId).toBe(3);
         const p = (id: number) => result.positions.get(id)!;
-        // Alpha's other hole (6) sits clear of the pinned system's lanes up.
-        expect(p(6).y).toBeLessThan(p(4).y);
+        // Alpha's other hole (6) sits clear of the pinned system's lanes down.
+        expect(p(6).y).toBeGreaterThan(p(5).y);
     });
 
     it('switched off: the old layout, no lanes', () => {
