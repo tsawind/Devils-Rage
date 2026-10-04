@@ -1,7 +1,6 @@
 import { displayAlias } from '@/lib/alias';
 import type { MapStore } from '@/map/store/mapStore';
-import MapSelection from '@/routes/map-selection';
-import { router } from '@inertiajs/vue3';
+import { deleteSystemsUndoable } from './deleteSystemsUndoable';
 import { ref } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -41,12 +40,8 @@ export function openClearSideChains(rootIds: number[]): void {
 
 export function clearSideChainSystems(ids: number[], label: string): void {
     if (ids.length === 0) return;
-    router.delete(MapSelection.destroy().url, {
-        data: { map_solarsystem_ids: ids },
-        preserveState: true,
-        preserveScroll: true,
-        only: ['map', 'map_navigation', 'selected_map_solarsystem'],
+    // Patch 21: one Undo step puts the whole cleared chain back.
+    deleteSystemsUndoable(ids, `cleared ${label}`, {
         onSuccess: () => toast.success(`Cleared ${label}`, { description: `${ids.length} system${ids.length === 1 ? '' : 's'} removed.` }),
-        onError: () => router.reload({ only: ['map'] }),
     });
 }

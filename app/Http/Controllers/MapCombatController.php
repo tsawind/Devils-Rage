@@ -10,6 +10,7 @@ use App\Features\MapSettingsFeature;
 use App\Models\Map;
 use App\Models\MapSolarsystem;
 use App\Models\User;
+use App\Support\Undo\MapUndoSnapshots;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -94,12 +95,18 @@ final class MapCombatController extends Controller
      *
      * @throws Throwable
      */
-    public function clearChain(Map $map, string $color, CombatModeAction $action, #[CurrentUser] User $user): RedirectResponse
+    public function clearChain(Map $map, string $color, CombatModeAction $action, MapUndoSnapshots $undo, #[CurrentUser] User $user): RedirectResponse
     {
         Gate::authorize('update', $map);
 
         if (! in_array($color, CombatModeAction::COLORS, true)) {
             throw ValidationException::withMessages(['combat' => 'Unknown chain color.']);
+        }
+
+        // Patch 21: the chain's systems as they were, so Undo can put them back.
+        $token = MapUndoSnapshots::tokenFrom(request());
+        if ($token !== null) {
+            $undo->capture($map, $user->id, $token, $map->mapSolarsystems()->where('combat_color', $color)->pluck('id')->map(intval(...))->all());
         }
 
         $action->clearChain($map, $color, $user);

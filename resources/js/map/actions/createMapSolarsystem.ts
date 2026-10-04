@@ -2,6 +2,7 @@ import { findFreePosition } from '@/map/core/layout/freePlacement';
 import type { Vec2 } from '@/map/core/types';
 import { useMapStore } from '@/map/store/mapStore';
 import MapSolarsystems from '@/routes/map-solarsystems';
+import { recordAddedSystem } from './recordAdded';
 import { router } from '@inertiajs/vue3';
 
 /**
@@ -36,6 +37,7 @@ export function createMapSolarsystem(solarsystem_id: number, position: Vec2 | nu
             preserveState: true,
             preserveScroll: true,
             only: ['map', 'map_navigation', 'selected_map_solarsystem'],
+            onSuccess: () => recordAddedSystem(store, solarsystem_id, 'added a system'),
             onError: () => router.reload({ only: ['map'] }),
         },
     );

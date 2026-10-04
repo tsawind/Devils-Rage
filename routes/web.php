@@ -39,6 +39,7 @@ use App\Http\Controllers\MapSelectionController;
 use App\Http\Controllers\MapSettingsController;
 use App\Http\Controllers\MapSolarsystemController;
 use App\Http\Controllers\MapTransferController;
+use App\Http\Controllers\MapUndoController;
 use App\Http\Controllers\MapUserSettingController;
 use App\Http\Controllers\MapWebhookController;
 use App\Http\Controllers\MapWebhookRoleController;
@@ -122,6 +123,7 @@ Route::middleware('auth')->group(function () {
     Route::post('map-solarsystems/{mapSolarsystem}/cleanup', [ChainCleanupController::class, 'store'])->name('map-solarsystems.cleanup.store');
     Route::post('map-solarsystems/{mapSolarsystem}/cleanup-convert', [ChainCleanupController::class, 'convert'])->name('map-solarsystems.cleanup.convert');
     Route::delete('map-solarsystems/{mapSolarsystem}/cleanup-return', [ChainCleanupController::class, 'returnDone'])->name('map-solarsystems.cleanup.return');
+    Route::post('map-undo/{token}', [MapUndoController::class, 'store'])->whereUuid('token')->name('map-undo.store');
     Route::put('map-selection', [MapSelectionController::class, 'update'])->name('map-selection.update');
     Route::delete('map-selection', [MapSelectionController::class, 'destroy'])->name('map-selection.destroy');
 

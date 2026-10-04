@@ -11,7 +11,11 @@ use App\Data\MapConnectionData;
 use App\Http\Requests\StoreMapConnectionRequest;
 use App\Http\Requests\UpdateMapConnectionRequest;
 use App\Models\MapConnection;
+use App\Models\User;
+use App\Support\Undo\MapUndoSnapshots;
+use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
 final class MapConnectionController extends Controller
@@ -26,9 +30,15 @@ final class MapConnectionController extends Controller
         );
     }
 
-    public function destroy(MapConnection $mapConnection, DeleteMapConnectionAction $action): RedirectResponse
+    public function destroy(Request $request, MapConnection $mapConnection, DeleteMapConnectionAction $action, MapUndoSnapshots $undo, #[CurrentUser] User $user): RedirectResponse
     {
         Gate::authorize('delete', $mapConnection);
+
+        // Patch 21: saved first (with its signatures and logged jumps), so Undo can put it back.
+        $token = MapUndoSnapshots::tokenFrom($request);
+        if ($token !== null) {
+            $undo->capture($mapConnection->map, $user->id, $token, connectionIds: [$mapConnection->id]);
+        }
 
         $action->handle($mapConnection);
 

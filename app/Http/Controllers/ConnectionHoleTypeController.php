@@ -8,6 +8,9 @@ use App\Actions\Signatures\ConnectionHoleTypeAction;
 use App\Models\MapConnection;
 use App\Models\Signature;
 use App\Models\SignatureType;
+use App\Models\User;
+use App\Support\Undo\MapUndoSnapshots;
+use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -22,7 +25,7 @@ final class ConnectionHoleTypeController extends Controller
     /**
      * @throws Throwable
      */
-    public function store(Request $request, MapConnection $mapConnection, ConnectionHoleTypeAction $action): RedirectResponse
+    public function store(Request $request, MapConnection $mapConnection, ConnectionHoleTypeAction $action, MapUndoSnapshots $undo, #[CurrentUser] User $user): RedirectResponse
     {
         Gate::authorize('update', $mapConnection);
 
@@ -30,6 +33,12 @@ final class ConnectionHoleTypeController extends Controller
             'map_solarsystem_id' => ['required', 'integer'],
             'signature_type_id' => ['required', 'integer', 'exists:signature_types,id'],
         ]);
+
+        // Patch 21: the pipe and its signatures as they were, so Undo can put the old types back.
+        $token = MapUndoSnapshots::tokenFrom($request);
+        if ($token !== null) {
+            $undo->capture($mapConnection->map, $user->id, $token, connectionIds: [$mapConnection->id]);
+        }
 
         $action->setType($mapConnection, (int) $validated['map_solarsystem_id'], SignatureType::query()->findOrFail((int) $validated['signature_type_id']));
 

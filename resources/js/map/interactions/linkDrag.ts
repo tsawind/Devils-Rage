@@ -3,6 +3,7 @@ import type { Vec2 } from '@/map/core/types';
 import type { MapStore } from '@/map/store/mapStore';
 import type { TMapSolarsystem } from '@/pages/maps';
 import MapConnections from '@/routes/map-connections';
+import { recordAddedConnection } from '@/map/actions/recordAdded';
 import { router } from '@inertiajs/vue3';
 import { ref, type Ref } from 'vue';
 import type { Gesture, GestureContext } from './gestures';
@@ -68,6 +69,7 @@ export function createLinkDragGesture(store: MapStore): LinkDrag {
                     preserveState: true,
                     preserveScroll: true,
                     only: ['map', 'selected_map_solarsystem', 'eve_scout_connections'],
+                    onSuccess: () => recordAddedConnection(store, from.id, to.id),
                 },
             );
         },

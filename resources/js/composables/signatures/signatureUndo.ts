@@ -3,18 +3,17 @@ import Signatures from '@/routes/signatures';
 import { updateSignature } from '@/map/actions/updateSignature';
 import type { TSignature } from '@/types/models';
 import type { FormDataConvertible } from '@inertiajs/core';
+import { recordUndo } from '@/composables/undo/mapUndo';
 import { router, usePage } from '@inertiajs/vue3';
-import { computed, shallowRef } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
 
 /**
- * Patch 20: a small personal Undo / Redo for your own signature edits
- * (category, type, mass, life, Static / Wandering, deleting a signature),
- * kept in this browser tab, last 20. It goes back through the same saves the
- * signature list makes, so everyone sees the undo. When someone else changed
- * that signature after you, the undo is skipped with a message rather than
- * overwriting their change. Systems, connections, map moves and arming keep
- * their own Undo toasts where they have one.
+ * Patch 20: your signature edits (category, type, mass, life, Static / Wandering,
+ * deleting a signature) as steps of the map's Undo / Redo (patch 21: one list for
+ * everything, see mapUndo). They go back through the same saves the signature
+ * list makes, so everyone sees the undo. When someone else changed that
+ * signature after you, the step is skipped with a message rather than
+ * overwriting their change.
  */
 
 /** The fields an undo can put back. */
@@ -26,13 +25,8 @@ type TEdit = { kind: 'edit'; label: string; signatureId: number; before: TValues
 type TDelete = { kind: 'delete'; label: string; mapSolarsystemId: number; snapshot: TSignature };
 type TEntry = TEdit | TDelete;
 
-const LIMIT = 20;
-const undoStack = shallowRef<TEntry[]>([]);
-const redoStack = shallowRef<TEntry[]>([]);
-
 function push(entry: TEntry): void {
-    undoStack.value = [...undoStack.value.slice(-(LIMIT - 1)), entry];
-    redoStack.value = [];
+    recordUndo({ label: entry.label, undo: () => apply(entry, 'undo'), redo: () => apply(entry, 'redo') });
 }
 
 /** The signature as the page has it now (the selected system's list), if it is there. */
@@ -113,44 +107,4 @@ function apply(entry: TEntry, direction: 'undo' | 'redo'): boolean {
     return true;
 }
 
-export function undoLast(): void {
-    const entry = undoStack.value.at(-1);
-    if (!entry) return;
-    undoStack.value = undoStack.value.slice(0, -1);
-    if (apply(entry, 'undo')) {
-        redoStack.value = [...redoStack.value, entry];
-        toast.success(`Undone: ${entry.label}`, { action: { label: 'Redo', onClick: () => redoLast() } });
-    }
-}
-
-export function redoLast(): void {
-    const entry = redoStack.value.at(-1);
-    if (!entry) return;
-    redoStack.value = redoStack.value.slice(0, -1);
-    if (apply(entry, 'redo')) {
-        undoStack.value = [...undoStack.value, entry];
-        toast.success(`Redone: ${entry.label}`);
-    }
-}
-
-export const canUndo = computed(() => undoStack.value.length > 0);
-export const canRedo = computed(() => redoStack.value.length > 0);
-export const undoLabel = computed(() => undoStack.value.at(-1)?.label ?? null);
-export const redoLabel = computed(() => redoStack.value.at(-1)?.label ?? null);
-
-/** Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z), except while typing in a box. */
-export function handleUndoKeydown(event: KeyboardEvent): void {
-    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
-    const target = event.target as HTMLElement | null;
-    if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
-    const key = event.key.toLowerCase();
-    if (key === 'z' && !event.shiftKey) {
-        if (!canUndo.value) return;
-        event.preventDefault();
-        undoLast();
-    } else if (key === 'y' || (key === 'z' && event.shiftKey)) {
-        if (!canRedo.value) return;
-        event.preventDefault();
-        redoLast();
-    }
-}
+export { canRedo, canUndo, handleUndoKeydown, redoLabel, redoLast, undoLabel, undoLast } from '@/composables/undo/mapUndo';

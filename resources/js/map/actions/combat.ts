@@ -1,4 +1,5 @@
 import MapCombatController from '@/actions/App/Http/Controllers/MapCombatController';
+import { recordUndo, restoreSaved, undoToken } from '@/composables/undo/mapUndo';
 import { router } from '@inertiajs/vue3';
 import { toast } from 'vue-sonner';
 
@@ -42,15 +43,36 @@ export function stopCombat(mapSlug: string): void {
  * working it. Confirmed first (see ClearChainDialog).
  */
 export function clearCombatChain(mapSlug: string, color: string, label: string): void {
+    // Patch 21: the server saves the chain's systems first, so Undo can put the chain back.
+    let saved = sendClearChain(mapSlug, color, label, () =>
+        recordUndo({
+            label: `cleared the ${label} chain`,
+            undo: () => {
+                restoreSaved(saved);
+                return true;
+            },
+            redo: () => {
+                saved = sendClearChain(mapSlug, color, label);
+                return true;
+            },
+        }),
+    );
+}
+
+function sendClearChain(mapSlug: string, color: string, label: string, record?: () => void): string {
+    const token = undoToken();
     router.delete(MapCombatController.clearChain({ map: mapSlug, color }).url, {
+        data: { undo_token: token },
         preserveScroll: true,
         preserveState: true,
         only: ['map_user_settings', 'map'],
         onSuccess: () => {
+            record?.();
             toast.success(`${label} chain cleared`);
         },
         onError: (errors) => {
             toast.error(errors.combat ?? 'Could not clear the rage chain.');
         },
     });
+    return token;
 }

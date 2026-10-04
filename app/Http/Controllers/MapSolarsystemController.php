@@ -10,7 +10,11 @@ use App\Actions\MapSolarsystem\UpdateMapSolarsystemAction;
 use App\Http\Requests\StoreMapSolarsystemRequest;
 use App\Http\Requests\UpdateMapSolarsystemRequest;
 use App\Models\MapSolarsystem;
+use App\Models\User;
+use App\Support\Undo\MapUndoSnapshots;
+use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
 final class MapSolarsystemController extends Controller
@@ -40,9 +44,15 @@ final class MapSolarsystemController extends Controller
             );
     }
 
-    public function destroy(MapSolarsystem $mapSolarsystem, DeleteMapSolarsystemAction $action): RedirectResponse
+    public function destroy(Request $request, MapSolarsystem $mapSolarsystem, DeleteMapSolarsystemAction $action, MapUndoSnapshots $undo, #[CurrentUser] User $user): RedirectResponse
     {
         Gate::authorize('delete', $mapSolarsystem);
+
+        // Patch 21: saved first, so Undo can put it back with its signatures and pipes.
+        $token = MapUndoSnapshots::tokenFrom($request);
+        if ($token !== null) {
+            $undo->capture($mapSolarsystem->map, $user->id, $token, [$mapSolarsystem->id]);
+        }
 
         $action->handle($mapSolarsystem);
 

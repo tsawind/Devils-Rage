@@ -1,12 +1,16 @@
 import { TRawSignature } from '@/lib/SignatureParser';
 import PasteSignatures from '@/routes/paste-signatures';
+import { recordRestorable, undoToken } from '@/composables/undo/mapUndo';
 import { router } from '@inertiajs/vue3';
 
 export function pasteSignatures(map_solarsystem_id: number, signatures: TRawSignature[], onSuccess?: () => void): void {
+    // Patch 21: the server saves the system's signatures first, so Undo can put them back.
+    const token = undoToken();
     return router.post(
         PasteSignatures.store().url,
         {
             map_solarsystem_id,
+            undo_token: token,
             signatures: signatures.map((signature) => ({
                 signature_id: signature.signature_id,
                 signature_category_id: signature.signature_category_id,
@@ -18,7 +22,10 @@ export function pasteSignatures(map_solarsystem_id: number, signatures: TRawSign
             preserveScroll: true,
             preserveState: true,
             only: ['map', 'selected_map_solarsystem'],
-            onSuccess: () => onSuccess?.(),
+            onSuccess: () => {
+                recordRestorable(`pasted ${signatures.length} signature${signatures.length === 1 ? '' : 's'}`, token);
+                onSuccess?.();
+            },
             onError: () => router.reload({ only: ['map'] }),
         },
     );

@@ -1,4 +1,5 @@
 import { getSelectedMapSolarsystems } from '@/map/actions/selectedMapSolarsystems';
+import { recordUndo } from '@/composables/undo/mapUndo';
 import { updateMapSelection } from '@/map/actions/updateMapSelection';
 import { clampToCanvas, snapToGrid } from '@/map/core/coords';
 import type { Vec2 } from '@/map/core/types';
@@ -49,6 +50,7 @@ export function createNodeDragGesture(store: MapStore): Gesture {
 
     function commit(): void {
         if (draggedId === null) return;
+        recordMove();
 
         if (isGroupDrag) {
             updateMapSelection(
@@ -81,6 +83,26 @@ export function createNodeDragGesture(store: MapStore): Gesture {
                 onError: () => router.reload({ only: ['map'] }),
             },
         );
+    }
+
+    /** Patch 21: a move is one Undo step: back to where they were (and Redo: where you put them). */
+    function recordMove(): void {
+        const before: { id: number; position_x: number; position_y: number }[] = [];
+        const after: { id: number; position_x: number; position_y: number }[] = [];
+        for (const [id, start] of startPositions) {
+            const position = store.positions.get(id);
+            if (!position) continue;
+            before.push({ id, position_x: Math.round(start.x), position_y: Math.round(start.y) });
+            after.push({ id, position_x: Math.round(position.x), position_y: Math.round(position.y) });
+        }
+        if (!after.some((end, i) => end.position_x !== before[i].position_x || end.position_y !== before[i].position_y)) return;
+        const put = (positions: typeof before) => {
+            const present = positions.filter((entry) => store.systems.has(entry.id));
+            if (present.length === 0) return false;
+            updateMapSelection(present);
+            return true;
+        };
+        recordUndo({ label: before.length === 1 ? 'moved a system' : `moved ${before.length} systems`, undo: () => put(before), redo: () => put(after) });
     }
 
     return {
