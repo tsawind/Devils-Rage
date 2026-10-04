@@ -200,13 +200,27 @@ export function useTracking() {
     // tracking POST) carry the pre-jump URL, and whichever lands last decides
     // what the page URL is. Selecting after them, rather than racing them, is
     // what keeps the selection from being reverted.
-    function followInto(solarsystem_id: number) {
+    function followInto(solarsystem_id: number, attempt = 0) {
         if (!map_user_settings.value.follow_character_enabled) return;
+
+        // Patch 21: another save started right after the jump (a signature update, the static
+        // check…) can cancel this visit, or land after it with the old URL and put the old
+        // system back. Then try again (twice at most) while you are still in that system.
+        const stillThere = () => character.value?.status?.solarsystem_id === solarsystem_id;
+        const selected = () => page.props.selected_map_solarsystem?.solarsystem_id === solarsystem_id;
+        const retry = () => {
+            if (attempt >= 2) return;
+            setTimeout(() => {
+                if (stillThere() && !selected()) followInto(solarsystem_id, attempt + 1);
+            }, 800);
+        };
 
         router.visit(show(page.props.map.slug, { mergeQuery: { solarsystem_id } }).url, {
             preserveScroll: true,
             preserveState: true,
             only: ['map', 'selected_map_solarsystem', 'map_navigation', 'map_characters', 'eve_scout_connections', 'threat_analysis'],
+            onCancel: retry,
+            onSuccess: retry,
         });
     }
 
