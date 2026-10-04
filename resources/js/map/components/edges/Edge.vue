@@ -261,7 +261,8 @@ const pillId = computed(() => (connection && !haloOnly ? geometry.id : null));
 watch(
     [pillId, () => badgeWidth(indicators.value)],
     ([id, width], previous) => {
-        if (previous && previous[0] !== null && previous[0] !== id) setPillWidth(store, previous[0], null);
+        const before = previous?.[0] ?? null;
+        if (before !== null && before !== id) setPillWidth(store, before, null);
         if (id !== null) setPillWidth(store, id, width);
     },
     { immediate: true },
