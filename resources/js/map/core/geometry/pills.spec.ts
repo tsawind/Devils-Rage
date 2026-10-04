@@ -99,4 +99,24 @@ describe('patch 21: pills', () => {
         );
         expect(spots.get(1)?.dot).toBe(true);
     });
+
+    it('a straight pipe is one stretch, even with its unused bend point in the middle', () => {
+        const spots = placePills(
+            [
+                {
+                    id: 1,
+                    points: [
+                        { x: 0, y: 0 },
+                        { x: 35, y: 0 },
+                        { x: 35, y: 0 },
+                        { x: 70, y: 0 },
+                    ],
+                    width: 40,
+                    height: 20,
+                },
+            ],
+            [],
+        );
+        expect(spots.get(1)).toEqual({ x: 35, y: 0, dot: false });
+    });
 });

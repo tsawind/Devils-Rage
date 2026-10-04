@@ -33,8 +33,25 @@ const STEP = 6;
 
 type Stretch = { a: Vec2; b: Vec2; length: number; horizontal: boolean };
 
-function stretchesOf(points: Vec2[]): Stretch[] {
+/**
+ * The pipe's real corners: repeated points dropped, and points in the middle of a
+ * straight run too (a straight pipe still carries its unused bend point, which
+ * would otherwise split one long stretch into two short halves).
+ */
+function cornersOf(points: Vec2[]): Vec2[] {
     const pts = points.filter((point, i) => i === 0 || Math.hypot(point.x - points[i - 1].x, point.y - points[i - 1].y) > 0.01);
+    return pts.filter((point, i) => {
+        if (i === 0 || i === pts.length - 1) return true;
+        const before = pts[i - 1];
+        const after = pts[i + 1];
+        const cross = (point.x - before.x) * (after.y - point.y) - (point.y - before.y) * (after.x - point.x);
+        const dot = (point.x - before.x) * (after.x - point.x) + (point.y - before.y) * (after.y - point.y);
+        return Math.abs(cross) > 0.01 || dot < 0;
+    });
+}
+
+function stretchesOf(points: Vec2[]): Stretch[] {
+    const pts = cornersOf(points);
     if (pts.length < 2) return [];
     const all: Stretch[] = [];
     for (let i = 1; i < pts.length; i++) {
