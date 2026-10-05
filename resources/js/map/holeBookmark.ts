@@ -2,6 +2,7 @@ import { aliasesBelow, suggestAlias } from '@/lib/alias';
 import { buildSignatureBookmark, formatBookmarkName, isFrigateOnly, visibleBookmarkName } from '@/lib/bookmark';
 import { connectionFlag } from '@/lib/chainNumbering';
 import { chainAliases } from '@/lib/combat';
+import { getTypeById } from '@/const/signatures';
 import { shipSizeFromJumpMass } from '@/lib/shipSize';
 import { wormholeMass } from '@/lib/wormholeMass';
 import type { TPlaceholder } from '@/lib/placeholders';
@@ -56,6 +57,12 @@ export function pendingHoleBookmark(store: MapStore, system: TMapSolarsystem, ho
     });
 }
 
+/** The grouped K162 details (`extra` "C4/5", its signature) of a hole's type, for the bookmark's class. */
+function groupedType(signatureTypeId: number | null | undefined): { extra?: string | null; signature?: string | null } {
+    const type = signatureTypeId ? getTypeById(signatureTypeId) : undefined;
+    return type ? { extra: type.extra ?? null, signature: type.signature ?? null } : {};
+}
+
 /** A pending hole in the shape the bookmark builder (and armHole) reads. */
 export function holeAsSignature(hole: TPendingHole) {
     return {
@@ -66,7 +73,8 @@ export function holeAsSignature(hole: TPendingHole) {
         mass_status: hole.mass_status ?? null,
         lifetime: hole.lifetime ?? 'healthy',
         wormhole: { name: hole.wormhole },
-        signature_type: { target_class: hole.target_class },
+        // Patch 28: a grouped K162 ("K162 C4/5") keeps its range in the bookmark (" G4 ZWV C4/5k").
+        signature_type: { target_class: hole.target_class, ...groupedType(hole.signature_type_id) },
         is_static: hole.is_static,
         is_wandering: hole.is_wandering,
     };
