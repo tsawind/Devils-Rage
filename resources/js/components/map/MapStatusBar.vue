@@ -453,8 +453,8 @@ const settingsUrl = computed(() => {
 
         <div class="hidden h-4 w-px bg-border/50 md:block" />
 
-        <!-- Layout Edit Toggle -->
-        <Tooltip>
+        <!-- Layout Edit Toggle (patch 26: hidden while the top bar is folded, unless you are editing) -->
+        <Tooltip v-if="!barsFolded || layout.isEditMode.value">
             <TooltipTrigger as-child>
                 <button
                     @click="handleLayoutToggle"
