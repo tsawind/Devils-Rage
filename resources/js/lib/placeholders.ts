@@ -405,22 +405,27 @@ function expectedStatics(
     return result;
 }
 
+/** Patch 23: a system with this many connections (jumped plus unjumped) folds its unidentified statics. */
+export const BUSY_SYSTEM_CONNECTIONS = 8;
+
 /**
  * Patch 15: in rage lanes a system's unjumped holes fold into one chip
- * ("+3 holes"), so the lane stays narrow. Armed holes, the system you're in
- * and systems you opened keep theirs. Main and side chains are untouched.
+ * ("+3 holes"), so the lane stays narrow. Patch 23: a busy system (a drifter
+ * hole, Thera) folds its unidentified statics the same way, in any chain.
+ * Armed holes, the system you're in and systems you opened keep theirs.
  */
 export function foldLaneHoles(
     placeholders: readonly TPlaceholder[],
     inLane: (parentId: number) => boolean,
     opened: ReadonlySet<number>,
     currentSystemId: number | null,
+    isBusy: (parentId: number) => boolean = () => false,
 ): { visible: TPlaceholder[]; folded: Map<number, number> } {
     const visible: TPlaceholder[] = [];
     const folded = new Map<number, number>();
     for (const placeholder of placeholders) {
-        const keep =
-            !inLane(placeholder.parentId) || Boolean(placeholder.armedBy) || opened.has(placeholder.parentId) || placeholder.parentId === currentSystemId;
+        const foldable = inLane(placeholder.parentId) || (Boolean(placeholder.expected) && isBusy(placeholder.parentId));
+        const keep = !foldable || Boolean(placeholder.armedBy) || opened.has(placeholder.parentId) || placeholder.parentId === currentSystemId;
         if (keep) visible.push(placeholder);
         else folded.set(placeholder.parentId, (folded.get(placeholder.parentId) ?? 0) + 1);
     }

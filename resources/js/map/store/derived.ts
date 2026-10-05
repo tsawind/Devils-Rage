@@ -1,5 +1,5 @@
 import { computeBandLayout, isLoopEdge, type BandLayoutInput, type BandLayoutResult } from '@/map/core/layout/bandLayout';
-import { buildPlaceholders, foldLaneHoles, type TPlaceholder } from '@/lib/placeholders';
+import { BUSY_SYSTEM_CONNECTIONS, buildPlaceholders, foldLaneHoles, type TPlaceholder } from '@/lib/placeholders';
 import { compareSystems } from '@/map/core/sorting';
 import { isWormholeClass } from '@/const/solarsystemClasses';
 import type { Vec2 } from '@/map/core/types';
@@ -73,12 +73,24 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
      * Patch 15: in rage lanes a system's unjumped holes fold into a chip;
      * armed ones, the system you're in and opened systems keep theirs.
      */
+    /** Patch 23: systems with 8+ connections (jumped and unjumped), e.g. drifter holes and Thera. */
+    const busyHoleParents: ComputedRef<ReadonlySet<number>> = computed(() => {
+        const counts = new Map<number, number>();
+        const add = (id: number) => counts.set(id, (counts.get(id) ?? 0) + 1);
+        for (const connection of entities.connections.values()) {
+            add(connection.from_map_solarsystem_id);
+            add(connection.to_map_solarsystem_id);
+        }
+        for (const placeholder of allPlaceholders.value) add(placeholder.parentId);
+        return new Set([...counts].filter(([, count]) => count >= BUSY_SYSTEM_CONNECTIONS).map(([id]) => id));
+    });
     const foldedPlaceholders = computed(() =>
         foldLaneHoles(
             allPlaceholders.value,
             (parentId) => Boolean(entities.systems.get(parentId)?.combat_color),
             view.openedHoleParents.value,
             view.currentSystemId.value,
+            (parentId) => busyHoleParents.value.has(parentId),
         ),
     );
     const placeholders: ComputedRef<TPlaceholder[]> = computed(() => foldedPlaceholders.value.visible);
@@ -253,6 +265,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         bandLayout,
         placeholders,
         foldedHoles,
+        busyHoleParents,
         loopConnectionIds,
         staticDoubtSignatureIds,
         treePositions,

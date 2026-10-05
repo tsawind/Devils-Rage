@@ -201,4 +201,15 @@ describe('patch 15: folding unjumped holes in rage lanes', () => {
         expect(visible.map((placeholder) => placeholder.nodeId)).toEqual([-3, -4, -5, -6]);
         expect([...folded]).toEqual([[10, 2]]);
     });
+
+    it('patch 23: a busy system outside the lanes folds only its unidentified statics', () => {
+        const expected = (nodeId: number, parentId: number) => ({ ...hole(nodeId, parentId), expected: true });
+        const all = [expected(-1, 40), expected(-2, 40), hole(-3, 40), expected(-4, 50)];
+        const busy = (id: number) => id === 40;
+        const { visible, folded } = foldLaneHoles(all, () => false, new Set(), null, busy);
+        expect(visible.map((placeholder) => placeholder.nodeId)).toEqual([-3, -4]);
+        expect([...folded]).toEqual([[40, 2]]);
+        expect(foldLaneHoles(all, () => false, new Set([40]), null, busy).folded.size).toBe(0);
+        expect(foldLaneHoles(all, () => false, new Set(), 40, busy).folded.size).toBe(0);
+    });
 });

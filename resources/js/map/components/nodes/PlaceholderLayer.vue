@@ -242,7 +242,9 @@ const chips = computed(() => {
         const position = store.renderPosition(parentId);
         if (!position) return;
         const left = position.x - ANCHOR_OFFSET.x + FULL_WIDTH + 10;
-        const top = position.y - ANCHOR_OFFSET.y + (visibleCount.get(parentId) ?? 0) * 34 + 4;
+        // Rage lanes stack their holes beside the system; in the chains the chip sits right of it.
+        const stacked = store.systems.get(parentId)?.combat_color ? (visibleCount.get(parentId) ?? 0) : 0;
+        const top = position.y - ANCHOR_OFFSET.y + stacked * 34 + 4;
         result.push({
             parentId,
             label,
@@ -250,9 +252,15 @@ const chips = computed(() => {
             style: { transform: `translate(${left * scale}px, ${top * scale}px)`, fontSize: `${10 * Math.min(scale, 1.5)}px` },
         });
     };
-    for (const [parentId, count] of store.foldedHoles.value) place(parentId, `+${count} hole${count === 1 ? '' : 's'} ▸`, false);
+    // Patch 23: a busy system outside the lanes folds only its unidentified statics.
+    const inLane = (parentId: number) => Boolean(store.systems.get(parentId)?.combat_color);
+    for (const [parentId, count] of store.foldedHoles.value) {
+        const what = inLane(parentId) ? 'hole' : 'static';
+        place(parentId, `+${count} ${what}${count === 1 ? '' : 's'} ▸`, false);
+    }
     for (const parentId of store.openedHoleParents.value) {
-        if (!store.foldedHoles.value.has(parentId) && (visibleCount.get(parentId) ?? 0) > 0 && store.systems.get(parentId)?.combat_color) place(parentId, 'fold ▴', true);
+        if (store.foldedHoles.value.has(parentId) || (visibleCount.get(parentId) ?? 0) === 0) continue;
+        if (inLane(parentId) || store.busyHoleParents.value.has(parentId)) place(parentId, 'fold ▴', true);
     }
     return result;
 });

@@ -11,6 +11,17 @@ export type ViewState = ReturnType<typeof createViewState>;
 const SHOW_PLACEHOLDERS_KEY = 'map-show-unjumped-holes';
 /** Patch 22: the home layout (on unless switched off in this browser). */
 const HOME_LAYOUT_KEY = 'map-home-layout';
+const OPENED_HOLES_KEY = 'map-opened-holes';
+
+/** Patch 23: the systems whose folded holes you opened, remembered in this browser. */
+function readOpenedHoles(): Set<number> {
+    try {
+        const ids: unknown = JSON.parse(window.localStorage.getItem(OPENED_HOLES_KEY) ?? '[]');
+        return new Set(Array.isArray(ids) ? ids.filter((id): id is number => typeof id === 'number') : []);
+    } catch {
+        return new Set();
+    }
+}
 
 function readHomeLayout(): boolean {
     try {
@@ -76,7 +87,7 @@ export function createViewState() {
     const scrollShift: ShallowRef<{ dx: number; dy: number; seq: number } | null> = shallowRef(null);
 
     /** Patch 15: rage-lane systems whose unjumped holes are opened (folded into a chip otherwise). */
-    const openedHoleParents: ShallowRef<ReadonlySet<number>> = shallowRef(new Set<number>());
+    const openedHoleParents: ShallowRef<ReadonlySet<number>> = shallowRef(readOpenedHoles());
     /** Patch 15: the map system you are in (its holes stay open; Center follows it). */
     const currentSystemId: Ref<number | null> = ref(null);
     /** Patch 15: ask the viewport to center on a base point (bumped on every request). */
@@ -87,6 +98,11 @@ export function createViewState() {
         if (next.has(id)) next.delete(id);
         else next.add(id);
         openedHoleParents.value = next;
+        try {
+            window.localStorage.setItem(OPENED_HOLES_KEY, JSON.stringify([...next].slice(-200)));
+        } catch {
+            // Storage unavailable: it stays open for this visit.
+        }
     }
 
     /** Patch 16: force re-centers even while your system is comfortably on screen. */
