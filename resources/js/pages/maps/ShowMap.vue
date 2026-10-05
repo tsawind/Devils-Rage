@@ -7,6 +7,7 @@ import LayoutEditorToolbar from '@/components/layout/LayoutEditorToolbar.vue';
 import MapKillmails from '@/components/map-killmails/MapKillmails.vue';
 import MapSkyhooks from '@/components/map-skyhooks/MapSkyhooks.vue';
 import CommandPalette from '@/components/map/CommandPalette.vue';
+import MapFloatingBar from '@/components/map/MapFloatingBar.vue';
 import MapIntroduction from '@/components/map/MapIntroduction.vue';
 import MapStatusBar from '@/components/map/MapStatusBar.vue';
 import ShipHistory from '@/components/ship-history/ShipHistory.vue';
@@ -17,6 +18,7 @@ import SystemInfo from '@/components/solarsystem/SystemInfo.vue';
 import SystemInfoEmptyState from '@/components/solarsystem/SystemInfoEmptyState.vue';
 import ThreatAnalysis from '@/components/threat-analysis/ThreatAnalysis.vue';
 import { useDisableTextSelection } from '@/composables/useDisableTextSelection';
+import { useMapChrome } from '@/composables/useMapChrome';
 import { useMapLayout } from '@/composables/useMapLayout';
 import { useOnClient } from '@/composables/useOnClient';
 import usePermission from '@/composables/usePermission';
@@ -47,6 +49,8 @@ const {
 } = defineProps<TShowMapProps>();
 
 const { isViewer } = usePermission();
+// Patch 23: both top bars can fold away for more map.
+const { barsFolded } = useMapChrome();
 const page = usePage();
 
 const { resolveSolarsystem } = useStaticSolarsystems();
@@ -175,7 +179,7 @@ const handleResizeEnd = () => {
 </script>
 
 <template>
-    <AppLayout>
+    <AppLayout :hide-header="barsFolded">
         <SeoHead
             :title="map.name"
             :description="`Explore the ${map.name} wormhole mapping network. Navigate dangerous wormhole space with real-time intel, signature tracking, and collaborative mapping tools.`"
@@ -191,7 +195,15 @@ const handleResizeEnd = () => {
         />
 
         <!-- Status Bar -->
-        <MapStatusBar :map="resolvedMap" :map_user_settings="map_user_settings" :layout="layout" />
+        <MapStatusBar
+            :map="resolvedMap"
+            :map_user_settings="map_user_settings"
+            :layout="layout"
+            :map_navigation="resolvedMapNavigation"
+            :map_characters="map_characters ?? null"
+            :selected_map_solarsystem="resolvedSelectedSolarsystem"
+            :ignored_systems="ignored_systems"
+        />
 
         <!-- Command Palette (Cmd/Ctrl+K) -->
         <CommandPalette />
@@ -216,7 +228,10 @@ const handleResizeEnd = () => {
         >
             <!-- Map Section -->
             <GridItem v-bind="getLayoutItem('map').value" @resize="handleResizeStart" @resized="handleResizeEnd">
-                <MapRoot :map="resolvedMap" :config="config" />
+                <div class="relative h-full w-full">
+                    <MapRoot :map="resolvedMap" :config="config" />
+                    <MapFloatingBar :map="resolvedMap" :map_characters="map_characters ?? null" />
+                </div>
             </GridItem>
 
             <!-- System Info Section -->

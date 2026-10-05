@@ -8,10 +8,13 @@ import type { BreadcrumbItemType } from '@/types';
 
 interface Props {
     breadcrumbs?: BreadcrumbItemType[];
+    /** Patch 23: the map page folds the site header away for more room. */
+    hideHeader?: boolean;
 }
 
 withDefaults(defineProps<Props>(), {
     breadcrumbs: () => [],
+    hideHeader: false,
 });
 </script>
 
@@ -19,7 +22,7 @@ withDefaults(defineProps<Props>(), {
     <TooltipProvider>
         <div class="flex flex-col">
             <AnnouncementBanner />
-            <AppHeader />
+            <AppHeader v-show="!hideHeader" />
             <AppContent>
                 <slot />
             </AppContent>

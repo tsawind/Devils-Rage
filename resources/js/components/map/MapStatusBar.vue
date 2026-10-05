@@ -23,17 +23,49 @@ import type { TMapUserSetting } from '@/types/models';
 import { Link } from '@inertiajs/vue3';
 import { useConnectionStatus } from '@laravel/echo-vue';
 import { ConnectionStatus } from 'laravel-echo';
-import { ClipboardCopy, Crosshair, Eye, EyeOff, LayoutGrid, LocateFixed, Map as MapIcon, Redo2, Settings, ShieldAlert, Undo2, Wifi, WifiOff } from 'lucide-vue-next';
+import {
+    ArrowUpToLine,
+    ChevronsUp,
+    ClipboardCopy,
+    Crosshair,
+    Eye,
+    EyeOff,
+    LayoutGrid,
+    LocateFixed,
+    Map as MapIcon,
+    PictureInPicture2,
+    Redo2,
+    Settings,
+    ShieldAlert,
+    Undo2,
+    Wifi,
+    WifiOff,
+} from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { canRedo, canUndo, handleUndoKeydown, redoLabel, redoLast, undoLabel, undoLast } from '@/composables/signatures/signatureUndo';
+import { useMapChrome } from '@/composables/useMapChrome';
+import type { TResolvedMapNavigation, TResolvedSelectedMapSolarsystem } from '@/pages/maps';
+import type { TCharacter } from '@/types/models';
 import CommandPaletteButton from './CommandPaletteButton.vue';
+import RoutingBox from './RoutingBox.vue';
 import TrackingSignatureDialog from './TrackingSignatureDialog.vue';
 
-const { map, map_user_settings, layout } = defineProps<{
+const { map, map_user_settings, layout, map_navigation = null, map_characters = null, selected_map_solarsystem = null, ignored_systems = [] } = defineProps<{
     map: TMap;
     map_user_settings: TMapUserSetting;
     layout: UseMapLayoutReturn;
+    map_navigation?: TResolvedMapNavigation | null;
+    map_characters?: TCharacter[] | null;
+    selected_map_solarsystem?: TResolvedSelectedMapSolarsystem | null;
+    ignored_systems?: number[];
 }>();
+
+// Patch 23: fold both top bars away (the toolbar floats over the map, icons only), and
+// Search + Routing can pop out into the map.
+const { barsFolded, toolsPopped, floatReady, setBarsFolded, setToolsPopped } = useMapChrome();
+const toolsFloating = computed(() => floatReady.value && (barsFolded.value || toolsPopped.value));
+const toolbarFloating = computed(() => floatReady.value && barsFolded.value);
+const labelClass = computed(() => (barsFolded.value ? 'hidden' : 'hidden md:inline'));
 
 // Initialize tracking
 usePing(map);
@@ -150,7 +182,7 @@ const settingsUrl = computed(() => {
 </script>
 
 <template>
-    <div class="relative flex h-10 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/30 px-2 sm:gap-3 sm:px-3">
+    <div v-show="!barsFolded" class="relative flex h-10 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/30 px-2 sm:gap-3 sm:px-3">
         <!-- Map Name -->
         <div class="flex items-center gap-2">
             <MapIcon class="size-4 text-muted-foreground" />
@@ -159,13 +191,36 @@ const settingsUrl = computed(() => {
 
         <div class="hidden h-4 w-px bg-border/50 sm:block" />
 
-        <!-- Search -->
-        <div class="hidden flex-1 sm:block">
-            <CommandPaletteButton />
-        </div>
+        <!-- Search + Routing (patch 23): in the bar, or floating in the map when popped out or folded -->
+        <Teleport defer to="#map-float-tools" :disabled="!toolsFloating">
+            <div class="hidden items-center gap-2 sm:flex" :class="toolsFloating ? 'rounded-lg border border-border/60 bg-card/90 p-1.5 shadow-md backdrop-blur' : ''">
+                <div class="w-56 lg:w-64">
+                    <CommandPaletteButton />
+                </div>
+                <div class="w-40 lg:w-48">
+                    <RoutingBox :map :map_navigation :map_characters :selected_map_solarsystem :ignored_systems />
+                </div>
+                <Tooltip v-if="!barsFolded">
+                    <TooltipTrigger as-child>
+                        <button
+                            type="button"
+                            class="flex items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            :aria-label="toolsPopped ? 'Put Search and Routing back in the bar' : 'Pop Search and Routing out into the map'"
+                            @click="setToolsPopped(!toolsPopped)"
+                        >
+                            <ArrowUpToLine v-if="toolsPopped" class="size-3.5" />
+                            <PictureInPicture2 v-else class="size-3.5" />
+                        </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                        <p class="text-xs">{{ toolsPopped ? 'Back into the bar' : 'Pop out into the map' }}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </div>
+        </Teleport>
 
-        <!-- Spacer for mobile -->
-        <div class="flex-1 sm:hidden" />
+        <!-- Spacer -->
+        <div class="flex-1" />
 
         <!-- Info badges: in line before the pilot location (centred, they covered it) -->
         <div class="flex shrink-0 items-center gap-2">
@@ -207,6 +262,9 @@ const settingsUrl = computed(() => {
 
         <div class="hidden h-4 w-px bg-border/50 lg:block" />
 
+        <!-- Patch 23: the toolbar; floats over the map (icons only) while the bars are folded -->
+        <Teleport defer to="#map-float-toolbar" :disabled="!toolbarFloating">
+        <div class="flex items-center gap-2 sm:gap-3" :class="barsFolded ? 'gap-1 sm:gap-1' : ''">
         <!-- Connection Status -->
         <Tooltip>
             <TooltipTrigger as-child>
@@ -244,7 +302,7 @@ const settingsUrl = computed(() => {
                 >
                     <Eye v-if="map_user_settings.tracking_allowed" class="size-3.5" />
                     <EyeOff v-else class="size-3.5" />
-                    <span class="hidden md:inline">Visible</span>
+                    <span :class="labelClass">Visible</span>
                 </button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
@@ -265,7 +323,7 @@ const settingsUrl = computed(() => {
                     :class="is_tracking ? 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
                 >
                     <TrackingIcon class="size-3.5" />
-                    <span class="hidden md:inline">Tracking</span>
+                    <span :class="labelClass">Tracking</span>
                 </button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
@@ -293,7 +351,7 @@ const settingsUrl = computed(() => {
                     :class="clipboard_on ? 'bg-violet-700 text-white hover:bg-violet-800 dark:bg-violet-500/20 dark:text-violet-300 dark:hover:bg-violet-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
                 >
                     <ClipboardCopy class="size-3.5" />
-                    <span class="hidden md:inline">Clipboard</span>
+                    <span :class="labelClass">Clipboard</span>
                 </button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
@@ -321,7 +379,7 @@ const settingsUrl = computed(() => {
                         :class="follow_enabled ? 'bg-sky-700 text-white hover:bg-sky-800 dark:bg-sky-500/30 dark:text-sky-200 dark:hover:bg-sky-500/40' : 'bg-sky-100 text-sky-800 hover:bg-sky-200 dark:bg-sky-950/60 dark:text-sky-600 dark:hover:bg-sky-900/60'"
                     >
                         <LocateFixed class="size-3.5" />
-                        <span class="hidden md:inline">Follow</span>
+                        <span :class="labelClass">Follow</span>
                     </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
@@ -340,7 +398,7 @@ const settingsUrl = computed(() => {
                         :class="centerOnMe ? 'bg-sky-700 text-white hover:bg-sky-800 dark:bg-sky-500/30 dark:text-sky-200 dark:hover:bg-sky-500/40' : 'bg-sky-100 text-sky-800 hover:bg-sky-200 dark:bg-sky-950/60 dark:text-sky-600 dark:hover:bg-sky-900/60'"
                     >
                         <Crosshair class="size-3.5" />
-                        <span class="hidden md:inline">Center</span>
+                        <span :class="labelClass">Center</span>
                     </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
@@ -401,7 +459,7 @@ const settingsUrl = computed(() => {
                     "
                 >
                     <ShieldAlert class="size-3.5" />
-                    <span class="hidden md:inline">Threats</span>
+                    <span :class="labelClass">Threats</span>
                 </button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
@@ -427,7 +485,7 @@ const settingsUrl = computed(() => {
                     "
                 >
                     <LayoutGrid class="size-3.5" />
-                    <span class="hidden md:inline">Layout</span>
+                    <span :class="labelClass">Layout</span>
                 </button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
@@ -443,8 +501,20 @@ const settingsUrl = computed(() => {
             prefetch
         >
             <Settings class="size-3.5" />
-            <span class="hidden md:inline">Settings</span>
+            <span :class="labelClass">Settings</span>
         </Link>
+        </div>
+        </Teleport>
+
+        <!-- Patch 23: fold both top bars away -->
+        <Tooltip>
+            <TooltipTrigger as-child>
+                <button type="button" class="flex items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Fold the top bars away" @click="setBarsFolded(true)">
+                    <ChevronsUp class="size-3.5" />
+                </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom"><p class="text-xs">Fold the top bars away (more room for the map)</p></TooltipContent>
+        </Tooltip>
     </div>
 
     <!-- Tracking Signature Dialog -->
