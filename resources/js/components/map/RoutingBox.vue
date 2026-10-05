@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import NavigationRoute from '@/components/autopilot/NavigationRoute.vue';
+import RouteCopyButtons from '@/components/map/RouteCopyButtons.vue';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useNavigationSystems } from '@/composables/useNavigationSystems';
 import { useStaticData } from '@/composables/useStaticData';
@@ -67,6 +68,7 @@ const label = computed(() => {
                 :destinations="map_navigation?.destinations ?? []"
                 :map_characters="map_characters"
             />
+            <RouteCopyButtons variant="panel" />
         </PopoverContent>
     </Popover>
 </template>

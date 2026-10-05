@@ -46,6 +46,7 @@ import { useMapChrome } from '@/composables/useMapChrome';
 import type { TResolvedMapNavigation, TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TCharacter } from '@/types/models';
 import CommandPaletteButton from './CommandPaletteButton.vue';
+import RouteCopyButtons from './RouteCopyButtons.vue';
 import RoutingBox from './RoutingBox.vue';
 import TrackingSignatureDialog from './TrackingSignatureDialog.vue';
 
@@ -196,6 +197,8 @@ const settingsUrl = computed(() => {
             <div class="w-40 lg:w-48">
                 <RoutingBox :map :map_navigation :map_characters :selected_map_solarsystem :ignored_systems />
             </div>
+            <!-- Patch 26: copy the route for fleet chat (Default, Safest, ▾ the rest) -->
+            <RouteCopyButtons variant="bar" />
         </div>
 
         <!-- Spacer -->

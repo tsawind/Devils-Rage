@@ -264,6 +264,8 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         isConstantWidthEnabled,
         bandLayout,
         placeholders,
+        // Patch 26: folded ones too (the route scan plan counts unfound statics).
+        allPlaceholders,
         foldedHoles,
         busyHoleParents,
         loopConnectionIds,
