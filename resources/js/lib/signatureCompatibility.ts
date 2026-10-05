@@ -1,4 +1,5 @@
 import { signatureCategories } from '@/const/signatures';
+import { k162Classes } from '@/lib/k162';
 import type { TSignature, TStringedSolarsystemClass } from '@/types/models';
 
 /**
@@ -17,15 +18,21 @@ export function signatureCanBeConnection(signature: TSignature): boolean {
  * given class. A type with a concrete destination class only fits that exact
  * class — jumping a "leads to Nullsec" hole cannot land you in a C4.
  * Unresolved types and types with an unknown destination (e.g. a bare K162)
- * can always fit.
+ * can always fit; a grouped K162 (C4/5) fits only its classes.
  */
 export function signatureCanLeadToClass(signature: TSignature, targetClass: TStringedSolarsystemClass | null | undefined): boolean {
-    const destinationClass = signature.signature_type?.target_class;
-    if (!destinationClass || destinationClass === 'unknown') {
+    if (!targetClass) {
         return true;
     }
 
-    if (!targetClass) {
+    // Patch 28: a grouped K162 ("K162 C4/5") only leads to its classes, never to highsec.
+    const range = k162Classes(signature.signature_type);
+    if (range.length > 1) {
+        return range.includes(String(targetClass));
+    }
+
+    const destinationClass = signature.signature_type?.target_class;
+    if (!destinationClass || destinationClass === 'unknown') {
         return true;
     }
 

@@ -127,3 +127,31 @@ describe('groupSignatureOptions (jump prompt data shape)', () => {
         expect(groupSignatureOptions([uncategorised, untypedWormhole, staticHole], '6').likely).toEqual([staticHole, untypedWormhole, uncategorised]);
     });
 });
+
+describe('patch 28: a grouped K162 only leads to its classes', () => {
+    const grouped = (extra: string): TSignature =>
+        ({
+            id: 7,
+            signature_id: 'ELI-688',
+            map_connection_id: null,
+            signature_category: { id: 1, name: 'Wormhole', code: 'wormhole' } as TSignatureCategory,
+            signature_type: { id: 903, name: `K162 - ${extra}`, signature: 'K162', target_class: 'unknown', extra } as TSignatureType,
+        }) as TSignature;
+
+    it('K162 C4/5 can lead to a C4 or a C5', () => {
+        expect(signatureCanLeadToClass(grouped('C4/5'), '4')).toBe(true);
+        expect(signatureCanLeadToClass(grouped('C4/5'), '5')).toBe(true);
+    });
+
+    it('K162 C4/5 cannot lead to highsec (Golf → Masanuh)', () => {
+        expect(signatureCanLeadToClass(grouped('C4/5'), 'h')).toBe(false);
+    });
+
+    it('K162 C2/3 cannot lead to a C4', () => {
+        expect(signatureCanLeadToClass(grouped('C2/3'), '4')).toBe(false);
+    });
+
+    it('K162 frigate still fits anywhere', () => {
+        expect(signatureCanLeadToClass(grouped('frigate'), 'h')).toBe(true);
+    });
+});
