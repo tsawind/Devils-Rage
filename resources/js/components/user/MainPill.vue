@@ -37,8 +37,9 @@ const { quickIds, quickList, setQuick } = useCharacterPills();
 const main = computed(() => user.value?.active_character ?? null);
 const onMap = computed(() => Boolean(page.props.map?.slug));
 const location = computed(() => page.props.map_characters?.find((character) => character.id === main.value?.id)?.status?.solarsystem_id ?? null);
-const switchable = computed(() => quickList(user.value?.characters ?? []).filter((character) => character.id !== main.value?.id));
-const quick = computed(() => new Set(quickIds.value));
+const switchable = computed(() => quickList('main', user.value?.characters ?? []).filter((character) => character.id !== main.value?.id));
+const myQuick = computed(() => quickIds.main.value);
+const quick = computed(() => new Set(myQuick.value));
 </script>
 
 <template>
@@ -64,7 +65,7 @@ const quick = computed(() => new Set(quickIds.value));
                                 {{ character.name }}
                             </Link>
                         </DropdownMenuItem>
-                        <p v-if="quickIds.length === 0" class="px-2 py-1 text-[11px] text-muted-foreground">Right-click the pill → Quick list to shorten this list.</p>
+                        <p v-if="myQuick.length === 0" class="px-2 py-1 text-[11px] text-muted-foreground">Right-click this pill → Quick list to shorten this list.</p>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
@@ -73,15 +74,15 @@ const quick = computed(() => new Set(quickIds.value));
             <ContextMenuLabel class="text-xs">{{ main.name }}</ContextMenuLabel>
             <ContextMenuSeparator />
             <ContextMenuSub>
-                <ContextMenuSubTrigger class="text-xs">Quick list ({{ quickIds.length || 'all' }})</ContextMenuSubTrigger>
+                <ContextMenuSubTrigger class="text-xs">Quick list ({{ myQuick.length || 'all' }})</ContextMenuSubTrigger>
                 <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">
-                    <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">Who the pills' left-click lists</ContextMenuLabel>
+                    <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">Who the Main pill's left-click lists</ContextMenuLabel>
                     <ContextMenuCheckboxItem
                         v-for="character in user.characters"
                         :key="character.id"
                         class="text-xs"
                         :model-value="quick.has(character.id)"
-                        @update:model-value="(value: boolean | 'indeterminate') => setQuick(character.id, value === true)"
+                        @update:model-value="(value: boolean | 'indeterminate') => setQuick('main', character.id, value === true)"
                         @select.prevent
                     >
                         {{ character.name }}

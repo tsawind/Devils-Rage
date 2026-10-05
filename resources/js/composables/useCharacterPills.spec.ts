@@ -25,15 +25,24 @@ const characters = [
 describe('patch 25: the Main and Alt pills', () => {
     afterEach(() => vi.unstubAllGlobals());
 
-    it('the left-click list shows everyone until you pick a quick list, then only those', async () => {
+    it('each pill has its own quick list; empty shows everyone', async () => {
         stubStorage();
         const pills = await freshPills();
-        expect(pills.quickList(characters).map((c) => c.id)).toEqual([1, 2, 3]);
-        pills.setQuick(2, true);
-        pills.setQuick(3, true);
-        expect(pills.quickList(characters).map((c) => c.id)).toEqual([2, 3]);
-        pills.setQuick(3, false);
-        expect(pills.quickList(characters).map((c) => c.id)).toEqual([2]);
+        expect(pills.quickList('main', characters).map((c) => c.id)).toEqual([1, 2, 3]);
+        pills.setQuick('main', 1, true);
+        pills.setQuick('alt', 2, true);
+        pills.setQuick('alt', 3, true);
+        expect(pills.quickList('main', characters).map((c) => c.id)).toEqual([1]);
+        expect(pills.quickList('alt', characters).map((c) => c.id)).toEqual([2, 3]);
+        pills.setQuick('alt', 3, false);
+        expect(pills.quickList('alt', characters).map((c) => c.id)).toEqual([2]);
+    });
+
+    it('the old shared list starts both lists', async () => {
+        stubStorage({ 'pill-quick-characters': '[2]' });
+        const pills = await freshPills();
+        expect(pills.quickList('main', characters).map((c) => c.id)).toEqual([2]);
+        expect(pills.quickList('alt', characters).map((c) => c.id)).toEqual([2]);
     });
 
     it('clipboard and prompts for alts are on by default, and remembered when turned off', async () => {
@@ -55,7 +64,7 @@ describe('patch 25: the Main and Alt pills', () => {
     it('ignores broken saved values', async () => {
         stubStorage({ 'pill-quick-characters': '"oops"', 'pill-alt-id': '{}', 'pill-alt-prompts': '1' });
         const pills = await freshPills();
-        expect(pills.quickIds.value).toEqual([]);
+        expect(pills.quickIds.main.value).toEqual([]);
         expect(pills.pillAltId.value).toBe(null);
         expect(pills.altPrompts.value).toBe(true);
     });

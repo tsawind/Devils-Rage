@@ -36,9 +36,10 @@ const { trackedIds, setTracked } = useTrackedAlts();
 const mapSlug = computed(() => page.props.map?.slug ?? null);
 const alts = computed(() => (user.value?.characters ?? []).filter((character) => character.id !== user.value?.active_character?.id));
 const alt = computed(() => alts.value.find((character) => character.id === pillAltId.value) ?? null);
-const pickable = computed(() => quickList(alts.value));
+const pickable = computed(() => quickList('alt', alts.value));
 const tracked = computed(() => trackedIds(mapSlug.value));
-const quick = computed(() => new Set(quickIds.value));
+const myQuick = computed(() => quickIds.alt.value);
+const quick = computed(() => new Set(myQuick.value));
 const locationOf = (id: number) => page.props.map_characters?.find((character) => character.id === id)?.status?.solarsystem_id ?? null;
 const location = computed(() => (alt.value ? locationOf(alt.value.id) : null));
 
@@ -80,7 +81,7 @@ function pick(id: number | null): void {
                             <DropdownMenuSeparator />
                             <DropdownMenuItem class="text-xs text-muted-foreground" @select="pick(null)">No alt</DropdownMenuItem>
                         </template>
-                        <p v-if="quickIds.length === 0" class="px-2 py-1 text-[11px] text-muted-foreground">Right-click the pill → Quick list to shorten this list.</p>
+                        <p v-if="myQuick.length === 0" class="px-2 py-1 text-[11px] text-muted-foreground">Right-click this pill → Quick list to shorten this list.</p>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
@@ -94,7 +95,7 @@ function pick(id: number | null): void {
                     <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">
                         <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">Their jumps are mapped while Tracking is on</ContextMenuLabel>
                         <ContextMenuCheckboxItem
-                            v-for="candidate in quickList(alts)"
+                            v-for="candidate in quickList('alt', alts)"
                             :key="candidate.id"
                             class="text-xs"
                             :model-value="tracked.has(candidate.id)"
@@ -125,15 +126,15 @@ function pick(id: number | null): void {
             </ContextMenuCheckboxItem>
             <ContextMenuSeparator />
             <ContextMenuSub>
-                <ContextMenuSubTrigger class="text-xs">Quick list ({{ quickIds.length || 'all' }})</ContextMenuSubTrigger>
+                <ContextMenuSubTrigger class="text-xs">Quick list ({{ myQuick.length || 'all' }})</ContextMenuSubTrigger>
                 <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">
-                    <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">Who the pills' left-click lists</ContextMenuLabel>
+                    <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">Who the Alt pill's left-click lists</ContextMenuLabel>
                     <ContextMenuCheckboxItem
                         v-for="character in user.characters"
                         :key="character.id"
                         class="text-xs"
                         :model-value="quick.has(character.id)"
-                        @update:model-value="(value: boolean | 'indeterminate') => setQuick(character.id, value === true)"
+                        @update:model-value="(value: boolean | 'indeterminate') => setQuick('alt', character.id, value === true)"
                         @select.prevent
                     >
                         {{ character.name }}
