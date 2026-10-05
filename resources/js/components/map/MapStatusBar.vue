@@ -42,6 +42,7 @@ import {
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { canRedo, canUndo, handleUndoKeydown, redoLabel, redoLast, undoLabel, undoLast } from '@/composables/signatures/signatureUndo';
 import { useMapChrome } from '@/composables/useMapChrome';
+import { displayAlias } from '@/lib/alias';
 import type { TResolvedMapNavigation, TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TCharacter } from '@/types/models';
 import CommandPaletteButton from './CommandPaletteButton.vue';
@@ -75,6 +76,12 @@ const connectionStatus = computed(() => echoStatus.value);
 
 // Get pilot's current location
 const currentSolarsystem = useStaticSolarsystem(() => character.value?.status?.solarsystem_id ?? null);
+// Patch 26: the map's name for where you are (Daisy, A12), when it's on the map.
+const currentAlias = computed(() => {
+    const id = character.value?.status?.solarsystem_id;
+    if (!id) return null;
+    return displayAlias(map.map_solarsystems?.find((system) => system.solarsystem_id === id)?.alias) || null;
+});
 
 // Tracking
 const {
@@ -235,7 +242,8 @@ const settingsUrl = computed(() => {
             <span class="text-[11px] tracking-wider text-muted-foreground uppercase">Location</span>
             <div class="flex items-center gap-1.5">
                 <SolarsystemClass :solarsystem_class="currentSolarsystem.class" :name="currentSolarsystem.name" />
-                <span class="text-xs">{{ currentSolarsystem.name }}</span>
+                <span v-if="currentAlias" class="text-xs font-semibold">{{ currentAlias }}</span>
+                <span class="text-xs" :class="currentAlias ? 'text-muted-foreground' : ''">{{ currentSolarsystem.name }}</span>
             </div>
         </div>
 
