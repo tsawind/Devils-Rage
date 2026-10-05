@@ -1,0 +1,37 @@
+# The Devil's Rage voice server (Mumble), next to the mapper and SeAT.
+# Lives in ~/mumble on the server; setup-mumble.sh copies this file there.
+# The SuperUser password is only in ~/mumble/.env (never in GitHub).
+name: mumble
+
+services:
+  mumble:
+    image: mumblevoip/mumble-server:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MUMBLE_CONFIG_USERS: "300"
+      MUMBLE_CONFIG_REGISTERNAME: "The Devil's Rage"
+      MUMBLE_CONFIG_WELCOMETEXT: "Welcome to <b>The Devil's Rage</b> comms. New here? Go to <b>Drag Me</b> and someone will pull you in."
+      # Everyone lands in the top channel instead of where they last were.
+      MUMBLE_CONFIG_REMEMBERCHANNEL: "false"
+      # Caps each person's voice quality so a 300-person op stays within bandwidth.
+      MUMBLE_CONFIG_BANDWIDTH: "72000"
+      MUMBLE_CONFIG_OPUSTHRESHOLD: "0"
+      MUMBLE_CONFIG_ALLOWHTML: "true"
+      MUMBLE_CONFIG_SENDVERSION: "false"
+      # EVE names: letters, numbers, spaces, apostrophes, hyphens, plus [TICKER] style tags.
+      MUMBLE_CONFIG_USERNAME: "[][ A-Za-z0-9_.'(){}@|=-]+"
+    ports:
+      - "64738:64738/tcp"
+      - "64738:64738/udp"
+    volumes:
+      - mumble-data:/data
+    mem_limit: 128m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  mumble-data:
