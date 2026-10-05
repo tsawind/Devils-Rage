@@ -24,7 +24,7 @@ import { Link } from '@inertiajs/vue3';
 import { useConnectionStatus } from '@laravel/echo-vue';
 import { ConnectionStatus } from 'laravel-echo';
 import {
-    ArrowUpToLine,
+    ChevronsDown,
     ChevronsUp,
     ClipboardCopy,
     Crosshair,
@@ -33,7 +33,6 @@ import {
     LayoutGrid,
     LocateFixed,
     Map as MapIcon,
-    PictureInPicture2,
     Redo2,
     Settings,
     ShieldAlert,
@@ -60,11 +59,8 @@ const { map, map_user_settings, layout, map_navigation = null, map_characters = 
     ignored_systems?: number[];
 }>();
 
-// Patch 23: fold both top bars away (the toolbar floats over the map, icons only), and
-// Search + Routing can pop out into the map.
-const { barsFolded, toolsPopped, floatReady, setBarsFolded, setToolsPopped } = useMapChrome();
-const toolsFloating = computed(() => floatReady.value && (barsFolded.value || toolsPopped.value));
-const toolbarFloating = computed(() => floatReady.value && barsFolded.value);
+// Patch 23: fold the site header away (your character floats on the map; this toolbar shrinks to small icons).
+const { barsFolded, setBarsFolded } = useMapChrome();
 const labelClass = computed(() => (barsFolded.value ? 'hidden' : 'hidden md:inline'));
 
 // Initialize tracking
@@ -182,7 +178,7 @@ const settingsUrl = computed(() => {
 </script>
 
 <template>
-    <div v-show="!barsFolded" class="relative flex h-10 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/30 px-2 sm:gap-3 sm:px-3">
+    <div class="relative flex h-10 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/30 px-2 sm:gap-3 sm:px-3">
         <!-- Map Name -->
         <div class="flex items-center gap-2">
             <MapIcon class="size-4 text-muted-foreground" />
@@ -191,33 +187,15 @@ const settingsUrl = computed(() => {
 
         <div class="hidden h-4 w-px bg-border/50 sm:block" />
 
-        <!-- Search + Routing (patch 23): in the bar, or floating in the map when popped out or folded -->
-        <Teleport defer to="#map-float-tools" :disabled="!toolsFloating">
-            <div class="hidden items-center gap-2 sm:flex" :class="toolsFloating ? 'rounded-lg border border-border/60 bg-card/90 p-1.5 shadow-md backdrop-blur' : ''">
-                <div class="w-56 lg:w-64">
-                    <CommandPaletteButton />
-                </div>
-                <div class="w-40 lg:w-48">
-                    <RoutingBox :map :map_navigation :map_characters :selected_map_solarsystem :ignored_systems />
-                </div>
-                <Tooltip v-if="!barsFolded">
-                    <TooltipTrigger as-child>
-                        <button
-                            type="button"
-                            class="flex items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                            :aria-label="toolsPopped ? 'Put Search and Routing back in the bar' : 'Pop Search and Routing out into the map'"
-                            @click="setToolsPopped(!toolsPopped)"
-                        >
-                            <ArrowUpToLine v-if="toolsPopped" class="size-3.5" />
-                            <PictureInPicture2 v-else class="size-3.5" />
-                        </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                        <p class="text-xs">{{ toolsPopped ? 'Back into the bar' : 'Pop out into the map' }}</p>
-                    </TooltipContent>
-                </Tooltip>
+        <!-- Search + Routing (patch 23: Search a bit narrower, Routing next to it) -->
+        <div class="hidden items-center gap-2 sm:flex">
+            <div class="w-56 lg:w-64">
+                <CommandPaletteButton />
             </div>
-        </Teleport>
+            <div class="w-40 lg:w-48">
+                <RoutingBox :map :map_navigation :map_characters :selected_map_solarsystem :ignored_systems />
+            </div>
+        </div>
 
         <!-- Spacer -->
         <div class="flex-1" />
@@ -262,9 +240,8 @@ const settingsUrl = computed(() => {
 
         <div class="hidden h-4 w-px bg-border/50 lg:block" />
 
-        <!-- Patch 23: the toolbar; floats over the map (icons only) while the bars are folded -->
-        <Teleport defer to="#map-float-toolbar" :disabled="!toolbarFloating">
-        <div class="flex items-center gap-2 sm:gap-3" :class="barsFolded ? 'gap-1 sm:gap-1' : ''">
+        <!-- Patch 23: the toolbar; small icons only while the site header is folded away -->
+        <div class="flex items-center" :class="barsFolded ? 'origin-right scale-[0.7] gap-1' : 'gap-2 sm:gap-3'">
         <!-- Connection Status -->
         <Tooltip>
             <TooltipTrigger as-child>
@@ -504,16 +481,23 @@ const settingsUrl = computed(() => {
             <span :class="labelClass">Settings</span>
         </Link>
         </div>
-        </Teleport>
 
-        <!-- Patch 23: fold both top bars away -->
+        <!-- Patch 23: fold the site header away -->
         <Tooltip>
             <TooltipTrigger as-child>
-                <button type="button" class="flex items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="Fold the top bars away" @click="setBarsFolded(true)">
-                    <ChevronsUp class="size-3.5" />
+                <button
+                    type="button"
+                    class="flex items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    :aria-label="barsFolded ? 'Show the top bar' : 'Fold the top bar away'"
+                    @click="setBarsFolded(!barsFolded)"
+                >
+                    <ChevronsDown v-if="barsFolded" class="size-3.5" />
+                    <ChevronsUp v-else class="size-3.5" />
                 </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom"><p class="text-xs">Fold the top bars away (more room for the map)</p></TooltipContent>
+            <TooltipContent side="bottom">
+                <p class="text-xs">{{ barsFolded ? 'Show the top bar' : 'Fold the top bar away (more room; your character floats on the map)' }}</p>
+            </TooltipContent>
         </Tooltip>
     </div>
 

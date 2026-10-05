@@ -230,7 +230,7 @@ const handleResizeEnd = () => {
             <GridItem v-bind="getLayoutItem('map').value" @resize="handleResizeStart" @resized="handleResizeEnd">
                 <div class="relative h-full w-full">
                     <MapRoot :map="resolvedMap" :config="config" />
-                    <MapFloatingBar :map="resolvedMap" :map_characters="map_characters ?? null" />
+                    <MapFloatingBar />
                 </div>
             </GridItem>
 

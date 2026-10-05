@@ -7,6 +7,7 @@ import { CharacterImage } from '@/components/images';
 import ServerStatus from '@/components/server-status/ServerStatus.vue';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import AltsMenu from '@/components/user/AltsMenu.vue';
 import UserMenuContent from '@/components/user/UserMenuContent.vue';
 import useUser from '@/composables/useUser';
 import Appearance from '@/layouts/Appearance.vue';
@@ -246,6 +247,9 @@ const documentationItem: NavItem = {
 
                     <!-- Divider -->
                     <div class="hidden h-6 border-l border-border/50 sm:block"></div>
+
+                    <!-- Patch 23: your alts -->
+                    <AltsMenu v-if="user" />
 
                     <!-- User menu -->
                     <template v-if="user">

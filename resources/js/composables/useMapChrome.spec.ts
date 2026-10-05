@@ -16,31 +16,27 @@ async function freshChrome() {
     return (await import('@/composables/useMapChrome')).useMapChrome;
 }
 
-describe('patch 23: folding the top bars and popping out Search + Routing', () => {
+describe('patch 23: folding the site header away', () => {
     afterEach(() => vi.unstubAllGlobals());
 
-    it('starts unfolded and docked, and shares one state between callers', async () => {
+    it('starts unfolded and shares one state between callers', async () => {
         stubStorage();
         const useMapChrome = await freshChrome();
         const bar = useMapChrome();
         const overlay = useMapChrome();
         expect(bar.barsFolded.value).toBe(false);
-        expect(bar.toolsPopped.value).toBe(false);
         bar.setBarsFolded(true);
         expect(overlay.barsFolded.value).toBe(true);
     });
 
-    it('remembers both choices in this browser', async () => {
+    it('remembers the choice in this browser', async () => {
         const store = stubStorage();
         const useMapChrome = await freshChrome();
         useMapChrome().setBarsFolded(true);
-        useMapChrome().setToolsPopped(true);
         expect(store.get('map-bars-folded')).toBe('1');
-        expect(store.get('map-tools-popped')).toBe('1');
 
         const again = (await freshChrome())();
         expect(again.barsFolded.value).toBe(true);
-        expect(again.toolsPopped.value).toBe(true);
     });
 
     it('still works when the browser blocks storage', async () => {
