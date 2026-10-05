@@ -3,12 +3,11 @@ import DocumentationController from '@/actions/App/Http/Controllers/Documentatio
 import LoginController from '@/actions/App/Http/Controllers/LoginController';
 import MapController from '@/actions/App/Http/Controllers/MapController';
 import SettingsController from '@/actions/App/Http/Controllers/SettingsController';
-import { CharacterImage } from '@/components/images';
 import ServerStatus from '@/components/server-status/ServerStatus.vue';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
-import AltsMenu from '@/components/user/AltsMenu.vue';
-import UserMenuContent from '@/components/user/UserMenuContent.vue';
+import AltPill from '@/components/user/AltPill.vue';
+import MainPill from '@/components/user/MainPill.vue';
 import useUser from '@/composables/useUser';
 import Appearance from '@/layouts/Appearance.vue';
 import AppLogo from '@/layouts/AppLogo.vue';
@@ -248,29 +247,10 @@ const documentationItem: NavItem = {
                     <!-- Divider -->
                     <div class="hidden h-6 border-l border-border/50 sm:block"></div>
 
-                    <!-- Patch 23: your alts -->
-                    <AltsMenu v-if="user" />
-
-                    <!-- User menu -->
+                    <!-- Patch 25: your alt and your main as pills (left-click: quick list; right-click: options) -->
                     <template v-if="user">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger :as-child="true">
-                                <button class="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/50">
-                                    <CharacterImage
-                                        v-if="user.active_character"
-                                        :character_id="user.active_character.id"
-                                        :character_name="user.active_character.name"
-                                        class="size-6 rounded"
-                                    />
-                                    <span class="hidden max-w-28 truncate text-xs font-medium text-muted-foreground sm:block">
-                                        {{ user.active_character?.name }}
-                                    </span>
-                                </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" class="w-56">
-                                <UserMenuContent :user="user" />
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <AltPill />
+                        <MainPill />
                     </template>
                     <template v-else>
                         <Link

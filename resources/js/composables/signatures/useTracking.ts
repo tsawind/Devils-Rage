@@ -4,6 +4,7 @@ import { useMapIgnoredSystems } from '@/composables/useMapIgnoredSystems';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { useShowMap } from '@/composables/useShowMap';
 import { useStaticData } from '@/composables/useStaticData';
+import { useCharacterPills } from '@/composables/useCharacterPills';
 import { useTrackedAlts } from '@/composables/useTrackedAlts';
 import { useTrackingSystems } from '@/composables/useTrackingSystems';
 import { useCombat } from '@/composables/combat/useCombat';
@@ -236,6 +237,8 @@ export function useTracking() {
 
     // Patch 24: your tracked alts (several at once): their jumps are mapped like your main's.
     const { trackedIds } = useTrackedAlts();
+    // Patch 25: alts' jumps can skip the clipboard and the "which signature?" prompt.
+    const { altClipboard, altPrompts } = useCharacterPills();
     const tracked_alt_locations = computed(() => {
         const tracked = trackedIds(page.props.map?.slug);
         const locations = new Map<number, { solarsystem_id: number | null; name: string }>();
@@ -368,7 +371,8 @@ export function useTracking() {
             return;
         }
 
-        if (gate_connected || !possible_signatures.value.length || !map_user_settings.value.prompt_for_signature_enabled) {
+        const prompts = map_user_settings.value.prompt_for_signature_enabled && (byMain || altPrompts.value);
+        if (gate_connected || !possible_signatures.value.length || !prompts) {
             return createTracking(origin_map_solarsystem.value!.id, target_solarsystem_id, {}, () => followInto(target_solarsystem_id, 0, byMain));
         }
 
@@ -528,6 +532,7 @@ export function useTracking() {
     // on this side.
     function copyConnectionBookmark(signatureId: number | null, alias: string | null) {
         if (!map_user_settings.value.copy_bookmark_enabled) return;
+        if (current_jump.value && !current_jump.value.byMain && !altClipboard.value) return;
         const origin = origin_map_solarsystem.value;
         if (!origin?.solarsystem || !target_solarsystem.value) return;
 
