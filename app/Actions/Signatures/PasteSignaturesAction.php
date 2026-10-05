@@ -22,6 +22,10 @@ final readonly class PasteSignaturesAction
 {
     private SignatureCategory $wormholeCategory;
 
+    private ?SignatureCategory $combatCategory;
+
+    private ?SignatureCategory $scannableCombatCategory;
+
     public function __construct(
         public StoreSignatureAction $storeSignatureAction,
         public UpdateSignatureAction $updateSignatureAction,
@@ -29,6 +33,8 @@ final readonly class PasteSignaturesAction
         private SyncConnectionShipSizeAction $syncConnectionShipSizeAction,
     ) {
         $this->wormholeCategory = SignatureCategory::query()->firstWhere('code', \App\Enums\SignatureCategory::Wormhole);
+        $this->combatCategory = SignatureCategory::query()->firstWhere('code', \App\Enums\SignatureCategory::Combat);
+        $this->scannableCombatCategory = SignatureCategory::query()->firstWhere('code', \App\Enums\SignatureCategory::ScannableCombat);
     }
 
     /**
@@ -67,7 +73,7 @@ final readonly class PasteSignaturesAction
             $updated_signatures->each(function (RawSignatureData $signature) use ($existing_signatures): void {
                 $existing_signature = $this->getExistingSignature($existing_signatures, $signature->signature_id);
 
-                $signature_category_id = $signature->signature_category_id ?? $existing_signature->signature_category_id;
+                $signature_category_id = $this->resolveCategoryId($signature->signature_category_id, $existing_signature->signature_category_id);
 
                 $signature_type_id = $this->resolveSignatureTypeId($signature, $existing_signature);
                 $raw_type_name = $this->resolveRawTypeName($signature, $existing_signature);
@@ -105,6 +111,24 @@ final readonly class PasteSignaturesAction
     private function getExistingSignature(Collection $signatures, string $id): ?Signature
     {
         return $signatures->firstWhere('signature_id', $id);
+    }
+
+    /**
+     * Patch 23: a signature that was unidentified (or already scannable) and now pastes as a
+     * combat site had to be probed down: it is a scannable combat site.
+     */
+    private function resolveCategoryId(?int $pasted, ?int $existing): ?int
+    {
+        if ($pasted === null) {
+            return $existing;
+        }
+
+        $scannable = $this->scannableCombatCategory?->id;
+        if ($scannable !== null && $pasted === $this->combatCategory?->id && ($existing === null || $existing === $scannable)) {
+            return $scannable;
+        }
+
+        return $pasted;
     }
 
     private function getNewMapConnectionId(?int $signature_category_id, ?int $existing_map_connection_id): ?int

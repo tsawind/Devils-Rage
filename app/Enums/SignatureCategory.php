@@ -14,6 +14,7 @@ enum SignatureCategory: string
     case Ore = 'ore';
     case Homefront = 'homefront';
     case FactionWarfare = 'faction-warfare';
+    case ScannableCombat = 'scannable-combat';
 
     public function name(): string
     {
@@ -26,6 +27,7 @@ enum SignatureCategory: string
             self::Ore => 'Ore Site',
             self::Homefront => 'Homefront Operations',
             self::FactionWarfare => 'Factional Warfare Site',
+            self::ScannableCombat => 'Scannable Combat Site',
         };
     }
 }

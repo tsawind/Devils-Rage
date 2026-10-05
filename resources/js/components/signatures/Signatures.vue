@@ -48,7 +48,7 @@ import { createSignature, TProcessedConnection, updateMapUserSettings, updateSig
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TSignature } from '@/types/models';
 import { useEventListener, useLocalStorage, useNow } from '@vueuse/core';
-import { ArrowDown, ArrowUp, CircleHelp, Cloud, Database, Fan, Flag, Gem, Landmark, Rows2, Rows3, Shield, Swords } from 'lucide-vue-next';
+import { ArrowDown, ArrowUp, CircleHelp, Cloud, Database, Fan, Flag, Gem, Landmark, Radar, Rows2, Rows3, Shield, Swords } from 'lucide-vue-next';
 import { type Component, computed, nextTick, ref, watch } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
 
@@ -573,6 +573,7 @@ const categoryFilterOptions: Array<{ value: string; icon: Component; color: stri
     { value: 'Ore Site', icon: Gem, color: 'text-yellow-400', label: 'Ore Site' },
     { value: 'Gas Site', icon: Cloud, color: 'text-orange-400', label: 'Gas Site' },
     { value: 'Combat Site', icon: Swords, color: 'text-green-400', label: 'Combat Site' },
+    { value: 'Scannable Combat Site', icon: Radar, color: 'text-lime-300', label: 'Scannable Combat Site' },
     { value: 'Homefront Operations', icon: Shield, color: 'text-rose-400', label: 'Homefront Operations' },
     { value: 'Factional Warfare Site', icon: Flag, color: 'text-fuchsia-400', label: 'Factional Warfare Site' },
     { value: UNCATEGORIZED_FILTER, icon: CircleHelp, color: 'text-muted-foreground', label: 'Uncategorized' },
@@ -580,7 +581,13 @@ const categoryFilterOptions: Array<{ value: string; icon: Component; color: stri
 
 // Persist the hidden categories instead of the visible ones so categories added
 // in later releases default to visible for users with saved filters.
-const hiddenCategoryFilters = useLocalStorage<string[]>('signatures-category-hidden-filters', []);
+// Patch 23: new defaults (anomalies hidden), so a new key: everyone starts from them once.
+const hiddenCategoryFilters = useLocalStorage<string[]>('signatures-category-hidden-filters-v2', [
+    'Combat Site',
+    'Ore Site',
+    'Homefront Operations',
+    'Factional Warfare Site',
+]);
 
 const activeCategoryFilters = computed<string[]>({
     get: () => categoryFilterOptions.map((option) => option.value).filter((value) => !hiddenCategoryFilters.value.includes(value)),
@@ -737,6 +744,7 @@ function createNewSignature() {
                 class="flex items-center gap-2 border-b border-border/30 bg-muted/20 px-3 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase"
                 :class="map_user_settings.compact_signature_list ? 'py-0.5' : 'py-1.5'"
             >
+                <span class="w-[2ch] shrink-0 overflow-hidden font-mono text-xs whitespace-nowrap" title="Name">Nm</span>
                 <span class="w-4 shrink-0" aria-hidden="true"></span>
                 <button class="flex w-16 shrink-0 items-center gap-1 hover:text-foreground" @click="handleSort('id')">
                     <span>ID</span>
@@ -754,7 +762,6 @@ function createNewSignature() {
                     <ArrowDown v-if="sortPreferences.column === 'type' && sortPreferences.direction === 'desc'" class="size-3" />
                 </button>
                 <span class="min-w-0 flex-1">Conn</span>
-                <span class="w-16 shrink-0">Name</span>
                 <span class="w-14 shrink-0"></span>
                 <button class="flex w-10 shrink-0 items-center justify-end gap-1 hover:text-foreground" @click="handleSort('age')">
                     <span>Age</span>

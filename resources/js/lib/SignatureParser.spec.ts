@@ -82,4 +82,16 @@ describe('parseSignatures', () => {
             raw_type_name: null,
         });
     });
+
+    it('patch 23: a combat site that had to be probed (Cosmic Signature) is a scannable combat site, with its site name', () => {
+        const combat = signatureCategories.find((cat) => cat.code === 'combat')!;
+        const scannable = signatureCategories.find((cat) => cat.code === 'scannable-combat')!;
+        const type = signatureTypes.find((t) => t.signature_category_id === combat.id)!;
+
+        const [probed] = signatureParser.parseSignatures(`QGP-880\tCosmic Signature\tCombat Site\t${type.name}\t100,0%\t3,1 AU`);
+        expect(probed).toMatchObject({ signature_category_id: scannable.id, signature_type_id: type.id, raw_type_name: null });
+
+        const [anomaly] = signatureParser.parseSignatures(`QGP-881\tCosmic Anomaly\tCombat Site\t${type.name}\t100,0%\t3,1 AU`);
+        expect(anomaly).toMatchObject({ signature_category_id: combat.id, signature_type_id: type.id });
+    });
 });

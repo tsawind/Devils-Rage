@@ -45,7 +45,7 @@ import { TSignature } from '@/types/models';
 import { UTCDate } from '@date-fns/utc';
 import type { FormDataConvertible } from '@inertiajs/core';
 import { syncRefs } from '@vueuse/core';
-import { Check, Cloud, Copy, Crosshair, Database, Fan, Flag, Gem, Heart, Landmark, MoreVertical, Shield, Swords } from 'lucide-vue-next';
+import { Check, Cloud, Copy, Crosshair, Database, Fan, Flag, Gem, Heart, Landmark, MoreVertical, Radar, Shield, Swords } from 'lucide-vue-next';
 import { AcceptableValue } from 'reka-ui';
 import { type Component, computed, nextTick, ref, toRef } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
@@ -159,6 +159,7 @@ const categoryAbbrev: Record<string, string> = {
     'Ore Site': 'Ore',
     'Gas Site': 'Gas',
     'Combat Site': 'Combat',
+    'Scannable Combat Site': 'S.Comb',
     'Homefront Operations': 'HF',
     'Factional Warfare Site': 'FW',
 };
@@ -170,6 +171,7 @@ const categoryIcon: Record<string, Component> = {
     'Ore Site': Gem,
     'Gas Site': Cloud,
     'Combat Site': Swords,
+    'Scannable Combat Site': Radar,
     'Homefront Operations': Shield,
     'Factional Warfare Site': Flag,
 };
@@ -179,6 +181,7 @@ const categoryColor: Record<string, string> = {
     'Data Site': 'text-cyan-400',
     'Relic Site': 'text-amber-400',
     'Combat Site': 'text-green-400',
+    'Scannable Combat Site': 'text-lime-300',
     'Gas Site': 'text-orange-400',
     'Ore Site': 'text-yellow-400',
     'Homefront Operations': 'text-rose-400',
@@ -852,6 +855,14 @@ function copyBookmark() {
         :data-updated="Data(is_updated)"
         :title="is_deleted ? 'Not in your last paste (ignored in game, or gone). It keeps its number until you delete it.' : undefined"
     >
+        <!-- Name (patch 23: far left, two letters wide; hover for the full name) -->
+        <div
+            class="w-[2ch] shrink-0 overflow-hidden font-mono text-xs whitespace-nowrap"
+            :title="armed_label ? `${name_title ?? ''} · ${armed_by_me ? 'armed by you: your next jump' : `armed by ${signature.armed_by_name ?? 'someone'}`}` : name_title"
+        >
+            <span :class="name_class">{{ name_label }}</span>
+        </div>
+
         <!-- Patch 15: arm button (grey: arm and copy the bookmark; red: yours, click to disarm) -->
         <div class="flex w-4 shrink-0 justify-center">
             <button
@@ -965,12 +976,6 @@ function copyBookmark() {
                 :disabled="!can_write"
                 @update:model-value="handleMapConnectionChange"
             />
-        </div>
-
-        <!-- Name: the number this hole has or gets, or where it leads -->
-        <div class="flex w-16 shrink-0 items-center gap-1 truncate font-mono text-xs" :title="armed_label ? `${name_title ?? ''} · ${armed_by_me ? 'armed by you: your next jump' : `armed by ${signature.armed_by_name ?? 'someone'}`}` : name_title">
-            <span :class="name_class">{{ name_label }}</span>
-            <span v-if="armed_label" class="truncate rounded bg-red-500/20 px-1 font-sans text-[10px] leading-tight text-red-400">{{ armed_label }}</span>
         </div>
 
         <!-- Actions -->

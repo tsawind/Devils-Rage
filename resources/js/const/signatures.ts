@@ -57,10 +57,16 @@ export function getTypeById(id: number): TSignatureType | undefined {
     return signatureTypeById.get(id);
 }
 
+/** Patch 23: scannable combat sites use the combat site list. */
+const SCANNABLE_COMBAT = 'scannable-combat';
+const combatCategoryId = signatureCategoryByCode.get('combat')?.id ?? null;
+
 export function getTypesByCategory(categoryId: number): TSignatureType[] {
+    if (combatCategoryId !== null && signatureCategoryById.get(categoryId)?.code === SCANNABLE_COMBAT) return signatureTypesByCategory[combatCategoryId] || [];
     return signatureTypesByCategory[categoryId] || [];
 }
 
 export function getTypesByCategoryName(categoryName: string): TSignatureType[] {
+    if (signatureCategoryByName.get(categoryName)?.code === SCANNABLE_COMBAT) return signatureTypesByCategoryName['Combat Site'] || [];
     return signatureTypesByCategoryName[categoryName] || [];
 }

@@ -11,10 +11,12 @@ use App\Data\NewSignatureData;
 use App\Data\SignatureData;
 use App\Data\SignaturesData;
 use App\Enums\ShipSize;
+use App\Enums\SignatureCategory as SignatureCategoryEnum;
 use App\Enums\WormholeSignature;
 use App\Models\Map;
 use App\Models\MapConnection;
 use App\Models\Signature;
+use App\Models\SignatureCategory;
 use App\Models\SignatureType;
 use App\Models\Wormhole;
 
@@ -178,4 +180,29 @@ it('syncs the connection ship size when storing an already-connected typed signa
     ]));
 
     expect($connection->fresh()->ship_size)->toBe(ShipSize::Large);
+});
+
+it('patch 23: an unidentified signature that pastes as a combat site becomes a scannable combat site', function () {
+    $combat = SignatureCategory::query()->firstWhere('code', SignatureCategoryEnum::Combat);
+    $scannable = SignatureCategory::query()->firstWhere('code', SignatureCategoryEnum::ScannableCombat);
+    $map = Map::factory()->create();
+    $system = placeMapSolarsystem($map, 30011007);
+    $paste = fn (array $signatures) => app(PasteSignaturesAction::class)->handle(SignaturesData::from([
+        'map_solarsystem_id' => $system->id,
+        'signatures' => $signatures,
+    ]));
+
+    $paste([['signature_id' => 'QGP-880'], ['signature_id' => 'ANO-100', 'signature_category_id' => $combat->id]]);
+    $paste([
+        ['signature_id' => 'QGP-880', 'signature_category_id' => $combat->id],
+        ['signature_id' => 'ANO-100', 'signature_category_id' => $combat->id],
+    ]);
+
+    expect($scannable)->not->toBeNull()
+        ->and($system->signatures()->firstWhere('signature_id', 'QGP-880')->signature_category_id)->toBe($scannable->id)
+        ->and($system->signatures()->firstWhere('signature_id', 'ANO-100')->signature_category_id)->toBe($combat->id);
+
+    $paste([['signature_id' => 'QGP-880', 'signature_category_id' => $combat->id]]);
+
+    expect($system->signatures()->firstWhere('signature_id', 'QGP-880')->signature_category_id)->toBe($scannable->id);
 });

@@ -1,4 +1,4 @@
-import { signatureCategories, signatureTypes } from '@/const/signatures';
+import { getTypesByCategory, signatureCategories, signatureCategoryByCode } from '@/const/signatures';
 import { distanceFromScanRow, TScanDistance } from '@/lib/returnHole';
 import { TSignatureCategory, TSignatureType } from '@/types/models';
 import { UTCDate } from '@date-fns/utc';
@@ -59,14 +59,14 @@ class SignatureParser {
             return null;
         }
 
-        const [signature_id, _, category_name, type_name] = signature;
+        const [signature_id, group, category_name, type_name] = signature;
 
         if (!signature_id) {
             toast.error('Invalid signature format. Signature ID is required.');
             return null;
         }
 
-        const signature_category = this.getCategory(category_name);
+        const signature_category = this.scannableIfProbed(this.getCategory(category_name), group);
         const signature_type = this.getType(signature_category, type_name);
 
         // Store the raw type name if we have a category but no matching type
@@ -101,6 +101,15 @@ class SignatureParser {
         );
     }
 
+    /**
+     * Patch 23: a combat site in the "Cosmic Signature" group had to be probed down
+     * (anomalies are "Cosmic Anomaly"): it is a scannable combat site.
+     */
+    scannableIfProbed(category: TSignatureCategory | null, group: string | undefined): TSignatureCategory | null {
+        if (category?.code !== 'combat' || !/signat|сигнат/i.test(group ?? '')) return category;
+        return signatureCategoryByCode.get('scannable-combat') ?? category;
+    }
+
     getType(category: TSignatureCategory | null, typeName: string): TSignatureType | null {
         if (!category) {
             return null;
@@ -109,7 +118,7 @@ class SignatureParser {
             return null;
         }
 
-        return signatureTypes.find((type) => type.name === typeName.trim() && type.signature_category_id === category.id) || null;
+        return getTypesByCategory(category.id).find((type) => type.name === typeName.trim()) || null;
     }
 }
 
