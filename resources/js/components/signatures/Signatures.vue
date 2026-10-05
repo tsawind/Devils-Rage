@@ -129,8 +129,19 @@ const number_owners = computed(() => {
     return owners;
 });
 
-// The one hole in this system marked as the static, if any (red rows included).
-const static_owner_id = computed(() => signatures.value.find((signature) => signature.is_static)?.id ?? null);
+/**
+ * The hole marked static that stops this one being marked (red rows included). Patch 27: a system
+ * with two statics (Golf: C247 and H900) can have both marked, never two of the same type.
+ */
+function staticOwnerFor(signature: TSignature): number | null {
+    const others = signatures.value.filter((other) => other.is_static && other.id !== signature.id);
+    if (others.length === 0) return null;
+    const name = signature.wormhole?.name?.toUpperCase() ?? null;
+    const sameType = name ? others.find((other) => other.wormhole?.name?.toUpperCase() === name) : undefined;
+    if (sameType) return sameType.id;
+    const staticCount = Math.max(1, props.map_solarsystem?.solarsystem?.statics?.length ?? 0);
+    return others.length >= staticCount ? others[0].id : null;
+}
 
 // Combat chains number holes in the order they are claimed (copied or jumped):
 // the next free number in this system, for a hole still in "limbo".
@@ -822,7 +833,7 @@ function createNewSignature() {
                     :planned_alias="planned_aliases.get(signature.id) ?? null"
                     :claim_alias="claim_alias"
                     :number_owners="number_owners"
-                    :static_owner_id="static_owner_id"
+                    :static_owner_id="staticOwnerFor(signature)"
                     :user_id="user_id"
                     :arm_as="armAsFor(signature)"
                     @arm="(alias, swap) => armRow(signature, alias, swap)"

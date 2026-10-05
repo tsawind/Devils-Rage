@@ -19,6 +19,9 @@ use App\Models\Signature;
 use App\Models\SignatureCategory;
 use App\Models\SignatureType;
 use App\Models\Wormhole;
+use App\Models\WormholeStatic;
+use App\Models\WormholeSystem;
+use Illuminate\Validation\ValidationException;
 
 it('stores a signature on a system', function () {
     $map = Map::factory()->create();
@@ -205,4 +208,34 @@ it('patch 23: an unidentified signature that pastes as a combat site becomes a s
     $paste([['signature_id' => 'QGP-880', 'signature_category_id' => $combat->id]]);
 
     expect($system->signatures()->firstWhere('signature_id', 'QGP-880')->signature_category_id)->toBe($scannable->id);
+});
+
+it('patch 27: a system with two statics can have both marked, but not two of the same type', function () {
+    $map = Map::factory()->create();
+    $system = placeMapSolarsystem($map, 31000901);
+    $wormholeSystem = WormholeSystem::query()->create(['id' => 31000901]);
+    $c247 = Wormhole::create(['name' => 'C247', 'total_mass' => 2_000_000_000, 'maximum_jump_mass' => 375_000_000, 'maximum_lifetime' => 57_600, 'leads_to' => 'c3']);
+    $h900 = Wormhole::create(['name' => 'H900', 'total_mass' => 3_000_000_000, 'maximum_jump_mass' => 375_000_000, 'maximum_lifetime' => 86_400, 'leads_to' => 'c5']);
+    WormholeStatic::query()->create(['wormhole_system_id' => $wormholeSystem->id, 'wormhole_id' => $c247->id]);
+    WormholeStatic::query()->create(['wormhole_system_id' => $wormholeSystem->id, 'wormhole_id' => $h900->id]);
+
+    $system->signatures()->create(['signature_id' => 'HWB-996', 'wormhole_id' => $h900->id, 'is_static' => true]);
+    $wrk = $system->signatures()->create(['signature_id' => 'WRK-992', 'wormhole_id' => $c247->id]);
+    $other = $system->signatures()->create(['signature_id' => 'ABC-123', 'wormhole_id' => $c247->id]);
+
+    app(UpdateSignatureAction::class)->handle($wrk, SignatureData::from(['is_static' => true]));
+    expect($wrk->fresh()->is_static)->toBeTrue();
+
+    expect(fn () => app(UpdateSignatureAction::class)->handle($other, SignatureData::from(['is_static' => true])))
+        ->toThrow(ValidationException::class);
+});
+
+it('patch 27: a system with one static still allows only one hole marked static', function () {
+    $map = Map::factory()->create();
+    $system = placeMapSolarsystem($map, 31000902);
+    $system->signatures()->create(['signature_id' => 'AAA-111', 'is_static' => true]);
+    $second = $system->signatures()->create(['signature_id' => 'BBB-222']);
+
+    expect(fn () => app(UpdateSignatureAction::class)->handle($second, SignatureData::from(['is_static' => true])))
+        ->toThrow(ValidationException::class);
 });

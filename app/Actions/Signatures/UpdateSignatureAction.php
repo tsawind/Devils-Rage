@@ -15,6 +15,7 @@ use App\Models\MapConnection;
 use App\Models\MapSolarsystem;
 use App\Models\Signature;
 use App\Models\SignatureType;
+use App\Models\WormholeStatic;
 use App\Support\Broadcasting\MapBroadcaster;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -107,8 +108,8 @@ final readonly class UpdateSignatureAction
     }
 
     /**
-     * A chain number may only be used once per system, and only one hole per
-     * system may be marked as the static.
+     * A chain number may only be used once per system, and a system has no more
+     * holes marked static than it has statics.
      *
      * @throws ValidationException
      */
@@ -129,17 +130,45 @@ final readonly class UpdateSignatureAction
         }
 
         if (! $data->is_static instanceof Optional && $data->is_static) {
-            $otherStatic = Signature::query()
-                ->where('map_solarsystem_id', $signature->map_solarsystem_id)
-                ->whereKeyNot($signature->id)
-                ->where('is_static', true)
-                ->first();
+            $this->guardStaticCount($signature, $data);
+        }
+    }
 
-            if ($otherStatic instanceof Signature) {
-                throw ValidationException::withMessages([
-                    'is_static' => sprintf('Signature %s is already marked as the static.', $otherStatic->signature_id ?? 'without an ID'),
-                ]);
-            }
+    /**
+     * A system with two or three statics (Golf: C247 and H900) may have that many
+     * holes marked as static, but never two of the same static type.
+     *
+     * @throws ValidationException
+     */
+    private function guardStaticCount(Signature $signature, SignatureData $data): void
+    {
+        $otherStatics = Signature::query()
+            ->where('map_solarsystem_id', $signature->map_solarsystem_id)
+            ->whereKeyNot($signature->id)
+            ->where('is_static', true)
+            ->get();
+
+        if ($otherStatics->isEmpty()) {
+            return;
+        }
+
+        $staticCount = max(1, WormholeStatic::query()
+            ->where('wormhole_system_id', $signature->mapSolarsystem()->value('solarsystem_id'))
+            ->count());
+
+        $wormholeId = $data->signature_type_id instanceof Optional
+            ? $signature->wormhole_id
+            : ($data->signature_type_id ? SignatureType::query()->find($data->signature_type_id)?->wormhole?->id : null);
+        $sameType = $wormholeId === null
+            ? null
+            : $otherStatics->first(fn (Signature $other): bool => $other->wormhole_id === $wormholeId);
+
+        $clash = $sameType ?? ($otherStatics->count() >= $staticCount ? $otherStatics->first() : null);
+
+        if ($clash instanceof Signature) {
+            throw ValidationException::withMessages([
+                'is_static' => sprintf('Signature %s is already marked as the static.', $clash->signature_id ?? 'without an ID'),
+            ]);
         }
     }
 
