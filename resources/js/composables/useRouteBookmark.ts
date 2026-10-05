@@ -17,10 +17,13 @@ import { computed } from 'vue';
  */
 export function useRouteBookmark() {
     const page = useShowMap();
+    const { getSolarsystemById, resolveSolarsystem } = useStaticSolarsystems();
     const mapConnections = computed(() => page.props.map.map_connections ?? []);
-    const mapSolarsystems = computed(() => page.props.map.map_solarsystems ?? []);
+    // The routing setup wants the map's systems with their static data, like the map page has them.
+    const mapSolarsystems = computed(() =>
+        (page.props.map.map_solarsystems ?? []).map((system) => ({ ...system, solarsystem: resolveSolarsystem(system.solarsystem_id) })),
+    );
     const { routingSettings, getConnections } = useRoutingSetup({ mapConnections, mapSolarsystems });
-    const { getSolarsystemById } = useStaticSolarsystems();
 
     const bySolarsystem = computed(() => new Map(mapSolarsystems.value.map((system) => [system.solarsystem_id, system])));
 
