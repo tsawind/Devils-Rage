@@ -15,6 +15,7 @@ import { displayAlias } from '@/lib/alias';
 import { combatColorHex, combatColorLabel } from '@/lib/combat';
 import { useKillPulses } from '@/composables/useKillPulses';
 import SolarsystemName from '@/map/components/solarsystem/SolarsystemName.vue';
+import SolarsystemOccupier from '@/map/components/solarsystem/SolarsystemOccupier.vue';
 import SolarsystemPilots from '@/map/components/solarsystem/SolarsystemPilots.vue';
 import SolarsystemRegion from '@/map/components/solarsystem/SolarsystemRegion.vue';
 import SolarsystemStatics from '@/map/components/solarsystem/SolarsystemStatics.vue';
@@ -288,11 +289,24 @@ function handleSubmit() {
                 >
                     *{{ wayBack.code ?? '???' }}
                 </button>
+                <SolarsystemOccupier v-if="system.occupier_alias" :occupier="system.occupier_alias" :status="system.status" />
                 <span
                     v-if="resolvedSolarsystem.region && !isWormholeClass(resolvedSolarsystem.class)"
                     class="min-w-0 truncate text-xs text-muted-foreground"
                     >{{ resolvedSolarsystem.region.name }}</span
                 >
+                <SolarsystemStatics
+                    v-else-if="resolvedSolarsystem.statics"
+                    :statics="resolvedSolarsystem.statics"
+                    class="ml-auto !col-span-1 font-mono font-semibold"
+                />
+            </div>
+            <!-- Patch 27: the occupier alias on the second line, coloured by status -->
+            <div v-else-if="system.occupier_alias" class="col-span-3 row-start-2 flex min-w-0 items-center gap-1">
+                <SolarsystemOccupier :occupier="system.occupier_alias" :status="system.status" />
+                <span v-if="resolvedSolarsystem.region && !isWormholeClass(resolvedSolarsystem.class)" class="min-w-0 truncate text-xs text-muted-foreground">{{
+                    resolvedSolarsystem.region.name
+                }}</span>
                 <SolarsystemStatics
                     v-else-if="resolvedSolarsystem.statics"
                     :statics="resolvedSolarsystem.statics"

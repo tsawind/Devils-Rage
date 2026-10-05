@@ -19,7 +19,7 @@ defineProps<{
             >{{
             map_solarsystem.solarsystem?.name
         }}</span>
-        <span v-if="map_solarsystem.occupier_alias" class="text-muted-foreground"> ({{ map_solarsystem.occupier_alias }})</span>
+        <!-- Patch 27: the occupier alias moved to the card's second line (SolarsystemOccupier) -->
     </span>
 </template>
 

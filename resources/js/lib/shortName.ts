@@ -8,3 +8,10 @@ export function shortName(name: string): string {
     if (chars.length <= 5) return name;
     return `${chars[0]}…${chars.slice(-3).join('')}`;
 }
+
+/** Patch 27: an occupier alias on a map card: up to 8 characters whole, else the first 7 and "…". */
+export function shortOccupier(name: string): string {
+    const chars = [...name.trim()];
+    if (chars.length <= 8) return chars.join('');
+    return `${chars.slice(0, 7).join('').trimEnd()}…`;
+}

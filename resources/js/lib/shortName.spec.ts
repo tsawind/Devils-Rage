@@ -1,4 +1,4 @@
-import { shortName } from '@/lib/shortName';
+import { shortName, shortOccupier } from '@/lib/shortName';
 import { describe, expect, it } from 'vitest';
 
 describe('patch 25: names in the signature list', () => {
@@ -12,5 +12,18 @@ describe('patch 25: names in the signature list', () => {
         ['', ''],
     ])('%s → %s', (name, short) => {
         expect(shortName(name)).toBe(short);
+    });
+});
+
+describe('patch 27: occupier alias on a map card', () => {
+    it.each([
+        ['Pagids Legion', 'Pagids…'],
+        ['Wormageddon', 'Wormage…'],
+        ['Hard Knocks Citizens', 'Hard Kn…'],
+        ['SWA', 'SWA'],
+        ['Wormgedn', 'Wormgedn'],
+        ['  Pagids  ', 'Pagids'],
+    ])('%s → %s', (name, short) => {
+        expect(shortOccupier(name)).toBe(short);
     });
 });
