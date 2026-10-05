@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AutopilotSettings from '@/components/autopilot/AutopilotSettings.vue';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ROUTE_KIND_LABELS, type TRouteKind, useRouteCopy } from '@/composables/useRouteCopy';
@@ -71,6 +72,8 @@ const hint = 'Pick To in Routing first (From is home while it is empty)';
                 </DropdownMenuCheckboxItem>
             </DropdownMenuContent>
         </DropdownMenu>
+        <!-- Patch 26: route settings (the same as Navigation's gear) -->
+        <AutopilotSettings variant="bar" />
     </div>
 
     <div v-else class="border-t border-border/30 px-3 py-2">

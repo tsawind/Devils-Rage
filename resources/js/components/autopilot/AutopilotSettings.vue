@@ -14,6 +14,8 @@ import { TLifetimeStatus, TMassStatus } from '@/types/models';
 import type { AcceptableValue } from 'reka-ui';
 import { ref, watch } from 'vue';
 
+const { variant = 'panel' } = defineProps<{ variant?: 'panel' | 'bar' }>();
+
 const map_user_settings = useMapUserSettings();
 const page = useShowMap();
 
@@ -78,12 +80,20 @@ function handleSecurityPenaltyCommit(value: number[]) {
         <PopoverTrigger>
             <Tooltip>
                 <TooltipTrigger as-child>
-                    <MapPanelHeaderActionButton size="icon">
+                    <!-- Patch 26: also in the map bar, next to the route copy buttons -->
+                    <span
+                        v-if="variant === 'bar'"
+                        class="flex items-center rounded border border-border/50 bg-background p-1.5 text-muted-foreground hover:border-border hover:text-foreground"
+                        aria-label="Route settings"
+                    >
+                        <SettingsIcon class="size-4" />
+                    </span>
+                    <MapPanelHeaderActionButton v-else size="icon">
                         <SettingsIcon />
                     </MapPanelHeaderActionButton>
                 </TooltipTrigger>
                 <TooltipContent>
-                    <p>Autopilot settings</p>
+                    <p>{{ variant === 'bar' ? 'Route settings' : 'Autopilot settings' }}</p>
                 </TooltipContent>
             </Tooltip>
         </PopoverTrigger>
