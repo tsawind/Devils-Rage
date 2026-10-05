@@ -41,6 +41,8 @@ const props = defineProps<{
     preselectFirstSignature?: boolean;
     /** Combat mode: answer Unknown by itself after this many seconds (null = no countdown). */
     countdownSeconds?: number | null;
+    /** Patch 24: a tracked alt's jump: its name (null for your main). */
+    characterName?: string | null;
 }>();
 
 const page = useShowMap();
@@ -322,9 +324,9 @@ const selectedShipSizeOption = computed(() => shipSizeOptions.find((option) => o
         >
             <!-- Header -->
             <DialogHeader class="gap-1.5 border-b border-border/50 bg-muted/30 px-6 py-4 text-left">
-                <DialogTitle>Which signature did you jump?</DialogTitle>
+                <DialogTitle>Which signature did {{ characterName ?? 'you' }} jump?</DialogTitle>
                 <DialogDescription>
-                    You jumped from <strong>{{ originSystemLabel }}</strong> to <strong>{{ targetSolarsystemName }}</strong
+                    {{ characterName ?? 'You' }} jumped from <strong>{{ originSystemLabel }}</strong> to <strong>{{ targetSolarsystemName }}</strong
                     >. Select the wormhole connection you used.
                 </DialogDescription>
             </DialogHeader>

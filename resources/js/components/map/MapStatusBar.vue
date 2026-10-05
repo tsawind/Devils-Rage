@@ -92,6 +92,7 @@ const {
     planned_aliases,
     prompt_static_slot_alias,
     static_owner_id,
+    jumper_name,
 } = useTracking();
 
 // Patch 19: the Clipboard switch (on by default; off = names show with a Copy button instead).
@@ -515,6 +516,7 @@ const settingsUrl = computed(() => {
         :static-slot-alias="prompt_static_slot_alias"
         :static-owner-id="static_owner_id"
         :countdown-seconds="popup_seconds"
+        :character-name="jumper_name"
         @select-signature="handleSelectSignature"
     />
 

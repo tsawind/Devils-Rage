@@ -4,6 +4,7 @@ import { useMapIgnoredSystems } from '@/composables/useMapIgnoredSystems';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { useShowMap } from '@/composables/useShowMap';
 import { useStaticData } from '@/composables/useStaticData';
+import { useTrackedAlts } from '@/composables/useTrackedAlts';
 import { useTrackingSystems } from '@/composables/useTrackingSystems';
 import { useCombat } from '@/composables/combat/useCombat';
 import { offerWayBack } from '@/composables/signatures/wayBack';
@@ -175,6 +176,49 @@ export function useTracking() {
         });
     });
 
+    /**
+     * Patch 24: jumps are mapped one at a time (the origin and target of the jump being
+     * mapped live in the page props, and there is one prompt): your main's and any tracked
+     * alt's. A jump waits while another one is being mapped or prompted.
+     */
+    type TJump = { from: number; to: number; byMain: boolean; name: string | null };
+    const jump_queue: TJump[] = [];
+    let jump_running = false;
+    const current_jump = ref<TJump | null>(null);
+    /** Patch 24: whose jump the prompt is for (null: your main). */
+    const jumper_name = computed(() => (current_jump.value && !current_jump.value.byMain ? current_jump.value.name : null));
+
+    function enqueueJump(jump: TJump): void {
+        jump_queue.push(jump);
+        runNextJump();
+    }
+
+    function runNextJump(): void {
+        if (jump_running || show_signature_modal.value) return;
+        const jump = jump_queue.shift();
+        if (!jump) return;
+        jump_running = true;
+        current_jump.value = jump;
+        if (jump.byMain) recordJump(jump.from, jump.to);
+        else toast.info(`${jump.name ?? 'Your alt'} jumped`, { description: 'Tracked alt: mapping its jump.' });
+        if (!handleSolarsystemJump(jump.from, jump.to)) return finishJump();
+        // If the lookup for this jump never comes back, don't hold up the next one forever.
+        setTimeout(() => {
+            if (current_jump.value === jump && jump_running && !show_signature_modal.value) finishJump();
+        }, 20_000);
+    }
+
+    function finishJump(): void {
+        if (!jump_running) return;
+        jump_running = false;
+        runNextJump();
+    }
+
+    // A prompted jump is done once its prompt closes (answered or dismissed).
+    watch(show_signature_modal, (open) => {
+        if (!open) finishJump();
+    });
+
     watch(
         () => [character.value?.id, character.value?.status?.solarsystem_id] as const,
         ([new_character_id, new_solarsystem_id], [old_character_id, old_solarsystem_id]) => {
@@ -186,10 +230,29 @@ export function useTracking() {
             // but that must not create a connection between the two characters' systems.
             if (new_character_id !== old_character_id) return;
 
-            recordJump(old_solarsystem_id, new_solarsystem_id);
-            handleSolarsystemJump(old_solarsystem_id, new_solarsystem_id);
+            enqueueJump({ from: old_solarsystem_id, to: new_solarsystem_id, byMain: true, name: null });
         },
     );
+
+    // Patch 24: your tracked alts (several at once): their jumps are mapped like your main's.
+    const { trackedIds } = useTrackedAlts();
+    const tracked_alt_locations = computed(() => {
+        const tracked = trackedIds(page.props.map?.slug);
+        const locations = new Map<number, { solarsystem_id: number | null; name: string }>();
+        for (const mapped of page.props.map_characters ?? []) {
+            if (!tracked.has(mapped.id) || mapped.id === character.value?.id) continue;
+            locations.set(mapped.id, { solarsystem_id: mapped.status?.solarsystem_id ?? null, name: mapped.name });
+        }
+        return locations;
+    });
+    watch(tracked_alt_locations, (now, before) => {
+        if (!map_user_settings.value.is_tracking) return;
+        for (const [id, alt] of now) {
+            const was = before?.get(id)?.solarsystem_id ?? null;
+            if (!alt.solarsystem_id || !was || alt.solarsystem_id === was) continue;
+            enqueueJump({ from: was, to: alt.solarsystem_id, byMain: false, name: alt.name });
+        }
+    });
 
     // Follow the pilot: select the system the character jumped into, so the
     // signature panel and details follow it.
@@ -200,7 +263,9 @@ export function useTracking() {
     // tracking POST) carry the pre-jump URL, and whichever lands last decides
     // what the page URL is. Selecting after them, rather than racing them, is
     // what keeps the selection from being reverted.
-    function followInto(solarsystem_id: number, attempt = 0) {
+    function followInto(solarsystem_id: number, attempt = 0, byMain = true) {
+        // Patch 24: Follow sticks to your main; a tracked alt's jump never moves your view.
+        if (!byMain) return;
         if (!map_user_settings.value.follow_character_enabled) return;
 
         // Patch 21: another save started right after the jump (a signature update, the static
@@ -211,7 +276,7 @@ export function useTracking() {
         const retry = () => {
             if (attempt >= 2) return;
             setTimeout(() => {
-                if (stillThere() && !selected()) followInto(solarsystem_id, attempt + 1);
+                if (stillThere() && !selected()) followInto(solarsystem_id, attempt + 1, byMain);
             }, 800);
         };
 
@@ -224,12 +289,18 @@ export function useTracking() {
         });
     }
 
-    function handleSolarsystemJump(old_solarsystem_id: number | null, new_solarsystem_id: number) {
-        if (isIgnored(new_solarsystem_id)) return;
+    /** Starts mapping a jump; false when there is nothing to map (patch 24: the queue moves on). */
+    function handleSolarsystemJump(old_solarsystem_id: number | null, new_solarsystem_id: number): boolean {
+        if (isIgnored(new_solarsystem_id)) return false;
         const old_map_solarsystem = map_solarsystems.value.find((s) => s.solarsystem_id === old_solarsystem_id);
-        if (!old_map_solarsystem) return;
-        if (old_map_solarsystem.solarsystem_id === new_solarsystem_id) return;
-        update(old_map_solarsystem.solarsystem_id, new_solarsystem_id, performJump);
+        if (!old_map_solarsystem) return false;
+        if (old_map_solarsystem.solarsystem_id === new_solarsystem_id) return false;
+        update(old_map_solarsystem.solarsystem_id, new_solarsystem_id, () => {
+            performJump();
+            // A prompt finishes the jump when it closes; anything else is done now.
+            if (!show_signature_modal.value) finishJump();
+        });
+        return true;
     }
 
     function isGateConnected(origin_solarsystem_id: number | null | undefined, target_solarsystem_id: number | null | undefined): boolean {
@@ -247,7 +318,8 @@ export function useTracking() {
         const leftLabel = origin ? displayAlias(origin.alias) || origin.solarsystem?.name || null : null;
         used_arm_id = null;
         performJumpChoice();
-        releaseArms(used_arm_id, leftLabel);
+        // Patch 24: a tracked alt moving elsewhere doesn't release your arms.
+        if (current_jump.value?.byMain !== false) releaseArms(used_arm_id, leftLabel);
         // Patch 20: the hole you jumped may be the origin's static now (the same check as a paste),
         // so a "maybe NRW?" box doesn't stay behind.
         if (origin) requestStaticCheck(origin.id, map_solarsystems.value.find((system) => system.id === origin.id) ?? null);
@@ -257,11 +329,12 @@ export function useTracking() {
 
     function performJumpChoice() {
         const target_solarsystem_id = target_solarsystem.value!.id;
+        const byMain = current_jump.value?.byMain !== false;
 
         // Already connected (patch 20: also a connection with no signature on this side, e.g. jumping
         // back the way you came): the system is on the map, nothing to ask or wait for.
         if (existing_connection.value?.map_connection_id || connectedOnMap()) {
-            followInto(target_solarsystem_id);
+            followInto(target_solarsystem_id, 0, byMain);
 
             return;
         }
@@ -296,7 +369,7 @@ export function useTracking() {
         }
 
         if (gate_connected || !possible_signatures.value.length || !map_user_settings.value.prompt_for_signature_enabled) {
-            return createTracking(origin_map_solarsystem.value!.id, target_solarsystem_id, {}, () => followInto(target_solarsystem_id));
+            return createTracking(origin_map_solarsystem.value!.id, target_solarsystem_id, {}, () => followInto(target_solarsystem_id, 0, byMain));
         }
 
         // The dialog defers the tracking request until the scout picks a
@@ -427,6 +500,7 @@ export function useTracking() {
         if (!origin_map_solarsystem.value || !target_solarsystem.value) return;
 
         const target_solarsystem_id = target_solarsystem.value.id;
+        const byMain = current_jump.value?.byMain !== false;
 
         copyConnectionBookmark(selection.signatureId, selection.alias);
         createTracking(
@@ -441,7 +515,7 @@ export function useTracking() {
                 is_static: selection.isStatic,
                 is_wandering: selection.isWandering,
             },
-            () => followInto(target_solarsystem_id),
+            () => followInto(target_solarsystem_id, 0, byMain),
         );
     }
 
@@ -515,5 +589,6 @@ export function useTracking() {
         static_slot_alias,
         prompt_static_slot_alias,
         static_owner_id,
+        jumper_name,
     };
 }
