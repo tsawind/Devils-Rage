@@ -88,3 +88,43 @@ describe('patch 21: Static and EOL inside the pill', () => {
         expect(wrapper.emitted('connectionClick')).toHaveLength(1);
     });
 });
+
+describe('patch 23: hub-lane pills point up or down', () => {
+    // Hole 2 sits above hub 1; the pipe runs straight down from the hole to the hub.
+    const lane: EdgeGeometry = {
+        id: 1,
+        kind: 'elbow',
+        from: { x: 210, y: 100 },
+        to: { x: 210, y: 300 },
+        fromNormal: { x: 0, y: 1 },
+        toNormal: { x: 0, y: -1 },
+        bend: null,
+        pillAt: 'from',
+    };
+    const arrowOf = (geometry: EdgeGeometry, openedIn: number) =>
+        mount(Edge, {
+            props: {
+                geometry,
+                scale: 1,
+                connection: connection({
+                    from_map_solarsystem_id: 2,
+                    to_map_solarsystem_id: 1,
+                    signatures: [{ id: 5, map_solarsystem_id: openedIn, wormhole: { name: 'V753' } }] as TMapConnection['signatures'],
+                }),
+            },
+        })
+            .find('foreignObject svg')
+            .attributes('aria-label');
+
+    it('opened in the hub below: up toward the hole', () => {
+        expect(arrowOf(lane, 1)).toContain('goes up');
+    });
+
+    it('opened in the hole above: down toward the hub', () => {
+        expect(arrowOf(lane, 2)).toContain('goes down');
+    });
+
+    it('an ordinary pipe keeps left / right', () => {
+        expect(arrowOf({ ...lane, pillAt: undefined, to: { x: 460, y: 100 } }, 2)).toBe('Opened on this side: it goes toward its K162 exit');
+    });
+});

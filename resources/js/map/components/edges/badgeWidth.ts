@@ -8,7 +8,7 @@ export type EdgeIndicator = {
      */
     role?: 'size' | 'type';
     /** Size text: which way the hole goes, from where it opened toward its K162 exit. */
-    arrow?: 'left' | 'right' | null;
+    arrow?: 'left' | 'right' | 'up' | 'down' | null;
     fill: string;
     stroke: string;
     /** Patch 16: a guess (likely EOL), drawn faint. */

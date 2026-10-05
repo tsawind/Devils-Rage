@@ -5,7 +5,7 @@ export type { EdgeIndicator } from '@/map/components/edges/badgeWidth';
 <script setup lang="ts">
 import { badgeLines, badgeSize, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
 import type { Vec2 } from '@/map/core/types';
-import { ArrowLeft, ArrowRight, Clock, Heart, Orbit, Weight } from 'lucide-vue-next';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Clock, Heart, Orbit, Weight } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 type Props = {
@@ -78,6 +78,8 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
                         {{ indicator.label }}
                         <ArrowRight v-if="indicator.arrow === 'right'" class="ml-px size-3" aria-label="Opened on this side: it goes toward its K162 exit" />
                         <ArrowLeft v-else-if="indicator.arrow === 'left'" class="ml-px size-3" aria-label="The K162 side: it opened on the far side" />
+                        <ArrowUp v-else-if="indicator.arrow === 'up'" class="ml-px size-3" aria-label="Opened at the lower end: it goes up toward its K162 exit" />
+                        <ArrowDown v-else-if="indicator.arrow === 'down'" class="ml-px size-3" aria-label="Opened at the upper end: it goes down toward its K162 exit" />
                     </span>
                     <Weight v-else-if="indicator.type === 'weight'" class="size-3" :style="{ color: indicator.fill }" />
                     <Clock

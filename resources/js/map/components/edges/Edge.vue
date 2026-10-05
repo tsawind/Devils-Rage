@@ -124,7 +124,7 @@ const indicators = computed<EdgeIndicator[]>(() => {
             fill: 'var(--color-neutral-500)',
             stroke: 'var(--color-neutral-600)',
             // Patch 21: a plain left / right arrow (from where it opened toward its K162 exit).
-            arrow: arrowAngle.value === null ? null : Math.abs(arrowAngle.value) <= 90 ? 'right' : 'left',
+            arrow: arrowDirection.value,
         });
     }
 
@@ -182,6 +182,17 @@ const arrowAngle = computed<number | null>(() => {
     const from = forward ? scaledFrom.value : scaledTo.value;
     const to = forward ? scaledTo.value : scaledFrom.value;
     return (Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI;
+});
+
+/**
+ * Patch 21: left / right on the pill. Patch 23: a hub lane runs straight up or down, so its
+ * pill points up or down.
+ */
+const arrowDirection = computed<'left' | 'right' | 'up' | 'down' | null>(() => {
+    const angle = arrowAngle.value;
+    if (angle === null) return null;
+    if (geometry.kind === 'elbow' && geometry.pillAt) return angle > 0 ? 'down' : 'up';
+    return Math.abs(angle) <= 90 ? 'right' : 'left';
 });
 
 // ---- Mass pipe (patch 12) -----------------------------------------------------
