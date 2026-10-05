@@ -11,7 +11,7 @@ import { TMapBackgroundMode, useMapBackground } from '@/composables/useMapBackgr
 import { updateMapUserSettings } from '@/map/actions/updateMapUserSettings';
 import { useMapStore } from '@/map/store/mapStore';
 import { router } from '@inertiajs/vue3';
-import { CircleDashed, Home as House, ImageUp, Loader2, Trash2, Waypoints, Workflow } from 'lucide-vue-next';
+import { CircleDashed, ImageUp, Loader2, Share2, Trash2, Waypoints, Workflow } from 'lucide-vue-next';
 import { computed, ref, useTemplateRef, type Component } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -167,10 +167,10 @@ function onDrop(event: DragEvent) {
                     :aria-pressed="store.homeLayout.value"
                     @click="store.setHomeLayout(!store.homeLayout.value)"
                 >
-                    <House class="size-4" />
+                    <Share2 class="size-4" />
                 </Button>
             </TooltipTrigger>
-            <TooltipContent>Home layout: {{ store.homeLayout.value ? 'on (click for the old layout)' : 'off (click to turn on)' }}</TooltipContent>
+            <TooltipContent>Hub layout: {{ store.homeLayout.value ? 'on (click for the old layout)' : 'off (click to turn on)' }}</TooltipContent>
         </Tooltip>
         <Popover>
             <PopoverTrigger as-child>

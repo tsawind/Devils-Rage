@@ -76,6 +76,9 @@ final class MapController extends Controller
         return Inertia::render('maps/ShowMap', [
             'map' => $map->toResource(MapResource::class),
             'config' => config('map'),
+            // Patch 26: the map switcher (loaded when it is opened).
+            'available_maps' => Inertia::optional(fn (): array => $this->availableMaps()),
+            'can_create_map' => Gate::allows('create', Map::class),
         ])
             ->with(new MapPermissionsFeature($map, $user))
             ->with($settingsFeature)
@@ -90,7 +93,32 @@ final class MapController extends Controller
             ->with(new MapSkyhooksFeature($hiddenCards));
     }
 
-    public function showByToken(string $token): RedirectResponse
+    /**
+     * The maps you can open, for the map switcher.
+     *
+     * @return list<array{id: int, name: string, slug: string}>
+     */
+    private function availableMaps(): array
+    {
+        if (! $this->user instanceof User) {
+            return [];
+        }
+
+        $accessibleIds = $this->user->getAccessibleIds();
+
+        return Map::query()
+            ->whereHas('mapAccessors', function (Builder $builder) use ($accessibleIds): void {
+                assert($builder instanceof MapAccessBuilder);
+                $builder->notExpired()->whereIn('accessible_id', $accessibleIds);
+            })
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Map $map): array => ['id' => $map->id, 'name' => $map->name, 'slug' => $map->slug])
+            ->values()
+            ->all();
+    }
+
+        public function showByToken(string $token): RedirectResponse
     {
         $map = Map::query()->where('share_token', $token)->firstOrFail();
 

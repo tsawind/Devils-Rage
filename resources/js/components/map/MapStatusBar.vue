@@ -32,7 +32,6 @@ import {
     EyeOff,
     LayoutGrid,
     LocateFixed,
-    Map as MapIcon,
     Redo2,
     Settings,
     ShieldAlert,
@@ -47,6 +46,7 @@ import type { TResolvedMapNavigation, TResolvedSelectedMapSolarsystem } from '@/
 import type { TCharacter } from '@/types/models';
 import CommandPaletteButton from './CommandPaletteButton.vue';
 import RouteCopyButtons from './RouteCopyButtons.vue';
+import MapSwitcher from './MapSwitcher.vue';
 import RoutingBox from './RoutingBox.vue';
 import TrackingSignatureDialog from './TrackingSignatureDialog.vue';
 
@@ -181,11 +181,8 @@ const settingsUrl = computed(() => {
 
 <template>
     <div class="relative flex h-10 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/30 px-2 sm:gap-3 sm:px-3">
-        <!-- Map Name -->
-        <div class="flex items-center gap-2">
-            <MapIcon class="size-4 text-muted-foreground" />
-            <span class="hidden font-mono text-xs font-medium sm:inline">{{ map.name }}</span>
-        </div>
+        <!-- Map Name (patch 26: opens a list of your maps, plus New map) -->
+        <MapSwitcher :map="map" />
 
         <div class="hidden h-4 w-px bg-border/50 sm:block" />
 

@@ -15,9 +15,9 @@ import InputError from '@/components/ui/error/InputError.vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
 
-const open = ref(false);
+/** Patch 26: can also be opened from outside (the map switcher's "New map"). */
+const open = defineModel<boolean>('open', { default: false });
 
 const form = useForm({
     name: '',
@@ -38,7 +38,7 @@ function handleSubmit(): void {
 
 <template>
     <Dialog :open="open" @update:open="handleOpenChange">
-        <DialogTrigger as-child>
+        <DialogTrigger v-if="$slots.default" as-child>
             <slot />
         </DialogTrigger>
         <DialogContent>
