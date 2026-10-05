@@ -151,8 +151,24 @@ const settingsUrl = computed(() => {
 
 <template>
     <div class="relative flex h-10 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/30 px-2 sm:gap-3 sm:px-3">
-        <!-- Centered info badges -->
-        <div class="absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2">
+        <!-- Map Name -->
+        <div class="flex items-center gap-2">
+            <MapIcon class="size-4 text-muted-foreground" />
+            <span class="hidden font-mono text-xs font-medium sm:inline">{{ map.name }}</span>
+        </div>
+
+        <div class="hidden h-4 w-px bg-border/50 sm:block" />
+
+        <!-- Search -->
+        <div class="hidden flex-1 sm:block">
+            <CommandPaletteButton />
+        </div>
+
+        <!-- Spacer for mobile -->
+        <div class="flex-1 sm:hidden" />
+
+        <!-- Info badges: in line before the pilot location (centred, they covered it) -->
+        <div class="flex shrink-0 items-center gap-2">
             <!-- Active Character Access Warning -->
             <Tooltip v-if="$page.props.auth.user && !$page.props.active_character_has_access">
                 <TooltipTrigger as-child>
@@ -179,22 +195,6 @@ const settingsUrl = computed(() => {
             <!-- Stale Connections Cleanup -->
             <StaleConnectionsBadge />
         </div>
-
-        <!-- Map Name -->
-        <div class="flex items-center gap-2">
-            <MapIcon class="size-4 text-muted-foreground" />
-            <span class="hidden font-mono text-xs font-medium sm:inline">{{ map.name }}</span>
-        </div>
-
-        <div class="hidden h-4 w-px bg-border/50 sm:block" />
-
-        <!-- Search -->
-        <div class="hidden flex-1 sm:block">
-            <CommandPaletteButton />
-        </div>
-
-        <!-- Spacer for mobile -->
-        <div class="flex-1 sm:hidden" />
 
         <!-- Pilot Location -->
         <div v-if="character && currentSolarsystem" class="hidden items-center gap-2 lg:flex">
