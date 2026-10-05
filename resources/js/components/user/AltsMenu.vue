@@ -6,6 +6,7 @@ import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import useUser from '@/composables/useUser';
 import { displayAlias } from '@/lib/alias';
 import type { TMapSolarsystemBase } from '@/pages/maps';
+import type { AppPageProps } from '@/types';
 import type { TCharacter } from '@/types/models';
 import { usePage } from '@inertiajs/vue3';
 import { Users } from 'lucide-vue-next';
@@ -16,7 +17,7 @@ import { computed } from 'vue';
  * each one is (when online and tracked there). Groundwork for a second tracked character.
  */
 const user = useUser();
-const page = usePage<{ map_characters?: TCharacter[] | null; map?: { map_solarsystems?: TMapSolarsystemBase[] } }>();
+const page = usePage<AppPageProps<{ map_characters?: TCharacter[] | null; map?: { map_solarsystems?: TMapSolarsystemBase[] } }>>();
 const { getSolarsystemById } = useStaticSolarsystems();
 
 const alts = computed(() =>
