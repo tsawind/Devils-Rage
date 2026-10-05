@@ -13,6 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { isWormholeClass } from '@/const/solarsystemClasses';
 import { displayAlias } from '@/lib/alias';
 import { combatColorHex, combatColorLabel } from '@/lib/combat';
+import { useKillPulses } from '@/composables/useKillPulses';
 import SolarsystemName from '@/map/components/solarsystem/SolarsystemName.vue';
 import SolarsystemPilots from '@/map/components/solarsystem/SolarsystemPilots.vue';
 import SolarsystemRegion from '@/map/components/solarsystem/SolarsystemRegion.vue';
@@ -61,6 +62,10 @@ const chainHex = computed(() => combatColorHex(system.combat_color));
 const chainLabel = computed(() => combatColorLabel(system.combat_color));
 const isCombatHome = computed(() => Boolean(system.combat_home && chainHex.value));
 const isCombatPulsing = computed(() => isCombatHome.value && Boolean(system.combat_active));
+
+// Patch 26: a kill just came in here: the card flashes red for a few seconds.
+const { pulses } = useKillPulses();
+const killFlash = computed(() => pulses.value.get(system.solarsystem_id) ?? null);
 /** Kept when its chain was cleared (patch 12): "was Red". */
 const previousChain = computed(() => combatColorLabel(system.combat_previous_color));
 const previousHex = computed(() => combatColorHex(system.combat_previous_color));
@@ -166,6 +171,17 @@ function handleSubmit() {
         @dblclick="openEditor()"
         @drag.prevent
     >
+        <!-- Patch 26: the rally point: a bright pulsing pink ring and a tag, easy to spot -->
+        <template v-if="isRally">
+            <div class="rally-pulse pointer-events-none absolute -inset-1.5 rounded-lg border-2 border-pink-500" />
+            <div class="pointer-events-none absolute -top-2.5 right-2 rounded bg-pink-600 px-1 font-display text-[11px] leading-4 font-bold tracking-wide text-white uppercase">⚑ Rally</div>
+        </template>
+        <!-- Patch 26: a kill just came in here: red flash and shock rings -->
+        <template v-if="killFlash">
+            <div :key="`kill-a-${killFlash}`" class="kill-ring pointer-events-none absolute -inset-1 rounded-lg border-2 border-red-500" />
+            <div :key="`kill-b-${killFlash}`" class="kill-ring kill-ring-late pointer-events-none absolute -inset-1 rounded-lg border-2 border-orange-400" />
+            <div :key="`kill-c-${killFlash}`" class="kill-flash pointer-events-none absolute inset-0 rounded bg-red-500/40" />
+        </template>
         <!-- Combat chain: a border in the chain's color; the combat home's is thicker and pulses while someone works the chain -->
         <div
             v-if="chainHex"
@@ -308,6 +324,49 @@ function handleSubmit() {
     }
     50% {
         box-shadow: 0 0 0 2px color-mix(in srgb, var(--chain) 45%, transparent);
+    }
+}
+/* Patch 26: the rally point: a pink glow that swells in and out, always on. */
+.rally-pulse {
+    animation: rally-pulse 1.6s ease-in-out infinite;
+}
+@keyframes rally-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgb(236 72 153 / 0.15);
+        opacity: 0.75;
+    }
+    50% {
+        box-shadow: 0 0 14px 4px rgb(236 72 153 / 0.6);
+        opacity: 1;
+    }
+}
+/* Patch 26: a new kill: rings that burst outward and fade, and a short red flash. */
+.kill-ring {
+    animation: kill-ring 1.4s ease-out 3;
+}
+.kill-ring-late {
+    animation-delay: 0.45s;
+}
+@keyframes kill-ring {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1.6);
+        opacity: 0;
+    }
+}
+.kill-flash {
+    animation: kill-flash 0.6s ease-out 4;
+}
+@keyframes kill-flash {
+    0% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
     }
 }
 </style>

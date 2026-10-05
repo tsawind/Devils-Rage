@@ -647,7 +647,7 @@ function createNewSignature() {
 
     <!-- Signatures list when system is selected -->
     <MapPanel v-if="map_solarsystem" class="@container/sigheader overflow-x-hidden">
-        <MapPanelHeader>
+        <MapPanelHeader class="h-auto min-h-9 flex-wrap gap-y-1 py-1">
             <CombatControls class="mr-2" />
             Signatures
             <span v-if="filteredSignatures.length" class="ml-1 text-amber-400">{{ filteredSignatures.length }}</span>
@@ -756,13 +756,13 @@ function createNewSignature() {
                     <ArrowUp v-if="sortPreferences.column === 'category' && sortPreferences.direction === 'asc'" class="size-3" />
                     <ArrowDown v-if="sortPreferences.column === 'category' && sortPreferences.direction === 'desc'" class="size-3" />
                 </button>
-                <button class="flex min-w-0 flex-1 items-center gap-1 hover:text-foreground" @click="handleSort('type')">
+                <button class="flex min-w-0 flex-1 items-center gap-1 hover:text-foreground @max-[29rem]/sigheader:hidden" @click="handleSort('type')">
                     <span>Type</span>
                     <ArrowUp v-if="sortPreferences.column === 'type' && sortPreferences.direction === 'asc'" class="size-3" />
                     <ArrowDown v-if="sortPreferences.column === 'type' && sortPreferences.direction === 'desc'" class="size-3" />
                 </button>
-                <span class="min-w-0 flex-1">Conn</span>
-                <span class="w-14 shrink-0"></span>
+                <span class="min-w-0 flex-1 @max-[29rem]/sigheader:hidden">Conn</span>
+                <span class="w-14 shrink-0 @max-[29rem]/sigheader:ml-auto"></span>
                 <button class="flex w-10 shrink-0 items-center justify-end gap-1 hover:text-foreground" @click="handleSort('age')">
                     <span>Age</span>
                     <ArrowUp v-if="sortPreferences.column === 'age' && sortPreferences.direction === 'asc'" class="size-3" />

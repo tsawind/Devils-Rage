@@ -14,6 +14,8 @@ import { TKillmail, TMapUserSetting } from '@/types/models';
 import { Deferred, router } from '@inertiajs/vue3';
 import { useEcho } from '@laravel/echo-vue';
 import type { AcceptableValue } from 'reka-ui';
+import { Eraser } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
 
 const { map_killmails, map_id, map_slug, map_user_settings } = defineProps<{
     map_killmails?: TKillmail[];
@@ -21,6 +23,35 @@ const { map_killmails, map_id, map_slug, map_user_settings } = defineProps<{
     map_slug: string;
     map_user_settings: TMapUserSetting;
 }>();
+
+/**
+ * Patch 26: Clear hides every killmail listed now, so only new ones show; just for you,
+ * remembered in this browser per map. "Show cleared" brings them back.
+ */
+const clearedKey = `killmails-cleared:${map_id}`;
+function readCleared(): Set<number> {
+    try {
+        const ids: unknown = JSON.parse(window.localStorage.getItem(clearedKey) ?? '[]');
+        return new Set(Array.isArray(ids) ? ids.filter((id): id is number => typeof id === 'number') : []);
+    } catch {
+        return new Set();
+    }
+}
+const cleared = ref<Set<number>>(readCleared());
+const showCleared = ref(false);
+watch(cleared, (ids) => {
+    try {
+        window.localStorage.setItem(clearedKey, JSON.stringify([...ids].slice(-500)));
+    } catch {
+        // Storage unavailable: it stays cleared for this visit.
+    }
+});
+const shownKillmails = computed(() => (showCleared.value ? (map_killmails ?? []) : (map_killmails ?? []).filter((killmail) => !cleared.value.has(killmail.id))));
+const clearedCount = computed(() => (map_killmails ?? []).filter((killmail) => cleared.value.has(killmail.id)).length);
+function clearKillmails(): void {
+    cleared.value = new Set([...cleared.value, ...(map_killmails ?? []).map((killmail) => killmail.id)]);
+    showCleared.value = false;
+}
 
 type KillmailReceivedEvent = {
     killmail: TKillmail;
@@ -53,8 +84,19 @@ useOnClient(() =>
     <MapPanel>
         <MapPanelHeader card-id="killmails">
             Killmails
-            <span v-if="map_killmails?.length" class="ml-1 text-amber-400">{{ map_killmails.length }}</span>
+            <span v-if="shownKillmails.length" class="ml-1 text-amber-400">{{ shownKillmails.length }}</span>
+            <button
+                v-if="clearedCount"
+                type="button"
+                class="ml-2 font-sans text-[11px] tracking-normal text-muted-foreground normal-case hover:text-foreground"
+                @click="showCleared = !showCleared"
+            >
+                {{ showCleared ? 'Hide cleared' : `Show cleared (${clearedCount})` }}
+            </button>
             <template #actions>
+                <MapPanelHeaderActionButton :disabled="!shownKillmails.length" title="Clear: hide these, show only new killmails (just for you)" @click="clearKillmails">
+                    <Eraser class="size-3.5" /> Clear
+                </MapPanelHeaderActionButton>
                 <DropdownMenu>
                     <DropdownMenuTrigger as-child>
                         <MapPanelHeaderActionButton size="icon">
@@ -74,15 +116,15 @@ useOnClient(() =>
         <MapPanelContent>
             <Deferred data="map_killmails">
                 <div class="@container">
-                    <template v-if="map_killmails?.length">
+                    <template v-if="shownKillmails.length">
                         <div class="grid grid-cols-[1.25rem_1.25rem_1.25rem_auto_1.25rem_auto_auto_1.25rem_1.25rem_2rem_auto_auto] gap-x-2">
                             <TransitionGroup name="list">
-                                <Killmail v-for="killmail in map_killmails" :key="killmail.id" :killmail="killmail" />
+                                <Killmail v-for="killmail in shownKillmails" :key="killmail.id" :killmail="killmail" />
                             </TransitionGroup>
                         </div>
                     </template>
                     <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">
-                        <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No killmails</p>
+                        <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">{{ clearedCount ? 'No new killmails' : 'No killmails' }}</p>
                     </div>
                 </div>
                 <template #fallback>

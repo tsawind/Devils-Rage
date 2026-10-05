@@ -27,7 +27,7 @@ function handleRemove() {
         <h3 class="font-sans font-semibold text-[11px] uppercase tracking-wider text-muted-foreground">
             <slot />
         </h3>
-        <div v-if="$slots.actions || (cardId && layoutEditMode())" class="flex items-center gap-2">
+        <div v-if="$slots.actions || (cardId && layoutEditMode())" class="flex flex-wrap items-center justify-end gap-2">
             <slot name="actions" />
             <Tooltip v-if="cardId && layoutEditMode()">
                 <TooltipTrigger as-child>

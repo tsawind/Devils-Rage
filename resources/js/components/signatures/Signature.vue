@@ -877,7 +877,7 @@ function copyBookmark() {
 
 <template>
     <div
-        class="flex items-center gap-2 border-b border-border/30 px-3 hover:bg-muted/30 data-deleted:bg-red-500/10 data-new:bg-green-500/10 data-updated:bg-amber-500/15"
+        class="flex items-center gap-2 border-b border-border/30 px-3 hover:bg-muted/30 data-deleted:bg-red-500/10 data-new:bg-green-500/10 data-updated:bg-amber-500/15 @max-[29rem]/sigheader:flex-wrap @max-[29rem]/sigheader:gap-y-1"
         :class="map_user_settings.compact_signature_list ? 'py-0.5' : 'py-1.5'"
         :data-deleted="Data(is_deleted)"
         :data-new="Data(is_new)"
@@ -970,8 +970,10 @@ function copyBookmark() {
             </Select>
         </div>
 
+        <!-- Patch 26: Type and Connection; on their own second line when the panel is narrow -->
+        <div class="flex min-w-0 flex-1 items-center gap-2 @max-[29rem]/sigheader:order-last @max-[29rem]/sigheader:basis-full @max-[29rem]/sigheader:pl-[calc(5ch+2rem)]">
         <!-- Type / Wormhole Info: capped for wormhole rows so the connection column gets the extra room. -->
-        <div class="min-w-0 flex-1" :class="{ 'max-w-44': isWormhole }">
+        <div class="min-w-0 flex-1 @max-[29rem]/sigheader:max-w-none" :class="{ 'max-w-44': isWormhole }">
             <WormholeTypeInput
                 v-if="isWormhole"
                 :model-value="signature.signature_type_id"
@@ -1007,8 +1009,10 @@ function copyBookmark() {
             />
         </div>
 
+        </div>
+
         <!-- Actions -->
-        <div class="flex w-14 shrink-0 items-center justify-end gap-1">
+        <div class="flex w-14 shrink-0 items-center justify-end gap-1 @max-[29rem]/sigheader:ml-auto">
             <Button v-if="isWormhole" variant="ghost" size="icon" class="size-6 text-muted-foreground hover:text-foreground" @click="copyBookmark">
                 <Copy class="size-3.5" />
             </Button>

@@ -18,7 +18,11 @@ import SystemInfo from '@/components/solarsystem/SystemInfo.vue';
 import SystemInfoEmptyState from '@/components/solarsystem/SystemInfoEmptyState.vue';
 import ThreatAnalysis from '@/components/threat-analysis/ThreatAnalysis.vue';
 import { useDisableTextSelection } from '@/composables/useDisableTextSelection';
+import { pulseKill } from '@/composables/useKillPulses';
 import { useMapChrome } from '@/composables/useMapChrome';
+import { getMapChannelName } from '@/const/channels';
+import { KillmailReceivedEvent } from '@/const/events';
+import type { TKillmail } from '@/types/models';
 import { useMapLayout } from '@/composables/useMapLayout';
 import { useOnClient } from '@/composables/useOnClient';
 import usePermission from '@/composables/usePermission';
@@ -30,7 +34,7 @@ import { useIsMapGestureActive } from '@/map/api';
 import MapRoot from '@/map/components/MapRoot.vue';
 import { TMap, TResolvedMapNavigation, TResolvedSelectedMapSolarsystem, TShowMapProps } from '@/pages/maps/index';
 import { router, usePage } from '@inertiajs/vue3';
-import { echo } from '@laravel/echo-vue';
+import { echo, useEcho } from '@laravel/echo-vue';
 import { GridItem, GridLayout } from 'grid-layout-plus';
 import { computed, provide, ref } from 'vue';
 
@@ -144,6 +148,9 @@ const userScopes = computed(() => {
     if (!user?.active_character?.esi_scopes) return [];
     return user.active_character.esi_scopes;
 });
+
+// Patch 26: a new killmail flashes its system on the map (even with the Killmails card hidden).
+useOnClient(() => useEcho<{ killmail: TKillmail }>(getMapChannelName(map.id), KillmailReceivedEvent, (event) => pulseKill(event.killmail.solarsystem_id)));
 
 useOnClient(() =>
     router.on('before', (event) => {
