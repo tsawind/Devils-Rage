@@ -391,7 +391,7 @@ const settingsUrl = computed(() => {
             </Tooltip>
         </div>
 
-        <!-- Patch 20: undo / redo your own signature edits -->
+        <!-- Patch 21: the global undo / redo (any of your map changes) -->
         <div v-if="canEdit" class="flex items-center gap-0.5">
             <Tooltip>
                 <TooltipTrigger as-child>
@@ -406,7 +406,7 @@ const settingsUrl = computed(() => {
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                     <p class="text-xs font-medium">Undo{{ undoLabel ? `: ${undoLabel}` : '' }}</p>
-                    <p class="text-xs text-muted-foreground">Ctrl+Z · your own signature edits</p>
+                    <p class="max-w-xs text-xs text-muted-foreground">Ctrl+Z · your last map change: moves, deletes, pastes, signature edits…</p>
                 </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -422,7 +422,7 @@ const settingsUrl = computed(() => {
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
                     <p class="text-xs font-medium">Redo{{ redoLabel ? `: ${redoLabel}` : '' }}</p>
-                    <p class="text-xs text-muted-foreground">Ctrl+Y</p>
+                    <p class="text-xs text-muted-foreground">Ctrl+Y · put back what you undid</p>
                 </TooltipContent>
             </Tooltip>
         </div>
