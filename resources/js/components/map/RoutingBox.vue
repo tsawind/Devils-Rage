@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import NavigationRoute from '@/components/autopilot/NavigationRoute.vue';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useNavigationSystems } from '@/composables/useNavigationSystems';
 import { useStaticData } from '@/composables/useStaticData';
+import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
+import { displayAlias } from '@/lib/alias';
 import useUser from '@/composables/useUser';
 import type { TMap, TResolvedMapNavigation, TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TCharacter } from '@/types/models';
@@ -23,6 +26,23 @@ const activeCharacter = computed(() => map_characters?.find((character) => chara
 const { staticData, loadStaticData } = useStaticData();
 void loadStaticData();
 const solarsystems = computed(() => staticData.value?.solarsystems ?? []);
+
+// Patch 25: the box shows what's picked ("From Jita", "Jita → Amarr"); route copies start at From.
+const { fromSystemId, toSystemId } = useNavigationSystems();
+const { getSolarsystemById } = useStaticSolarsystems();
+const nameOf = (id: number | null): string | null => {
+    if (!id) return null;
+    const alias = map.map_solarsystems?.find((system) => system.solarsystem_id === id)?.alias;
+    return displayAlias(alias) || getSolarsystemById(id)?.name || null;
+};
+const label = computed(() => {
+    const from = nameOf(fromSystemId.value);
+    const to = nameOf(toSystemId.value);
+    if (from && to) return `${from} → ${to}`;
+    if (from) return `From ${from}`;
+    if (to) return `To ${to}`;
+    return 'Routing';
+});
 </script>
 
 <template>
@@ -33,7 +53,7 @@ const solarsystems = computed(() => staticData.value?.solarsystems ?? []);
                 class="flex w-full items-center gap-2 rounded border border-border/50 bg-background px-3 py-1.5 text-sm text-muted-foreground hover:border-border hover:text-foreground"
             >
                 <Route class="size-4 shrink-0" />
-                <span class="flex-1 text-left">Routing</span>
+                <span class="flex-1 truncate text-left" :class="label !== 'Routing' ? 'text-foreground' : ''">{{ label }}</span>
             </button>
         </PopoverTrigger>
         <PopoverContent align="start" class="max-h-[70vh] w-[380px] overflow-y-auto p-0">
@@ -45,6 +65,7 @@ const solarsystems = computed(() => staticData.value?.solarsystems ?? []);
                 :active_character="activeCharacter"
                 :character_status="activeCharacter?.status ?? null"
                 :destinations="map_navigation?.destinations ?? []"
+                :map_characters="map_characters"
             />
         </PopoverContent>
     </Popover>

@@ -744,7 +744,7 @@ function createNewSignature() {
                 class="flex items-center gap-2 border-b border-border/30 bg-muted/20 px-3 font-sans font-semibold text-[11px] tracking-wider text-muted-foreground uppercase"
                 :class="map_user_settings.compact_signature_list ? 'py-0.5' : 'py-1.5'"
             >
-                <span class="w-[2ch] shrink-0 overflow-hidden font-mono text-xs whitespace-nowrap" title="Name">Nm</span>
+                <span class="w-[5ch] shrink-0 overflow-hidden font-mono text-xs whitespace-nowrap" title="Name (hover a name for the full name and details)">Name</span>
                 <span class="w-4 shrink-0" aria-hidden="true"></span>
                 <button class="flex w-16 shrink-0 items-center gap-1 hover:text-foreground" @click="handleSort('id')">
                     <span>ID</span>

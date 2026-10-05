@@ -1,4 +1,5 @@
 import { useRoutingSetup } from '@/composables/routing/useRoutingSetup';
+import { useNavigationSystems } from '@/composables/useNavigationSystems';
 import { findRoute } from '@/composables/useRoutingWorker';
 import { useShowMap } from '@/composables/useShowMap';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
@@ -11,7 +12,7 @@ import { wormholeMass } from '@/lib/wormholeMass';
 import { computed } from 'vue';
 
 /**
- * Patch 25: copy the route from the origin (the map's home, Daisy) to a system: the chain,
+ * Patch 25: copy the route from the origin (Routing's From; the map's home while it's empty) to a system: the chain,
  * the way out, the mass the whole way can take and its chokepoint (see routeBookmark).
  * Only on a map page.
  */
@@ -54,7 +55,10 @@ export function useRouteBookmark() {
         };
     }
 
-    async function routeTo(solarsystemId: number, originId: number | null = page.props.map.home_solarsystem_id): Promise<string | null> {
+    // Patch 25: the origin is the route planner's From (Routing box); home while it's empty.
+    const { fromSystemId } = useNavigationSystems();
+
+    async function routeTo(solarsystemId: number, originId: number | null = fromSystemId.value ?? page.props.map.home_solarsystem_id): Promise<string | null> {
         if (!originId) return null;
         if (originId === solarsystemId) return nameOf(originId);
         const { dynamicConnections, eveScoutConnections } = getConnections();
@@ -72,7 +76,7 @@ export function useRouteBookmark() {
     async function copyRouteTo(solarsystemId: number, who: string): Promise<void> {
         const text = await routeTo(solarsystemId);
         if (!text) {
-            toast.warning(`No route to ${who}`, { description: 'Nothing on the map or by gate links the origin to where they are.' });
+            toast.warning(`No route to ${who}`, { description: 'Nothing on the map or by gate links the origin (Routing → From, or home) to where they are.' });
             return;
         }
         try {

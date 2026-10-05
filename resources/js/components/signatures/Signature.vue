@@ -30,6 +30,7 @@ import usePermission from '@/composables/usePermission';
 import { useShowMap } from '@/composables/useShowMap';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
+import { shortName } from '@/lib/shortName';
 import { aliasesBelow, aliasForSlot, displayAlias, isIgnoredAlias, staticSlotFor, suggestAlias } from '@/lib/alias';
 import { autoCopy, clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
 import type { TArmAsOption } from '@/lib/arming';
@@ -795,13 +796,41 @@ const name_class = computed(() => {
     return 'text-muted-foreground';
 });
 
+/** Patch 25: the name squeezed into the Name column; the full name and details are on hover. */
+const name_short = computed(() => shortName(name_label.value));
+
 const name_title = computed(() => {
     if (!isWormhole.value) return undefined;
-    if (selected_connection.value) return 'Leads to this system';
-    if (signature.alias) return 'Number locked (copied or jumped)';
-    if (planned_alias) return 'The number this hole gets';
-    return 'Rage chain: numbered when it is jumped or copied';
+    const lines: string[] = [];
+    const target = selected_connection.value?.target;
+    if (target) {
+        const system = target.solarsystem;
+        lines.push(`${name_label.value} · leads to this system`);
+        if (system) {
+            lines.push([classLabel(system.class), system.name, system.region?.name].filter(Boolean).join(' · '));
+            const statics = (system.statics ?? []).map((wormhole) => `${wormhole.name} → ${wormhole.leads_to.toUpperCase()}`);
+            if (statics.length) lines.push(`Statics: ${statics.join(', ')}`);
+            if (system.effect?.name) lines.push(`Effect: ${system.effect.name}`);
+        }
+        return lines.join('\n');
+    }
+    lines.push(
+        signature.alias
+            ? `${name_label.value} · number locked (copied or jumped)`
+            : planned_alias
+              ? `${name_label.value} · the number this hole gets`
+              : 'Rage chain: numbered when it is jumped or copied',
+    );
+    const type = signature.signature_type;
+    if (type) lines.push(`${type.signature ?? type.name}${type.target_class ? ` → ${classLabel(type.target_class)}` : ''}${signature.is_static ? ' · Static' : ''}`);
+    else if (signature.is_static) lines.push('Static');
+    return lines.join('\n');
 });
+
+function classLabel(value: string | null | undefined): string {
+    if (!value) return '';
+    return /^\d+$/.test(value) ? `C${value}` : value.toUpperCase() === 'H' ? 'HS' : value.toUpperCase() === 'L' ? 'LS' : value.toUpperCase() === 'N' ? 'NS' : value.toUpperCase();
+}
 
 // The destination bookmark for this hole: the real connection target when one
 // is set, otherwise the auto-suggested next chain alias.
@@ -857,10 +886,10 @@ function copyBookmark() {
     >
         <!-- Name (patch 23: far left, two letters wide; hover for the full name) -->
         <div
-            class="w-[2ch] shrink-0 overflow-hidden font-mono text-xs whitespace-nowrap"
+            class="w-[5ch] shrink-0 overflow-hidden font-mono text-xs whitespace-nowrap"
             :title="armed_label ? `${name_title ?? ''} · ${armed_by_me ? 'armed by you: your next jump' : `armed by ${signature.armed_by_name ?? 'someone'}`}` : name_title"
         >
-            <span :class="name_class">{{ name_label }}</span>
+            <span :class="name_class">{{ name_short }}</span>
         </div>
 
         <!-- Patch 15: arm button (grey: arm and copy the bookmark; red: yours, click to disarm) -->

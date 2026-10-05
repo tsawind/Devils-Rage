@@ -116,6 +116,7 @@ const activeTab = ref('destinations');
                         :active_character="activeCharacter"
                         :character_status="characterStatus"
                         :destinations="map_navigation.destinations"
+                        :map_characters="map_characters"
                     />
                 </TabsContent>
 

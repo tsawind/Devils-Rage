@@ -7,6 +7,7 @@ import SolarsystemClass from '@/components/solarsystem/SolarsystemClass.vue';
 import SolarsystemEffect from '@/components/solarsystem/SolarsystemEffect.vue';
 import { Combobox, ComboboxAnchor } from '@/components/ui/combobox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCharacterPills } from '@/composables/useCharacterPills';
 import { useIgnoreList } from '@/composables/useIgnoreList';
 import { useNavigationSystems } from '@/composables/useNavigationSystems';
 import { usePath } from '@/composables/usePath';
@@ -19,12 +20,14 @@ import type { ConnectionType } from '@/routing/types';
 import type { TCharacter, TCharacterStatus } from '@/types/models';
 import type { TStaticSolarsystem } from '@/types/static-data';
 import { vElementHover } from '@vueuse/components';
-import { ArrowUpDown, MapPin, Navigation, Search, X } from 'lucide-vue-next';
+import { ArrowUpDown, Eraser, Home, MapPin, Navigation, Search, Users, X } from 'lucide-vue-next';
 import { ComboboxInput as RekaComboboxInput } from 'reka-ui';
 import { computed, ref, watch } from 'vue';
 
-const { map, solarsystems, selected_map_solarsystem, ignored_systems, active_character, character_status, destinations } = defineProps<{
+const { map, solarsystems, selected_map_solarsystem, ignored_systems, active_character, character_status, destinations, map_characters = null } = defineProps<{
     map: TMap;
+    /** Patch 25: for the Alt location chip. */
+    map_characters?: TCharacter[] | null;
     solarsystems: TStaticSolarsystem[];
     selected_map_solarsystem?: TResolvedSelectedMapSolarsystem | null;
     ignored_systems: number[];
@@ -41,7 +44,7 @@ const { setPath } = usePath();
 
 const search = ref('');
 
-const { fromSystemId, toSystemId, setFromSystem, setToSystem, clearFromSystem, clearToSystem, swapSystems } = useNavigationSystems();
+const { fromSystemId, toSystemId, setFromSystem, setToSystem, clearFromSystem, clearToSystem, clearAll, swapSystems } = useNavigationSystems();
 const { resolveSolarsystem } = useStaticSolarsystems();
 
 const fromSystem = computed(() => (fromSystemId.value ? resolveSolarsystem(fromSystemId.value) : null));
@@ -82,7 +85,20 @@ const activeCharacterSystem = useStaticSolarsystem(() => (active_character ? (ch
 
 const pinnedDestinations = computed(() => destinations.filter((dest) => dest.is_pinned).slice(0, 3));
 
-const hasQuickPicks = computed(() => selected_map_solarsystem?.solarsystem || activeCharacterSystem.value || pinnedDestinations.value.length > 0);
+// Patch 25: Home and your Alt pill's alt are always one click away (My location is the arrow chip).
+const homeSystem = useStaticSolarsystem(() => map.home_solarsystem_id ?? null);
+const { pillAltId } = useCharacterPills();
+const altSystem = useStaticSolarsystem(() => (pillAltId.value ? (map_characters?.find((character) => character.id === pillAltId.value)?.status?.solarsystem_id ?? null) : null));
+const fixedPicks = computed(() =>
+    [
+        homeSystem.value ? { key: 'home', system: homeSystem.value, icon: Home, title: 'Home' } : null,
+        altSystem.value ? { key: 'alt', system: altSystem.value, icon: Users, title: 'Where your alt is' } : null,
+    ].filter((pick): pick is NonNullable<typeof pick> => pick !== null),
+);
+
+const hasQuickPicks = computed(
+    () => fixedPicks.value.length > 0 || selected_map_solarsystem?.solarsystem || activeCharacterSystem.value || pinnedDestinations.value.length > 0,
+);
 
 const filteredSolarsystems = computed(() => {
     const query = search.value.trim().toLowerCase();
@@ -158,6 +174,19 @@ function clearTo() {
 </script>
 
 <template>
+    <!-- Patch 25: Clear: From and To empty again (route copies go from home again) -->
+    <div class="flex items-center justify-between border-b border-border/30 px-3 py-1">
+        <span class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">Route planner</span>
+        <button
+            type="button"
+            class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+            :disabled="!fromSystemId && !toSystemId"
+            title="Empty From and To (the origin goes back to home)"
+            @click="clearAll"
+        >
+            <Eraser class="size-3" /> Clear
+        </button>
+    </div>
     <!-- From system bar -->
     <div class="border-b border-border/30 px-3 py-2">
         <Combobox>
@@ -197,6 +226,20 @@ function clearTo() {
         </Combobox>
         <div v-if="hasQuickPicks" class="mt-1.5 flex flex-wrap gap-1.5">
             <button
+                v-for="pick in fixedPicks"
+                :key="pick.key"
+                :title="pick.title"
+                class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
+                @click="handleFromSystemSelect(pick.system)"
+            >
+                <component :is="pick.icon" class="size-3 shrink-0 text-muted-foreground" />
+                <SolarsystemClass :solarsystem_class="pick.system.class" class="shrink-0 text-[11px]" />
+                <span>
+                    <span v-if="aliases.get(pick.system.id)" class="mr-1">{{ aliases.get(pick.system.id) }}</span>
+                    <span :class="{ 'text-muted-foreground': aliases.get(pick.system.id) }">{{ pick.system.name }}</span>
+                </span>
+            </button>
+            <button
                 v-if="selected_map_solarsystem?.solarsystem"
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
                 @click="handleFromSystemSelect(selected_map_solarsystem.solarsystem)"
@@ -215,6 +258,7 @@ function clearTo() {
             <button
                 v-if="activeCharacterSystem"
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
+                title="My location"
                 @click="handleFromSystemSelect(activeCharacterSystem)"
             >
                 <SolarsystemClass :solarsystem_class="activeCharacterSystem.class" class="shrink-0 text-[11px]" />
@@ -286,6 +330,20 @@ function clearTo() {
         </Combobox>
         <div v-if="hasQuickPicks" class="mt-1.5 flex flex-wrap gap-1.5">
             <button
+                v-for="pick in fixedPicks"
+                :key="pick.key"
+                :title="pick.title"
+                class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
+                @click="handleToSystemSelect(pick.system)"
+            >
+                <component :is="pick.icon" class="size-3 shrink-0 text-muted-foreground" />
+                <SolarsystemClass :solarsystem_class="pick.system.class" class="shrink-0 text-[11px]" />
+                <span>
+                    <span v-if="aliases.get(pick.system.id)" class="mr-1">{{ aliases.get(pick.system.id) }}</span>
+                    <span :class="{ 'text-muted-foreground': aliases.get(pick.system.id) }">{{ pick.system.name }}</span>
+                </span>
+            </button>
+            <button
                 v-if="selected_map_solarsystem?.solarsystem"
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
                 @click="handleToSystemSelect(selected_map_solarsystem.solarsystem)"
@@ -304,6 +362,7 @@ function clearTo() {
             <button
                 v-if="activeCharacterSystem"
                 class="inline-flex items-center gap-1.5 rounded-md border border-border/40 bg-muted/30 px-2 py-1 text-xs transition-colors hover:bg-muted/60"
+                title="My location"
                 @click="handleToSystemSelect(activeCharacterSystem)"
             >
                 <SolarsystemClass :solarsystem_class="activeCharacterSystem.class" class="shrink-0 text-[11px]" />
