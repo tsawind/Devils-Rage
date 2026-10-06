@@ -9,8 +9,10 @@ import { useRallyRoute } from '@/composables/useRallyRoute';
 import { useRouteCopy } from '@/composables/useRouteCopy';
 import { useStaticSolarsystem, useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import { displayAlias } from '@/lib/alias';
-import { ClipboardCopy, Flag, Navigation, ShieldCheck } from 'lucide-vue-next';
-import { computed } from 'vue';
+import RallyPingDialog from '@/components/map/RallyPingDialog.vue';
+import usePermission from '@/composables/usePermission';
+import { ClipboardCopy, Flag, Megaphone, Navigation, ShieldCheck } from 'lucide-vue-next';
+import { computed, ref } from 'vue';
 
 /**
  * The rally point. Patch 26: top-middle of the map (the Main / Alt pills have the top-right),
@@ -35,6 +37,11 @@ const jumpCount = computed(() => {
 const resolvedRoute = computed(() => {
     return rallyRoute.value.map((step) => resolveSolarsystem(step.id));
 });
+
+// Patch 29: members and managers can ping Discord to form up here.
+const { canEdit } = usePermission();
+const pingOpen = ref(false);
+const where = computed(() => (rallyAlias.value ? `${rallyAlias.value} (${rallySolarsystem.value?.name ?? ''})` : (rallySolarsystem.value?.name ?? 'the rally point')));
 
 const action = 'flex size-8 items-center justify-center rounded-lg bg-pink-500/15 text-pink-500 transition-colors hover:bg-pink-500/30';
 </script>
@@ -89,6 +96,15 @@ const action = 'flex size-8 items-center justify-center rounded-lg bg-pink-500/1
                 </TooltipTrigger>
                 <TooltipContent side="bottom"><p class="text-xs">Copy the Safest route here</p></TooltipContent>
             </Tooltip>
+            <Tooltip v-if="canEdit">
+                <TooltipTrigger as-child>
+                    <button type="button" :class="action" aria-label="Ping Discord to form up here" @click="pingOpen = true">
+                        <Megaphone class="size-4" />
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p class="text-xs">Ping Discord: form up here</p></TooltipContent>
+            </Tooltip>
+            <RallyPingDialog v-if="canEdit" v-model:open="pingOpen" :map-slug="map.slug" :rally-solarsystem-id="rallySolarsystem.id" :where="where" />
         </div>
     </div>
 </template>

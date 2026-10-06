@@ -25,6 +25,8 @@ use App\Http\Resources\MapCardResource;
 use App\Http\Resources\MapResource;
 use App\Models\Map;
 use App\Models\MapSolarsystem;
+use App\Models\MapWebhook;
+use App\Models\MapWebhookRole;
 use App\Models\User;
 use App\Scopes\WithVisibleSolarsystems;
 use App\Services\EveScoutService;
@@ -79,6 +81,8 @@ final class MapController extends Controller
             // Patch 26: the map switcher (loaded when it is opened).
             'available_maps' => Inertia::optional(fn (): array => $this->availableMaps()),
             'can_create_map' => Gate::allows('create', Map::class),
+            // Patch 29: where a rally ping can go and who it can mention (loaded when the ping box opens).
+            'rally_ping_targets' => Inertia::optional(fn (): array => $this->rallyPingTargets($map)),
         ])
             ->with(new MapPermissionsFeature($map, $user))
             ->with($settingsFeature)
@@ -118,7 +122,26 @@ final class MapController extends Controller
             ->all();
     }
 
-        public function showByToken(string $token): RedirectResponse
+    /**
+     * The map's webhooks and saved mentions, for members and managers.
+     *
+     * @return array{webhooks: list<array{id: int, name: string}>, mentions: list<array{id: int, name: string}>}
+     */
+    private function rallyPingTargets(Map $map): array
+    {
+        if (! Gate::allows('update', $map)) {
+            return ['webhooks' => [], 'mentions' => []];
+        }
+
+        return [
+            'webhooks' => MapWebhook::query()->where('map_id', $map->id)->orderBy('name')->get(['id', 'name'])
+                ->map(fn (MapWebhook $webhook): array => ['id' => $webhook->id, 'name' => $webhook->name])->values()->all(),
+            'mentions' => MapWebhookRole::query()->where('map_id', $map->id)->orderBy('name')->get(['id', 'name'])
+                ->map(fn (MapWebhookRole $role): array => ['id' => $role->id, 'name' => $role->name])->values()->all(),
+        ];
+    }
+
+    public function showByToken(string $token): RedirectResponse
     {
         $map = Map::query()->where('share_token', $token)->firstOrFail();
 

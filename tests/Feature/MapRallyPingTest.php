@@ -1,0 +1,111 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Enums\MapWebhookMentionType;
+use App\Enums\Permission;
+use App\Models\Character;
+use App\Models\Map;
+use App\Models\MapAccess;
+use App\Models\MapWebhook;
+use App\Models\MapWebhookRole;
+use App\Models\User;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+
+use function Pest\Laravel\actingAs;
+
+function rallyPinger(Map $map, Permission $permission): User
+{
+    return User::factory()
+        ->has(Character::factory()->has(MapAccess::factory(['permission' => $permission])->for($map)))
+        ->create();
+}
+
+function rallyMap(): Map
+{
+    $map = Map::factory()->create();
+    makeSolarsystem(31000005);
+    $map->update(['rally_solarsystem_id' => 31000005]);
+
+    return $map;
+}
+
+beforeEach(function () {
+    Cache::flush();
+    Http::fake(['discord.com/*' => Http::response(null, 204)]);
+});
+
+it('patch 29: a member pings the rally point with a saved role mention, route and note', function () {
+    $map = rallyMap();
+    $webhook = MapWebhook::factory()->for($map)->create();
+    $role = MapWebhookRole::factory()->for($map)->create(['mention_type' => MapWebhookMentionType::Role, 'discord_role_id' => '42']);
+    actingAs(rallyPinger($map, Permission::Member));
+
+    $this->post(route('maps.rally-ping.store', $map), [
+        'map_webhook_id' => $webhook->id,
+        'mention' => 'role:'.$role->id,
+        'route' => 'Daisy → Bravo QAL → Delta',
+        'note' => 'Armor doctrine',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    Http::assertSent(function (Request $request): bool {
+        $embed = $request['embeds'][0];
+
+        return $request['content'] === '<@&42>'
+            && $request['allowed_mentions'] === ['roles' => ['42']]
+            && str_starts_with($embed['title'], '⚑ Form up at')
+            && $embed['fields'][0]['name'] === 'Route'
+            && $embed['fields'][1]['value'] === 'Armor doctrine';
+    });
+});
+
+it('patch 29: @here and no mention', function (string $mention, ?string $content) {
+    $map = rallyMap();
+    $webhook = MapWebhook::factory()->for($map)->create();
+    actingAs(rallyPinger($map, Permission::Manager));
+
+    $this->post(route('maps.rally-ping.store', $map), ['map_webhook_id' => $webhook->id, 'mention' => $mention])
+        ->assertSessionHasNoErrors();
+
+    Http::assertSent(fn (Request $request): bool => ($request['content'] ?? null) === $content);
+})->with([
+    'here' => ['here', '@here'],
+    'none' => ['none', null],
+]);
+
+it('patch 29: viewers cannot ping', function () {
+    $map = rallyMap();
+    $webhook = MapWebhook::factory()->for($map)->create();
+    actingAs(rallyPinger($map, Permission::Viewer));
+
+    $this->post(route('maps.rally-ping.store', $map), ['map_webhook_id' => $webhook->id, 'mention' => 'none'])->assertForbidden();
+
+    Http::assertNothingSent();
+});
+
+it('patch 29: a second ping within two minutes is refused', function () {
+    $map = rallyMap();
+    $webhook = MapWebhook::factory()->for($map)->create();
+    actingAs(rallyPinger($map, Permission::Member));
+
+    $this->post(route('maps.rally-ping.store', $map), ['map_webhook_id' => $webhook->id, 'mention' => 'none'])->assertSessionHasNoErrors();
+    $this->post(route('maps.rally-ping.store', $map), ['map_webhook_id' => $webhook->id, 'mention' => 'none'])->assertSessionHasErrors('map_webhook_id');
+
+    Http::assertSentCount(1);
+});
+
+it('patch 29: needs a rally point and a webhook from the same map', function () {
+    $map = Map::factory()->create();
+    $other = MapWebhook::factory()->create();
+    actingAs(rallyPinger($map, Permission::Member));
+
+    $this->post(route('maps.rally-ping.store', $map), ['map_webhook_id' => $other->id, 'mention' => 'none'])->assertSessionHasErrors('map_webhook_id');
+
+    $rally = rallyMap();
+    actingAs(rallyPinger($rally, Permission::Member));
+    $this->post(route('maps.rally-ping.store', $rally), ['map_webhook_id' => $other->id, 'mention' => 'none'])->assertNotFound();
+
+    Http::assertNothingSent();
+});

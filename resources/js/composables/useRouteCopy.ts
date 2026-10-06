@@ -251,6 +251,15 @@ export function useRouteCopy() {
         await writeOut(label, routeSummary(toInput(route)));
     }
 
+    /** Patch 29: the route text without copying it (the rally ping posts it); null when there is no route. */
+    async function routeText(kind: TRouteKind, to: number | null): Promise<string | null> {
+        const from = originId.value;
+        if (!from || !to) return null;
+        if (from === to) return nameOf(from);
+        const { route } = await routeFor(kind, from, to);
+        return route ? routeSummary(toInput(route)) : null;
+    }
+
     async function copyHoldFacts(): Promise<void> {
         const ends = endpoints();
         if (!ends) return;
@@ -268,5 +277,5 @@ export function useRouteCopy() {
         await writeOut('Scan plan (experimental)', scanPlan(scanCandidates(route), backup.noBackup));
     }
 
-    return { roundTrip, nameOf, copyRoute, copyHoldFacts, copyScanPlan, canCopy: computed(() => Boolean(originId.value && toSystemId.value)) };
+    return { roundTrip, nameOf, copyRoute, routeText, copyHoldFacts, copyScanPlan, canCopy: computed(() => Boolean(originId.value && toSystemId.value)) };
 }

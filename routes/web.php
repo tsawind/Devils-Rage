@@ -19,6 +19,7 @@ use App\Http\Controllers\LandingController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\MapAccessController;
 use App\Http\Controllers\MapAlertController;
+use App\Http\Controllers\MapRallyPingController;
 use App\Http\Controllers\MapAlertStateController;
 use App\Http\Controllers\MapBackgroundImageController;
 use App\Http\Controllers\MapBookmarkFormatController;
@@ -165,6 +166,7 @@ Route::middleware('auth')->group(function () {
     Route::resource('map-webhooks', MapWebhookController::class)->only(['store', 'update', 'destroy']);
     Route::resource('map-webhook-roles', MapWebhookRoleController::class)->only(['store', 'update', 'destroy']);
     Route::resource('map-alerts', MapAlertController::class)->only(['store', 'update', 'destroy']);
+    Route::post('maps/{map}/rally-ping', [MapRallyPingController::class, 'store'])->name('maps.rally-ping.store');
     Route::put('map-alerts/{map_alert}/state', [MapAlertStateController::class, 'update'])->name('map-alerts.state.update');
     Route::get('eve/ship-search', [EveSearchController::class, 'index'])->name('eve.ship-search');
     Route::get('maps/{map}/search', [MapSearchController::class, 'index'])->name('maps.search');
