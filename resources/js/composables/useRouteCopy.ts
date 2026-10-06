@@ -140,7 +140,7 @@ export function useRouteCopy() {
         return maxJump !== null && maxJump <= 5_000_000;
     }
 
-    function toInput(route: RouteStep[], roundTripOverride?: boolean): TRouteInput {
+    function toInput(route: RouteStep[], roundTripOverride?: boolean, kind: TRouteKind | null = null): TRouteInput {
         const steps: TRouteStep[] = route.map((step) => ({
             name: nameOf(step.id),
             mapped: bySolarsystem.value.has(step.id),
@@ -154,7 +154,7 @@ export function useRouteCopy() {
             if (via === 'stargate' || !connection || connection.type === 'stargate') return { via: 'stargate', hole: null };
             return { via, hole: holeOf(connection, from) };
         });
-        return { steps, hops, roundTrip: roundTripOverride ?? roundTrip.value, now: new Date() };
+        return { steps, hops, roundTrip: roundTripOverride ?? roundTrip.value, now: new Date(), kind: kind ? ROUTE_KIND_LABELS[kind] : null };
     }
 
     const sameEdge = (edge: RoutingConnection, a: number, b: number) => (edge.from === a && edge.to === b) || (edge.from === b && edge.to === a);
@@ -252,7 +252,7 @@ export function useRouteCopy() {
             toast.warning(`No route to ${who ?? nameOf(ends.to)}`, { description: 'Nothing on the map or by gate links From (or home) to it.' });
             return;
         }
-        await writeOut(label, routeSummary(toInput(route)));
+        await writeOut(label, routeSummary(toInput(route, undefined, kind)));
     }
 
     /** Patch 29: the route text without copying it (the rally ping posts it); null when there is no route. */
@@ -261,7 +261,7 @@ export function useRouteCopy() {
         if (!from || !to) return null;
         if (from === to) return nameOf(from);
         const { route } = await routeFor(kind, from, to);
-        return route ? routeSummary(toInput(route)) : null;
+        return route ? routeSummary(toInput(route, undefined, kind)) : null;
     }
 
     /**
@@ -276,7 +276,7 @@ export function useRouteCopy() {
         for (const kind of picks.kinds) {
             const { route, noBackup } = await routeFor(kind, from, to);
             const title = `${ROUTE_KIND_LABELS[kind]} route`;
-            if (route) sections.push({ title, text: routeSummary(toInput(route, picks.roundTrip)) });
+            if (route) sections.push({ title, text: routeSummary(toInput(route, picks.roundTrip, kind)) });
             else sections.push({ title, text: noBackup ? 'No backup: every other way shares a hole with the first route.' : 'No route found.' });
         }
         if (picks.hold || picks.scan) {

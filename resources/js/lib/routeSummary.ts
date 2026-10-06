@@ -43,6 +43,8 @@ export type TRouteInput = {
     /** In and back out the same way: half the mass. */
     roundTrip: boolean;
     now: Date;
+    /** Patch 29d: which route this is ("Safest", "Shortest backup"), named at the front of the copy. */
+    kind?: string | null;
 };
 
 type THoleOnRoute = { index: number; label: string; hole: TRouteHole; estimate: TMassEstimate | null };
@@ -85,8 +87,12 @@ export function condenseRoute(steps: readonly TRouteStep[], hops: readonly TRout
         if (step.mapped && up !== nextUp) keep[index] = true; // turns from home-ward to out-ward (or back)
     }
     const parts: string[] = [];
+    let previous = -1;
     steps.forEach((step, index) => {
         if (!keep[index]) return;
+        // Patch 29d: a stretch of k-space by gate says how many jumps it is ("Niarja → 7j → Amarr").
+        if (previous >= 0 && hops.slice(previous, index).every((hop) => hop?.via === 'stargate')) parts.push(`${index - previous}j`);
+        previous = index;
         // Reached by going home-ward: the bookmark there is a way-back one (*).
         const homeward = index > 0 && step.mapped && depth(index) < depth(index - 1);
         const hop = hops[index];
@@ -176,7 +182,9 @@ function riskText(entry: THoleOnRoute, now: Date): string | null {
 
 /** The whole copy for a route, cut to fit FLEET_RULES.maxCopyLength (extras go first, the route stays). */
 export function routeSummary(input: TRouteInput, extra: string | null = null): string {
-    const route = condenseRoute(input.steps, input.hops);
+    // Patch 29d: "Safest 12j: …" (the kind when known, and the total jumps).
+    const jumps = Math.max(0, input.steps.length - 1);
+    const route = `${input.kind ? `${input.kind} ` : ''}${jumps}j: ${condenseRoute(input.steps, input.hops)}`;
     const holes = holesOnRoute(input);
     const mass = massLine(input, holes);
     const chokes = chokepoints(holes).map(chokeText);

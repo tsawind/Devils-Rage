@@ -29,21 +29,22 @@ const { pingSections } = useRouteCopy();
 
 /**
  * Patch 29c: every route copy and prediction can go in the ping. Defaults: Safest and its
- * backup on (the safe way in, and the way if a hole goes); the rest off. Ticks are remembered.
+ * backup on (patch 29d: Shortest too, listed first); the rest off. Ticks are remembered.
  */
 type TPick = 'default' | 'shortest' | 'shortestBackup' | 'safest' | 'safestBackup' | 'roundTrip' | 'hold' | 'scan';
 const PICKS: { key: TPick; label: string; hint: string; experimental?: boolean }[] = [
-    { key: 'safest', label: 'Safest route', hint: 'Frigate holes skipped' },
-    { key: 'safestBackup', label: 'Safest backup', hint: 'If a hole on it goes' },
     { key: 'shortest', label: 'Shortest route', hint: 'Fewest jumps' },
+    { key: 'safest', label: 'Safest route', hint: 'Frigate holes skipped' },
     { key: 'shortestBackup', label: 'Shortest backup', hint: 'If a hole on it goes' },
+    { key: 'safestBackup', label: 'Safest backup', hint: 'If a hole on it goes' },
     { key: 'default', label: 'Default route', hint: 'Your route settings' },
     { key: 'roundTrip', label: 'In and back out', hint: '½ mass in the fleet size' },
     { key: 'hold', label: 'Will it hold?', hint: 'Mass and EOL facts', experimental: true },
     { key: 'scan', label: 'Scan plan', hint: 'Where to scan if it collapses', experimental: true },
 ];
-const DEFAULT_PICKS: TPick[] = ['safest', 'safestBackup'];
-const PICKS_KEY = 'rally-ping-picks';
+// Patch 29d: Shortest and Safest first and on (plus the Safest backup).
+const DEFAULT_PICKS: TPick[] = ['shortest', 'safest', 'safestBackup'];
+const PICKS_KEY = 'rally-ping-picks-v2';
 function readPicks(): TPick[] {
     try {
         const saved = JSON.parse(localStorage.getItem(PICKS_KEY) ?? 'null');
@@ -69,7 +70,7 @@ const sections = ref<{ title: string; text: string }[]>([]);
 const building = ref(false);
 async function buildSections(): Promise<void> {
     building.value = true;
-    const kinds = (['safest', 'safestBackup', 'shortest', 'shortestBackup', 'default'] as const).filter((kind) => picked.value.has(kind));
+    const kinds = (['shortest', 'safest', 'shortestBackup', 'safestBackup', 'default'] as const).filter((kind) => picked.value.has(kind));
     sections.value = await pingSections(rallySolarsystemId, { kinds, roundTrip: picked.value.has('roundTrip'), hold: picked.value.has('hold'), scan: picked.value.has('scan') });
     building.value = false;
 }

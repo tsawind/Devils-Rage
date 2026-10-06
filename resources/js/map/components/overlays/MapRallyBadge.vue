@@ -11,7 +11,7 @@ import { useStaticSolarsystem, useStaticSolarsystems } from '@/composables/useSt
 import { displayAlias } from '@/lib/alias';
 import RallyPingDialog from '@/components/map/RallyPingDialog.vue';
 import usePermission from '@/composables/usePermission';
-import { ClipboardCopy, Flag, Megaphone, Navigation, ShieldCheck } from 'lucide-vue-next';
+import { ClipboardCopy, Flag, Megaphone, Navigation, ShieldCheck, Zap } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 /**
@@ -87,6 +87,14 @@ const action = 'flex size-8 items-center justify-center rounded-lg bg-pink-500/1
                     </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom"><p class="text-xs">Copy the route here for chat (from Routing's From, or home)</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+                <TooltipTrigger as-child>
+                    <button type="button" :class="action" aria-label="Copy the shortest route to the rally point" @click="copyRoute('shortest', rallySolarsystem.id, 'the rally point (shortest)')">
+                        <Zap class="size-4" />
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p class="text-xs">Copy the Shortest route here</p></TooltipContent>
             </Tooltip>
             <Tooltip>
                 <TooltipTrigger as-child>

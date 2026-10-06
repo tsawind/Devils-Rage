@@ -26,12 +26,12 @@ describe('patch 26: the route line', () => {
 
     it('out to k-space: the way out with its sig, the gate entry and the destination', () => {
         const steps = [step('Daisy', 0), step('Alpha', 1), step('A121', 2), step('Niarja', null), step('Ahbazon', null), step('Amarr', null)];
-        expect(condenseRoute(steps, [wh(), wh(), wh({ nearSignature: 'ABC-123' }), gate, gate])).toBe('Daisy → A121 (ABC) → Niarja → Amarr');
+        expect(condenseRoute(steps, [wh(), wh(), wh({ nearSignature: 'ABC-123' }), gate, gate])).toBe('Daisy → A121 (ABC) → Niarja → 2j → Amarr');
     });
 
     it('coming home: the * way-back bookmarks where it matters', () => {
         const steps = [step('Amarr', null), step('Badivefi', null), step('1112', 4), step('111', 3), step('11', 2), step('A121-1', 1), step('Alpha', 0)];
-        expect(condenseRoute(steps, [gate, wh(), wh(), wh(), wh(), wh()])).toBe('Amarr → Badivefi → *1112 → *Alpha');
+        expect(condenseRoute(steps, [gate, wh(), wh(), wh(), wh(), wh()])).toBe('Amarr → 1j → Badivefi → *1112 → *Alpha');
     });
 
     it('over the top of the chain: the turning point is written down', () => {
@@ -77,7 +77,7 @@ describe('patch 26: size, mass, chokepoints and risks', () => {
         const long = Array.from({ length: 120 }, (_, index) => step(`Very-Long-Name-${index}`, null));
         const text = routeSummary({ steps: long, hops: long.slice(1).map(() => gate), roundTrip: false, now });
         expect(text.length).toBeLessThanOrEqual(FLEET_RULES.maxCopyLength);
-        expect(text.startsWith('Very-Long-Name-0')).toBe(true);
+        expect(text.startsWith('119j: Very-Long-Name-0')).toBe(true);
     });
 });
 
@@ -107,5 +107,19 @@ describe('patch 26: experimental predictions', () => {
             true,
         );
         expect(text).toBe('No backup route. Scan (experimental): A12 (3 unscanned sigs), A1 (C3 static not found), Daisy (2 unscanned sigs)');
+    });
+});
+
+describe('patch 29d: jump counts and the route kind', () => {
+    it('names the kind and the total jumps at the front', () => {
+        const steps = [step('Daisy', 0), step('Alpha', 1), step('A1', 2), step('Jita', null), step('Perimeter', null)];
+        const text = routeSummary({ steps, hops: [wh(), wh(), wh(), gate], roundTrip: false, now, kind: 'Safest' });
+        expect(text.startsWith('Safest 4j: Daisy → A1 → Jita → 1j → Perimeter')).toBe(true);
+    });
+
+    it('counts a long gate stretch', () => {
+        const kspace = Array.from({ length: 8 }, (_, index) => step(`K${index}`, null));
+        const steps = [step('Daisy', 0), ...kspace];
+        expect(condenseRoute(steps, [wh(), ...kspace.slice(1).map(() => gate)])).toBe('Daisy → K0 → 7j → K7');
     });
 });
