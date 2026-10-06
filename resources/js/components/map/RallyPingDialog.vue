@@ -52,7 +52,7 @@ watch(
                 const last = readLast();
                 const webhooks = targets.value.webhooks;
                 form.map_webhook_id = webhooks.find((webhook) => webhook.id === last.webhook)?.id ?? webhooks[0]?.id ?? null;
-                const mentionOk = last.mention === 'none' || last.mention === 'here' || targets.value.mentions.some((mention) => `role:${mention.id}` === last.mention);
+                const mentionOk = ['none', 'here', 'everyone'].includes(last.mention ?? '') || targets.value.mentions.some((mention) => `role:${mention.id}` === last.mention);
                 form.mention = mentionOk && last.mention ? last.mention : 'none';
             },
         });
@@ -110,6 +110,7 @@ function send(): void {
                             <SelectContent>
                                 <SelectItem value="none">No mention</SelectItem>
                                 <SelectItem value="here">@here</SelectItem>
+                                <SelectItem value="everyone">@everyone</SelectItem>
                                 <SelectItem v-for="mention in targets.mentions" :key="mention.id" :value="`role:${mention.id}`">@{{ mention.name }}</SelectItem>
                             </SelectContent>
                         </Select>

@@ -29,7 +29,7 @@ final class SendRallyPingRequest extends FormRequest
     {
         return [
             'map_webhook_id' => ['required', 'integer'],
-            'mention' => ['required', 'string', 'regex:/^(none|here|role:\d+)$/'],
+            'mention' => ['required', 'string', 'regex:/^(none|here|everyone|role:\d+)$/'],
             'route' => ['nullable', 'string', 'max:900'],
             'note' => ['nullable', 'string', 'max:300'],
         ];

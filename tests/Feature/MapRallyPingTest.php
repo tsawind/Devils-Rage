@@ -61,7 +61,7 @@ it('patch 29: a member pings the rally point with a saved role mention, route an
     });
 });
 
-it('patch 29: @here and no mention', function (string $mention, ?string $content) {
+it('patch 29: @here, @everyone and no mention', function (string $mention, ?string $content) {
     $map = rallyMap();
     $webhook = MapWebhook::factory()->for($map)->create();
     actingAs(rallyPinger($map, Permission::Manager));
@@ -72,6 +72,7 @@ it('patch 29: @here and no mention', function (string $mention, ?string $content
     Http::assertSent(fn (Request $request): bool => ($request['content'] ?? null) === $content);
 })->with([
     'here' => ['here', '@here'],
+    'everyone' => ['everyone', '@everyone'],
     'none' => ['none', null],
 ]);
 

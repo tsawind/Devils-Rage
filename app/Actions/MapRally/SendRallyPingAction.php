@@ -18,7 +18,7 @@ use Throwable;
 
 /**
  * Patch 29: "Form up at the rally point" posted to a Discord webhook, with the
- * pinger's pick of mention (a saved role, @here, or none), a route and a note.
+ * pinger's pick of mention (a saved role, @here, @everyone, or none), a route and a note.
  * One ping per map every two minutes.
  */
 final readonly class SendRallyPingAction
@@ -107,8 +107,8 @@ final readonly class SendRallyPingAction
      */
     private function mention(Map $map, string $mention): ?array
     {
-        if ($mention === 'here') {
-            return ['content' => '@here', 'allowed_mentions' => ['parse' => ['everyone']]];
+        if ($mention === 'here' || $mention === 'everyone') {
+            return ['content' => '@'.$mention, 'allowed_mentions' => ['parse' => ['everyone']]];
         }
 
         if (str_starts_with($mention, 'role:')) {
