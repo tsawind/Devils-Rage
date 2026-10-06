@@ -30,7 +30,9 @@ final class SendRallyPingRequest extends FormRequest
         return [
             'map_webhook_id' => ['required', 'integer'],
             'mention' => ['required', 'string', 'regex:/^(none|here|everyone|role:\d+)$/'],
-            'route' => ['nullable', 'string', 'max:900'],
+            'sections' => ['nullable', 'array', 'max:8'],
+            'sections.*.title' => ['required', 'string', 'max:60'],
+            'sections.*.text' => ['required', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:300'],
         ];
     }
@@ -44,6 +46,8 @@ final class SendRallyPingRequest extends FormRequest
             'map_webhook_id.required' => 'Pick a channel to ping.',
             'mention.regex' => 'Pick who to mention.',
             'note.max' => 'Keep the note under 300 characters.',
+            'sections.max' => 'Too many sections for one ping.',
+            'sections.*.text.max' => 'A section is too long for Discord.',
         ];
     }
 }

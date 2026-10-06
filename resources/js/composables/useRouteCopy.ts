@@ -29,6 +29,10 @@ export const ROUTE_KIND_LABELS: Record<TRouteKind, string> = {
     safestBackup: 'Safest backup',
 };
 
+/** Patch 29c: what a rally ping includes. */
+export type TPingPicks = { kinds: TRouteKind[]; roundTrip: boolean; hold: boolean; scan: boolean };
+export type TPingSection = { title: string; text: string };
+
 const ROUND_TRIP_KEY = 'route-copy-round-trip';
 function readRoundTrip(): boolean {
     try {
@@ -136,7 +140,7 @@ export function useRouteCopy() {
         return maxJump !== null && maxJump <= 5_000_000;
     }
 
-    function toInput(route: RouteStep[]): TRouteInput {
+    function toInput(route: RouteStep[], roundTripOverride?: boolean): TRouteInput {
         const steps: TRouteStep[] = route.map((step) => ({
             name: nameOf(step.id),
             mapped: bySolarsystem.value.has(step.id),
@@ -150,7 +154,7 @@ export function useRouteCopy() {
             if (via === 'stargate' || !connection || connection.type === 'stargate') return { via: 'stargate', hole: null };
             return { via, hole: holeOf(connection, from) };
         });
-        return { steps, hops, roundTrip: roundTrip.value, now: new Date() };
+        return { steps, hops, roundTrip: roundTripOverride ?? roundTrip.value, now: new Date() };
     }
 
     const sameEdge = (edge: RoutingConnection, a: number, b: number) => (edge.from === a && edge.to === b) || (edge.from === b && edge.to === a);
@@ -260,6 +264,32 @@ export function useRouteCopy() {
         return route ? routeSummary(toInput(route)) : null;
     }
 
+    /**
+     * Patch 29c: the sections a rally ping posts (one per ticked box), from Routing's From (or
+     * home) to `to`. `roundTrip` here is the ping's own box, not the copy buttons' setting.
+     */
+    async function pingSections(to: number | null, picks: TPingPicks): Promise<TPingSection[]> {
+        const from = originId.value;
+        if (!from || !to) return [];
+        if (from === to) return [{ title: 'Route', text: `${nameOf(from)} (you are there)` }];
+        const sections: TPingSection[] = [];
+        for (const kind of picks.kinds) {
+            const { route, noBackup } = await routeFor(kind, from, to);
+            const title = `${ROUTE_KIND_LABELS[kind]} route`;
+            if (route) sections.push({ title, text: routeSummary(toInput(route, picks.roundTrip)) });
+            else sections.push({ title, text: noBackup ? 'No backup: every other way shares a hole with the first route.' : 'No route found.' });
+        }
+        if (picks.hold || picks.scan) {
+            const { route } = await routeFor('default', from, to);
+            if (route && picks.hold) sections.push({ title: 'Will it hold? (experimental)', text: holdFacts(toInput(route, picks.roundTrip)) });
+            if (route && picks.scan) {
+                const backup = await routeFor('shortestBackup', from, to);
+                sections.push({ title: 'Scan plan (experimental)', text: scanPlan(scanCandidates(route), backup.noBackup) });
+            }
+        }
+        return sections;
+    }
+
     async function copyHoldFacts(): Promise<void> {
         const ends = endpoints();
         if (!ends) return;
@@ -277,5 +307,5 @@ export function useRouteCopy() {
         await writeOut('Scan plan (experimental)', scanPlan(scanCandidates(route), backup.noBackup));
     }
 
-    return { roundTrip, nameOf, copyRoute, routeText, copyHoldFacts, copyScanPlan, canCopy: computed(() => Boolean(originId.value && toSystemId.value)) };
+    return { roundTrip, nameOf, copyRoute, routeText, pingSections, copyHoldFacts, copyScanPlan, canCopy: computed(() => Boolean(originId.value && toSystemId.value)) };
 }

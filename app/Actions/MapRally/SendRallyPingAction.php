@@ -18,7 +18,8 @@ use Throwable;
 
 /**
  * Patch 29: "Form up at the rally point" posted to a Discord webhook, with the
- * pinger's pick of mention (a saved role, @here, @everyone, or none), a route and a note.
+ * pinger's pick of mention (a saved role, @here, @everyone, or none), the ticked
+ * routes and predictions, and a note.
  * One ping per map every two minutes.
  */
 final readonly class SendRallyPingAction
@@ -27,8 +28,10 @@ final readonly class SendRallyPingAction
 
     public const int COOLDOWN_SECONDS = 120;
 
+    private const int MAX_SECTIONS_LENGTH = 5000;
+
     /**
-     * @param  array{map_webhook_id: int, mention: string, route?: string|null, note?: string|null}  $data
+     * @param  array{map_webhook_id: int, mention: string, sections?: list<array{title: string, text: string}>|null, note?: string|null}  $data
      *
      * @throws ValidationException
      */
@@ -61,7 +64,7 @@ final readonly class SendRallyPingAction
     }
 
     /**
-     * @param  array{map_webhook_id: int, mention: string, route?: string|null, note?: string|null}  $data
+     * @param  array{map_webhook_id: int, mention: string, sections?: list<array{title: string, text: string}>|null, note?: string|null}  $data
      * @return array<string, mixed>
      */
     public function payload(Map $map, User $user, array $data): array
@@ -75,8 +78,17 @@ final readonly class SendRallyPingAction
         $where = filled($alias) ? sprintf('%s (%s)', mb_trim((string) $alias), $name) : $name;
 
         $fields = [];
-        if (filled($data['route'] ?? null)) {
-            $fields[] = ['name' => 'Route', 'value' => sprintf("```\n%s\n```", $data['route'])];
+        $length = 0;
+        // Discord allows 6000 characters per embed: sections past ~5000 are left out.
+        foreach ($data['sections'] ?? [] as $section) {
+            $value = sprintf("```\n%s\n```", $section['text']);
+            if ($length + mb_strlen($value) > self::MAX_SECTIONS_LENGTH) {
+                $fields[] = ['name' => 'More', 'value' => 'Too long for one ping: open the map for the rest.'];
+
+                break;
+            }
+            $length += mb_strlen($value);
+            $fields[] = ['name' => $section['title'], 'value' => $value];
         }
         if (filled($data['note'] ?? null)) {
             $fields[] = ['name' => 'Note', 'value' => (string) $data['note']];

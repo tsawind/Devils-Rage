@@ -14,7 +14,7 @@ import { computed, ref, watch } from 'vue';
 
 /**
  * Patch 29: "Form up at the rally point" to Discord. Pick the channel (a webhook from the
- * map's Discord settings) and who to mention each time; the Safest route and a note go with it.
+ * map's Discord settings) and who to mention each time; routes, predictions and a note go with it.
  */
 type TTarget = { id: number; name: string };
 type TTargets = { webhooks: TTarget[]; mentions: TTarget[] };
@@ -25,48 +25,78 @@ const { mapSlug, rallySolarsystemId, where } = defineProps<{ mapSlug: string; ra
 const page = usePage<AppPageProps<{ rally_ping_targets?: TTargets }>>();
 const targets = computed<TTargets>(() => page.props.rally_ping_targets ?? { webhooks: [], mentions: [] });
 const loading = ref(false);
-const { routeText } = useRouteCopy();
-const route = ref<string | null>(null);
-const includeRoute = ref(true);
+const { pingSections } = useRouteCopy();
 
-const LAST_KEY = 'rally-ping-last';
-function readLast(): { webhook?: number; mention?: string } {
+/**
+ * Patch 29c: every route copy and prediction can go in the ping. Defaults: Safest and its
+ * backup on (the safe way in, and the way if a hole goes); the rest off. Ticks are remembered.
+ */
+type TPick = 'default' | 'shortest' | 'shortestBackup' | 'safest' | 'safestBackup' | 'roundTrip' | 'hold' | 'scan';
+const PICKS: { key: TPick; label: string; hint: string; experimental?: boolean }[] = [
+    { key: 'safest', label: 'Safest route', hint: 'Frigate holes skipped' },
+    { key: 'safestBackup', label: 'Safest backup', hint: 'If a hole on it goes' },
+    { key: 'shortest', label: 'Shortest route', hint: 'Fewest jumps' },
+    { key: 'shortestBackup', label: 'Shortest backup', hint: 'If a hole on it goes' },
+    { key: 'default', label: 'Default route', hint: 'Your route settings' },
+    { key: 'roundTrip', label: 'In and back out', hint: '½ mass in the fleet size' },
+    { key: 'hold', label: 'Will it hold?', hint: 'Mass and EOL facts', experimental: true },
+    { key: 'scan', label: 'Scan plan', hint: 'Where to scan if it collapses', experimental: true },
+];
+const DEFAULT_PICKS: TPick[] = ['safest', 'safestBackup'];
+const PICKS_KEY = 'rally-ping-picks';
+function readPicks(): TPick[] {
     try {
-        return JSON.parse(localStorage.getItem(LAST_KEY) ?? '{}');
+        const saved = JSON.parse(localStorage.getItem(PICKS_KEY) ?? 'null');
+        return Array.isArray(saved) ? saved.filter((key): key is TPick => PICKS.some((pick) => pick.key === key)) : DEFAULT_PICKS;
     } catch {
-        return {};
+        return DEFAULT_PICKS;
     }
 }
-
-const form = useForm({ map_webhook_id: null as number | null, mention: 'none', route: '' as string | null, note: '' });
-
-watch(
-    open,
-    async (isOpen) => {
-        if (!isOpen) return;
-        loading.value = true;
-        router.reload({
-            only: ['rally_ping_targets'],
-            onFinish: () => {
-                loading.value = false;
-                const last = readLast();
-                const webhooks = targets.value.webhooks;
-                form.map_webhook_id = webhooks.find((webhook) => webhook.id === last.webhook)?.id ?? webhooks[0]?.id ?? null;
-                const mentionOk = ['none', 'here', 'everyone'].includes(last.mention ?? '') || targets.value.mentions.some((mention) => `role:${mention.id}` === last.mention);
-                form.mention = mentionOk && last.mention ? last.mention : 'none';
-            },
-        });
-        route.value = await routeText('safest', rallySolarsystemId);
-    },
-);
-
-function send(): void {
-    form.route = includeRoute.value ? route.value : null;
+const picked = ref<Set<TPick>>(new Set(readPicks()));
+function setPick(key: TPick, on: boolean): void {
+    const next = new Set(picked.value);
+    if (on) next.add(key);
+    else next.delete(key);
+    picked.value = next;
     try {
-        localStorage.setItem(LAST_KEY, JSON.stringify({ webhook: form.map_webhook_id, mention: form.mention }));
+        localStorage.setItem(PICKS_KEY, JSON.stringify([...next]));
     } catch {
         /* remembered only when the browser allows it */
     }
+}
+
+const sections = ref<{ title: string; text: string }[]>([]);
+const building = ref(false);
+async function buildSections(): Promise<void> {
+    building.value = true;
+    const kinds = (['safest', 'safestBackup', 'shortest', 'shortestBackup', 'default'] as const).filter((kind) => picked.value.has(kind));
+    sections.value = await pingSections(rallySolarsystemId, { kinds, roundTrip: picked.value.has('roundTrip'), hold: picked.value.has('hold'), scan: picked.value.has('scan') });
+    building.value = false;
+}
+watch(picked, () => {
+    if (open.value) buildSections();
+});
+
+const form = useForm({ map_webhook_id: null as number | null, mention: 'everyone', sections: [] as { title: string; text: string }[], note: '' });
+
+/** Defaults: the channel with "ping" in its name (else the first) and @everyone. */
+watch(open, (isOpen) => {
+    if (!isOpen) return;
+    loading.value = true;
+    router.reload({
+        only: ['rally_ping_targets'],
+        onFinish: () => {
+            loading.value = false;
+            const webhooks = targets.value.webhooks;
+            form.map_webhook_id = (webhooks.find((webhook) => /ping/i.test(webhook.name)) ?? webhooks[0])?.id ?? null;
+            form.mention = 'everyone';
+        },
+    });
+    buildSections();
+});
+
+function send(): void {
+    form.sections = sections.value;
     form.submit(MapRallyPingController.store(mapSlug), {
         preserveScroll: true,
         preserveState: true,
@@ -81,7 +111,7 @@ function send(): void {
 
 <template>
     <Dialog v-model:open="open">
-        <DialogContent class="sm:max-w-lg">
+        <DialogContent class="sm:max-w-xl">
             <DialogHeader>
                 <DialogTitle>📣 Ping: form up at {{ where }}</DialogTitle>
                 <DialogDescription>Posts to Discord. One ping per map every two minutes.</DialogDescription>
@@ -117,14 +147,28 @@ function send(): void {
                     </div>
                 </div>
 
-                <div class="grid gap-1.5">
-                    <label class="flex cursor-pointer items-center gap-2 text-sm">
-                        <Checkbox :model-value="includeRoute" @update:model-value="(value) => (includeRoute = value === true)" />
-                        Include the Safest route
-                    </label>
-                    <pre v-if="includeRoute" class="max-h-24 overflow-y-auto rounded-md bg-muted/40 p-2 font-mono text-[11px] whitespace-pre-wrap">{{
-                        route ?? 'No route found from Routing\'s From (or home).'
-                    }}</pre>
+                <div class="grid gap-2">
+                    <Label>Include</Label>
+                    <div class="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                        <label v-for="pick in PICKS" :key="pick.key" class="flex cursor-pointer items-start gap-2 text-sm" :title="pick.hint">
+                            <Checkbox class="mt-0.5" :model-value="picked.has(pick.key)" @update:model-value="(value) => setPick(pick.key, value === true)" />
+                            <span class="leading-tight">
+                                {{ pick.label }}
+                                <span v-if="pick.experimental" class="text-[10px] font-semibold text-amber-400 uppercase">exp</span>
+                                <span class="block text-[11px] text-muted-foreground">{{ pick.hint }}</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="max-h-40 overflow-y-auto rounded-md bg-muted/40 p-2 font-mono text-[11px]">
+                        <p v-if="building" class="text-muted-foreground">Working out the routes…</p>
+                        <p v-else-if="sections.length === 0" class="text-muted-foreground">Nothing ticked (or no route from Routing's From / home).</p>
+                        <template v-else>
+                            <div v-for="section in sections" :key="section.title" class="mb-1.5 last:mb-0">
+                                <p class="font-sans font-semibold">{{ section.title }}</p>
+                                <p class="whitespace-pre-wrap">{{ section.text }}</p>
+                            </div>
+                        </template>
+                    </div>
                 </div>
 
                 <div class="grid gap-1.5">
@@ -132,11 +176,11 @@ function send(): void {
                     <Textarea id="rally-note" v-model="form.note" maxlength="300" rows="2" placeholder="Doctrine, time, who brings what…" />
                 </div>
 
-                <InputError :message="form.errors.map_webhook_id ?? form.errors.mention ?? form.errors.note ?? form.errors.route" />
+                <InputError :message="form.errors.map_webhook_id ?? form.errors.mention ?? form.errors.note ?? form.errors.sections" />
 
                 <DialogFooter>
                     <Button type="button" variant="ghost" @click="open = false">Cancel</Button>
-                    <Button type="submit" class="bg-pink-600 text-white hover:bg-pink-500" :disabled="form.processing || !form.map_webhook_id">Send ping</Button>
+                    <Button type="submit" class="bg-pink-600 text-white hover:bg-pink-500" :disabled="form.processing || building || !form.map_webhook_id">Send ping</Button>
                 </DialogFooter>
             </form>
         </DialogContent>

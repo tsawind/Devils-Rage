@@ -37,7 +37,7 @@ beforeEach(function () {
     Http::fake(['discord.com/*' => Http::response(null, 204)]);
 });
 
-it('patch 29: a member pings the rally point with a saved role mention, route and note', function () {
+it('patch 29: a member pings the rally point with a saved role mention, sections and note', function () {
     $map = rallyMap();
     $webhook = MapWebhook::factory()->for($map)->create();
     $role = MapWebhookRole::factory()->for($map)->create(['mention_type' => MapWebhookMentionType::Role, 'discord_role_id' => '42']);
@@ -46,7 +46,10 @@ it('patch 29: a member pings the rally point with a saved role mention, route an
     $this->post(route('maps.rally-ping.store', $map), [
         'map_webhook_id' => $webhook->id,
         'mention' => 'role:'.$role->id,
-        'route' => 'Daisy → Bravo QAL → Delta',
+        'sections' => [
+            ['title' => 'Safest route', 'text' => 'Daisy → Bravo QAL → Delta'],
+            ['title' => 'Will it hold? (experimental)', 'text' => 'H296: 2.1b left'],
+        ],
         'note' => 'Armor doctrine',
     ])->assertRedirect()->assertSessionHasNoErrors();
 
@@ -56,8 +59,9 @@ it('patch 29: a member pings the rally point with a saved role mention, route an
         return $request['content'] === '<@&42>'
             && $request['allowed_mentions'] === ['roles' => ['42']]
             && str_starts_with($embed['title'], '⚑ Form up at')
-            && $embed['fields'][0]['name'] === 'Route'
-            && $embed['fields'][1]['value'] === 'Armor doctrine';
+            && $embed['fields'][0]['name'] === 'Safest route'
+            && $embed['fields'][1]['name'] === 'Will it hold? (experimental)'
+            && $embed['fields'][2]['value'] === 'Armor doctrine';
     });
 });
 
@@ -109,4 +113,35 @@ it('patch 29: needs a rally point and a webhook from the same map', function () 
     $this->post(route('maps.rally-ping.store', $rally), ['map_webhook_id' => $other->id, 'mention' => 'none'])->assertNotFound();
 
     Http::assertNothingSent();
+});
+
+it('patch 29c: sections past the embed limit are left out with a note', function () {
+    $map = rallyMap();
+    $webhook = MapWebhook::factory()->for($map)->create();
+    actingAs(rallyPinger($map, Permission::Member));
+    $long = str_repeat('x', 1000);
+
+    $this->post(route('maps.rally-ping.store', $map), [
+        'map_webhook_id' => $webhook->id,
+        'mention' => 'everyone',
+        'sections' => array_map(fn (int $index): array => ['title' => 'Section '.$index, 'text' => $long], range(1, 6)),
+    ])->assertSessionHasNoErrors();
+
+    Http::assertSent(function (Request $request): bool {
+        $fields = $request['embeds'][0]['fields'];
+
+        return count($fields) === 5 && end($fields)['name'] === 'More';
+    });
+});
+
+it('patch 29c: refuses more than 8 sections', function () {
+    $map = rallyMap();
+    $webhook = MapWebhook::factory()->for($map)->create();
+    actingAs(rallyPinger($map, Permission::Member));
+
+    $this->post(route('maps.rally-ping.store', $map), [
+        'map_webhook_id' => $webhook->id,
+        'mention' => 'none',
+        'sections' => array_fill(0, 9, ['title' => 'A', 'text' => 'B']),
+    ])->assertSessionHasErrors('sections');
 });
