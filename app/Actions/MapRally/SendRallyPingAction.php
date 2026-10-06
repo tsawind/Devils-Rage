@@ -71,7 +71,7 @@ final readonly class SendRallyPingAction
             ->where('map_id', $map->id)
             ->where('solarsystem_id', $map->rally_solarsystem_id)
             ->value('alias');
-        $name = $solarsystem?->name ?? 'the rally point';
+        $name = $solarsystem->name ?? 'the rally point';
         $where = filled($alias) ? sprintf('%s (%s)', mb_trim((string) $alias), $name) : $name;
 
         $fields = [];
@@ -87,7 +87,7 @@ final readonly class SendRallyPingAction
                 'title' => sprintf('⚑ Form up at %s', $where),
                 'color' => 0xEC4899,
                 'fields' => $fields,
-                'footer' => ['text' => sprintf('Pinged by %s · %s', $user->active_character?->name ?? 'a pilot', $map->name)],
+                'footer' => ['text' => sprintf('Pinged by %s · %s', $user->active_character->name ?? 'a pilot', $map->name)],
                 'timestamp' => now()->toIso8601String(),
             ]],
             'allowed_mentions' => ['parse' => []],
