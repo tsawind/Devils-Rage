@@ -28,8 +28,10 @@ final class SendRallyPingRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'kind' => ['nullable', 'string', 'in:form_up,moved,stand_down'],
             'map_webhook_id' => ['required', 'integer'],
-            'mention' => ['required', 'string', 'regex:/^(none|here|everyone|role:\d+)$/'],
+            // Patch 30: @here / @everyone only for "Form up".
+            'mention' => ['required', 'string', ($this->input('kind') ?? 'form_up') === 'form_up' ? 'regex:/^(none|here|everyone|role:\d+)$/' : 'regex:/^(none|role:\d+)$/'],
             'sections' => ['nullable', 'array', 'max:8'],
             'sections.*.title' => ['required', 'string', 'max:60'],
             'sections.*.text' => ['required', 'string', 'max:1000'],
@@ -44,7 +46,7 @@ final class SendRallyPingRequest extends FormRequest
     {
         return [
             'map_webhook_id.required' => 'Pick a channel to ping.',
-            'mention.regex' => 'Pick who to mention.',
+            'mention.regex' => 'Pick who to mention (no @here or @everyone for Rally moved or Stand down).',
             'note.max' => 'Keep the note under 300 characters.',
             'sections.max' => 'Too many sections for one ping.',
             'sections.*.text.max' => 'A section is too long for Discord.',

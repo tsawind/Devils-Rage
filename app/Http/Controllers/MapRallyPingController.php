@@ -19,7 +19,7 @@ final class MapRallyPingController extends Controller
      */
     public function store(SendRallyPingRequest $request, Map $map, #[CurrentUser] User $user, SendRallyPingAction $action): RedirectResponse
     {
-        /** @var array{map_webhook_id: int, mention: string, sections?: list<array{title: string, text: string}>|null, note?: string|null} $data */
+        /** @var array{kind?: string|null, map_webhook_id: int, mention: string, sections?: list<array{title: string, text: string}>|null, note?: string|null} $data */
         $data = $request->validated();
         $action->handle($map, $user, $data);
 

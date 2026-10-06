@@ -7,6 +7,7 @@ use App\Enums\Permission;
 use App\Models\Character;
 use App\Models\Map;
 use App\Models\MapAccess;
+use App\Models\MapRallyPing;
 use App\Models\MapWebhook;
 use App\Models\MapWebhookRole;
 use App\Models\User;
@@ -144,4 +145,59 @@ it('patch 29c: refuses more than 8 sections', function () {
         'mention' => 'none',
         'sections' => array_fill(0, 9, ['title' => 'A', 'text' => 'B']),
     ])->assertSessionHasErrors('sections');
+});
+
+it('patch 30: rally moved and stand down post their own titles and are logged', function (string $kind, string $title) {
+    $map = rallyMap();
+    $webhook = MapWebhook::factory()->for($map)->create(['name' => 'devils-pings']);
+    actingAs(rallyPinger($map, Permission::Member));
+
+    $this->post(route('maps.rally-ping.store', $map), ['kind' => $kind, 'map_webhook_id' => $webhook->id, 'mention' => 'none'])
+        ->assertSessionHasNoErrors();
+
+    Http::assertSent(fn (Request $request): bool => str_starts_with($request['embeds'][0]['title'], $title));
+    $log = MapRallyPing::query()->where('map_id', $map->id)->sole();
+    expect($log->kind)->toBe($kind)
+        ->and($log->channel)->toBe('devils-pings')
+        ->and($log->mention)->toBeNull();
+})->with([
+    'moved' => ['moved', '⚑ Rally moved: form up at'],
+    'stand down' => ['stand_down', '✋ Stand down'],
+]);
+
+it('patch 30: no @here or @everyone for rally moved or stand down', function (string $kind, string $mention) {
+    $map = rallyMap();
+    $webhook = MapWebhook::factory()->for($map)->create();
+    actingAs(rallyPinger($map, Permission::Member));
+
+    $this->post(route('maps.rally-ping.store', $map), ['kind' => $kind, 'map_webhook_id' => $webhook->id, 'mention' => $mention])
+        ->assertSessionHasErrors('mention');
+
+    Http::assertNothingSent();
+})->with([
+    ['moved', 'here'],
+    ['moved', 'everyone'],
+    ['stand_down', 'here'],
+    ['stand_down', 'everyone'],
+]);
+
+it('patch 30: a stand down right after a form up is allowed (cooldown per kind)', function () {
+    $map = rallyMap();
+    $webhook = MapWebhook::factory()->for($map)->create();
+    actingAs(rallyPinger($map, Permission::Member));
+
+    $this->post(route('maps.rally-ping.store', $map), ['map_webhook_id' => $webhook->id, 'mention' => 'everyone'])->assertSessionHasNoErrors();
+    $this->post(route('maps.rally-ping.store', $map), ['kind' => 'stand_down', 'map_webhook_id' => $webhook->id, 'mention' => 'none'])->assertSessionHasNoErrors();
+
+    Http::assertSentCount(2);
+    expect(MapRallyPing::query()->where('map_id', $map->id)->pluck('mention')->all())->toContain('@everyone');
+});
+
+it('patch 30: the Discord settings page shows the ping log', function () {
+    $map = rallyMap();
+    MapRallyPing::factory()->for($map)->create(['title' => '⚑ Form up at Daisy']);
+    actingAs(rallyPinger($map, Permission::Manager));
+
+    $this->get(route('maps.settings.discord.show', $map))
+        ->assertInertia(fn ($page) => $page->has('rallyPings', 1)->where('rallyPings.0.title', '⚑ Form up at Daisy'));
 });

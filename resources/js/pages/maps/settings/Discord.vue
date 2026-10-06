@@ -41,16 +41,25 @@ import {
 } from '@/types/models';
 import { TStaticSolarsystem } from '@/types/static-data';
 import { router, useForm } from '@inertiajs/vue3';
-import { AtSign, Bell, Bot, ExternalLink, Pencil, Rocket, Route, ShieldCheck, Swords, Trash2, Webhook } from 'lucide-vue-next';
+import { AtSign, Bell, Bot, ExternalLink, Megaphone, Pencil, Rocket, Route, ShieldCheck, Swords, Trash2, Webhook } from 'lucide-vue-next';
 import { computed, ref, type Component } from 'vue';
 
-const { map, tab, botAlerts, alertEvents, discordInviteUrl } = defineProps<{
+/** Patch 30: one sent rally ping, for the ping log. */
+type TRallyPingLog = { id: number; kind: string; title: string; channel: string; mention: string | null; character_name: string | null; created_at: string };
+
+const { map, tab, botAlerts, alertEvents, discordInviteUrl, rallyPings = [] } = defineProps<{
     map: TMapSummary;
     tab: IntegrationTab;
     botAlerts: TMapAlert[];
     alertEvents: TMapAlertEvent[];
     discordInviteUrl: string | null;
+    rallyPings?: TRallyPingLog[];
 }>();
+
+const pingKindLabel: Record<string, string> = { form_up: 'Form up', moved: 'Rally moved', stand_down: 'Stand down' };
+function pingTime(value: string): string {
+    return new Date(value).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
 const { canManageAccess } = usePermission();
 const { webhooks, deleteWebhook } = useMapWebhooks();
@@ -591,6 +600,26 @@ function confirmPendingDelete() {
                             </CardContent>
                         </Card>
                     </div>
+
+                    <!-- Patch 30: the rally pings sent from the map -->
+                    <Card class="gap-0 py-0">
+                        <CardHeader class="border-b py-4">
+                            <CardTitle class="flex items-center gap-2 text-lg"><Megaphone class="size-5 text-pink-500" />Ping log</CardTitle>
+                            <CardDescription>The last 25 rally pings sent from the map, and who sent them.</CardDescription>
+                        </CardHeader>
+                        <CardContent class="p-4">
+                            <p v-if="rallyPings.length === 0" class="text-sm text-muted-foreground">No pings sent yet.</p>
+                            <ul v-else class="divide-y divide-border/60">
+                                <li v-for="ping in rallyPings" :key="ping.id" class="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm first:pt-0 last:pb-0">
+                                    <span class="w-28 shrink-0 text-xs text-muted-foreground">{{ pingTime(ping.created_at) }}</span>
+                                    <Badge variant="outline" class="shrink-0">{{ pingKindLabel[ping.kind] ?? ping.kind }}</Badge>
+                                    <span class="min-w-0 flex-1 truncate">{{ ping.title }}</span>
+                                    <span class="text-xs text-muted-foreground">#{{ ping.channel }}<template v-if="ping.mention"> · {{ ping.mention }}</template></span>
+                                    <span class="text-xs font-medium">{{ ping.character_name ?? 'Unknown' }}</span>
+                                </li>
+                            </ul>
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 <TabsContent value="bot" class="mt-0 space-y-6">

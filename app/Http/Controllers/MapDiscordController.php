@@ -12,6 +12,7 @@ use App\Http\Resources\MapWebhookResource;
 use App\Http\Resources\MapWebhookRoleResource;
 use App\Models\Map;
 use App\Models\MapAlertEvent;
+use App\Models\MapRallyPing;
 use App\Models\User;
 use App\Services\Discord\DiscordInvite;
 use Illuminate\Container\Attributes\CurrentUser;
@@ -51,6 +52,12 @@ final class MapDiscordController extends Controller
                 ->limit(25)
                 ->get()
                 ->toResourceCollection(MapAlertEventResource::class),
+            // Patch 30: the ping log.
+            'rallyPings' => fn () => MapRallyPing::query()
+                ->where('map_id', $map->id)
+                ->latest()
+                ->limit(25)
+                ->get(['id', 'kind', 'title', 'channel', 'mention', 'character_name', 'created_at']),
             'permission' => $map->getUserPermission($this->user)?->value,
             'discordInviteUrl' => $this->discordInvite->url(),
         ]);

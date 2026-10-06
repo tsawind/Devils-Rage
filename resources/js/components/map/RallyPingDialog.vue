@@ -78,7 +78,22 @@ watch(picked, () => {
     if (open.value) buildSections();
 });
 
-const form = useForm({ map_webhook_id: null as number | null, mention: 'everyone', sections: [] as { title: string; text: string }[], note: '' });
+/** Patch 30: Form up, Rally moved (a new rally point) or Stand down; no @here / @everyone for the last two. */
+type TKind = 'form_up' | 'moved' | 'stand_down';
+const KINDS: { key: TKind; label: string }[] = [
+    { key: 'form_up', label: '⚑ Form up' },
+    { key: 'moved', label: '↪ Rally moved' },
+    { key: 'stand_down', label: '✋ Stand down' },
+];
+const form = useForm({ kind: 'form_up' as TKind, map_webhook_id: null as number | null, mention: 'everyone', sections: [] as { title: string; text: string }[], note: '' });
+const broadMentions = computed(() => form.kind === 'form_up');
+const showRoutes = computed(() => form.kind !== 'stand_down');
+const heading = computed(() => (form.kind === 'stand_down' ? 'Stand down' : form.kind === 'moved' ? `Rally moved to ${where}` : `Form up at ${where}`));
+function setKind(kind: TKind): void {
+    form.kind = kind;
+    if (kind === 'form_up') form.mention = 'everyone';
+    else if (form.mention === 'here' || form.mention === 'everyone') form.mention = 'none';
+}
 
 /** Defaults: the channel with "ping" in its name (else the first) and @everyone. */
 watch(open, (isOpen) => {
@@ -90,14 +105,14 @@ watch(open, (isOpen) => {
             loading.value = false;
             const webhooks = targets.value.webhooks;
             form.map_webhook_id = (webhooks.find((webhook) => /ping/i.test(webhook.name)) ?? webhooks[0])?.id ?? null;
-            form.mention = 'everyone';
+            setKind('form_up');
         },
     });
     buildSections();
 });
 
 function send(): void {
-    form.sections = sections.value;
+    form.sections = showRoutes.value ? sections.value : [];
     form.submit(MapRallyPingController.store(mapSlug), {
         preserveScroll: true,
         preserveState: true,
@@ -114,8 +129,8 @@ function send(): void {
     <Dialog v-model:open="open">
         <DialogContent class="sm:max-w-xl">
             <DialogHeader>
-                <DialogTitle>📣 Ping: form up at {{ where }}</DialogTitle>
-                <DialogDescription>Posts to Discord. One ping per map every two minutes.</DialogDescription>
+                <DialogTitle>📣 Ping: {{ heading }}</DialogTitle>
+                <DialogDescription>Posts to Discord. One ping of each kind per map every two minutes.</DialogDescription>
             </DialogHeader>
 
             <p v-if="!loading && targets.webhooks.length === 0" class="text-sm text-muted-foreground">
@@ -124,6 +139,18 @@ function send(): void {
             </p>
 
             <form v-else class="grid gap-4" @submit.prevent="send">
+                <div class="grid grid-cols-3 gap-1 rounded-lg bg-muted/40 p-1">
+                    <button
+                        v-for="kind in KINDS"
+                        :key="kind.key"
+                        type="button"
+                        class="rounded-md px-2 py-1.5 text-sm font-medium transition-colors"
+                        :class="form.kind === kind.key ? 'bg-pink-600 text-white' : 'text-muted-foreground hover:bg-muted'"
+                        @click="setKind(kind.key)"
+                    >
+                        {{ kind.label }}
+                    </button>
+                </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="grid gap-1.5">
                         <Label for="rally-channel">Channel</Label>
@@ -140,15 +167,15 @@ function send(): void {
                             <SelectTrigger id="rally-mention" class="w-full"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="none">No mention</SelectItem>
-                                <SelectItem value="here">@here</SelectItem>
-                                <SelectItem value="everyone">@everyone</SelectItem>
+                                <SelectItem v-if="broadMentions" value="here">@here</SelectItem>
+                                <SelectItem v-if="broadMentions" value="everyone">@everyone</SelectItem>
                                 <SelectItem v-for="mention in targets.mentions" :key="mention.id" :value="`role:${mention.id}`">@{{ mention.name }}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
                 </div>
 
-                <div class="grid gap-2">
+                <div v-if="showRoutes" class="grid gap-2">
                     <Label>Include</Label>
                     <div class="grid grid-cols-2 gap-x-3 gap-y-1.5">
                         <label v-for="pick in PICKS" :key="pick.key" class="flex cursor-pointer items-start gap-2 text-sm" :title="pick.hint">
@@ -174,10 +201,10 @@ function send(): void {
 
                 <div class="grid gap-1.5">
                     <Label for="rally-note">Note</Label>
-                    <Textarea id="rally-note" v-model="form.note" maxlength="300" rows="2" placeholder="Doctrine, time, who brings what…" />
+                    <Textarea id="rally-note" v-model="form.note" maxlength="300" rows="2" :placeholder="form.kind === 'stand_down' ? 'Why, and what next…' : 'Doctrine, time, who brings what…'" />
                 </div>
 
-                <InputError :message="form.errors.map_webhook_id ?? form.errors.mention ?? form.errors.note ?? form.errors.sections" />
+                <InputError :message="form.errors.map_webhook_id ?? form.errors.mention ?? form.errors.note ?? form.errors.sections ?? form.errors.kind" />
 
                 <DialogFooter>
                     <Button type="button" variant="ghost" @click="open = false">Cancel</Button>

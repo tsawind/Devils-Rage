@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\MapRally;
 
 use App\Models\Map;
+use App\Models\MapRallyPing;
 use App\Models\MapSolarsystem;
 use App\Models\MapWebhook;
 use App\Models\MapWebhookRole;
@@ -19,8 +20,9 @@ use Throwable;
 /**
  * Patch 29: "Form up at the rally point" posted to a Discord webhook, with the
  * pinger's pick of mention (a saved role, @here, @everyone, or none), the ticked
- * routes and predictions, and a note.
- * One ping per map every two minutes.
+ * routes and predictions, and a note. Patch 30: also "Rally moved" and "Stand
+ * down" (no @here / @everyone for those), and every ping is logged.
+ * One ping of each kind per map every two minutes.
  */
 final readonly class SendRallyPingAction
 {
@@ -30,8 +32,15 @@ final readonly class SendRallyPingAction
 
     private const int MAX_SECTIONS_LENGTH = 5000;
 
+    /** @var array<string, array{verb: string, color: int}> */
+    private const array KINDS = [
+        'form_up' => ['verb' => '⚑ Form up at %s', 'color' => 0xEC4899],
+        'moved' => ['verb' => '⚑ Rally moved: form up at %s', 'color' => 0xF97316],
+        'stand_down' => ['verb' => '✋ Stand down (rally was %s)', 'color' => 0x64748B],
+    ];
+
     /**
-     * @param  array{map_webhook_id: int, mention: string, sections?: list<array{title: string, text: string}>|null, note?: string|null}  $data
+     * @param  array{kind?: string|null, map_webhook_id: int, mention: string, sections?: list<array{title: string, text: string}>|null, note?: string|null}  $data
      *
      * @throws ValidationException
      */
@@ -43,9 +52,13 @@ final readonly class SendRallyPingAction
 
         $webhook = MapWebhook::query()->where('map_id', $map->id)->findOrFail($data['map_webhook_id']);
 
-        if (! Cache::add($this->cooldownKey($map), true, self::COOLDOWN_SECONDS)) {
-            throw ValidationException::withMessages(['map_webhook_id' => 'Someone pinged the rally point less than two minutes ago.']);
+        $kind = $this->kind($data);
+        $cooldownKey = $this->cooldownKey($map, $kind);
+        if (! Cache::add($cooldownKey, true, self::COOLDOWN_SECONDS)) {
+            throw ValidationException::withMessages(['map_webhook_id' => 'Someone sent this ping less than two minutes ago.']);
         }
+
+        $payload = $this->payload($map, $user, $data);
 
         try {
             Http::timeout(10)
@@ -54,17 +67,27 @@ final readonly class SendRallyPingAction
                     fn (int $attempt, Throwable $exception): int => $this->retryDelayMilliseconds($exception),
                     fn (Throwable $exception): bool => $this->wasRateLimited($exception),
                 )
-                ->post($webhook->discord_webhook_url, $this->payload($map, $user, $data))
+                ->post($webhook->discord_webhook_url, $payload)
                 ->throw();
         } catch (Throwable) {
-            Cache::forget($this->cooldownKey($map));
+            Cache::forget($cooldownKey);
 
             throw ValidationException::withMessages(['map_webhook_id' => 'Discord did not take the ping. Check the webhook in the map\'s Discord settings.']);
         }
+
+        MapRallyPing::query()->create([
+            'map_id' => $map->id,
+            'user_id' => $user->id,
+            'character_name' => $user->active_character->name ?? null,
+            'kind' => $kind,
+            'title' => $payload['embeds'][0]['title'],
+            'channel' => $webhook->name,
+            'mention' => $payload['content'] ?? null,
+        ]);
     }
 
     /**
-     * @param  array{map_webhook_id: int, mention: string, sections?: list<array{title: string, text: string}>|null, note?: string|null}  $data
+     * @param  array{kind?: string|null, map_webhook_id: int, mention: string, sections?: list<array{title: string, text: string}>|null, note?: string|null}  $data
      * @return array<string, mixed>
      */
     public function payload(Map $map, User $user, array $data): array
@@ -94,10 +117,11 @@ final readonly class SendRallyPingAction
             $fields[] = ['name' => 'Note', 'value' => (string) $data['note']];
         }
 
+        $kind = self::KINDS[$this->kind($data)];
         $payload = [
             'embeds' => [[
-                'title' => sprintf('⚑ Form up at %s', $where),
-                'color' => 0xEC4899,
+                'title' => sprintf($kind['verb'], $where),
+                'color' => $kind['color'],
                 'fields' => $fields,
                 'footer' => ['text' => sprintf('Pinged by %s · %s', $user->active_character->name ?? 'a pilot', $map->name)],
                 'timestamp' => now()->toIso8601String(),
@@ -132,8 +156,18 @@ final readonly class SendRallyPingAction
         return null;
     }
 
-    private function cooldownKey(Map $map): string
+    /**
+     * @param  array{kind?: string|null}  $data
+     */
+    private function kind(array $data): string
     {
-        return sprintf('rally-ping:%d', $map->id);
+        $kind = $data['kind'] ?? 'form_up';
+
+        return array_key_exists((string) $kind, self::KINDS) ? (string) $kind : 'form_up';
+    }
+
+    private function cooldownKey(Map $map, string $kind): string
+    {
+        return sprintf('rally-ping:%d:%s', $map->id, $kind);
     }
 }

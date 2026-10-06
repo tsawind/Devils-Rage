@@ -3,7 +3,7 @@ import AutopilotSettings from '@/components/autopilot/AutopilotSettings.vue';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ROUTE_KIND_LABELS, type TRouteKind, useRouteCopy } from '@/composables/useRouteCopy';
-import { ChevronDown, ClipboardCopy, Radar, ShieldCheck, TriangleAlert } from 'lucide-vue-next';
+import { ChevronDown, ClipboardCopy, Radar, ShieldCheck, TriangleAlert, Zap } from 'lucide-vue-next';
 
 /**
  * Patch 26: copy a route for fleet chat. `bar`: in the map bar (Default, Safest, ▾ for the
@@ -32,6 +32,21 @@ const hint = 'Pick To in Routing first (From is home while it is empty)';
                 </button>
             </TooltipTrigger>
             <TooltipContent side="bottom"><p class="text-xs">{{ canCopy ? 'Copy the route for chat (your route settings)' : hint }}</p></TooltipContent>
+        </Tooltip>
+        <!-- Patch 30: Shortest next to Safest (as on the rally badge) -->
+        <Tooltip>
+            <TooltipTrigger as-child>
+                <button
+                    type="button"
+                    class="flex items-center rounded border border-border/50 bg-background p-1.5 text-muted-foreground hover:border-border hover:text-foreground disabled:opacity-40"
+                    :disabled="!canCopy"
+                    aria-label="Copy the Shortest route"
+                    @click="copyRoute('shortest')"
+                >
+                    <Zap class="size-4" />
+                </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom"><p class="text-xs">{{ canCopy ? 'Copy the Shortest route (frigate holes skipped)' : hint }}</p></TooltipContent>
         </Tooltip>
         <Tooltip>
             <TooltipTrigger as-child>
