@@ -8,11 +8,17 @@
 # - Memory caps so SeAT can never squeeze the mapper. If a SeAT container hits
 #   its cap, only that container restarts. Watch with: docker stats --no-stream
 # - Small MariaDB settings (mariadb-small.cnf).
+# - front/worker/scheduler run our own image (build/Dockerfile): SeAT + the
+#   Discord connector + our patch so SeAT only manages Discord roles that have
+#   a rule. Update SeAT with: docker compose build --pull && docker compose up -d
 # No secrets in this file; they live only in ~/seat-docker/.env on the server.
 
 services:
 
   front:
+    image: devilsrage/seat:5-discord
+    build: ./build
+    pull_policy: build
     mem_limit: 384m
     networks:
       - web
@@ -38,9 +44,15 @@ services:
       - "traefik.http.middlewares.seat-security.headers.stsSeconds=31536000"
 
   worker:
+    image: devilsrage/seat:5-discord
+    build: ./build
+    pull_policy: build
     mem_limit: 512m
 
   scheduler:
+    image: devilsrage/seat:5-discord
+    build: ./build
+    pull_policy: build
     mem_limit: 192m
 
   cache:
