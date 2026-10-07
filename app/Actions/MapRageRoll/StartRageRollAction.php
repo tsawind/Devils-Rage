@@ -64,49 +64,6 @@ final readonly class StartRageRollAction
     }
 
     /**
-     * @param  array{solarsystem_id: int, map_webhook_id?: int|null, mention?: string|null, system_text?: string|null, static_text?: string|null, kspace_text?: string|null, note?: string|null, targets?: list<string>|null, scanning?: bool|null}  $data
-     * @param  list<int>  $target_ids
-     *
-     * @throws ValidationException
-     */
-    private function ping(Map $map, User $user, array $data, array $target_ids): void
-    {
-        $webhook = MapWebhook::query()->where('map_id', $map->id)->findOrFail($data['map_webhook_id']);
-
-        $cooldown_key = sprintf('rally-ping:%d:%s', $map->id, self::KIND);
-        if (! Cache::add($cooldown_key, true, self::COOLDOWN_SECONDS)) {
-            throw ValidationException::withMessages(['map_webhook_id' => 'Someone sent a rage roll ping less than two minutes ago. Pick "Don\'t ping" to start the roll anyway.']);
-        }
-
-        $payload = $this->payload($map, $user, $data, $target_ids);
-
-        try {
-            Http::timeout(10)
-                ->retry(
-                    3,
-                    fn (int $attempt, Throwable $exception): int => $this->retryDelayMilliseconds($exception),
-                    fn (Throwable $exception): bool => $this->wasRateLimited($exception),
-                )
-                ->post($webhook->discord_webhook_url, $payload)
-                ->throw();
-        } catch (Throwable) {
-            Cache::forget($cooldown_key);
-
-            throw ValidationException::withMessages(['map_webhook_id' => 'Discord did not take the ping. Check the webhook in the map\'s Discord settings.']);
-        }
-
-        MapRallyPing::query()->create([
-            'map_id' => $map->id,
-            'user_id' => $user->id,
-            'character_name' => $user->active_character->name ?? null,
-            'kind' => self::KIND,
-            'title' => $payload['embeds'][0]['title'],
-            'channel' => $webhook->name,
-            'mention' => $payload['content'] ?? null,
-        ]);
-    }
-
-    /**
      * @param  array{solarsystem_id: int, mention?: string|null, system_text?: string|null, static_text?: string|null, kspace_text?: string|null, note?: string|null, scanning?: bool|null}  $data
      * @param  list<int>  $target_ids
      * @return array<string, mixed>
@@ -158,5 +115,48 @@ final readonly class StartRageRollAction
         }
 
         return $payload;
+    }
+
+    /**
+     * @param  array{solarsystem_id: int, map_webhook_id?: int|null, mention?: string|null, system_text?: string|null, static_text?: string|null, kspace_text?: string|null, note?: string|null, targets?: list<string>|null, scanning?: bool|null}  $data
+     * @param  list<int>  $target_ids
+     *
+     * @throws ValidationException
+     */
+    private function ping(Map $map, User $user, array $data, array $target_ids): void
+    {
+        $webhook = MapWebhook::query()->where('map_id', $map->id)->findOrFail($data['map_webhook_id']);
+
+        $cooldown_key = sprintf('rally-ping:%d:%s', $map->id, self::KIND);
+        if (! Cache::add($cooldown_key, true, self::COOLDOWN_SECONDS)) {
+            throw ValidationException::withMessages(['map_webhook_id' => 'Someone sent a rage roll ping less than two minutes ago. Pick "Don\'t ping" to start the roll anyway.']);
+        }
+
+        $payload = $this->payload($map, $user, $data, $target_ids);
+
+        try {
+            Http::timeout(10)
+                ->retry(
+                    3,
+                    fn (int $attempt, Throwable $exception): int => $this->retryDelayMilliseconds($exception),
+                    fn (Throwable $exception): bool => $this->wasRateLimited($exception),
+                )
+                ->post($webhook->discord_webhook_url, $payload)
+                ->throw();
+        } catch (Throwable) {
+            Cache::forget($cooldown_key);
+
+            throw ValidationException::withMessages(['map_webhook_id' => 'Discord did not take the ping. Check the webhook in the map\'s Discord settings.']);
+        }
+
+        MapRallyPing::query()->create([
+            'map_id' => $map->id,
+            'user_id' => $user->id,
+            'character_name' => $user->active_character->name ?? null,
+            'kind' => self::KIND,
+            'title' => $payload['embeds'][0]['title'],
+            'channel' => $webhook->name,
+            'mention' => $payload['content'] ?? null,
+        ]);
     }
 }

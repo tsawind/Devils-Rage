@@ -1,20 +1,21 @@
 import { displayAlias, guessNextAlias, planSignatureAliases, splitStamp, staticSlotAlias } from '@/lib/alias';
 import { getBookmarkTokenValues } from '@/lib/bookmark';
 import { describeKspacePath, describeStatics, formatElapsed, nearestKspacePath, newStaticQuestion, parseTargets, staticPipes, targetHits } from '@/lib/rageRoll';
+import type { TStringedSolarsystemClass } from '@/types/models';
 import { describe, expect, it } from 'vitest';
 
 type TSys = {
     id: number;
     solarsystem_id: number;
     alias: string | null;
-    solarsystem: { name: string; class: string; region?: { name: string } | null; statics?: { name: string; leads_to: string }[] | null };
+    solarsystem: { name: string; class: TStringedSolarsystemClass; region?: { name: string } | null; statics?: { name: string; leads_to: string }[] | null };
 };
 
 const sys = (id: number, alias: string | null, name: string, cls: string, extra: Partial<TSys['solarsystem']> = {}): TSys => ({
     id,
     solarsystem_id: 30000000 + id,
     alias,
-    solarsystem: { name, class: cls, ...extra },
+    solarsystem: { name, class: cls as TStringedSolarsystemClass, ...extra },
 });
 
 // Daisy (C5) → Alpha (C6), Daisy → Bravo (C3) → Tama (lowsec)

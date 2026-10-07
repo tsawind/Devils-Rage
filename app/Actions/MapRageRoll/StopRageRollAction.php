@@ -51,7 +51,7 @@ final readonly class StopRageRollAction
             ->whereNull('combat_color')
             ->get();
 
-        $who = $by?->active_character->name ?? 'Someone';
+        $who = $by->active_character->name ?? 'Someone';
         foreach ($settings as $setting) {
             $setting->update(['combat_mode' => false]);
             if ($by !== null && $by->id === $setting->user_id) {

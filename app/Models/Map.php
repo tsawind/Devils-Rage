@@ -219,7 +219,7 @@ final class Map extends Model
             return null;
         }
 
-        $target_ids = array_values(array_map(intval(...), $this->rage_roll_targets ?? []));
+        $target_ids = array_map(intval(...), $this->rage_roll_targets ?? []);
         $names = Solarsystem::query()->whereIn('id', $target_ids)->pluck('name', 'id');
 
         return [
@@ -227,10 +227,10 @@ final class Map extends Model
             'started_at' => $this->rage_roll_started_at?->toIso8601String(),
             'started_by' => $this->rage_roll_started_by,
             'scanning' => (bool) $this->rage_roll_scanning,
-            'targets' => array_values(array_map(
+            'targets' => array_map(
                 fn (int $id): array => ['id' => $id, 'name' => (string) ($names[$id] ?? $id)],
                 $target_ids,
-            )),
+            ),
         ];
     }
 

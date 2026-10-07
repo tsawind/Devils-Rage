@@ -28,6 +28,22 @@ final readonly class NewStaticAction
         private MapBroadcaster $mapBroadcaster,
     ) {}
 
+    public static function isInChain(string $alias, string $base): bool
+    {
+        $name = mb_strtoupper(mb_trim($alias));
+        if ($name === '' || str_contains($name, '@') || preg_match('/^[A-Z0-9]+$/', $name) !== 1) {
+            return false;
+        }
+
+        // Chain numbers below a hole always carry a digit ("A1", "A0B"); plain names like "Daisy" don't.
+        return $name === $base || (str_starts_with($name, $base) && mb_strlen($name) > mb_strlen($base) && preg_match('/\d/', $name) === 1);
+    }
+
+    public static function stamped(string $alias, string $stamp): string
+    {
+        return mb_strtoupper(mb_trim($alias)).'@'.$stamp;
+    }
+
     /**
      * @return array{alias: string|null, stamp: string|null, stamped: int}
      *
@@ -48,7 +64,7 @@ final readonly class NewStaticAction
 
         $result = DB::transaction(function () use ($rolling, $old, $new): array {
             $old_system = $this->farSide($rolling, $old);
-            $base = mb_strtoupper(mb_trim((string) ($old->alias ?? $old_system?->alias ?? '')));
+            $base = mb_strtoupper(mb_trim((string) ($old->alias ?? $old_system->alias ?? '')));
             $stamped = 0;
             $stamp = null;
 
@@ -123,21 +139,5 @@ final readonly class NewStaticAction
             ->each(fn (Signature $signature) => $signature->update(['alias' => self::stamped((string) $signature->alias, $stamp)]));
 
         return $systems->count();
-    }
-
-    public static function isInChain(string $alias, string $base): bool
-    {
-        $name = mb_strtoupper(mb_trim($alias));
-        if ($name === '' || str_contains($name, '@') || preg_match('/^[A-Z0-9]+$/', $name) !== 1) {
-            return false;
-        }
-
-        // Chain numbers below a hole always carry a digit ("A1", "A0B"); plain names like "Daisy" don't.
-        return $name === $base || (str_starts_with($name, $base) && mb_strlen($name) > mb_strlen($base) && preg_match('/\d/', $name) === 1);
-    }
-
-    public static function stamped(string $alias, string $stamp): string
-    {
-        return mb_strtoupper(mb_trim($alias)).'@'.$stamp;
     }
 }
