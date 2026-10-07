@@ -46,6 +46,7 @@ import { displayAlias } from '@/lib/alias';
 import type { TResolvedMapNavigation, TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TCharacter } from '@/types/models';
 import CommandPaletteButton from './CommandPaletteButton.vue';
+import RallyChip from './RallyChip.vue';
 import RouteCopyButtons from './RouteCopyButtons.vue';
 import MapSwitcher from './MapSwitcher.vue';
 import RoutingBox from './RoutingBox.vue';
@@ -203,6 +204,8 @@ const settingsUrl = computed(() => {
             </div>
             <!-- Patch 26: copy the route for fleet chat (Default, Safest, ▾ the rest) -->
             <RouteCopyButtons variant="bar" />
+            <!-- Patch 31: the rally point, moved off the map -->
+            <RallyChip />
         </div>
 
         <!-- Spacer -->

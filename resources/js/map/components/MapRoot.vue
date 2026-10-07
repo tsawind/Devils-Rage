@@ -27,7 +27,6 @@ import MapAddConnectionDialog from '@/map/components/overlays/MapAddConnectionDi
 import MapConnectionContextMenu from '@/map/components/overlays/MapConnectionContextMenu.vue';
 import MapContextMenu from '@/map/components/overlays/MapContextMenu.vue';
 import MapOptions from '@/map/components/overlays/MapOptions.vue';
-import MapRallyBadge from '@/map/components/overlays/MapRallyBadge.vue';
 import MapSolarsystemContextMenu from '@/map/components/overlays/MapSolarsystemContextMenu.vue';
 import type { Vec2 } from '@/map/core/types';
 import type { Gesture } from '@/map/interactions/gestures';
@@ -278,7 +277,6 @@ whenever(Delete, () => {
             />
         </template>
         <template #overlays>
-            <MapRallyBadge />
             <MapOptions />
             <WayBackPopup />
         </template>
