@@ -59,7 +59,8 @@ final readonly class RecordMapConnectionJumpAction
             return;
         }
 
-        $mass = (int) round(Type::query()->whereKey($ship_type_id)->value('mass') ?? 0);
+        // Patch 34: HICs / Odysseus log as if their Zero-Point Mass Entangler were on.
+        $mass = Type::loggedJumpMass($ship_type_id);
 
         foreach ($maps as $map) {
             $this->recordJumpOnMap($map, $character_id, $from_solarsystem_id, $to_solarsystem_id, $ship_type_id, $ship_name, $mass);

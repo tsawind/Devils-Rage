@@ -57,6 +57,7 @@ final readonly class CreateMapConnectionJumpAction
 
     private function shipTypeMass(?int $ship_type_id): int
     {
-        return (int) round(Type::query()->whereKey($ship_type_id)->value('mass') ?? 0);
+        // Patch 34: HICs / Odysseus log as if their Zero-Point Mass Entangler were on.
+        return Type::loggedJumpMass($ship_type_id);
     }
 }

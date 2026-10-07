@@ -43,7 +43,8 @@ final readonly class UpdateMapConnectionJumpAction
         if (array_key_exists('mass', $data)) {
             $attributes['mass'] = $data['mass'];
         } elseif (isset($data['ship_type_id'])) {
-            $attributes['mass'] = (int) round(Type::query()->whereKey($data['ship_type_id'])->value('mass') ?? 0);
+            // Patch 34: HICs / Odysseus log as if their Zero-Point Mass Entangler were on.
+            $attributes['mass'] = Type::loggedJumpMass($data['ship_type_id']);
         }
 
         $jump->update($attributes);

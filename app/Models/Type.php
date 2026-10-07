@@ -106,4 +106,35 @@ final class Type extends Model
             'published' => 'boolean',
         ];
     }
+
+    /** Patch 34: the EVE group of Heavy Interdiction Cruisers. */
+    public const int HEAVY_INTERDICTOR_GROUP_ID = 894;
+
+    /** Patch 34: what a Zero-Point Mass Entangler leaves of the hull's mass (−80%). */
+    public const float ZERO_POINT_SHARE = 0.2;
+
+    /**
+     * The mass a jump in this ship logs. Logged mass must never be more than really went
+     * through (the jump log proves reduced / critical / rolled), so HICs and the Odysseus
+     * count as if their Zero-Point Mass Entangler were on (20% of the hull). Everything
+     * else logs its base hull: plates, prop mods and Higgs only ever add mass.
+     */
+    public static function loggedJumpMass(?int $typeId): int
+    {
+        if ($typeId === null) {
+            return 0;
+        }
+
+        $type = self::query()->whereKey($typeId)->first(['id', 'name', 'group_id', 'mass']);
+        if (! $type instanceof self) {
+            return 0;
+        }
+
+        $mass = (float) ($type->mass ?? 0);
+        if ($type->group_id === self::HEAVY_INTERDICTOR_GROUP_ID || $type->name === 'Odysseus') {
+            $mass *= self::ZERO_POINT_SHARE;
+        }
+
+        return (int) round($mass);
+    }
 }
