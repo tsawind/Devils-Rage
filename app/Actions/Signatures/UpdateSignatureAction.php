@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Signatures;
 
 use App\Actions\MapConnections\BroadcastMapConnectionAction;
+use App\Actions\MapConnections\InferMassStatusFromJumpsAction;
 use App\Actions\MapConnections\SyncConnectionShipSizeAction;
 use App\Actions\MapSolarsystem\UpdateMapSolarsystemAction;
 use App\Data\SignatureData;
@@ -30,6 +31,7 @@ final readonly class UpdateSignatureAction
         private UpdateMapSolarsystemAction $updateMapSolarsystemAction,
         private FillFarSideK162Action $fillFarSideK162Action,
         private BroadcastMapConnectionAction $broadcastMapConnectionAction,
+        private InferMassStatusFromJumpsAction $inferMassStatusFromJumpsAction,
     ) {}
 
     /**
@@ -58,6 +60,10 @@ final readonly class UpdateSignatureAction
             $this->syncConnectedSystemAlias($signature, $data, $previousAlias);
             $this->syncMassAndLifetime($signature, $data);
             $this->syncConnectionShipSizeAction->handle($signature);
+            // Patch 33: a newly known type can turn the logged jumps into a status.
+            if (! $data->signature_type_id instanceof Optional && $signature->mapConnection !== null) {
+                $this->inferMassStatusFromJumpsAction->handle($signature->mapConnection);
+            }
 
             // Linking a hole to a connection, or typing it, may reveal the far side as a K162.
             if (! $data->map_connection_id instanceof Optional || ! $data->signature_type_id instanceof Optional) {

@@ -142,6 +142,11 @@ const indicators = computed<EdgeIndicator[]>(() => {
         });
     }
 
+    // Patch 33: the jump log says more went through than this hole can ever hold.
+    if (connection?.should_have_rolled) {
+        items.push({ type: 'eol', label: 'ROLLED?', strong: true, fill: 'var(--color-red-700)', stroke: 'var(--color-red-800)' });
+    }
+
     // Patch 21: end of life inside the pill, in purple ("EOL!" when critical).
     if (lifetime.value === 'eol' || lifetime.value === 'critical') {
         const critical = lifetime.value === 'critical';
@@ -225,8 +230,8 @@ const estimate = computed(() => {
     if (isStargate.value || !connection) return null;
     const total = holeType.value?.total_mass ?? guessedMass.value;
     if (!total) return null;
-    // Patch 32: only the jumps since the mass status was set count against its band.
-    return estimateMass({ totalMass: total, jumped: connection.jumps_mass_since_status ?? connection.jumps_mass_sum, status: massStatus.value });
+    // Patch 33: every logged jump is mass gone; the ones since the status was set also count against its band.
+    return estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, status: massStatus.value });
 });
 
 const pipe = computed(() => {

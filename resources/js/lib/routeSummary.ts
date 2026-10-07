@@ -26,6 +26,8 @@ export type TRouteHole = {
     /** The most one ship may weigh per jump; null when not known. */
     maxJumpMass: number | null;
     jumpedMass: number;
+    /** Patch 33: logged since the mass status was set (null: same as jumpedMass). */
+    jumpedSinceStatus?: number | null;
     massStatus: string | null;
     lifetimeStatus: string | null;
     /** When it was marked end-of-life (ISO), if it is. */
@@ -112,7 +114,7 @@ function holesOnRoute(input: TRouteInput): THoleOnRoute[] {
             index,
             label: `${input.steps[index].name}↔${input.steps[index + 1].name}`,
             hole,
-            estimate: hole.totalMass ? estimateMass({ totalMass: hole.totalMass, jumped: hole.jumpedMass, status: hole.massStatus }) : null,
+            estimate: hole.totalMass ? estimateMass({ totalMass: hole.totalMass, jumped: hole.jumpedMass, jumpedSinceStatus: hole.jumpedSinceStatus, status: hole.massStatus }) : null,
         });
     });
     return result;

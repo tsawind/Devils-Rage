@@ -32,7 +32,13 @@ export function useRoutingSetup(params: UseRoutingSetupParams) {
         useWormholes: mapUserSettings.value.route_use_wormholes,
     }));
 
-    const convertedConnections = computed(() => convertMapConnectionsToWorkerEdges(toValue(params.mapConnections), toValue(params.mapSolarsystems)));
+    // Patch 33: a hole the jump log says must have rolled is left out of every route.
+    const convertedConnections = computed(() =>
+        convertMapConnectionsToWorkerEdges(
+            toValue(params.mapConnections).filter((connection) => !connection.should_have_rolled),
+            toValue(params.mapSolarsystems),
+        ),
+    );
 
     const convertedEveScoutConnections = computed(() => convertEveScoutConnections(eveScoutConnections.value, useEveScout.value));
 

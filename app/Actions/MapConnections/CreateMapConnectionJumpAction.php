@@ -16,7 +16,10 @@ use App\Models\Type;
  */
 final readonly class CreateMapConnectionJumpAction
 {
-    public function __construct(private BroadcastMapConnectionAction $broadcastMapConnection) {}
+    public function __construct(
+        private BroadcastMapConnectionAction $broadcastMapConnection,
+        private InferMassStatusFromJumpsAction $inferMassStatus,
+    ) {}
 
     /**
      * @param  ManualJumpData  $data
@@ -45,6 +48,8 @@ final readonly class CreateMapConnectionJumpAction
             'is_manual' => true,
         ]);
 
+        // Patch 33: the log may prove the hole reduced / critical / rolled.
+        $this->inferMassStatus->handle($connection);
         $this->broadcastMapConnection->handle($connection);
 
         return $jump;

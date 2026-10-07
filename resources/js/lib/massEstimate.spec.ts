@@ -33,6 +33,14 @@ describe('patch 12: mass left on a wormhole', () => {
         expect(estimate.min).toBe(0);
     });
 
+    it('patch 33: jumps before a reduced mark still count (the tighter limit wins)', () => {
+        // 2 B logged while fresh, then marked reduced, 0.5 B since: max = min(5.5 − 2.5, 2.75 − 0.5) = 2.25 B.
+        const estimate = estimateMass({ totalMass: D845, jumped: 2.5e9, jumpedSinceStatus: 0.5e9, status: 'reduced' })!;
+        expect(Math.round(estimate.max)).toBe(2.25e9);
+        const late = estimateMass({ totalMass: D845, jumped: 4.5e9, jumpedSinceStatus: 0.5e9, status: 'reduced' })!;
+        expect(Math.round(late.max)).toBe(1e9);
+    });
+
     it('patch 32: the bottom never goes above the top', () => {
         const estimate = estimateMass({ totalMass: D845, jumped: 4e9, status: 'fresh' })!;
         expect(Math.round(estimate.max)).toBe(1.5e9);

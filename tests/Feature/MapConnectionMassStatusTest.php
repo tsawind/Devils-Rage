@@ -72,3 +72,68 @@ it('patch 32: saving without a status change keeps the old timestamp', function 
 
     expect($connection->fresh()->mass_status_updated_at?->toIso8601String())->toBe($stamp?->toIso8601String());
 });
+
+function v753Connection(): MapConnection
+{
+    $connection = massStatusConnection();
+    $wormhole = App\Models\Wormhole::create([
+        'name' => 'V753',
+        'total_mass' => 3_300_000_000,
+        'maximum_jump_mass' => 1_350_000_000,
+        'maximum_lifetime' => 86_400,
+        'leads_to' => 'c6',
+    ]);
+    $connection->fromMapSolarsystem->signatures()->create([
+        'signature_id' => 'ABC-123',
+        'wormhole_id' => $wormhole->id,
+        'map_connection_id' => $connection->id,
+    ]);
+
+    return $connection->fresh();
+}
+
+it('patch 33: the log proves reduced at 55% of the listed mass (V753: 1,815 M)', function () {
+    $connection = v753Connection();
+    logJump($connection, 1_800_000_000);
+    app(App\Actions\MapConnections\InferMassStatusFromJumpsAction::class)->handle($connection);
+    expect($connection->fresh()->mass_status)->toBe(MassStatus::Fresh);
+
+    logJump($connection, 20_000_000);
+    app(App\Actions\MapConnections\InferMassStatusFromJumpsAction::class)->handle($connection->fresh());
+
+    $after = $connection->fresh();
+    expect($after->mass_status)->toBe(MassStatus::Reduced)
+        ->and($after->mass_status_from_log)->toBeTrue()
+        ->and($after->signatures()->first()->mass_status)->toBe(MassStatus::Reduced)
+        ->and($after->should_have_rolled)->toBeFalse();
+});
+
+it('patch 33: critical at 99% and "should have rolled" past 110% (V753: 3,267 M / 3,630 M)', function () {
+    $connection = v753Connection();
+    logJump($connection, 3_270_000_000);
+    app(App\Actions\MapConnections\InferMassStatusFromJumpsAction::class)->handle($connection);
+    expect($connection->fresh()->mass_status)->toBe(MassStatus::Critical)
+        ->and($connection->fresh()->should_have_rolled)->toBeFalse();
+
+    logJump($connection, 400_000_000);
+    app(App\Actions\MapConnections\InferMassStatusFromJumpsAction::class)->handle($connection->fresh());
+    expect($connection->fresh()->should_have_rolled)->toBeTrue();
+});
+
+it('patch 33: never makes a status better, and a hand-set status is not from the log', function () {
+    $connection = v753Connection();
+    $connection->update(['mass_status' => MassStatus::Critical]);
+    logJump($connection, 2_000_000_000);
+    app(App\Actions\MapConnections\InferMassStatusFromJumpsAction::class)->handle($connection->fresh());
+
+    expect($connection->fresh()->mass_status)->toBe(MassStatus::Critical)
+        ->and($connection->fresh()->mass_status_from_log)->toBeFalse();
+});
+
+it('patch 33: does nothing without a known hole type', function () {
+    $connection = massStatusConnection();
+    logJump($connection, 9_000_000_000);
+
+    expect(app(App\Actions\MapConnections\InferMassStatusFromJumpsAction::class)->handle($connection))->toBeFalse()
+        ->and($connection->fresh()->mass_status)->toBe(MassStatus::Fresh);
+});

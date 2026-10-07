@@ -4,8 +4,10 @@
  *
  * A new hole has its type's total mass ±10% (a D845: 4.5–5.5 B kg). Patch 32:
  * the status is the band (fresh 50–100%, reduced 10–50%, critical 0–10%, each
- * widened by the ±10% roll), and jumps logged since the status was set bring the
- * top down. The bottom stays at the band's bottom: not every jump gets logged.
+ * widened by the ±10% roll). Every logged jump brings the top down, and so do those
+ * since the status was set (against the band). The bottom stays at the band's bottom:
+ * not every jump gets logged. Patch 33: the server marks a hole reduced / critical once
+ * the log proves it, and flags it "rolled?" past the biggest it can be.
  */
 
 export type TMassEstimate = {
@@ -30,20 +32,28 @@ export function isFrigateHole(maximumJumpMass: number | null | undefined): boole
     return (maximumJumpMass ?? 0) > 0 && (maximumJumpMass ?? 0) <= FRIGATE_JUMP_MASS;
 }
 
-export function estimateMass(params: { totalMass: number | null | undefined; jumped: number | null | undefined; status: string | null | undefined }): TMassEstimate | null {
+export function estimateMass(params: {
+    totalMass: number | null | undefined;
+    /** Every logged jump through the hole. */
+    jumped: number | null | undefined;
+    /** Patch 33: the logged jumps since the mass status was last set (all of them when unknown). */
+    jumpedSinceStatus?: number | null;
+    status: string | null | undefined;
+}): TMassEstimate | null {
     const total = params.totalMass ?? 0;
     if (!(total > 0)) return null;
 
     const low = total * 0.9;
     const high = total * 1.1;
-    // Patch 32: `jumped` is only what was logged since the status was last set (marking a hole
-    // reduced or crit starts a new log). Unlogged pilots are always possible, so the bottom is
-    // the status band's bottom; logged jumps only bring the top down.
     const jumped = Math.max(0, params.jumped ?? 0);
+    const since = Math.max(0, params.jumpedSinceStatus ?? jumped);
     const bands: Record<string, [number, number]> = { critical: [0, 0.1], reduced: [0.1, 0.5], unknown: [0, 1] };
     const [bandLow, bandHigh] = bands[params.status ?? ''] ?? [0.5, 1];
 
-    const max = Math.max(0, high * bandHigh - jumped);
+    // Patch 32/33: the top is the tighter of "the biggest it can be, minus everything logged"
+    // and "the top of the status band, minus what was logged since the status was set". The
+    // bottom is the band's bottom: not every jump gets logged.
+    const max = Math.max(0, Math.min(high - jumped, high * bandHigh - since));
     const min = Math.min(low * bandLow, max);
     return { capacity: high, min: Math.max(0, min), max };
 }

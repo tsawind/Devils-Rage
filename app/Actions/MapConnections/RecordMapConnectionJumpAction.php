@@ -27,6 +27,7 @@ final readonly class RecordMapConnectionJumpAction
 {
     public function __construct(
         private BroadcastMapConnectionAction $broadcastMapConnection,
+        private InferMassStatusFromJumpsAction $inferMassStatus,
         private StargatePairDetector $stargatePairDetector,
     ) {}
 
@@ -109,6 +110,8 @@ final readonly class RecordMapConnectionJumpAction
             $jump->update(['map_connection_id' => $connection->id]);
         }
 
+        // Patch 33: the log may prove the hole reduced / critical / rolled.
+        $this->inferMassStatus->handle($connection);
         $this->broadcastMapConnection->handle($connection);
     }
 

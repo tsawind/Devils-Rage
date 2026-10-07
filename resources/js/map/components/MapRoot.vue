@@ -36,6 +36,7 @@ import { createNodeDragGesture } from '@/map/interactions/nodeDrag';
 import { createPanGesture } from '@/map/interactions/pan';
 import { useIsUsingInput } from '@/map/interactions/useIsUsingInput';
 import { createMapStore, provideMapStore } from '@/map/store/mapStore';
+import { useMassLogToasts } from '@/composables/useMassLogToasts';
 import { useMapSync } from '@/map/sync/useMapSync';
 import { TMap, TMapConnection, TSolarsystem } from '@/pages/maps';
 import { TMapConfig } from '@/types/map';
@@ -94,6 +95,8 @@ watchEffect(() => {
 useMapSync(store, () => map.id);
 // Patch 13: mark a static once it is certain, after your own paste / type change.
 useStaticCertainty(store);
+// Patch 33: the jump log marked a hole reduced / critical / rolled.
+useMassLogToasts(store);
 useUserEvents();
 
 // Patch 15: the system you're in (its rage-lane holes stay open), and Center:

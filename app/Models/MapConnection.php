@@ -35,6 +35,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property LifetimeStatus $lifetime
  * @property DateTimeImmutable|string|null $lifetime_updated_at
  * @property CarbonImmutable|null $mass_status_updated_at
+ * @property bool $mass_status_from_log
+ * @property bool $should_have_rolled
  * @property CarbonImmutable|null $connected_at
  * @property-read string|CarbonImmutable $created_at
  * @property-read string|CarbonImmutable $updated_at
@@ -65,6 +67,8 @@ final class MapConnection extends Model
         'lifetime' => LifetimeStatus::class,
         'lifetime_updated_at' => 'immutable_datetime',
         'mass_status_updated_at' => 'immutable_datetime',
+        'mass_status_from_log' => 'boolean',
+        'should_have_rolled' => 'boolean',
     ];
 
     /**
@@ -75,6 +79,10 @@ final class MapConnection extends Model
         self::saving(function (MapConnection $connection): void {
             if ($connection->exists && $connection->isDirty('mass_status')) {
                 $connection->mass_status_updated_at = now()->toImmutable();
+                // Patch 33: set by hand unless the jump log set it.
+                if (! $connection->isDirty('mass_status_from_log')) {
+                    $connection->mass_status_from_log = false;
+                }
             }
         });
     }
