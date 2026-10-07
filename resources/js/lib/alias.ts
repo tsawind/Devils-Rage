@@ -230,6 +230,10 @@ function nextNumericSlot(prefix: string, aliases: string[], slots: string = NUME
  * counts as a taken child and the chain stays visually consistent.
  */
 export function guessNextAlias(parentAlias: string | null | undefined, aliases: string[], opts?: TGuessNextAliasOptions): string {
+    const { base, stamp } = splitStamp(parentAlias);
+    if (stamp) {
+        return `${guessNextAlias(base, namesWithStamp(aliases, stamp), opts)}@${stamp}`;
+    }
     const combatHome = Boolean(opts?.combatHome);
     const isHome = usesHomeLetters(parentAlias, opts?.ignoredAlias, combatHome);
     const prefix = isHome || combatHome ? '' : (parentAlias ?? '').trim().toUpperCase();
@@ -302,19 +306,43 @@ export type TAliasPlanSignature = {
 };
 
 /**
+ * Patch 35: a chain retired by a rage roll keeps its names with a stamp of when it was
+ * first mapped, in EVE time: "A@1958", "A12@1958". The stamp never counts as part
+ * of the chain number, so the plain name ("A") is free again for the new static.
+ */
+export function splitStamp(alias: string | null | undefined): { base: string; stamp: string | null } {
+    const value = (alias ?? '').trim();
+    const at = value.indexOf('@');
+    return at === -1 ? { base: value, stamp: null } : { base: value.slice(0, at), stamp: value.slice(at + 1) || null };
+}
+
+function restamp(alias: string, parentAlias: string | null | undefined): string {
+    const { stamp } = splitStamp(parentAlias);
+    return stamp ? `${alias}@${stamp}` : alias;
+}
+
+/** Only the names carrying `stamp`, without it (the rest belong to other chains). */
+function namesWithStamp(aliases: readonly string[], stamp: string): string[] {
+    return aliases.flatMap((alias) => {
+        const split = splitStamp(alias);
+        return split.stamp?.toUpperCase() === stamp.toUpperCase() ? [split.base] : [];
+    });
+}
+
+/**
  * The chain prefix for a system: its alias, or "" for the ignored (home) alias
  * and for a combat home (whose chain starts again at 1, 2, 3).
  */
 export function chainPrefix(parentAlias: string | null | undefined, ignoredAlias?: string | null, combatHome = false): string {
     if (combatHome) return '';
-    const prefix = (parentAlias ?? '').trim().toUpperCase();
+    const prefix = splitStamp(parentAlias).base.toUpperCase();
     return isIgnoredAlias(prefix, ignoredAlias) ? '' : prefix;
 }
 
 /** The alias reserved for a system's static: "A" (Alpha) in home, "0" in a combat home, otherwise slot 0, e.g. "A0", "10". */
 export function staticSlotAlias(parentAlias: string | null | undefined, ignoredAlias?: string | null, combatHome = false): string {
     const isHome = usesHomeLetters(parentAlias, ignoredAlias, combatHome);
-    return `${chainPrefix(parentAlias, ignoredAlias, combatHome)}${slotsFor(isHome).staticSlot}`;
+    return restamp(`${chainPrefix(parentAlias, ignoredAlias, combatHome)}${slotsFor(isHome).staticSlot}`, parentAlias);
 }
 
 /**
@@ -347,7 +375,7 @@ export function orderStatics<T extends { leads_to?: string | null; leadsTo?: str
 export function staticSlotAliasAt(parentAlias: string | null | undefined, index: number, ignoredAlias?: string | null, combatHome = false): string {
     const { staticSlot, slots } = slotsFor(usesHomeLetters(parentAlias, ignoredAlias, combatHome));
     const sequence = staticSlot + slots;
-    return `${chainPrefix(parentAlias, ignoredAlias, combatHome)}${sequence[Math.min(Math.max(index, 0), sequence.length - 1)]}`;
+    return restamp(`${chainPrefix(parentAlias, ignoredAlias, combatHome)}${sequence[Math.min(Math.max(index, 0), sequence.length - 1)]}`, parentAlias);
 }
 
 /** Patch 20: the index of a static type among the system's statics (orderStatics order), or -1. */
@@ -381,7 +409,7 @@ export function aliasForSlot(parentAlias: string | null | undefined, slot: strin
     const normalized = slot.trim().toUpperCase();
     const { staticSlot, slots } = slotsFor(usesHomeLetters(parentAlias, ignoredAlias, combatHome));
     if (normalized.length !== 1 || !(staticSlot + slots).includes(normalized)) return null;
-    return `${chainPrefix(parentAlias, ignoredAlias, combatHome)}${normalized}`;
+    return restamp(`${chainPrefix(parentAlias, ignoredAlias, combatHome)}${normalized}`, parentAlias);
 }
 
 /**
@@ -419,6 +447,20 @@ export function planSignatureAliases(params: {
      */
     staticCount?: number;
 }): Map<number, string> {
+    const { base, stamp } = splitStamp(params.parentAlias);
+    if (stamp) {
+        const unstamped = planSignatureAliases({
+            ...params,
+            parentAlias: base,
+            aliases: namesWithStamp(params.aliases, stamp),
+            signatures: params.signatures.map((signature) => ({
+                ...signature,
+                lockedAlias: signature.lockedAlias ? (splitStamp(signature.lockedAlias).stamp === stamp ? splitStamp(signature.lockedAlias).base : signature.lockedAlias) : signature.lockedAlias,
+            })),
+        });
+        return new Map([...unstamped].map(([id, alias]) => [id, alias.includes('@') ? alias : `${alias}@${stamp}`]));
+    }
+
     const planned = new Map<number, string>();
     const wormholes = params.signatures.filter((signature) => signature.isWormhole).toSorted((a, b) => a.id - b.id);
 
@@ -541,6 +583,8 @@ export function formatAliasPath(alias: string | null | undefined): string {
  * never changed. The alphabetical scheme keeps its aliases as they are.
  */
 export function displayAlias(alias: string | null | undefined, scheme?: TAliasScheme): string {
+    const { base, stamp } = splitStamp(alias);
+    if (stamp) return `${displayAlias(base, scheme)}@${stamp}`;
     const value = (alias ?? '').trim();
     if (scheme === 'alphabetical') return value;
     return homeCallsign(value) ?? formatAliasPath(value);
@@ -548,7 +592,7 @@ export function displayAlias(alias: string | null | undefined, scheme?: TAliasSc
 
 /** The hole's own number within its system: the last character of a chain alias ("1121" → "1"). */
 export function localSlot(alias: string | null | undefined): string {
-    const value = (alias ?? '').trim();
+    const value = splitStamp(alias).base;
     return value ? value[value.length - 1] : '';
 }
 

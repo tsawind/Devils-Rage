@@ -46,6 +46,8 @@ const {
     isActive: boolean;
     isHome: boolean;
     isRally: boolean;
+    /** Patch 35: being rage rolled. */
+    isRolling?: boolean;
     fixedWidth: boolean;
     threatLevel?: TThreatLevel | null;
     /** Fully scanned with no way on: shown faded. */
@@ -176,6 +178,11 @@ function handleSubmit() {
         <template v-if="isRally">
             <div class="rally-pulse pointer-events-none absolute -inset-1.5 rounded-lg border-2 border-pink-500" />
             <div class="pointer-events-none absolute -top-2.5 right-2 rounded bg-pink-600 px-1 font-display text-[11px] leading-4 font-bold tracking-wide text-white uppercase">⚑ Rally</div>
+        </template>
+        <!-- Patch 35: rage rolling this system's static: a fast red ring and a ROLLING tag -->
+        <template v-if="isRolling">
+            <div class="rage-ring pointer-events-none absolute -inset-2 rounded-lg border-2 border-red-500" />
+            <div class="pointer-events-none absolute -top-2.5 left-2 rounded bg-red-700 px-1 font-display text-[11px] leading-4 font-bold tracking-widest text-white uppercase">⚡ Rolling</div>
         </template>
         <!-- Patch 26: a kill just came in here: red flash and shock rings -->
         <template v-if="killFlash">
@@ -341,6 +348,25 @@ function handleSubmit() {
     }
 }
 /* Patch 26: the rally point: a pink glow that swells in and out, always on. */
+.rage-ring {
+    animation: rage-ring 0.9s ease-in-out infinite;
+}
+@keyframes rage-ring {
+    0%,
+    100% {
+        border-color: rgb(239 68 68);
+        box-shadow: 0 0 10px rgb(220 38 38 / 0.8);
+    }
+    50% {
+        border-color: rgb(127 29 29);
+        box-shadow: 0 0 2px rgb(127 29 29 / 0.4);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .rage-ring {
+        animation: none;
+    }
+}
 .rally-pulse {
     animation: rally-pulse 1.6s ease-in-out infinite;
 }

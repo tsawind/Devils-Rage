@@ -19,6 +19,7 @@ use App\Http\Controllers\LandingController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\MapAccessController;
 use App\Http\Controllers\MapAlertController;
+use App\Http\Controllers\MapRageRollController;
 use App\Http\Controllers\MapRallyPingController;
 use App\Http\Controllers\MapAlertStateController;
 use App\Http\Controllers\MapBackgroundImageController;
@@ -167,6 +168,10 @@ Route::middleware('auth')->group(function () {
     Route::resource('map-webhook-roles', MapWebhookRoleController::class)->only(['store', 'update', 'destroy']);
     Route::resource('map-alerts', MapAlertController::class)->only(['store', 'update', 'destroy']);
     Route::post('maps/{map}/rally-ping', [MapRallyPingController::class, 'store'])->name('maps.rally-ping.store');
+    Route::post('maps/{map}/rage-roll', [MapRageRollController::class, 'store'])->name('maps.rage-roll.store');
+    Route::put('maps/{map}/rage-roll/targets', [MapRageRollController::class, 'targets'])->name('maps.rage-roll.targets');
+    Route::post('maps/{map}/rage-roll/new-static', [MapRageRollController::class, 'newStatic'])->name('maps.rage-roll.new-static');
+    Route::delete('maps/{map}/rage-roll', [MapRageRollController::class, 'destroy'])->name('maps.rage-roll.destroy');
     Route::put('map-alerts/{map_alert}/state', [MapAlertStateController::class, 'update'])->name('map-alerts.state.update');
     Route::get('eve/ship-search', [EveSearchController::class, 'index'])->name('eve.ship-search');
     Route::get('maps/{map}/search', [MapSearchController::class, 'index'])->name('maps.search');

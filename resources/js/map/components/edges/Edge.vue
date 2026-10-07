@@ -28,6 +28,8 @@ type Props = {
     rallyDirection?: 'forward' | 'reverse' | null;
     /** Combat chain color: a glowing band behind the line in that color. */
     chainColor?: string | null;
+    /** Patch 35: the static being rage rolled: a pulsing red band. */
+    rolling?: boolean;
     /** A loop (patch 12): not how either end was found, drawn dashed amber. */
     isLoop?: boolean;
     /** Pipes drawn this much thinner (patch 13: compact combat lanes). */
@@ -48,6 +50,7 @@ const {
     isOnRoute = false,
     rallyDirection = null,
     chainColor = null,
+    rolling = false,
     isLoop = false,
     pipeScale = 1,
     endClasses = null,
@@ -320,6 +323,17 @@ function getDashArray(): string | undefined {
         class="pointer-events-none stroke-stone-100 dark:stroke-neutral-950"
     />
     <g v-else pointer-events="visiblePainted" class="group text-stone-600 dark:text-neutral-700">
+        <!-- Patch 35: the static being rage rolled glows red -->
+        <path
+            v-if="rolling"
+            :d="path.d"
+            stroke="#dc2626"
+            fill="none"
+            :stroke-width="isOrthogonal ? 14 : 18"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+            class="rage-pipe pointer-events-none"
+        />
         <!-- Combat chain: a soft band in the chain's color behind the connection, so the chain reads as one colored path. -->
         <template v-if="chainColor">
             <path :d="path.d" :stroke="chainColor" fill="none" :stroke-width="isOrthogonal ? 9 : 14" stroke-opacity="0.18" stroke-linejoin="round" stroke-linecap="round" />
@@ -436,6 +450,25 @@ function getDashArray(): string | undefined {
 </template>
 
 <style scoped>
+.rage-pipe {
+    animation: rage-pipe 1.2s ease-in-out infinite;
+}
+@keyframes rage-pipe {
+    0%,
+    100% {
+        stroke-opacity: 0.2;
+    }
+    50% {
+        stroke-opacity: 0.6;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .rage-pipe {
+        animation: none;
+        stroke-opacity: 0.35;
+    }
+}
+
 [data-lifetime='critical'] {
     color: var(--color-red-500);
 }

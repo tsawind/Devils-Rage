@@ -1,3 +1,4 @@
+import type { TRageRoll } from '@/lib/rageRoll';
 import { TLayout } from '@/composables/useLayout';
 import { TAliasScheme } from '@/lib/alias';
 import { TEveScoutConnection } from '@/types/eve-scout';
@@ -157,6 +158,8 @@ export type TMap = {
     slug: string;
     home_solarsystem_id: number | null;
     rally_solarsystem_id: number | null;
+    /** Patch 35: the rage roll in progress, if any. */
+    rage_roll?: TRageRoll | null;
     layout: 'manual' | 'tree';
     allow_layout_override: boolean;
     constant_width_enabled: boolean;

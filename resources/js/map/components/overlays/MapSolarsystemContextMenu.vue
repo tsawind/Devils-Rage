@@ -3,6 +3,7 @@ import { CharacterImage } from '@/components/images';
 import SolarsystemStatusIcon from '@/components/map/SolarsystemStatusIcon.vue';
 import SolarsystemExternalLinks from '@/components/solarsystem/SolarsystemExternalLinks.vue';
 import {
+    ContextMenuCheckboxItem,
     ContextMenuContent,
     ContextMenuItem,
     ContextMenuRadioGroup,
@@ -15,6 +16,7 @@ import {
 import { useHomeSystem } from '@/composables/useHomeSystem';
 import { useNavigationSystems } from '@/composables/useNavigationSystems';
 import usePermission from '@/composables/usePermission';
+import { useRageRoll } from '@/composables/useRageRoll';
 import { useRallyPoint } from '@/composables/useRallyPoint';
 import useUser from '@/composables/useUser';
 import { useWaypoint } from '@/composables/useWaypoint';
@@ -46,6 +48,16 @@ const { canEdit: can_write } = usePermission();
 
 const { isHome, toggleHomeSystem } = useHomeSystem(() => map_solarsystem.solarsystem_id);
 const { isRally, toggleRallyPoint } = useRallyPoint(() => map_solarsystem.solarsystem_id);
+const { isRolling, openRageRoll, stopRageRoll } = useRageRoll();
+
+/** Patch 35: tick → the RAGE ROLL popup; untick (this system is rolling) → the roll ends for everyone. */
+function handleRageRoll(): void {
+    if (isRolling(map_solarsystem.solarsystem_id)) {
+        stopRageRoll();
+        return;
+    }
+    openRageRoll(map_solarsystem.solarsystem_id);
+}
 
 const { setWaypoint, setWaypointAll, onlineCharacters } = useWaypoint();
 
@@ -211,7 +223,16 @@ const options: TMapSolarsystemStatus[] = ['unknown', 'friendly', 'hostile', 'act
             <Home class="size-4" />
             {{ isHome ? 'Unset Home System' : 'Set as Home System' }}
         </ContextMenuItem>
-        <ContextMenuItem @select="toggleRallyPoint" v-if="can_write">
+        <!-- Patch 35: RAGE ROLL, bold and red, just above the (pink) rally point -->
+        <ContextMenuCheckboxItem
+            v-if="can_write"
+            :model-value="isRolling(map_solarsystem.solarsystem_id)"
+            class="font-display font-bold tracking-wider text-red-500 uppercase focus:bg-red-950/60 focus:text-red-400"
+            @select="handleRageRoll"
+        >
+            ⚡ Rage roll
+        </ContextMenuCheckboxItem>
+        <ContextMenuItem @select="toggleRallyPoint" v-if="can_write" class="text-pink-500 focus:bg-pink-950/50 focus:text-pink-400 [&_svg]:text-pink-500">
             <Flag class="size-4" />
             {{ isRally ? 'Clear Rally Point' : 'Set as Rally Point' }}
         </ContextMenuItem>

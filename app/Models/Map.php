@@ -31,6 +31,11 @@ use function sprintf;
  * @property string|null $share_token
  * @property int|null $home_solarsystem_id
  * @property int|null $rally_solarsystem_id
+ * @property int|null $rage_roll_solarsystem_id Patch 35: the system whose static is being rage rolled
+ * @property CarbonImmutable|null $rage_roll_started_at
+ * @property string|null $rage_roll_started_by
+ * @property list<int>|null $rage_roll_targets Solarsystem ids that end the roll when hit
+ * @property bool $rage_roll_scanning The roll is also a Rage Scanning session: rage speed for everyone
  * @property string $bookmark_format_wormhole
  * @property string $bookmark_format_kspace
  * @property string $bookmark_format_return
@@ -202,6 +207,33 @@ final class Map extends Model
     /**
      * @return array<string, string>
      */
+    /**
+     * Patch 35: the rage roll in progress (null when nobody is rolling), with the
+     * target systems' names for the mapper.
+     *
+     * @return array{solarsystem_id: int, started_at: string|null, started_by: string|null, scanning: bool, targets: list<array{id: int, name: string}>}|null
+     */
+    public function rageRollState(): ?array
+    {
+        if ($this->rage_roll_solarsystem_id === null) {
+            return null;
+        }
+
+        $target_ids = array_values(array_map(intval(...), $this->rage_roll_targets ?? []));
+        $names = Solarsystem::query()->whereIn('id', $target_ids)->pluck('name', 'id');
+
+        return [
+            'solarsystem_id' => $this->rage_roll_solarsystem_id,
+            'started_at' => $this->rage_roll_started_at?->toIso8601String(),
+            'started_by' => $this->rage_roll_started_by,
+            'scanning' => (bool) $this->rage_roll_scanning,
+            'targets' => array_values(array_map(
+                fn (int $id): array => ['id' => $id, 'name' => (string) ($names[$id] ?? $id)],
+                $target_ids,
+            )),
+        ];
+    }
+
     protected function casts(): array
     {
         return [
@@ -210,6 +242,9 @@ final class Map extends Model
             'allow_layout_override' => 'boolean',
             'constant_width_enabled' => 'boolean',
             'bookmark_alias_scheme' => AliasScheme::class,
+            'rage_roll_started_at' => 'immutable_datetime',
+            'rage_roll_targets' => 'array',
+            'rage_roll_scanning' => 'boolean',
         ];
     }
 }

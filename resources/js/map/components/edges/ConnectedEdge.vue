@@ -53,6 +53,17 @@ const geometry = computed<EdgeGeometry | null>(() => {
 
 const isOnRoute = computed(() => store.routeConnectionIds.value.has(id));
 
+/** Patch 35: this is the static being rage rolled (marked static on the rolling system's side). */
+const isRolling = computed(() => {
+    const resolved = connection.value;
+    const rollingSolarsystemId = store.meta.value?.rage_roll?.solarsystem_id;
+    if (!resolved || rollingSolarsystemId == null) return false;
+    const rolling = [resolved.from_map_solarsystem_id, resolved.to_map_solarsystem_id].find(
+        (systemId) => store.systems.get(systemId)?.solarsystem_id === rollingSolarsystemId,
+    );
+    return rolling !== undefined && (resolved.signatures ?? []).some((signature) => signature.map_solarsystem_id === rolling && signature.is_static);
+});
+
 /** Both ends in the same combat chain: the line is drawn in the chain's color. */
 const chainColor = computed<string | null>(() => {
     const resolved = connection.value;
@@ -122,6 +133,7 @@ function handleConnectionContextMenu(event: MouseEvent): void {
         :geometry="geometry"
         :connection="connection"
         :is-on-route="isOnRoute"
+        :rolling="isRolling"
         :rally-direction="rallyDirection"
         :chain-color="chainColor"
         :is-loop="isLoop"

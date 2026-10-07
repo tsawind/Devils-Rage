@@ -1,5 +1,5 @@
 import { isWormholeClass } from '@/const/solarsystemClasses';
-import { aliasTargetKind, formatAliasPath, homeCallsign, isIgnoredAlias, suggestAlias, TAliasScheme } from '@/lib/alias';
+import { aliasTargetKind, formatAliasPath, homeCallsign, isIgnoredAlias, splitStamp, suggestAlias, TAliasScheme } from '@/lib/alias';
 import { connectionFlag } from '@/lib/chainNumbering';
 import { combatColorLabel } from '@/lib/combat';
 import { TResolvedSolarsystem } from '@/pages/maps';
@@ -180,6 +180,9 @@ export function getSignatureIdShort(signatureId: string | null | undefined): str
  */
 function aliasTokenValue(alias: string | null | undefined, useCallsigns: boolean): string {
     if (!useCallsigns) return alias ?? '';
+    // Patch 35: a stamped old chain keeps its stamp ("Alpha@1958", "A111-102@1958").
+    const { base, stamp } = splitStamp(alias);
+    if (stamp) return `${homeCallsign(base) ?? formatAliasPath(base)}@${stamp}`;
     const callsign = homeCallsign(alias);
     return callsign ? `${BOOKMARK_SPACE}${callsign}` : formatAliasPath(alias);
 }
@@ -187,6 +190,8 @@ function aliasTokenValue(alias: string | null | undefined, useCallsigns: boolean
 /** `{here}`: a system directly off home is named by its callsign ("A" → "Alpha"), others by their full path ("111-2"). */
 function hereTokenValue(alias: string | null | undefined, useCallsigns: boolean): string {
     if (!useCallsigns) return alias ?? '';
+    const { base, stamp } = splitStamp(alias);
+    if (stamp) return `${homeCallsign(base) ?? formatAliasPath(base)}@${stamp}`;
     return homeCallsign(alias) ?? formatAliasPath(alias);
 }
 

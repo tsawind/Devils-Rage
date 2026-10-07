@@ -87,6 +87,11 @@ const isRally = computed(() => {
     return system.value !== null && store.meta.value?.rally_solarsystem_id === system.value.solarsystem_id;
 });
 
+/** Patch 35: this system's static is being rage rolled. */
+const isRolling = computed(() => {
+    return system.value !== null && store.meta.value?.rage_roll?.solarsystem_id === system.value.solarsystem_id;
+});
+
 // Fully scanned, every signature identified, and the only hole is the way in (see isDeadEnd).
 const minuteClock = useMinuteClock();
 const isDeadEnd = computed(() => {
@@ -205,6 +210,7 @@ onBeforeUnmount(() => {
                             :is-active="isActive"
                             :is-home="isHome"
                             :is-rally="isRally"
+                            :is-rolling="isRolling"
                             :fixed-width="fixedWidth"
                             :threat-level="threatLevel"
                             :way-back="wayBack"

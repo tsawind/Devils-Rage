@@ -21,7 +21,7 @@ const page = useShowMap();
 const character = useActiveMapCharacter();
 const { canEdit } = usePermission();
 const { map_solarsystems } = useMapSolarsystems();
-const { is_combat, combat_color } = useCombat();
+const { is_combat, is_session_speed, combat_color } = useCombat();
 
 const show_combat_dialog = ref(false);
 
@@ -41,12 +41,14 @@ const combat_homes = computed(() => map_solarsystems.value.filter((system) => sy
 
 const combat_label = computed(() => {
     const chain = combatColorLabel(combat_color.value);
+    if (!chain && is_session_speed.value) return 'Rage · Session';
     return chain ? `Rage · ${chain}` : 'Rage Scanning';
 });
 const combat_dot = computed(() => combatColorHex(combat_color.value));
 
 function handleToggleCombat(): void {
-    if (is_combat.value) {
+    // Patch 35: speed from a rage roll session isn't yours to switch off; you can still start a chain.
+    if (is_combat.value && !is_session_speed.value) {
         stopCombat(page.props.map.slug);
         return;
     }
@@ -75,6 +77,9 @@ function handleChooseCombat(choice: TCombatStart): void {
             </TooltipTrigger>
             <TooltipContent side="bottom" class="max-w-sm">
                 <p class="text-xs font-medium">Rage Scanning · {{ is_combat ? 'On' : 'Off' }} (just for you)</p>
+                <p v-if="is_session_speed" class="mt-1 text-xs font-medium text-red-400">
+                    On for everyone: the rage roll is a Rage Scanning session. It turns off when the roll ends.
+                </p>
                 <div class="mt-1 space-y-1.5 text-xs text-muted-foreground">
                     <p>
                         The mapper stops asking and keeps up with you. No jump prompt, popups answer themselves after 60 s, holes are numbered

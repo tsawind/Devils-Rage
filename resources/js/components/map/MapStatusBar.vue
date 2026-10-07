@@ -46,7 +46,9 @@ import { displayAlias } from '@/lib/alias';
 import type { TResolvedMapNavigation, TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TCharacter } from '@/types/models';
 import CommandPaletteButton from './CommandPaletteButton.vue';
+import RageRollChip from './RageRollChip.vue';
 import RallyChip from './RallyChip.vue';
+import { useRageRoll } from '@/composables/useRageRoll';
 import RouteCopyButtons from './RouteCopyButtons.vue';
 import MapSwitcher from './MapSwitcher.vue';
 import RoutingBox from './RoutingBox.vue';
@@ -64,6 +66,8 @@ const { map, map_user_settings, layout, map_navigation = null, map_characters = 
 
 // Patch 23: fold the site header away (your character floats on the map; this toolbar shrinks to small icons).
 const { barsFolded, setBarsFolded } = useMapChrome();
+/** Patch 35: the bar pulses red while a rage roll is on. */
+const { rageRoll } = useRageRoll();
 const labelClass = computed(() => (barsFolded.value ? 'hidden' : 'hidden md:inline'));
 
 // Initialize tracking
@@ -188,7 +192,10 @@ const settingsUrl = computed(() => {
 </script>
 
 <template>
-    <div class="relative flex h-10 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/30 px-2 sm:gap-3 sm:px-3">
+    <div
+        class="relative flex h-10 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/30 px-2 sm:gap-3 sm:px-3"
+        :class="{ 'rage-bar': rageRoll }"
+    >
         <!-- Map Name (patch 26: opens a list of your maps, plus New map) -->
         <MapSwitcher :map="map" />
 
@@ -207,6 +214,8 @@ const settingsUrl = computed(() => {
             <!-- Patch 31: the rally point, moved off the map -->
             <RallyChip />
         </div>
+        <!-- Patch 35: the rage roll, for everyone while it's on -->
+        <RageRollChip />
 
         <!-- Spacer -->
         <div class="flex-1" />
@@ -553,3 +562,28 @@ const settingsUrl = computed(() => {
         </DialogContent>
     </Dialog>
 </template>
+
+<style scoped>
+/* Patch 35: the bar breathes red while a rage roll is on. */
+.rage-bar {
+    border-bottom-color: rgb(185 28 28 / 0.9);
+    animation: rage-bar 1.6s ease-in-out infinite;
+}
+@keyframes rage-bar {
+    0%,
+    100% {
+        background-color: rgb(69 10 10 / 0.55);
+        box-shadow: inset 0 -1px 0 rgb(185 28 28), 0 0 10px rgb(127 29 29 / 0.6);
+    }
+    50% {
+        background-color: rgb(127 29 29 / 0.6);
+        box-shadow: inset 0 -1px 0 rgb(239 68 68), 0 0 24px rgb(220 38 38 / 0.85);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .rage-bar {
+        animation: none;
+        background-color: rgb(69 10 10 / 0.6);
+    }
+}
+</style>

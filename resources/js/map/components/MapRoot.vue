@@ -7,6 +7,7 @@ import { useRallyRoute } from '@/composables/useRallyRoute';
 import StaticCertainDialog from '@/components/signatures/StaticCertainDialog.vue';
 import StaticConfirmDialog from '@/components/signatures/StaticConfirmDialog.vue';
 import WayBackPopup from '@/components/signatures/WayBackPopup.vue';
+import RageRollOverlay from '@/components/map/RageRollOverlay.vue';
 import { useStaticCertainty } from '@/composables/signatures/useStaticCertainty';
 import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
 import { useCombat } from '@/composables/combat/useCombat';
@@ -282,6 +283,7 @@ whenever(Delete, () => {
         <template #overlays>
             <MapOptions />
             <WayBackPopup />
+            <RageRollOverlay />
         </template>
     </MapViewport>
     <ConnectionPopover
