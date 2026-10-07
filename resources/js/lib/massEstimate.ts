@@ -2,11 +2,10 @@
  * How much mass a wormhole has left (patch 12): drawn as the thickness of its
  * connection on the map.
  *
- * A new hole has its type's total mass ±10% (a D845: 4.5–5.5 B kg). Logged
- * jumps (both directions) come off that, and the status a scanner sets narrows
- * it: fresh is at least 50% of the hole, reduced is under 50% (at least 10%),
- * critical is under 10%. Only jumps the mapper logged count (tracked pilots,
- * base ship mass), which is why the status keeps the estimate honest.
+ * A new hole has its type's total mass ±10% (a D845: 4.5–5.5 B kg). Patch 32:
+ * the status is the band (fresh 50–100%, reduced 10–50%, critical 0–10%, each
+ * widened by the ±10% roll), and jumps logged since the status was set bring the
+ * top down. The bottom stays at the band's bottom: not every jump gets logged.
  */
 
 export type TMassEstimate = {
@@ -37,27 +36,16 @@ export function estimateMass(params: { totalMass: number | null | undefined; jum
 
     const low = total * 0.9;
     const high = total * 1.1;
+    // Patch 32: `jumped` is only what was logged since the status was last set (marking a hole
+    // reduced or crit starts a new log). Unlogged pilots are always possible, so the bottom is
+    // the status band's bottom; logged jumps only bring the top down.
     const jumped = Math.max(0, params.jumped ?? 0);
+    const bands: Record<string, [number, number]> = { critical: [0, 0.1], reduced: [0.1, 0.5], unknown: [0, 1] };
+    const [bandLow, bandHigh] = bands[params.status ?? ''] ?? [0.5, 1];
 
-    // Logged jumps are only part of what went through (unlogged pilots, prop
-    // mods): they cap what can be left, but only bound the low end while they
-    // agree with the status.
-    const fromJumps = low - jumped;
-    let max = high - jumped;
-    let statusMin = 0;
-
-    if (params.status === 'reduced') {
-        max = Math.min(max, high * 0.5);
-        statusMin = low * 0.1;
-    } else if (params.status === 'critical') {
-        max = Math.min(max, high * 0.1);
-    } else {
-        statusMin = Math.min(low * 0.5, fromJumps);
-    }
-
-    max = Math.max(0, max);
-    const min = fromJumps <= max ? Math.max(fromJumps, statusMin) : statusMin;
-    return { capacity: high, min: Math.max(0, Math.min(min, max)), max };
+    const max = Math.max(0, high * bandHigh - jumped);
+    const min = Math.min(low * bandLow, max);
+    return { capacity: high, min: Math.max(0, min), max };
 }
 
 /** Pipe width for a mass: 2 px + 30 px × (mass ÷ 5.5 B), so 32 px for the biggest hole (0 for nothing). */

@@ -125,7 +125,8 @@ export function useRouteCopy() {
             typeName: typed?.name ?? null,
             totalMass: typed?.total_mass ?? wormholeMass(typed?.name)?.total ?? null,
             maxJumpMass: typed?.maximum_jump_mass ?? wormholeMass(typed?.name)?.maxJump ?? (connection.ship_size ? (SHIP_SIZE_MAX_JUMP[connection.ship_size] ?? null) : null),
-            jumpedMass: connection.jumps_mass_sum ?? 0,
+            // Patch 32: only the jumps since the mass status was set.
+            jumpedMass: connection.jumps_mass_since_status ?? connection.jumps_mass_sum ?? 0,
             massStatus: connection.mass_status ?? null,
             lifetimeStatus: connection.lifetime_status ?? null,
             eolSince: connection.lifetime_status === 'eol' || connection.lifetime_status === 'critical' ? connection.lifetime_status_updated_at : null,

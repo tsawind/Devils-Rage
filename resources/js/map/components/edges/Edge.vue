@@ -225,7 +225,8 @@ const estimate = computed(() => {
     if (isStargate.value || !connection) return null;
     const total = holeType.value?.total_mass ?? guessedMass.value;
     if (!total) return null;
-    return estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, status: massStatus.value });
+    // Patch 32: only the jumps since the mass status was set count against its band.
+    return estimateMass({ totalMass: total, jumped: connection.jumps_mass_since_status ?? connection.jumps_mass_sum, status: massStatus.value });
 });
 
 const pipe = computed(() => {

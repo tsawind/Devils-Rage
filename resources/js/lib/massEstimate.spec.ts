@@ -4,29 +4,39 @@ import { describe, expect, it } from 'vitest';
 const D845 = 5_000_000_000;
 
 describe('patch 12: mass left on a wormhole', () => {
-    it('starts at total mass ±10%', () => {
-        expect(estimateMass({ totalMass: D845, jumped: 0, status: 'fresh' })).toEqual({ capacity: 5.5e9, min: 4.5e9, max: 5.5e9 });
+    it('patch 32: fresh is 50–100% of the hole (±10%), whatever was logged', () => {
+        expect(estimateMass({ totalMass: D845, jumped: 0, status: 'fresh' })).toEqual({ capacity: 5.5e9, min: 2.25e9, max: 5.5e9 });
     });
 
-    it('takes logged jumps off', () => {
+    it('patch 32: logged jumps since the status was set only bring the top down', () => {
         const estimate = estimateMass({ totalMass: D845, jumped: 1.2e9, status: 'fresh' })!;
-        expect(estimate.min).toBe(3.3e9);
+        expect(estimate.min).toBe(2.25e9);
         expect(Math.round(estimate.max)).toBe(4.3e9);
     });
 
-    it('limits reduced to 2.75 B or less (and at least 10%)', () => {
+    it('patch 32: reduced is 10–50% (±10%)', () => {
         const flagOnly = estimateMass({ totalMass: D845, jumped: 0, status: 'reduced' })!;
         expect(flagOnly.max).toBe(2.75e9);
         expect(flagOnly.min).toBe(4.5e8);
-        const withJumps = estimateMass({ totalMass: D845, jumped: 2.9e9, status: 'reduced' })!;
-        expect(Math.round(withJumps.min)).toBe(1.6e9);
-        expect(Math.round(withJumps.max)).toBe(2.6e9);
+        const withJumps = estimateMass({ totalMass: D845, jumped: 1e9, status: 'reduced' })!;
+        expect(withJumps.min).toBe(4.5e8);
+        expect(Math.round(withJumps.max)).toBe(1.75e9);
+    });
+
+    it('patch 32: unknown status could be anything up to full', () => {
+        expect(estimateMass({ totalMass: D845, jumped: 0, status: 'unknown' })).toEqual({ capacity: 5.5e9, min: 0, max: 5.5e9 });
     });
 
     it('limits critical to 550 M or less', () => {
         const estimate = estimateMass({ totalMass: D845, jumped: 0, status: 'critical' })!;
         expect(estimate.max).toBe(5.5e8);
         expect(estimate.min).toBe(0);
+    });
+
+    it('patch 32: the bottom never goes above the top', () => {
+        const estimate = estimateMass({ totalMass: D845, jumped: 4e9, status: 'fresh' })!;
+        expect(Math.round(estimate.max)).toBe(1.5e9);
+        expect(Math.round(estimate.min)).toBe(1.5e9);
     });
 
     it('never goes negative, and has no estimate without a known type', () => {

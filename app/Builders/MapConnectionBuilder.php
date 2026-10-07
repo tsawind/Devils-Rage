@@ -48,6 +48,10 @@ final class MapConnectionBuilder extends Builder
         return $this
             ->withCount('jumps')
             ->withSum('jumps as jumps_mass_sum', 'mass')
+            // Patch 32: only the jumps since the mass status was last set count against its band.
+            ->withSum(['jumps as jumps_mass_since_status' => fn ($query) => $query->where(fn ($inner) => $inner
+                ->whereNull('map_connections.mass_status_updated_at')
+                ->orWhereColumn('map_connection_jumps.created_at', '>=', 'map_connections.mass_status_updated_at'))], 'mass')
             ->with(['jumps' => fn ($query) => $query
                 ->with('character:id,name', 'shipType:id,name')
                 ->latest('id')

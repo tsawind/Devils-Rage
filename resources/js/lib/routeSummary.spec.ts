@@ -51,7 +51,7 @@ describe('patch 26: size, mass, chokepoints and risks', () => {
     it('size from the smallest hole, mass from the tightest, counted cold with plates on', () => {
         const text = routeSummary({ steps, hops: [wh(), wh({ totalMass: 3_000_000_000, typeName: 'B274' }), wh()], roundTrip: false, now });
         expect(text).toContain('Battleship sized');
-        expect(text).toContain(`≈ ${Math.floor((3_000_000_000 * 0.9) / FLEET_RULES.shipMass.battleship)} BS`);
+        expect(text).toContain(`≈ ${Math.floor((3_000_000_000 * 0.9 * 0.5) / FLEET_RULES.shipMass.battleship)} BS`);
         expect(text).toContain('Choke: Alpha↔A12 "B274"');
     });
 
@@ -121,5 +121,16 @@ describe('patch 29d: jump counts and the route kind', () => {
         const kspace = Array.from({ length: 8 }, (_, index) => step(`K${index}`, null));
         const steps = [step('Daisy', 0), ...kspace];
         expect(condenseRoute(steps, [wh(), ...kspace.slice(1).map(() => gate)])).toBe('Daisy → K0 → 7j → K7');
+    });
+});
+
+describe('patch 32: frigate-only routes skip the mass', () => {
+    it('says "Frig sized" with no mass, fleet count or chokepoint', () => {
+        const steps = [step('Daisy', 0), step('Bravo', 1), step('Jita', null)];
+        const frig = wh({ typeName: 'Q003', totalMass: 1_000_000_000, maxJumpMass: 5_000_000 });
+        const text = routeSummary({ steps, hops: [frig, wh()], roundTrip: false, now });
+        expect(text).toContain('Frig sized');
+        expect(text).not.toContain(' kg');
+        expect(text).not.toContain('Choke');
     });
 });

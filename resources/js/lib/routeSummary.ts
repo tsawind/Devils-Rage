@@ -1,5 +1,5 @@
 import { FLEET_RULES, sizeLabel } from '@/lib/fleetRules';
-import { estimateMass, type TMassEstimate } from '@/lib/massEstimate';
+import { estimateMass, isFrigateHole, type TMassEstimate } from '@/lib/massEstimate';
 
 /**
  * Patch 26: a route as one line for fleet chat: only the bookmarks people can't work out in
@@ -130,6 +130,8 @@ function massLine(input: TRouteInput, holes: THoleOnRoute[]): string | null {
     const parts: string[] = [];
     const maxJump = sized.length ? Math.min(...sized) : null;
     if (maxJump !== null) parts.push(`${sizeLabel(maxJump)} sized`);
+    // Patch 32: a frigate-only route: the mass doesn't matter.
+    if (maxJump !== null && isFrigateHole(maxJump)) return parts.join(' · ');
     if (estimated.length) {
         const low = share(input, Math.min(...estimated.map((entry) => entry.estimate.min)));
         const high = share(input, Math.min(...estimated.map((entry) => entry.estimate.max)));
@@ -187,7 +189,9 @@ export function routeSummary(input: TRouteInput, extra: string | null = null): s
     const route = `${input.kind ? `${input.kind} ` : ''}${jumps}j: ${condenseRoute(input.steps, input.hops)}`;
     const holes = holesOnRoute(input);
     const mass = massLine(input, holes);
-    const chokes = chokepoints(holes).map(chokeText);
+    // Patch 32: no chokepoints on a frigate-only route (mass doesn't matter there).
+    const frigateOnly = holes.some((entry) => isFrigateHole(entry.hole.maxJumpMass));
+    const chokes = frigateOnly ? [] : chokepoints(holes).map(chokeText);
     const risks = holes
         .map((entry) => riskText(entry, input.now))
         .filter((text): text is string => text !== null)

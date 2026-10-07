@@ -34,6 +34,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|ShipSize|null $ship_size
  * @property LifetimeStatus $lifetime
  * @property DateTimeImmutable|string|null $lifetime_updated_at
+ * @property CarbonImmutable|null $mass_status_updated_at
  * @property CarbonImmutable|null $connected_at
  * @property-read string|CarbonImmutable $created_at
  * @property-read string|CarbonImmutable $updated_at
@@ -44,6 +45,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Collection<int, MapConnectionJump> $jumps
  * @property-read int|null $jumps_count
  * @property-read int|string|null $jumps_mass_sum
+ * @property-read int|string|null $jumps_mass_since_status
  */
 #[UseFactory(MapConnectionFactory::class)]
 #[UseEloquentBuilder(MapConnectionBuilder::class)]
@@ -62,7 +64,20 @@ final class MapConnection extends Model
         'ship_size' => ShipSize::class,
         'lifetime' => LifetimeStatus::class,
         'lifetime_updated_at' => 'immutable_datetime',
+        'mass_status_updated_at' => 'immutable_datetime',
     ];
+
+    /**
+     * Patch 32: a new mass status starts a new jump log (only jumps since then count).
+     */
+    protected static function booted(): void
+    {
+        self::saving(function (MapConnection $connection): void {
+            if ($connection->exists && $connection->isDirty('mass_status')) {
+                $connection->mass_status_updated_at = now()->toImmutable();
+            }
+        });
+    }
 
     /**
      * The solar system this connection is from.

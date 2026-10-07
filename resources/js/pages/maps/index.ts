@@ -256,6 +256,9 @@ export type TMapConnection = {
     signatures: TTailoredSignature[] | null;
     ship_size: TShipSize | null;
     jumps_mass_sum: number;
+    /** Patch 32: jumps logged since the mass status was last set (the ones that count against its band). */
+    jumps_mass_since_status?: number;
+    mass_status_updated_at?: string | null;
     jumps_count: number;
     jumps?: TConnectionJump[];
     created_at: string;
