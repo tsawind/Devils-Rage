@@ -140,11 +140,15 @@ final readonly class HideOldChainsAction
      */
     private function occupiedSolarsystemIds(Collection $systems): array
     {
-        return CharacterStatus::query()
+        $occupied = [];
+        $solarsystem_ids = CharacterStatus::query()
             ->where('is_online', true)
             ->whereIn('solarsystem_id', $systems->pluck('solarsystem_id')->all())
-            ->pluck('solarsystem_id')
-            ->mapWithKeys(fn (mixed $id): array => [(int) $id => true])
-            ->all();
+            ->pluck('solarsystem_id');
+        foreach ($solarsystem_ids as $id) {
+            $occupied[(int) $id] = true;
+        }
+
+        return $occupied;
     }
 }
