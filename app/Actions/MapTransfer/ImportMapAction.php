@@ -249,9 +249,11 @@ final readonly class ImportMapAction
                         'position_x' => (int) $entry['position_x'],
                         'position_y' => (int) $entry['position_y'],
                         'pinned' => (bool) ($entry['pinned'] ?? false),
+                        // Patch 36: importing a system that was hidden brings it back.
+                        'hidden_at' => null,
                     ], $chunk),
                     ['map_id', 'solarsystem_id'],
-                    ['map_solarsystem_details_id', 'alias', 'position_x', 'position_y', 'pinned'],
+                    ['map_solarsystem_details_id', 'alias', 'position_x', 'position_y', 'pinned', 'hidden_at'],
                 );
             }
         }

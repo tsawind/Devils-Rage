@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\MapRageRoll;
 
+use App\Actions\MapSolarsystem\HideOldChainsAction;
 use App\Actions\Signatures\DeleteSignatureAction;
 use App\Enums\SignatureCategory;
 use App\Models\MapConnection;
@@ -18,7 +19,8 @@ use Throwable;
  * Patch 35: "New Alpha?" → Yes. The old static's chain keeps its names with a
  * stamp of when it was first mapped, in EVE time ("A" → "A@1958", "A1" →
  * "A1@1958"), so its slot is free at once; the old static's signature (and its
- * pipe) is deleted, and the new signature becomes the static with the old name
+ * pipe) is deleted and the old chain hides (patch 36, unless a pilot is still
+ * in it, it is pinned or it has another way out), and the new signature becomes the static with the old name
  * and, when known, the old static's hole type.
  */
 final readonly class NewStaticAction
@@ -26,6 +28,7 @@ final readonly class NewStaticAction
     public function __construct(
         private DeleteSignatureAction $deleteSignatureAction,
         private MapBroadcaster $mapBroadcaster,
+        private HideOldChainsAction $hideOldChainsAction,
     ) {}
 
     public static function isInChain(string $alias, string $base): bool
@@ -45,7 +48,7 @@ final readonly class NewStaticAction
     }
 
     /**
-     * @return array{alias: string|null, stamp: string|null, stamped: int}
+     * @return array{alias: string|null, stamp: string|null, stamped: int, hidden: int}
      *
      * @throws ValidationException
      * @throws Throwable
@@ -84,12 +87,17 @@ final readonly class NewStaticAction
                 'wormhole_id' => $new->wormhole_id ?? $wormhole_id,
             ]);
 
-            return ['alias' => $base !== '' ? $base : null, 'stamp' => $stamp, 'stamped' => $stamped];
+            return ['alias' => $base !== '' ? $base : null, 'stamp' => $stamp, 'stamped' => $stamped, 'old_system_id' => $old_system?->id];
         });
+
+        // Patch 36: the old chain hides, unless a pilot is still in it, it is pinned or it has another way out.
+        $hidden = $result['old_system_id'] === null
+            ? []
+            : $this->hideOldChainsAction->handle($rolling->map, [(int) $result['old_system_id']]);
 
         $this->mapBroadcaster->resync($rolling->map_id);
 
-        return $result;
+        return ['alias' => $result['alias'], 'stamp' => $result['stamp'], 'stamped' => $result['stamped'], 'hidden' => count($hidden)];
     }
 
     /**

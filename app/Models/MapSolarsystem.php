@@ -39,6 +39,8 @@ use Staudenmeir\EloquentHasManyDeep\HasRelationships;
  * @property string|null $combat_previous_color
  * @property bool $cleanup_return_pending
  * @property \Carbon\CarbonImmutable|null $scanned_at
+ * @property \Carbon\CarbonImmutable|null $hidden_at Patch 36: hidden by a clear (chain memory), not on the map
+ * @property-read \Carbon\CarbonImmutable $created_at
  * @property-read int|null $signatures_count
  * @property-read int|null $uncategorized_signatures_count
  * @property-read int|null $wormhole_signatures_count
@@ -64,6 +66,27 @@ final class MapSolarsystem extends Model
     use HasFactory;
 
     use HasRelationships;
+
+    /** Patch 36: the global scope that keeps hidden systems (chain memory) off the map. */
+    public const string VISIBLE_SCOPE = 'visible';
+
+    /**
+     * A query that also sees hidden systems (restoring, cleanup, undo).
+     *
+     * @return MapSolarsystemBuilder<MapSolarsystem>
+     */
+    public static function withHidden(): MapSolarsystemBuilder
+    {
+        /** @var MapSolarsystemBuilder<MapSolarsystem> $query */
+        $query = self::query()->withoutGlobalScope(self::VISIBLE_SCOPE);
+
+        return $query;
+    }
+
+    public function isHidden(): bool
+    {
+        return $this->hidden_at !== null;
+    }
 
     /**
      * Get all connections where this solar system is either the source or destination.
@@ -205,6 +228,15 @@ final class MapSolarsystem extends Model
             'scanned_at' => 'immutable_datetime',
             'combat_started_at' => 'immutable_datetime',
             'cleanup_return_pending' => 'boolean',
+            'hidden_at' => 'immutable_datetime',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // Patch 36: hidden systems keep their row but are never part of the map.
+        static::addGlobalScope(self::VISIBLE_SCOPE, function (\Illuminate\Database\Eloquent\Builder $query): void {
+            $query->whereNull($query->qualifyColumn('hidden_at'));
+        });
     }
 }

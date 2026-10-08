@@ -10,6 +10,7 @@ use App\Models\MapConnectionJump;
 use App\Models\MapSolarsystem;
 use App\Models\Signature;
 use App\Support\Broadcasting\MapBroadcaster;
+use App\Support\ChainMemory;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -140,9 +141,11 @@ final readonly class MapUndoSnapshots
             /** @var array<int, int> $systemIds old id → id now */
             $systemIds = [];
             foreach ($snapshot['systems'] as $row) {
-                $existing = MapSolarsystem::query()->find($row['id'])
-                    ?? MapSolarsystem::query()->where('map_id', $map->id)->where('solarsystem_id', $row['solarsystem_id'])->first();
+                // Patch 36: a cleared system is hidden, not gone: Undo shows it again.
+                $existing = MapSolarsystem::withHidden()->find($row['id'])
+                    ?? MapSolarsystem::withHidden()->where('map_id', $map->id)->where('solarsystem_id', $row['solarsystem_id'])->first();
                 if ($existing instanceof MapSolarsystem && (int) $existing->map_id === (int) $map->id) {
+                    $row = [...$this->keepStampWhenNameTaken($existing, $row), 'hidden_at' => null];
                     // Still (or again) on the map: only reset what the change touched, never move it to another row.
                     $this->resetRow($existing, array_diff_key($row, ['id' => true]));
                     $systemIds[(int) $row['id']] = $existing->id;
@@ -228,6 +231,25 @@ final readonly class MapUndoSnapshots
         $this->mapBroadcaster->resync($map->id);
 
         return $counts;
+    }
+
+    /**
+     * A hidden system put back by Undo takes its old name again, unless someone
+     * else holds it now: then it keeps its "@hhmm" stamp.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function keepStampWhenNameTaken(MapSolarsystem $existing, array $row): array
+    {
+        $plain = is_string($row['alias'] ?? null) ? ChainMemory::plainAlias($row['alias']) : null;
+        if (! $existing->isHidden() || $plain === null || ChainMemory::isStamped($row['alias'])) {
+            return $row;
+        }
+
+        return ChainMemory::isNameFree((int) $existing->map_id, $plain, $existing->id)
+            ? $row
+            : [...$row, 'alias' => $existing->alias];
     }
 
     /**

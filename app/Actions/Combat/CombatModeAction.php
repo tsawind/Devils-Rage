@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Actions\Combat;
 
-use App\Actions\MapSolarsystem\DeleteMapSolarsystemAction;
+use App\Actions\MapSolarsystem\HideMapSolarsystemsAction;
 use App\Actions\MapSolarsystem\StoreMapSolarsystemAction;
 use App\Actions\MapSolarsystem\UpdateMapSolarsystemAction;
 use App\Events\Maps\CombatModeTurnedOffEvent;
@@ -41,7 +41,7 @@ final readonly class CombatModeAction
     public function __construct(
         private UpdateMapSolarsystemAction $updateMapSolarsystemAction,
         private StoreMapSolarsystemAction $storeMapSolarsystemAction,
-        private DeleteMapSolarsystemAction $deleteMapSolarsystemAction,
+        private HideMapSolarsystemsAction $hideMapSolarsystemsAction,
         private MapBroadcaster $mapBroadcaster,
     ) {}
 
@@ -272,9 +272,8 @@ final readonly class CombatModeAction
                 }
             }
 
-            foreach ($removed as $system) {
-                $this->deleteMapSolarsystemAction->handle($system);
-            }
+            // Patch 36 (chain memory): the chain is hidden, not deleted.
+            $this->hideMapSolarsystemsAction->handle($map, $removed_ids);
 
             // Combat off for everyone on this chain; for everyone once no chain is left.
             $chains_left = MapSolarsystem::query()->where('map_id', $map->id)->whereNotNull('combat_color')->exists();

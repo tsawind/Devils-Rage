@@ -91,7 +91,14 @@ final readonly class StoreTrackingAction
             * instead of adding a duplicate. Otherwise we add it to the map.
             */
             $existing_map_solarsystem = $this->getMapSolarsystemOnMap($origin->map, $to_solarsystem);
+            // Patch 36 (chain memory): a system hidden by a clear comes back as it was.
+            $was_hidden = ! $existing_map_solarsystem instanceof MapSolarsystem && MapSolarsystem::withHidden()
+                ->where('map_id', $origin->map_id)
+                ->isSolarsystem($to_solarsystem)
+                ->whereNotNull('hidden_at')
+                ->exists();
             $target_map_solarsystem = $existing_map_solarsystem ?? $this->addSolarsystemToMap($origin, $to_solarsystem);
+            $restored_name = $was_hidden && filled($target_map_solarsystem->alias) ? (string) $target_map_solarsystem->alias : null;
 
             /* The alias goes through the update action so the broadcast payload
              * carries it — a raw update() here left other viewers (and the
@@ -100,7 +107,7 @@ final readonly class StoreTrackingAction
              * A system newly found from a combat chain joins that chain (its color).
              */
             $system_update = [];
-            if (filled($data->alias)) {
+            if (filled($data->alias) && $restored_name === null) {
                 $system_update['alias'] = $data->alias;
             }
             if (! $existing_map_solarsystem instanceof MapSolarsystem && filled($origin->combat_color)) {
@@ -131,6 +138,8 @@ final readonly class StoreTrackingAction
                 $signature_update = [
                     'map_connection_id' => $connection->id,
                     ...$this->getChainNumberingUpdate($signature, $data),
+                    // Patch 36: the hole into a restored system takes its old name (like a loop).
+                    ...($restored_name !== null && $signature instanceof Signature && $signature->alias === null ? ['alias' => $restored_name] : []),
                     // Patch 13: jumping the hole uses up its arm (the number stays).
                     'armed_by_user_id' => null,
                     'armed_by_name' => null,

@@ -67,7 +67,7 @@ function confirm(): void {
                     Clear the {{ label }} chain?
                 </DialogTitle>
                 <DialogDescription>
-                    Removes {{ plan.removed.length }} {{ plan.removed.length === 1 ? 'system' : 'systems' }} from the map.
+                    Hides {{ plan.removed.length }} {{ plan.removed.length === 1 ? 'system' : 'systems' }} from the map (back as they were if someone reconnects within 27 h).
                     <template v-if="homeName && plan.homeStays"> {{ homeName }} stays: it is still linked, so it moves back to the main chain.</template>
                     <template v-else-if="homeName"> {{ homeName }} goes too: nothing else is linked to it.</template>
                 </DialogDescription>

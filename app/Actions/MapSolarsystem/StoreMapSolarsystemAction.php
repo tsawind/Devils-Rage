@@ -10,6 +10,7 @@ use App\Models\Map;
 use App\Models\MapConnection;
 use App\Models\MapSolarsystem;
 use App\Support\Broadcasting\MapBroadcaster;
+use App\Support\ChainMemory;
 use Illuminate\Database\Eloquent\Builder;
 
 final readonly class StoreMapSolarsystemAction
@@ -27,14 +28,23 @@ final readonly class StoreMapSolarsystemAction
             'solarsystem_id' => $data['solarsystem_id'],
         ]);
 
-        $map_solarsystem = $map->mapSolarsystems()->firstOrNew([
-            'solarsystem_id' => $data['solarsystem_id'],
-        ]);
+        // Patch 36 (chain memory): a hidden system keeps its row, so re-adding it brings it back.
+        $map_solarsystem = MapSolarsystem::withHidden()
+            ->where('map_id', $map->id)
+            ->where('solarsystem_id', $data['solarsystem_id'])
+            ->first() ?? new MapSolarsystem(['map_id' => $map->id, 'solarsystem_id' => $data['solarsystem_id']]);
+        $map_solarsystem->map_id = $map->id;
+        $map_solarsystem->solarsystem_id = (int) $data['solarsystem_id'];
         $map_solarsystem->map_solarsystem_details_id = $details->id;
 
-        // Only a newly placed system takes the requested position; re-adding one already on
-        // the map (e.g. to connect to it) must leave it where the user put it.
-        if (! $map_solarsystem->exists) {
+        $was_hidden = $map_solarsystem->exists && $map_solarsystem->isHidden();
+        if ($was_hidden) {
+            ChainMemory::unhide($map_solarsystem);
+        }
+
+        // Only a newly placed (or restored) system takes the requested position; re-adding one
+        // already on the map (e.g. to connect to it) must leave it where the user put it.
+        if (! $map_solarsystem->exists || $was_hidden) {
             $map_solarsystem->position_x = $data['position_x'];
             $map_solarsystem->position_y = $data['position_y'];
         }

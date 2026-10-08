@@ -80,7 +80,7 @@ final class MapRageRollController extends Controller
         $result = $action->handle($rolling, $old, $new);
 
         $message = $result['stamp'] !== null
-            ? sprintf('The old chain is now %s@%s (%d system%s).', $result['alias'], $result['stamp'], $result['stamped'], $result['stamped'] === 1 ? '' : 's')
+            ? sprintf('The old chain is now %s@%s (%d system%s)%s.', $result['alias'], $result['stamp'], $result['stamped'], $result['stamped'] === 1 ? '' : 's', $result['hidden'] > 0 ? ', hidden' : ', still shown (pilot inside, pinned or another exit)')
             : 'The old static was never jumped: its signature is gone.';
 
         return back()->notify('New static', message: $message);

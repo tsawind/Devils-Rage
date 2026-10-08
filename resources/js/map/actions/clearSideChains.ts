@@ -42,6 +42,6 @@ export function clearSideChainSystems(ids: number[], label: string): void {
     if (ids.length === 0) return;
     // Patch 21: one Undo step puts the whole cleared chain back.
     deleteSystemsUndoable(ids, `cleared ${label}`, {
-        onSuccess: () => toast.success(`Cleared ${label}`, { description: `${ids.length} system${ids.length === 1 ? '' : 's'} removed.` }),
+        onSuccess: () => toast.success(`Cleared ${label}`, { description: `${ids.length} system${ids.length === 1 ? '' : 's'} hidden (back if reconnected within 27 h).` }),
     });
 }
