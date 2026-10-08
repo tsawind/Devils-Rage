@@ -105,7 +105,7 @@ final readonly class HideMapSolarsystemsAction
                         ->where('map_solarsystem_id', $system->id)
                         ->whereNotNull('alias')
                         ->where('alias', 'not like', '%@%')
-                        ->get(['id', 'alias'])
+                        ->get()
                         ->each(fn (Signature $signature) => $signature->update(['alias' => mb_strtoupper(mb_trim((string) $signature->alias)).'@'.$stamp]));
                 }
             }

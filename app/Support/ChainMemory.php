@@ -174,7 +174,7 @@ final class ChainMemory
         Signature::query()
             ->where('map_solarsystem_id', $system->id)
             ->where('alias', 'like', '%@'.$stamp)
-            ->get(['id', 'alias'])
+            ->get()
             ->each(fn (Signature $signature) => $signature->update(['alias' => self::plainAlias($signature->alias)]));
     }
 

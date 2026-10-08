@@ -132,7 +132,7 @@ final readonly class NewStaticAction
             ->where('map_id', $rolling->map_id)
             ->whereKeyNot($rolling->id)
             ->whereNotNull('alias')
-            ->get(['id', 'alias'])
+            ->get()
             ->filter(fn (MapSolarsystem $system): bool => self::isInChain((string) $system->alias, $base));
 
         foreach ($systems as $system) {
@@ -142,7 +142,7 @@ final readonly class NewStaticAction
         Signature::query()
             ->whereIn('map_solarsystem_id', $systems->pluck('id'))
             ->whereNotNull('alias')
-            ->get(['id', 'alias'])
+            ->get()
             ->filter(fn (Signature $signature): bool => ! str_contains((string) $signature->alias, '@'))
             ->each(fn (Signature $signature) => $signature->update(['alias' => self::stamped((string) $signature->alias, $stamp)]));
 
