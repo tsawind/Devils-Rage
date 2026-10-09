@@ -37,6 +37,7 @@ final class MapConnectionResource extends JsonResource
             'jumps_mass_sum' => $this->whenHas('jumps_mass_sum', fn (int|string|null $mass_sum): int => (int) $mass_sum, 0),
             'jumps_mass_since_status' => $this->whenHas('jumps_mass_since_status', fn (int|string|null $mass_sum): int => (int) $mass_sum, 0),
             'mass_status_updated_at' => $this->mass_status_updated_at,
+            'checked_at' => $this->checked_at,
             'mass_status_from_log' => (bool) $this->mass_status_from_log,
             'should_have_rolled' => (bool) $this->should_have_rolled,
             'jumps_count' => $this->whenHas('jumps_count', fn (int|string|null $count): int => (int) $count, 0),

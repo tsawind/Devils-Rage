@@ -42,8 +42,10 @@ const FULL_HEIGHT = 40;
 function pillParts(placeholder: TPlaceholder, facts: ReturnType<typeof holeFacts>): EdgeIndicator[] {
     const neutral = { fill: 'var(--color-neutral-500)', stroke: 'var(--color-neutral-600)' };
     const parts: EdgeIndicator[] = [];
+    // Patch 37: the type is a green chip that copies the hole's bookmark; an expected static has no sig yet (faint).
+    const copy: 'on' | 'faint' = placeholder.expected ? 'faint' : 'on';
     if (placeholder.isStatic || placeholder.expected) {
-        parts.push({ type: 'static', label: 'Static', fill: 'var(--color-green-700)', stroke: 'var(--color-green-800)' });
+        parts.push({ type: 'static', label: 'Static', fill: 'var(--color-green-700)', stroke: 'var(--color-green-800)', copy: copy === 'on' ? 'on' : undefined });
     } else if (placeholder.maybeStatic) {
         parts.push({ type: 'static', label: 'Static?', strong: true, fill: 'var(--color-yellow-600)', stroke: 'var(--color-yellow-700)' });
     }
@@ -53,7 +55,7 @@ function pillParts(placeholder: TPlaceholder, facts: ReturnType<typeof holeFacts
     else if (facts.guess) parts.push({ type: 'text', label: '≈', fill: 'var(--color-neutral-400)', stroke: 'var(--color-neutral-500)' });
     // Kept short so the pill fits between two columns (the K162's range is in the details).
     const typeName = isK162Frigate(facts.holeTypeInfo) ? 'K162 frig' : placeholder.wormhole ? placeholder.wormhole.toUpperCase() : facts.isK162 ? 'K162' : null;
-    if (typeName) parts.push({ type: 'text', role: 'type', label: typeName, ...neutral });
+    parts.push({ type: 'text', role: 'type', label: typeName ?? '???', ...neutral, copy });
     if (!parts.length) parts.push({ type: 'text', label: '?', fill: 'var(--color-neutral-400)', stroke: 'var(--color-neutral-500)' });
     if (placeholder.massStatus === 'reduced' || placeholder.massStatus === 'critical') {
         const critical = placeholder.massStatus === 'critical';
@@ -335,6 +337,7 @@ const chips = computed(() => {
                     clickable
                     title="Click for details"
                     @open="(event) => openDetails(event, item.nodeId)"
+                    @copy="() => copyBookmark(item)"
                 />
             </template>
         </svg>

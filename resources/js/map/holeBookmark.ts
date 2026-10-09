@@ -9,7 +9,7 @@ import type { TPlaceholder } from '@/lib/placeholders';
 import { signatureToast } from '@/lib/signatureToast';
 import { updateSignature } from '@/map/actions/updateSignature';
 import type { MapStore } from '@/map/store/mapStore';
-import type { TMapSolarsystem, TPendingHole } from '@/pages/maps';
+import type { TMapConnection, TMapSolarsystem, TPendingHole } from '@/pages/maps';
 import type { TSignature } from '@/types/models';
 
 /**
@@ -277,5 +277,31 @@ export function copyPlaceholderBookmark(store: MapStore, placeholder: TPlacehold
     if (canEdit && !hole.alias && claim) {
         updateSignature({ id: placeholder.signatureId } as TSignature, { alias: claim });
     }
+    signatureToast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(name) });
+}
+
+/**
+ * Patch 37: a jumped pipe's near side (the end closer to home, by how the chain was
+ * found) and far side, and this pipe's signature on the near side, if pasted.
+ */
+export function forwardSides(store: MapStore, connection: TMapConnection): { near: TMapSolarsystem; far: TMapSolarsystem; pasted: boolean } | null {
+    const a = connection.from_map_solarsystem_id;
+    const b = connection.to_map_solarsystem_id;
+    const parentOf = store.bandLayout.value?.parentOf;
+    const [nearId, farId] = parentOf?.get(a) === b ? [b, a] : [a, b];
+    const near = store.systems.get(nearId);
+    const far = store.systems.get(farId);
+    if (!near || !far) return null;
+    const pasted = (connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === nearId && Boolean(signature.signature_id));
+    return { near, far, pasted };
+}
+
+/** Patch 37: the green type chip on a jumped pipe's pill copies that hole's forward bookmark (its sig on the near side). */
+export function copyForwardBookmark(store: MapStore, connection: TMapConnection): void {
+    const sides = forwardSides(store, connection);
+    if (!sides?.pasted) return;
+    const name = linkedForwardBookmark(store, sides.near, sides.far.id, sides.far.alias ?? '');
+    if (!name) return;
+    navigator.clipboard.writeText(name).catch(() => undefined);
     signatureToast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(name) });
 }

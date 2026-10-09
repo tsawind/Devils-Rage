@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useMapBackground } from '@/composables/useMapBackground';
+import { useMapEffects } from '@/composables/useMapEffects';
 import MapScrollbar from '@/map/components/MapScrollbar.vue';
 import { useCombat } from '@/composables/combat/useCombat';
 import { centerScroll, RAGE_ROOM_SCREENS } from '@/map/core/centerScroll';
@@ -127,7 +128,11 @@ onBeforeUnmount(() => {
     if (settleTimer) clearTimeout(settleTimer);
 });
 
-const { backgroundImageUrl, backgroundMode } = useMapBackground();
+const { backgroundImageUrl: ownBackgroundUrl, backgroundMode } = useMapBackground();
+// Patch 37: a full-screen background is drawn behind the whole page; the map then draws none of its own.
+const { effects } = useMapEffects();
+const fullScreenBackground = computed(() => effects.value.fullScreenBackground && Boolean(ownBackgroundUrl.value));
+const backgroundImageUrl = computed(() => (fullScreenBackground.value ? '' : ownBackgroundUrl.value));
 
 // The manual map uses the full configured canvas. The tree layout instead sizes the
 // canvas to its own content (plus padding) so the SVG viewBox covers every connection
@@ -276,14 +281,20 @@ function handleContextMenu(event: MouseEvent): void {
 
 <template>
     <div
-        class="relative h-full w-full overflow-hidden bg-card ring-1 ring-border ring-offset-[-0.5px]"
+        class="relative h-full w-full overflow-hidden ring-1 ring-border ring-offset-[-0.5px]"
+        :class="fullScreenBackground ? 'bg-transparent' : 'bg-card'"
         @mouseenter="onScrollAreaEnter"
         @mousemove="onScrollAreaMousemove"
     >
         <div
             ref="surface"
-            class="relative h-full w-full overflow-hidden bg-stone-100 dark:bg-neutral-950"
-            :class="{ 'cursor-grab': store.isTreeLayout.value, 'map-bg-image': Boolean(scrollableContainerStyle) }"
+            class="relative h-full w-full overflow-hidden"
+            :class="{
+                'cursor-grab': store.isTreeLayout.value,
+                'map-bg-image': Boolean(scrollableContainerStyle),
+                'bg-stone-100 dark:bg-neutral-950': !fullScreenBackground,
+                'bg-transparent': fullScreenBackground,
+            }"
             :style="scrollableContainerStyle"
             @contextmenu="handleContextMenu"
         >

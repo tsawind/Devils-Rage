@@ -96,6 +96,11 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
         <ConnectionHoleTypeMenu :connection="map_connection" />
         <!-- Patch 16: the jump went through another signature -->
         <ConnectionRelinkMenu :connection="map_connection" />
+        <!-- Patch 37: I looked at Show Info, mass and life are as shown (resets the 4 h "?"; replaces patch 16's "Checked: still healthy") -->
+        <ContextMenuItem v-if="map_connection.type !== 'stargate'" @select="handleLifetimeChange(map_connection.lifetime_status)">
+            <Check class="size-4" />
+            Checked in game
+        </ContextMenuItem>
         <ContextMenuSub>
             <ContextMenuSubTrigger>
                 <Clock class="size-4" />
@@ -124,14 +129,6 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
                         <span class="text-muted-foreground">&lt; 1h</span>
                     </ContextMenuRadioItem>
                 </ContextMenuRadioGroup>
-                <!-- Patch 16: re-confirm a healthy hole (clears the faint "likely EOL by age" clock). -->
-                <template v-if="map_connection.lifetime_status === 'healthy'">
-                    <ContextMenuSeparator />
-                    <ContextMenuItem class="text-xs" @select="handleLifetimeChange('healthy')">
-                        <Check class="size-4" />
-                        Checked: still healthy
-                    </ContextMenuItem>
-                </template>
             </ContextMenuSubContent>
         </ContextMenuSub>
         <ContextMenuSub>

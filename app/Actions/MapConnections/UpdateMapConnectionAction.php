@@ -42,6 +42,13 @@ final readonly class UpdateMapConnectionAction
                 $data_array['lifetime_updated_at'] = now();
             }
 
+            /* Patch 37: picking a type, size, mass or life status (even the same one again)
+             * counts as someone looking at the hole in game.
+             */
+            if (! $data->lifetime instanceof Optional || ! $data->mass_status instanceof Optional || ! $data->ship_size instanceof Optional || ! $data->wormhole_id instanceof Optional) {
+                $data_array['checked_at'] = now();
+            }
+
             $mapConnection->update($data_array);
 
             $this->syncMassAndLifetime($mapConnection, $data);

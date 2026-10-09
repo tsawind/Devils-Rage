@@ -1,6 +1,6 @@
 /** One part of a pipe's pill. */
 export type EdgeIndicator = {
-    type: 'text' | 'clock' | 'weight' | 'gate' | 'preserve' | 'static' | 'eol';
+    type: 'text' | 'clock' | 'weight' | 'gate' | 'preserve' | 'static' | 'eol' | 'unchecked';
     label?: string;
     /**
      * Patch 21: text parts: 'type' is the hole's type (second line); anything else
@@ -15,6 +15,8 @@ export type EdgeIndicator = {
     faint?: boolean;
     /** Patch 21: a doubtful static ("Static?") or a critical EOL ("EOL!"). */
     strong?: boolean;
+    /** Patch 37: the type (and Static) is a green chip that copies the forward bookmark; 'faint' = dashed, nothing to copy yet. */
+    copy?: 'on' | 'faint';
 };
 
 /**
@@ -22,7 +24,7 @@ export type EdgeIndicator = {
  * gate icons), then the type, then Static, then EOL. Empty lines are left out.
  */
 export function badgeLines(indicators: readonly EdgeIndicator[]): EdgeIndicator[][] {
-    const top = indicators.filter((item) => (item.type === 'text' && item.role !== 'type') || ['weight', 'clock', 'gate', 'preserve'].includes(item.type));
+    const top = indicators.filter((item) => (item.type === 'text' && item.role !== 'type') || ['weight', 'clock', 'gate', 'preserve', 'unchecked'].includes(item.type));
     const type = indicators.filter((item) => item.type === 'text' && item.role === 'type');
     const statics = indicators.filter((item) => item.type === 'static');
     const eol = indicators.filter((item) => item.type === 'eol');
@@ -32,8 +34,9 @@ export function badgeLines(indicators: readonly EdgeIndicator[]): EdgeIndicator[
 const LINE_HEIGHT = 14;
 
 function partWidth(item: EdgeIndicator): number {
+    if (item.type === 'unchecked') return 14;
     if (item.type === 'static' || item.type === 'eol') return (item.label ?? '').length * 6 + 8;
-    if (item.type === 'text' && item.role === 'type') return (item.label ?? '').length * 6.7;
+    if (item.type === 'text' && item.role === 'type') return (item.label ?? '').length * 6.7 + (item.copy ? 8 : 0);
     if (item.type === 'text') return (item.label ?? '').length * 7.5 + (item.arrow ? 13 : 0);
     return 13;
 }

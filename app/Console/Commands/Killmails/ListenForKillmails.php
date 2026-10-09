@@ -154,7 +154,7 @@ final class ListenForKillmails extends AppCommand
     {
         $maps = Map::query()->whereRelation('mapSolarsystems', 'solarsystem_id', $killmail->solarsystem_id)->get();
 
-        $maps->each(fn (Map $map) => KillmailReceivedEvent::dispatch($map));
+        $maps->each(fn (Map $map) => KillmailReceivedEvent::dispatch($map, $killmail));
     }
 
     private function shouldStoreKillmail(R2Z2Killmail $killmail): bool

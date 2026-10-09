@@ -368,3 +368,26 @@ html:not(.dark) .map-node-card {
         z-index: 99999 !important;
     }
 }
+
+/*
+ * Patch 37: full-screen background. The picture sits on the page grid; the side windows
+ * (signatures, notes, killmails, threat analysis, EVE Scout) turn see-through by the
+ * person's slider, with a light blur behind them to keep the text readable.
+ */
+.map-fullscreen-bg .bg-card,
+.map-fullscreen-bg .bg-background {
+    background-color: color-mix(in oklab, var(--color-card) calc(var(--panel-solidity, 1) * 100%), transparent) !important;
+    backdrop-filter: blur(6px);
+}
+.map-fullscreen-bg .bg-card .bg-card,
+.map-fullscreen-bg .bg-card .bg-background,
+.map-fullscreen-bg .bg-background .bg-card,
+.map-fullscreen-bg .bg-background .bg-background {
+    background-color: transparent !important;
+    backdrop-filter: none;
+}
+html:not(.dark) .map-fullscreen-bg .bg-card,
+html:not(.dark) .map-fullscreen-bg .bg-background {
+    background-color: var(--color-card) !important;
+    backdrop-filter: none;
+}

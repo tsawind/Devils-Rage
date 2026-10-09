@@ -23,7 +23,17 @@ type Props = {
 
 const { indicators, center, dot = false, clickable = false, title, scale = 1 } = defineProps<Props>();
 
-const emit = defineEmits<{ (e: 'open', event: MouseEvent): void }>();
+const emit = defineEmits<{ (e: 'open', event: MouseEvent): void; (e: 'copy', event: MouseEvent): void }>();
+
+/** Patch 37: a click on the green type chip (or a copyable Static) copies the forward bookmark instead of opening the details. */
+function onPartClick(event: MouseEvent, indicator: EdgeIndicator): void {
+    if (indicator.copy === 'on') {
+        event.stopPropagation();
+        emit('copy', event);
+    } else if (indicator.copy === 'faint') {
+        event.stopPropagation();
+    }
+}
 
 const size = computed(() => badgeSize(indicators));
 const lines = computed(() => badgeLines(indicators));
@@ -58,6 +68,8 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
                     <span
                         v-if="indicator.type === 'static' || indicator.type === 'eol'"
                         class="rounded-full px-1 text-[10px] leading-[12px] font-bold"
+                        :title="indicator.copy === 'on' ? 'Copy the bookmark' : undefined"
+                        @click="(event) => onPartClick(event, indicator)"
                         :class="
                             indicator.type === 'static'
                                 ? indicator.strong
@@ -67,6 +79,18 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
                                   ? 'bg-fuchsia-600 text-white'
                                   : 'bg-purple-700 text-purple-100'
                         "
+                        >{{ indicator.label }}</span
+                    >
+                    <span
+                        v-else-if="indicator.type === 'text' && indicator.copy"
+                        class="rounded-full px-1 font-mono text-[11px] leading-[12px] font-bold"
+                        :class="
+                            indicator.copy === 'on'
+                                ? 'bg-green-800 text-green-100 hover:bg-green-700'
+                                : 'border border-dashed border-green-800/70 text-green-700/80 dark:text-green-400/70'
+                        "
+                        :title="indicator.copy === 'on' ? 'Copy the bookmark' : 'Not pasted on this side yet'"
+                        @click="(event) => onPartClick(event, indicator)"
                         >{{ indicator.label }}</span
                     >
                     <span
@@ -81,6 +105,12 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
                         <ArrowUp v-else-if="indicator.arrow === 'up'" class="ml-px size-3" aria-label="Opened at the lower end: it goes up toward its K162 exit" />
                         <ArrowDown v-else-if="indicator.arrow === 'down'" class="ml-px size-3" aria-label="Opened at the upper end: it goes down toward its K162 exit" />
                     </span>
+                    <span
+                        v-else-if="indicator.type === 'unchecked'"
+                        class="rounded-full border border-purple-400 px-[3px] text-[10px] leading-[10px] font-bold text-purple-300"
+                        aria-label="Not checked for 4 hours or more"
+                        >?</span
+                    >
                     <Weight v-else-if="indicator.type === 'weight'" class="size-3" :style="{ color: indicator.fill }" />
                     <Clock
                         v-else-if="indicator.type === 'clock'"

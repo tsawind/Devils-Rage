@@ -13,7 +13,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { isWormholeClass } from '@/const/solarsystemClasses';
 import { displayAlias } from '@/lib/alias';
 import { combatColorHex, combatColorLabel } from '@/lib/combat';
-import { useKillPulses } from '@/composables/useKillPulses';
+import { KILL_MARKER_MS, useKillPulses } from '@/composables/useKillPulses';
+import { useMinuteNow } from '@/composables/useMinuteNow';
 import SolarsystemName from '@/map/components/solarsystem/SolarsystemName.vue';
 import SolarsystemOccupier from '@/map/components/solarsystem/SolarsystemOccupier.vue';
 import SolarsystemPilots from '@/map/components/solarsystem/SolarsystemPilots.vue';
@@ -67,8 +68,21 @@ const isCombatHome = computed(() => Boolean(system.combat_home && chainHex.value
 const isCombatPulsing = computed(() => isCombatHome.value && Boolean(system.combat_active));
 
 // Patch 26: a kill just came in here: the card flashes red for a few seconds.
-const { pulses } = useKillPulses();
+const { pulses, recent } = useKillPulses();
 const killFlash = computed(() => pulses.value.get(system.solarsystem_id) ?? null);
+// Patch 37: a small "💥 2 kills · 4 min ago" marker for 15 minutes after a kill.
+const minuteNow = useMinuteNow();
+const killMarker = computed(() => {
+    const kills = (recent.value.get(system.solarsystem_id) ?? []).filter((kill) => minuteNow.value - kill.at < KILL_MARKER_MS + 60_000);
+    if (!kills.length) return null;
+    const last = Math.max(...kills.map((kill) => kill.at));
+    const minutes = Math.max(0, Math.floor((Math.max(minuteNow.value, last) - last) / 60_000));
+    const lines = kills.map((kill) => `${kill.ship ?? 'Unknown ship'}${kill.capital ? ' (capital)' : ''}${kill.value ? ` · ${(kill.value / 1_000_000).toFixed(0)}M ISK` : ''}`);
+    return {
+        label: `💥 ${kills.length} ${kills.length === 1 ? 'kill' : 'kills'} · ${minutes < 1 ? 'now' : `${minutes} min ago`}`,
+        title: `${lines.join('\n')}\nMore in the Killmails window`,
+    };
+});
 /** Kept when its chain was cleared (patch 12): "was Red". */
 const previousChain = computed(() => combatColorLabel(system.combat_previous_color));
 const previousHex = computed(() => combatColorHex(system.combat_previous_color));
@@ -189,7 +203,16 @@ function handleSubmit() {
             <div :key="`kill-a-${killFlash}`" class="kill-ring pointer-events-none absolute -inset-1 rounded-lg border-2 border-red-500" />
             <div :key="`kill-b-${killFlash}`" class="kill-ring kill-ring-late pointer-events-none absolute -inset-1 rounded-lg border-2 border-orange-400" />
             <div :key="`kill-c-${killFlash}`" class="kill-flash pointer-events-none absolute inset-0 rounded bg-red-500/40" />
+            <!-- Patch 37: after the burst, a gentle red pulse until 15 s -->
+            <div :key="`kill-d-${killFlash}`" class="kill-pulse pointer-events-none absolute -inset-1 rounded-lg border-2 border-red-500/80" />
         </template>
+        <div
+            v-if="killMarker"
+            class="absolute -top-2.5 right-2 z-10 rounded bg-red-900/90 px-1 font-mono text-[10px] leading-4 font-bold whitespace-nowrap text-red-100 ring-1 ring-red-500/60"
+            :title="killMarker.title"
+        >
+            {{ killMarker.label }}
+        </div>
         <!-- Combat chain: a border in the chain's color; the combat home's is thicker and pulses while someone works the chain -->
         <div
             v-if="chainHex"
@@ -379,6 +402,22 @@ function handleSubmit() {
     50% {
         box-shadow: 0 0 14px 4px rgb(236 72 153 / 0.6);
         opacity: 1;
+    }
+}
+/* Patch 37: after the 2 s burst, the card glows and fades in a slow red pulse until 15 s. */
+.kill-pulse {
+    opacity: 0;
+    animation: kill-pulse 1.6s ease-in-out 2s 8;
+}
+@keyframes kill-pulse {
+    0%,
+    100% {
+        opacity: 0;
+        box-shadow: 0 0 0 0 rgb(239 68 68 / 0);
+    }
+    50% {
+        opacity: 1;
+        box-shadow: 0 0 14px 3px rgb(239 68 68 / 0.55);
     }
 }
 /* Patch 26: a new kill: rings that burst outward and fade, and a short red flash. */

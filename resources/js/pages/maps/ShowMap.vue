@@ -19,10 +19,11 @@ import SystemInfoEmptyState from '@/components/solarsystem/SystemInfoEmptyState.
 import ThreatAnalysis from '@/components/threat-analysis/ThreatAnalysis.vue';
 import { useDisableTextSelection } from '@/composables/useDisableTextSelection';
 import { pulseKill } from '@/composables/useKillPulses';
+import { useMapBackground } from '@/composables/useMapBackground';
+import { useMapEffects } from '@/composables/useMapEffects';
 import { useMapChrome } from '@/composables/useMapChrome';
 import { getMapChannelName } from '@/const/channels';
 import { KillmailReceivedEvent } from '@/const/events';
-import type { TKillmail } from '@/types/models';
 import { useMapLayout } from '@/composables/useMapLayout';
 import { useOnClient } from '@/composables/useOnClient';
 import usePermission from '@/composables/usePermission';
@@ -150,7 +151,32 @@ const userScopes = computed(() => {
 });
 
 // Patch 26: a new killmail flashes its system on the map (even with the Killmails card hidden).
-useOnClient(() => useEcho<{ killmail: TKillmail }>(getMapChannelName(map.id), KillmailReceivedEvent, (event) => pulseKill(event.killmail.solarsystem_id)));
+// Patch 37: the background can run full screen, under the side windows (which turn see-through).
+const { backgroundImageUrl: fullScreenSourceUrl } = useMapBackground();
+const { effects: mapEffects } = useMapEffects();
+const fullScreenBackgroundUrl = computed(() => (mapEffects.value.fullScreenBackground ? fullScreenSourceUrl.value : ''));
+const fullScreenBackgroundStyle = computed<Record<string, string>>(() =>
+    fullScreenBackgroundUrl.value
+        ? {
+              backgroundImage: `url(${fullScreenBackgroundUrl.value})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center center',
+              backgroundAttachment: 'fixed',
+              '--panel-solidity': String(mapEffects.value.panelSolidity),
+          }
+        : {},
+);
+
+// Patch 37: the event now carries the kill's system and ship (it carried nothing, so the flash never fired).
+useOnClient(() =>
+    useEcho<{ killmail: { solarsystem_id: number; ship_name: string | null; is_capital: boolean; value: number | null } | null }>(
+        getMapChannelName(map.id),
+        KillmailReceivedEvent,
+        (event) => {
+            if (event.killmail) pulseKill(event.killmail.solarsystem_id, Date.now(), { ship: event.killmail.ship_name, capital: event.killmail.is_capital, value: event.killmail.value });
+        },
+    ),
+);
 
 useOnClient(() =>
     router.on('before', (event) => {
@@ -218,7 +244,8 @@ const handleResizeEnd = () => {
         <!-- Grid Layout Container -->
         <GridLayout
             :ref="layout.gridLayoutRef"
-            :style="layout.isEditMode.value ? { minHeight: '4000px' } : undefined"
+            :class="fullScreenBackgroundUrl ? 'map-fullscreen-bg map-bg-image' : undefined"
+            :style="{ ...(layout.isEditMode.value ? { minHeight: '4000px' } : {}), ...fullScreenBackgroundStyle }"
             :layout="layout.currentLayoutItems.value"
             :col-num="layout.currentLayoutCols.value"
             :row-height="layout.currentLayoutRowHeight.value"

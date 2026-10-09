@@ -35,6 +35,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property LifetimeStatus $lifetime
  * @property DateTimeImmutable|string|null $lifetime_updated_at
  * @property CarbonImmutable|null $mass_status_updated_at
+ * @property CarbonImmutable|null $checked_at
  * @property bool $mass_status_from_log
  * @property bool $should_have_rolled
  * @property CarbonImmutable|null $connected_at
@@ -67,6 +68,7 @@ final class MapConnection extends Model
         'lifetime' => LifetimeStatus::class,
         'lifetime_updated_at' => 'immutable_datetime',
         'mass_status_updated_at' => 'immutable_datetime',
+        'checked_at' => 'immutable_datetime',
         'mass_status_from_log' => 'boolean',
         'should_have_rolled' => 'boolean',
     ];

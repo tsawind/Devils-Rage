@@ -12,7 +12,10 @@ import { TMapBackgroundMode, useMapBackground } from '@/composables/useMapBackgr
 import { updateMapUserSettings } from '@/map/actions/updateMapUserSettings';
 import { useMapStore } from '@/map/store/mapStore';
 import { router } from '@inertiajs/vue3';
-import { CircleDashed, ImageUp, Loader2, Trash2, Waypoints, Workflow } from 'lucide-vue-next';
+import { CircleDashed, ImageUp, Loader2, Trash2, Volume2, VolumeX, Waypoints, Workflow } from 'lucide-vue-next';
+import { useMapEffects } from '@/composables/useMapEffects';
+import { pulseKill } from '@/composables/useKillPulses';
+import { playRageHitSound } from '@/lib/rageSound';
 import { computed, ref, useTemplateRef, type Component } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -59,6 +62,20 @@ const allowLayoutOverride = computed(() => store.meta.value?.allow_layout_overri
 const mapSlug = computed(() => store.meta.value?.slug ?? null);
 
 const { backgroundImageUrl, backgroundMode, canUpload } = useMapBackground();
+
+// Patch 37: the speaker menu and the full-screen background (per browser).
+const { effects } = useMapEffects();
+
+function testSound(): void {
+    playRageHitSound();
+}
+
+/** The full kill effect with its sound on the home system, on this screen only. */
+function testKill(): void {
+    const home = store.meta.value?.home_solarsystem_id ?? null;
+    if (home === null) return;
+    pulseKill(home, Date.now(), { ship: 'Test kill' }, { sound: true, force: true });
+}
 
 const fileInput = useTemplateRef<HTMLInputElement>('file-input');
 const is_dragging = ref(false);
@@ -173,6 +190,32 @@ function onDrop(event: DragEvent) {
             </TooltipTrigger>
             <TooltipContent>Hub layout: {{ store.homeLayout.value ? 'on (click for the old layout)' : 'off (click to turn on)' }}</TooltipContent>
         </Tooltip>
+        <!-- Patch 37: sounds and kill effects, with two tests (only on your own screen) -->
+        <Popover>
+            <PopoverTrigger as-child>
+                <Button variant="ghost" size="icon" class="h-8 w-8 rounded-full text-neutral-600 dark:text-neutral-400" title="Sounds and kill effects">
+                    <Volume2 v-if="effects.sounds" class="size-4" />
+                    <VolumeX v-else class="size-4" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent class="w-64 p-3" side="top" align="end">
+                <div class="flex flex-col gap-2 text-sm">
+                    <label class="flex items-center justify-between gap-2">
+                        <span>Sounds</span>
+                        <input v-model="effects.sounds" type="checkbox" class="size-4 accent-red-600" />
+                    </label>
+                    <label class="flex items-center justify-between gap-2">
+                        <span>Kill effects on the map</span>
+                        <input v-model="effects.killEffects" type="checkbox" class="size-4 accent-red-600" />
+                    </label>
+                    <div class="mt-1 grid grid-cols-2 gap-1.5">
+                        <Button variant="outline" size="sm" class="h-7 text-xs" @click="testSound">▶ Test sound</Button>
+                        <Button variant="outline" size="sm" class="h-7 text-xs" @click="testKill">💥 Test kill</Button>
+                    </div>
+                    <p class="text-[11px] text-muted-foreground">Tests only play on your screen. The kill test flashes your home system.</p>
+                </div>
+            </PopoverContent>
+        </Popover>
         <Popover>
             <PopoverTrigger as-child>
                 <Button variant="ghost" size="icon" class="h-8 w-8 rounded-full text-neutral-600 dark:text-neutral-400" title="Background Image">
@@ -250,6 +293,17 @@ function onDrop(event: DragEvent) {
                                 {{ option.label }}
                             </button>
                         </div>
+                    </div>
+                    <!-- Patch 37: the background also runs under the side windows, which turn see-through -->
+                    <div v-if="backgroundImageUrl" class="flex flex-col gap-1.5">
+                        <label class="flex items-center justify-between gap-2 text-xs font-medium">
+                            <span>Full screen (under the windows)</span>
+                            <input v-model="effects.fullScreenBackground" type="checkbox" class="size-4" />
+                        </label>
+                        <label v-if="effects.fullScreenBackground" class="flex flex-col gap-1 text-xs text-muted-foreground">
+                            <span>Windows: {{ effects.panelSolidity >= 0.99 ? 'solid' : `${Math.round((1 - effects.panelSolidity) * 100)}% see-through` }}</span>
+                            <input v-model.number="effects.panelSolidity" type="range" min="0.3" max="1" step="0.05" />
+                        </label>
                     </div>
                 </div>
             </PopoverContent>

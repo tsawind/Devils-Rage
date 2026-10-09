@@ -115,3 +115,69 @@ export function playRageHitSound(volume = 0.5): void {
         oscillator.stop(bellStart + 2.3);
     });
 }
+
+/**
+ * Patch 37: a kill on a map system: a sharp crack, a burst of noise like debris, and a
+ * short low boom; a capital adds a deep, longer rumble under it. Made in the browser.
+ */
+export function playKillSound(heavy = false, volume = 0.45): void {
+    const ctx = audio();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => undefined);
+    }
+    const t = ctx.currentTime + 0.02;
+    const master = ctx.createGain();
+    master.gain.value = Math.min(Math.max(volume, 0), 1);
+    master.connect(ctx.destination);
+
+    // 1. The crack and debris: a short burst of filtered noise.
+    const seconds = heavy ? 1.6 : 0.9;
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * seconds), ctx.sampleRate);
+    const samples = buffer.getChannelData(0);
+    for (let i = 0; i < samples.length; i++) samples[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / samples.length, heavy ? 2 : 3);
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(heavy ? 2400 : 3600, t);
+    filter.frequency.exponentialRampToValueAtTime(heavy ? 120 : 300, t + seconds);
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.9, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + seconds);
+    noise.connect(filter).connect(noiseGain).connect(master);
+    noise.start(t);
+    noise.stop(t + seconds);
+
+    // 2. The boom: a sine dropping fast (lower and longer for a capital).
+    const boom = ctx.createOscillator();
+    boom.type = 'sine';
+    boom.frequency.setValueAtTime(heavy ? 90 : 140, t);
+    boom.frequency.exponentialRampToValueAtTime(heavy ? 28 : 45, t + (heavy ? 1.4 : 0.5));
+    const boomGain = ctx.createGain();
+    boomGain.gain.setValueAtTime(heavy ? 1 : 0.8, t);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, t + (heavy ? 1.8 : 0.7));
+    boom.connect(boomGain).connect(master);
+    boom.start(t);
+    boom.stop(t + (heavy ? 1.9 : 0.8));
+
+    // 3. Capitals: a second, later rumble a tritone below, through distortion.
+    if (heavy) {
+        const rumble = ctx.createOscillator();
+        rumble.type = 'sawtooth';
+        rumble.frequency.setValueAtTime(55, t + 0.25);
+        rumble.frequency.exponentialRampToValueAtTime(38.9, t + 2.2);
+        const shaper = ctx.createWaveShaper();
+        shaper.curve = distortionCurve(40);
+        const rumbleFilter = ctx.createBiquadFilter();
+        rumbleFilter.type = 'lowpass';
+        rumbleFilter.frequency.value = 220;
+        const rumbleGain = ctx.createGain();
+        rumbleGain.gain.setValueAtTime(0.0001, t + 0.25);
+        rumbleGain.gain.exponentialRampToValueAtTime(0.5, t + 0.45);
+        rumbleGain.gain.exponentialRampToValueAtTime(0.001, t + 2.4);
+        rumble.connect(shaper).connect(rumbleFilter).connect(rumbleGain).connect(master);
+        rumble.start(t + 0.25);
+        rumble.stop(t + 2.5);
+    }
+}

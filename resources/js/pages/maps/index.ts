@@ -262,6 +262,8 @@ export type TMapConnection = {
     /** Patch 32: jumps logged since the mass status was last set (the ones that count against its band). */
     jumps_mass_since_status?: number;
     mass_status_updated_at?: string | null;
+    /** Patch 37: someone last picked a type / mass / life status or pressed ✓ Checked in game. */
+    checked_at?: string | null;
     /** Patch 33: the jump log set this status (not a person). */
     mass_status_from_log?: boolean;
     /** Patch 33: the log says more went through than the hole can hold. */

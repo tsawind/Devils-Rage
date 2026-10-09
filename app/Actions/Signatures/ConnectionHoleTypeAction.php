@@ -48,6 +48,7 @@ final readonly class ConnectionHoleTypeAction
         $isK162 = self::isK162($type);
 
         DB::transaction(function () use ($connection, $sideId, $type, $isK162): void {
+            $connection->forceFill(['checked_at' => now()])->save();
             $fields = [
                 'signature_category_id' => $type->signature_category_id,
                 'signature_type_id' => $type->id,

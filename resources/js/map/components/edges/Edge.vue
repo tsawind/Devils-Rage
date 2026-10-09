@@ -5,8 +5,10 @@ import { badgeSize, type EdgeIndicator } from '@/map/components/edges/badgeWidth
 import { scalePoint } from '@/map/core/coords';
 import { setPillSize, usePillSpots } from '@/map/store/pillLayout';
 import { tryUseMapStore } from '@/map/store/mapStore';
+import { copyForwardBookmark, forwardSides } from '@/map/holeBookmark';
 import { useMinuteNow } from '@/composables/useMinuteNow';
 import { holeAge } from '@/lib/holeAge';
+import { uncheckedFor } from '@/lib/holeChecked';
 import { guessHole } from '@/map/holeGuess';
 import { describeEstimate, estimateMass, formatMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
@@ -94,7 +96,14 @@ const indicators = computed<EdgeIndicator[]>(() => {
 
     // Patch 21: the static sits inside the pill, in green ("Static?" in yellow when in doubt).
     if (staticEnd) {
-        items.push({ type: 'static', label: staticEnd.doubt ? 'Static?' : 'Static', strong: staticEnd.doubt, fill: 'var(--color-green-700)', stroke: 'var(--color-green-800)' });
+        items.push({
+            type: 'static',
+            label: staticEnd.doubt ? 'Static?' : 'Static',
+            strong: staticEnd.doubt,
+            fill: 'var(--color-green-700)',
+            stroke: 'var(--color-green-800)',
+            copy: forwardCopy.value === 'on' ? 'on' : undefined,
+        });
     }
 
     if (isStargate.value) {
@@ -131,10 +140,16 @@ const indicators = computed<EdgeIndicator[]>(() => {
         });
     }
 
+    // Patch 37: nobody checked, jumped or changed it for 4 h: a light purple "?".
+    if (unchecked.value) items.push({ type: 'unchecked', fill: 'var(--color-purple-400)', stroke: 'var(--color-purple-500)' });
+
     // Patch 21: the hole's type on the second line of the pill.
     const typeName = holeType.value?.name ?? ((connection?.signatures ?? []).some((signature) => signature.wormhole?.name?.startsWith('K162')) ? 'K162' : null);
     if (typeName && !isStargate.value) {
-        items.push({ type: 'text', role: 'type', label: typeName, fill: 'var(--color-neutral-500)', stroke: 'var(--color-neutral-600)' });
+        items.push({ type: 'text', role: 'type', label: typeName, fill: 'var(--color-neutral-500)', stroke: 'var(--color-neutral-600)', copy: forwardCopy.value ?? undefined });
+    } else if (!isStargate.value && connection && forwardCopy.value) {
+        // Patch 37: an untyped jumped hole still gets its copy chip.
+        items.push({ type: 'text', role: 'type', label: '???', fill: 'var(--color-neutral-500)', stroke: 'var(--color-neutral-600)', copy: forwardCopy.value });
     }
 
     if (massStatus.value && massStatus.value !== 'fresh') {
@@ -256,6 +271,8 @@ const pipe = computed(() => {
 
 // ---- Age (patch 16) -------------------------------------------------------------
 const now = useMinuteNow();
+/** Patch 37: how long nobody checked, jumped or changed this hole, once it is 4 h or more. */
+const unchecked = computed(() => (connection && !isStargate.value ? uncheckedFor(connection, now.value) : null));
 const age = computed(() => {
     if (!connection || isStargate.value) return null;
     return holeAge({
@@ -268,6 +285,13 @@ const age = computed(() => {
 });
 
 const pipeTitle = computed(() => {
+    const base = pipeTitleBase.value;
+    if (!unchecked.value) return base;
+    const note = `Not checked for ${unchecked.value}: look at Show Info (right-click → ✓ Checked in game)`;
+    return base ? `${note} · ${base}` : note;
+});
+
+const pipeTitleBase = computed(() => {
     if (!connection) return undefined;
     const seen = age.value ? `${age.value.label}${age.value.likelyEol ? ' · likely EOL' : ''}` : null;
     const current = estimate.value;
@@ -283,6 +307,14 @@ const pipeTitle = computed(() => {
 // ---- Pill (patch 21) ---------------------------------------------------------------
 // One pill per pipe, placed with all the others (clear of bends, boxes and other pills).
 const store = tryUseMapStore();
+
+/** Patch 37: the pill's green type chip copies the forward bookmark (faint while the near-side sig isn't pasted). */
+const forwardCopy = computed<'on' | 'faint' | null>(() => {
+    if (!store || !connection || isStargate.value || haloOnly) return null;
+    const sides = forwardSides(store, connection);
+    if (!sides) return null;
+    return sides.pasted ? 'on' : 'faint';
+});
 const pillSpots = store ? usePillSpots(store) : null;
 const pillId = computed(() => (store && connection && !haloOnly ? geometry.id : null));
 watch(
@@ -428,6 +460,7 @@ function getDashArray(): string | undefined {
             :clickable="Boolean(connection)"
             :title="pipeTitle"
             @open="(event) => emit('connectionClick', event)"
+            @copy="() => store && connection && copyForwardBookmark(store, connection)"
         />
         <path
             :d="path.d"
