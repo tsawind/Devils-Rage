@@ -31,3 +31,12 @@ RUN FILES=$(grep -rl 'id="dt-character-selector"' vendor/eveseat/web/src/resourc
  && test -n "$FILES" \
  && php /tmp/patch-character-picker.php $FILES \
  && rm /tmp/patch-character-picker.php
+
+# "My characters only" toggle for directors / CEOs / admins (top bar, next to search).
+# Narrows lists and the top search to your own characters; never grants access.
+COPY --chown=seat:seat patch-own-only-mode.php /tmp/patch-own-only-mode.php
+RUN php /tmp/patch-own-only-mode.php \
+        vendor/eveseat/web/src/Http/DataTables/Scopes/CharacterScope.php \
+        vendor/eveseat/web/src/resources/views/includes/header.blade.php \
+ && php -l vendor/eveseat/web/src/Http/DataTables/Scopes/CharacterScope.php \
+ && rm /tmp/patch-own-only-mode.php
