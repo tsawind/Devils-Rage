@@ -22,3 +22,9 @@ RUN F=vendor/warlof/seat-connector/src/Traits/ConnectorPolicyManagement.php \
  && cp /tmp/ConnectorPolicyManagement.php "$F" \
  && rm /tmp/ConnectorPolicyManagement.php \
  && php -l "$F"
+
+# "All characters" / "Only this character" buttons on the character Assets page.
+# The script refuses (and fails the build) if SeAT changed that page.
+COPY --chown=seat:seat patch-assets-view.php /tmp/patch-assets-view.php
+RUN php /tmp/patch-assets-view.php vendor/eveseat/web/src/resources/views/character/assets/assets.blade.php \
+ && rm /tmp/patch-assets-view.php

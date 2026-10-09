@@ -28,7 +28,7 @@ fi
 
 cp "$SRC/docker-compose.devilsrage.yml" "$SRC/mariadb-small.cnf" .
 mkdir -p build
-cp "$SRC/build/Dockerfile" "$SRC/build/ConnectorPolicyManagement.php" build/
+cp "$SRC/build/Dockerfile" "$SRC/build/ConnectorPolicyManagement.php" "$SRC/build/patch-assets-view.php" build/
 
 if [ -f .env ]; then
   echo ".env already exists: left as it is."
