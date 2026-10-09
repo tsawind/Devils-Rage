@@ -25,7 +25,7 @@ function connection(overrides: Partial<TMapConnection> = {}): TMapConnection {
         lifetime_status_updated_at: null,
         signatures: [],
         ship_size: 'large',
-        created_at: '2026-01-01T00:00:00Z',
+        created_at: new Date().toISOString(), // patch 37: recent, so no 4 h "?"
         updated_at: '2026-01-01T00:00:00Z',
         ...overrides,
     } as TMapConnection;
@@ -56,6 +56,12 @@ describe('Edge ship size badge', () => {
 
     it('omits the badge while nobody has said what fits', () => {
         expect(badgeText({ ship_size: null })).toBe('');
+    });
+
+    it('patch 37: a pipe nobody checked, jumped or changed for 4 h gets a "?"', () => {
+        const old = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString();
+        expect(badgeText({ ship_size: null, created_at: old })).toBe('?');
+        expect(badgeText({ ship_size: null, created_at: old, checked_at: new Date().toISOString() })).toBe('');
     });
 
     it('omits the badge on the ghost edge drawn while dragging a new connection', () => {
