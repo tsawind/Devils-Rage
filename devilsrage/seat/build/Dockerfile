@@ -23,8 +23,11 @@ RUN F=vendor/warlof/seat-connector/src/Traits/ConnectorPolicyManagement.php \
  && rm /tmp/ConnectorPolicyManagement.php \
  && php -l "$F"
 
-# "All characters" / "Only this character" buttons on the character Assets page.
-# The script refuses (and fails the build) if SeAT changed that page.
-COPY --chown=seat:seat patch-assets-view.php /tmp/patch-assets-view.php
-RUN php /tmp/patch-assets-view.php vendor/eveseat/web/src/resources/views/character/assets/assets.blade.php \
- && rm /tmp/patch-assets-view.php
+# "All characters" / "Only this character" buttons above the character picker on every
+# character page that has one (Assets, Fittings, Wallet, Mail, Contracts, Industry, ...).
+# Fails the build if no such page is found or a page doesn't look as expected.
+COPY --chown=seat:seat patch-character-picker.php /tmp/patch-character-picker.php
+RUN FILES=$(grep -rl 'id="dt-character-selector"' vendor/eveseat/web/src/resources/views/character) \
+ && test -n "$FILES" \
+ && php /tmp/patch-character-picker.php $FILES \
+ && rm /tmp/patch-character-picker.php
