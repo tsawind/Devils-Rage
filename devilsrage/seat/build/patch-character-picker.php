@@ -9,6 +9,9 @@
  * (and with it the build), so a future SeAT update can never be patched blindly.
  * Running it twice on a file is harmless.
  *
+ * On your own characters, all of your characters start selected ("All characters" is the
+ * default); "Only this character" narrows it again.
+ *
  * The picker lists the characters of the pilot who owns the viewed character, so on
  * your own character the buttons select your own alts. SeAT still checks permissions
  * for every selected character exactly as before; nothing here widens access.
@@ -16,8 +19,17 @@
 
 const SELECT_MARKER = '<select multiple="multiple" id="dt-character-selector"';
 
+// Selected-option line SeAT uses in every picker; we extend it so that on your OWN
+// characters all of your characters start selected (someone else's character still
+// starts with just that one, so a director viewing a member is unaffected).
+const SELECTED_MARKER = '@if($character_info->character_id == $character->character_id)';
+const SELECTED_NEW = '@if($character_info->character_id == $character->character_id || $drOwnPage)';
+
 const BUTTONS = <<<'HTML'
-<div class="btn-group btn-group-sm mb-2" role="group" aria-label="Character selection">
+@php
+          $drOwnPage = $character->refresh_token && $character->refresh_token->user_id == auth()->id();
+        @endphp
+        <div class="btn-group btn-group-sm mb-2" role="group" aria-label="Character selection">
           <button type="button" class="btn btn-default" id="dt-select-all-characters">
             <i class="fas fa-users"></i> All characters
           </button>
@@ -64,12 +76,13 @@ function patch_view(string $file): bool
         return true;
     }
 
-    if (substr_count($view, SELECT_MARKER) !== 1) {
-        fwrite(STDERR, "Character picker marker not found exactly once in $file; SeAT changed this page, re-check the patch.\n");
+    if (substr_count($view, SELECT_MARKER) !== 1 || substr_count($view, SELECTED_MARKER) !== 1) {
+        fwrite(STDERR, "Character picker markers not found exactly once in $file; SeAT changed this page, re-check the patch.\n");
         return false;
     }
 
     $view = str_replace(SELECT_MARKER, BUTTONS . "\n        " . SELECT_MARKER, $view);
+    $view = str_replace(SELECTED_MARKER, SELECTED_NEW, $view);
     $view = rtrim($view) . "\n" . SCRIPT;
 
     if (file_put_contents($file, $view) === false) {
