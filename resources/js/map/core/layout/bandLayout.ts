@@ -137,6 +137,12 @@ export type BandLayoutResult = {
 /** Patch 22: a hub's first hole sits this far right of the hub, each further hole one lane step left. */
 export const HUB_FIRST_LANE = 135;
 export const HUB_LANE_STEP = 45;
+/** Patch 37: which side of a hub its nth hole goes: up, down, down, up, then the pattern repeats (-1 = up, 1 = down). */
+export function hubSideOf(index: number): -1 | 1 {
+    const step = index % 4;
+    return step === 0 || step === 3 ? -1 : 1;
+}
+
 /** Lanes up (and down) before holes start sharing the last one. */
 export const HUB_MAX_LANES = 5;
 
@@ -457,10 +463,10 @@ export function computeBandLayout(input: BandLayoutInput, options: BandLayoutOpt
         const sub: HubSub = { pos: new Map([[id, { x: 0, y: 0 }]]), rects: [boxRect(0, 0)], lanes: [] };
         const children = tree.get(id) ?? [];
         if (hub) {
-            // Holes alternate up and down (the first, usually the static, goes up), each in its own lane.
+            // Holes go up, down, down, up (patch 37), then repeat; the first, usually the static, goes up. Each in its own lane.
             const sides: { d: 1 | -1; list: number[] }[] = [
-                { d: -1, list: children.filter((_, index) => index % 2 === 0) },
-                { d: 1, list: children.filter((_, index) => index % 2 === 1) },
+                { d: -1, list: children.filter((_, index) => hubSideOf(index) === -1) },
+                { d: 1, list: children.filter((_, index) => hubSideOf(index) === 1) },
             ];
             for (const side of sides) {
                 // How far this side's trees reach so far: each next hole sits beyond the previous hole's whole tree.

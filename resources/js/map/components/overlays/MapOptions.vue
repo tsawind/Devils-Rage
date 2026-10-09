@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import MapBackgroundImageController from '@/actions/App/Http/Controllers/MapBackgroundImageController';
+import HubLayoutIcon from '@/components/icons/HubLayoutIcon.vue';
 import BackgroundImageIcon from '@/components/icons/BackgroundImageIcon.vue';
 import MinusIcon from '@/components/icons/MinusIcon.vue';
 import PlusIcon from '@/components/icons/PlusIcon.vue';
@@ -11,7 +12,7 @@ import { TMapBackgroundMode, useMapBackground } from '@/composables/useMapBackgr
 import { updateMapUserSettings } from '@/map/actions/updateMapUserSettings';
 import { useMapStore } from '@/map/store/mapStore';
 import { router } from '@inertiajs/vue3';
-import { CircleDashed, ImageUp, Loader2, Share2, Trash2, Waypoints, Workflow } from 'lucide-vue-next';
+import { CircleDashed, ImageUp, Loader2, Trash2, Waypoints, Workflow } from 'lucide-vue-next';
 import { computed, ref, useTemplateRef, type Component } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -167,7 +168,7 @@ function onDrop(event: DragEvent) {
                     :aria-pressed="store.homeLayout.value"
                     @click="store.setHomeLayout(!store.homeLayout.value)"
                 >
-                    <Share2 class="size-4" />
+                    <HubLayoutIcon class="size-4" />
                 </Button>
             </TooltipTrigger>
             <TooltipContent>Hub layout: {{ store.homeLayout.value ? 'on (click for the old layout)' : 'off (click to turn on)' }}</TooltipContent>

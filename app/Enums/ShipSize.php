@@ -36,7 +36,7 @@ enum ShipSize: string
             $maximum_jump_mass === null, $maximum_jump_mass <= 0.0 => null,
             $maximum_jump_mass <= 5_000_000.0 => self::Frigate,
             $maximum_jump_mass <= 62_000_000.0 => self::Medium,
-            $maximum_jump_mass < 2_000_000_000.0 => self::Large,
+            $maximum_jump_mass <= 375_000_000.0 => self::Large,
             default => self::ExtraLarge,
         };
     }

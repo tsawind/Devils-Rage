@@ -13,7 +13,8 @@ export const SHIP_SIZE_OPTIONS = [
 
 /**
  * The largest ship class that fits through a wormhole with the given maximum
- * jump mass, using the standard 5M / 62M / <2B / 2B+ kg tiers. Unknown or
+ * jump mass, using the standard 5M / 62M / 375M / larger kg tiers (patch 37: 1,000M holes such as
+ * M555 and D792 are XL, as in game). Unknown or
  * zero masses resolve to null.
  *
  * Mirrored on the backend in App\Enums\ShipSize::fromJumpMass().
@@ -31,7 +32,7 @@ export function shipSizeFromJumpMass(maximumJumpMass: number | null | undefined)
         return 'medium';
     }
 
-    if (maximumJumpMass < 2_000_000_000) {
+    if (maximumJumpMass <= 375_000_000) {
         return 'large';
     }
 

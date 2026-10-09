@@ -1,4 +1,4 @@
-import { computeBandLayout, HUB_FIRST_LANE, HUB_LANE_STEP, type BandLayoutNode } from '@/map/core/layout/bandLayout';
+import { computeBandLayout, HUB_FIRST_LANE, HUB_LANE_STEP, hubSideOf, type BandLayoutNode } from '@/map/core/layout/bandLayout';
 import { computeTreeEdgeGeometries } from '@/map/core/geometry/treeRouting';
 import { nodeRect } from '@/map/core/coords';
 import type { EdgeGeometry } from '@/map/core/types';
@@ -15,11 +15,15 @@ describe('patch 22: the home layout', () => {
     const daisy = layout([{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }], [[1, 2], [1, 3], [1, 4], [1, 5]]);
     const at = (id: number) => daisy.positions.get(id)!;
 
-    it("home's holes alternate up and down, starting up", () => {
+    it("patch 37: home's holes go up, down, down, up", () => {
         expect(at(2).y).toBeLessThan(at(1).y);
         expect(at(3).y).toBeGreaterThan(at(1).y);
-        expect(at(4).y).toBeLessThan(at(2).y);
-        expect(at(5).y).toBeGreaterThan(at(3).y);
+        expect(at(4).y).toBeGreaterThan(at(3).y);
+        expect(at(5).y).toBeLessThan(at(2).y);
+    });
+
+    it('patch 37: from the fifth hole the pattern repeats', () => {
+        expect([0, 1, 2, 3, 4, 5, 6, 7].map(hubSideOf)).toEqual([-1, 1, 1, -1, -1, 1, 1, -1]);
     });
 
     it('the nearest hole takes the right-hand lane, each further hole one lane left', () => {
@@ -102,12 +106,12 @@ describe('patch 22: the home layout', () => {
 
     it("nothing overlaps: the next hole up sits beyond the previous hole's whole tree", () => {
         const grown = layout(
-            [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 6 }, { id: 7 }],
-            [[1, 2], [1, 3], [1, 4], [2, 6], [2, 7]],
+            [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }, { id: 5 }, { id: 6 }, { id: 7 }],
+            [[1, 2], [1, 3], [1, 4], [1, 5], [2, 6], [2, 7]],
         );
         const p = (id: number) => grown.positions.get(id)!;
-        // Delta (4) is home's second hole up: above Alpha's extra hole (7).
-        expect(p(4).y).toBeLessThan(p(7).y);
+        // Golf (5) is home's second hole up: above Alpha's extra hole (7).
+        expect(p(5).y).toBeLessThan(p(7).y);
     });
 
     it('home keeps its spot while the rows above it are enough', () => {

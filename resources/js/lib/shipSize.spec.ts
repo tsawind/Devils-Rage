@@ -6,7 +6,7 @@ describe('shipSizeFromJumpMass', () => {
         expect(shipSizeFromJumpMass(5_000_000)).toBe('frigate');
         expect(shipSizeFromJumpMass(62_000_000)).toBe('medium');
         expect(shipSizeFromJumpMass(375_000_000)).toBe('large');
-        expect(shipSizeFromJumpMass(1_000_000_000)).toBe('large');
+        expect(shipSizeFromJumpMass(1_000_000_000)).toBe('xlarge');
         expect(shipSizeFromJumpMass(2_000_000_000)).toBe('xlarge');
     });
 

@@ -146,7 +146,7 @@ export function possibleHoleTypes(params: {
 export function guessFromCandidates(candidates: readonly TPossibleType[]): { total: number; name: string | null; maxJump: number } | null {
     if (candidates.length === 0) return null;
     const names = [...new Set(candidates.map((type) => type.name.toUpperCase()))];
-    const sizeOf = (jump: number) => (jump <= 62_000_000 ? 'medium' : jump < 2_000_000_000 ? 'large' : 'xlarge');
+    const sizeOf = (jump: number) => (jump <= 62_000_000 ? 'medium' : jump <= 375_000_000 ? 'large' : 'xlarge');
     const sizes = new Set(candidates.map((type) => sizeOf(type.maxJump)));
     if (sizes.size !== 1) return null;
     const smallest = candidates.reduce((best, type) => (type.total < best.total ? type : best));
