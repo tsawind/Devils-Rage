@@ -451,17 +451,6 @@ function getDashArray(): string | undefined {
                 :class="rallyDirection === 'reverse' ? 'rally-route-animated-reverse' : 'rally-route-animated'"
             />
         </template>
-        <!-- Connection status indicators -->
-        <EdgeBadges
-            :indicators="indicators"
-            :center="pill.center"
-            :dot="pill.dot"
-            :scale="scale"
-            :clickable="Boolean(connection)"
-            :title="pipeTitle"
-            @open="(event) => emit('connectionClick', event)"
-            @copy="() => store && connection && copyForwardBookmark(store, connection)"
-        />
         <path
             :d="path.d"
             stroke="transparent"
@@ -474,6 +463,18 @@ function getDashArray(): string | undefined {
         >
             <title v-if="pipeTitle">{{ pipeTitle }}</title>
         </path>
+        <!-- Patch 37: drawn after the wide click path, so clicks on the pill (and its copy chip) reach it -->
+        <!-- Connection status indicators -->
+        <EdgeBadges
+            :indicators="indicators"
+            :center="pill.center"
+            :dot="pill.dot"
+            :scale="scale"
+            :clickable="Boolean(connection)"
+            :title="pipeTitle"
+            @open="(event) => emit('connectionClick', event)"
+            @copy="() => store && connection && copyForwardBookmark(store, connection)"
+        />
         <!-- Original style draws solid endpoints; the orthogonal style meets the node edge instead. -->
         <template v-if="!isOrthogonal">
             <circle :cx="scaledFrom.x" :cy="scaledFrom.y" r="4" fill="currentColor" />
