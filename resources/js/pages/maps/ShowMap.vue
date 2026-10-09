@@ -155,17 +155,17 @@ const userScopes = computed(() => {
 const { backgroundImageUrl: fullScreenSourceUrl } = useMapBackground();
 const { effects: mapEffects } = useMapEffects();
 const fullScreenBackgroundUrl = computed(() => (mapEffects.value.fullScreenBackground ? fullScreenSourceUrl.value : ''));
-const fullScreenBackgroundStyle = computed<Record<string, string>>(() =>
-    fullScreenBackgroundUrl.value
-        ? {
-              backgroundImage: `url(${fullScreenBackgroundUrl.value})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center center',
-              backgroundAttachment: 'fixed',
-              '--panel-solidity': String(mapEffects.value.panelSolidity),
-          }
-        : {},
-);
+const fullScreenBackgroundStyle = computed((): Record<string, string> => {
+    const url = fullScreenBackgroundUrl.value;
+    if (!url) return {};
+    const style: Record<string, string> = {};
+    style.backgroundImage = `url(${url})`;
+    style.backgroundSize = 'cover';
+    style.backgroundPosition = 'center center';
+    style.backgroundAttachment = 'fixed';
+    style['--panel-solidity'] = String(mapEffects.value.panelSolidity);
+    return style;
+});
 
 // Patch 37: the event now carries the kill's system and ship (it carried nothing, so the flash never fired).
 useOnClient(() =>
