@@ -152,8 +152,8 @@ function pick(entry: { type: TSignatureType; sideId: number }): void {
                         {{ typed ? `Search: ${typed.toUpperCase()} · Backspace to edit` : `Types that spawn in ${sideName(side.system.id)} · type to search` }}
                     </ContextMenuLabel>
                     <template v-for="group in [
-                        { key: 'k162', label: 'K162', items: typesFor(side).k162 },
                         { key: 'statics', label: 'Statics', items: typesFor(side).statics },
+                        { key: 'k162', label: 'K162', items: typesFor(side).k162 },
                         { key: 'fits', label: `Lead to ${sideName(side.other.id)}'s class`, items: typesFor(side).fits },
                         { key: 'other', label: 'Other wormholes', items: typesFor(side).other },
                     ]" :key="group.key">

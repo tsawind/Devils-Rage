@@ -6,7 +6,7 @@ import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { typeSearchMatches } from '@/lib/arming';
 import { comboboxRowText, flattenComboboxSections, type TComboboxRow } from '@/lib/comboboxSections';
 import { k162Classes, k162Hint, k162Order, offersK162 } from '@/lib/k162';
-import { isQuickKey, isRareType, oftenSeen, oftenSeenCounts, quickKeyRank } from '@/lib/typeOrdering';
+import { isQuickKey, isRareType, oftenSeen, oftenSeenCounts, quickKeyRank, startsWithFirst } from '@/lib/typeOrdering';
 import { useMapStore } from '@/map/store/mapStore';
 import type { TSignatureType } from '@/types/models';
 import { computed, ref, watch } from 'vue';
@@ -91,7 +91,7 @@ const rows = computed<TComboboxRow<TSignatureType | null>[]>(() => {
 
     // Patch 20: a quick key lifts its matches to the top and keeps everything else below.
     if (isQuickKey(needle)) {
-        const all = [...k162_options.value, ...statics.value, ...often.value, ...common, ...otherCommon, ...rare];
+        const all = [...statics.value, ...k162_options.value, ...often.value, ...common, ...otherCommon, ...rare];
         const ranked = all
             .map((option, index) => ({ option, index, rank: quickKeyRank(needle, option, upperStatics) }))
             .filter((entry) => entry.rank !== null)
@@ -101,8 +101,8 @@ const rows = computed<TComboboxRow<TSignatureType | null>[]>(() => {
         const rest = (items: TSignatureType[]) => items.filter((option) => !lifted.has(option.id));
         return flattenComboboxSections<TSignatureType | null>([
             { key: 'match', heading: `Matches ${needle.toUpperCase()}`, items: ranked },
-            { key: 'k162', heading: 'K162', items: rest(k162_options.value) },
             { key: 'statics', heading: 'Statics', items: rest(statics.value) },
+            { key: 'k162', heading: 'K162', items: rest(k162_options.value) },
             { key: 'often', heading: 'Often seen on this map', items: rest(often.value) },
             { key: 'wormholes', heading: 'Wormholes', items: rest(common) },
             { key: 'other', heading: 'Other wormholes (not listed for this class)', items: rest(otherCommon) },
@@ -111,13 +111,17 @@ const rows = computed<TComboboxRow<TSignatureType | null>[]>(() => {
         ]);
     }
 
+    // Patch 37: names that start with what you typed first ("C2" → C248), the ones that spawn here before the rest.
+    const starts = startsWithFirst(needle, [...statics.value, ...k162_options.value, ...often.value, ...common, ...otherCommon, ...rare]);
+    const lifted = new Set(starts.map((option) => option.id));
     // Names first ("F1" finds F135).
-    const matches = (option: TSignatureType) => typeSearchMatches(needle, option);
+    const matches = (option: TSignatureType) => !lifted.has(option.id) && typeSearchMatches(needle, option);
 
     return flattenComboboxSections<TSignatureType | null>([
         { key: 'unknown', heading: '', items: needle === '' || 'unknown'.includes(needle) ? [null] : [] },
-        { key: 'k162', heading: 'K162', items: k162_options.value.filter(matches) },
+        { key: 'starts', heading: `Starts with ${needle.toUpperCase()}`, items: starts },
         { key: 'statics', heading: 'Statics', items: statics.value.filter(matches) },
+        { key: 'k162', heading: 'K162', items: k162_options.value.filter(matches) },
         { key: 'often', heading: 'Often seen on this map', items: often.value.filter(matches) },
         { key: 'wormholes', heading: 'Wormholes', items: common.filter(matches) },
         { key: 'other', heading: 'Other wormholes (not listed for this class)', items: otherCommon.filter(matches) },

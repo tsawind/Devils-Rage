@@ -134,5 +134,24 @@ export function typeSections<T extends TOrderType & { name?: string | null; spaw
             (group) => group.items.length,
         );
     }
-    return groups.map((group) => ({ ...group, items: group.items.filter((type) => params.matches(needle, type)) })).filter((group) => group.items.length);
+    // Patch 37: names that start with what you typed come first ("C2" → C248), the ones that
+    // spawn here before the rest.
+    const starts = startsWithFirst(needle, groups.flatMap((group) => group.items));
+    const lifted = new Set(starts);
+    return [
+        { key: 'starts', label: `Starts with ${needle.toUpperCase()}`, items: starts },
+        ...groups.map((group) => ({ ...group, items: group.items.filter((type) => !lifted.has(type) && params.matches(needle, type)) })),
+    ].filter((group) => group.items.length);
+}
+
+/** Patch 37: the types whose code starts with the search, in list order, each once (none for an empty search). */
+export function startsWithFirst<T extends TOrderType>(query: string, items: readonly T[]): T[] {
+    const needle = query.trim().toUpperCase();
+    if (needle === '') return [];
+    const seen = new Set<number>();
+    return items.filter((type) => {
+        if (!type.signature.toUpperCase().startsWith(needle) || seen.has(type.id)) return false;
+        seen.add(type.id);
+        return true;
+    });
 }

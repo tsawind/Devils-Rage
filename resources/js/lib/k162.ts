@@ -93,11 +93,14 @@ export function k162Hint(type: TTypeLike, standingClass: string | number | null 
     return null;
 }
 
-/** Sort weight inside the K162 group: the class-narrowing options first, in class order. */
+/**
+ * Sort weight inside the K162 group. Patch 37: "K162 ?" (class unknown) first, for a quick
+ * mark when you're moving fast; then the class-narrowing options in class order; frigate last.
+ */
 export function k162Order(type: TTypeLike): number {
     if (isK162Frigate(type)) return 90;
     const classes = k162Classes(type);
-    if (classes.length === 0) return 95;
+    if (classes.length === 0) return -1;
     const first = wormholeNumber(classes[0]);
     if (first === null) return 80 + (type.target_class ?? '').charCodeAt(0) / 1000;
     return first * 2 + (classes.length > 1 ? 1 : 0);
