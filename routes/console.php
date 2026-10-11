@@ -18,6 +18,7 @@ use App\Console\Commands\Signatures\DeleteOldSignaturesCommand;
 use App\Console\Commands\Signatures\ReleaseExpiredArmsCommand;
 use App\Console\Commands\Skyhooks\GetRaidableSkyhooksCommand;
 use App\Console\Commands\Sovereignty\GetSovereigntiesCommand;
+use App\Models\MapShareLink;
 use Illuminate\Queue\Console\PruneBatchesCommand;
 use Illuminate\Support\Facades\Schedule;
 
@@ -36,5 +37,7 @@ Schedule::command(PurgeOldKillmailsCommand::class)->runInBackground()->daily();
 Schedule::command(PurgeExpiredMapAccessCommand::class)->runInBackground()->everyTenMinutes()->withoutOverlapping();
 Schedule::command(PruneBatchesCommand::class)->daily();
 Schedule::command(AnalyzeWormholeSystems::class)->runInBackground()->daily()->withoutOverlapping();
+// Patch 37: viewer links that ran out are deleted.
+Schedule::call(fn () => MapShareLink::query()->whereNotNull('expires_at')->where('expires_at', '<=', now())->delete())->name('prune-share-links')->everyTenMinutes()->withoutOverlapping();
 Schedule::command(SyncSeatMainsCommand::class)->runInBackground()->hourly()->withoutOverlapping();
 Schedule::command(ResolveUnnamedOrganisationsCommand::class)->runInBackground()->hourly()->withoutOverlapping()->notDuringDowntime();

@@ -8,6 +8,12 @@
 
 let context: AudioContext | null = null;
 
+/** Patch 37: the speaker menu's volume (0–1), applied to every mapper sound and the spoken call-out. */
+let soundVolume = 0.7;
+export function setSoundVolume(volume: number): void {
+    soundVolume = Math.min(Math.max(volume, 0), 1);
+}
+
 function audio(): AudioContext | null {
     if (typeof window === 'undefined') return null;
     const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -52,7 +58,7 @@ export function playRageHitSound(volume = 1): void {
 
     const t = ctx.currentTime + 0.02;
     const master = ctx.createGain();
-    master.gain.value = Math.min(Math.max(volume, 0), 1);
+    master.gain.value = Math.min(Math.max(volume, 0), 1) * soundVolume;
     // Patch 37: louder: squeezed by a compressor, then turned up (no clipping).
     const compressor = ctx.createDynamicsCompressor();
     compressor.threshold.value = -28;
@@ -137,7 +143,7 @@ export function playKillSound(heavy = false, volume = 0.45): void {
     }
     const t = ctx.currentTime + 0.02;
     const master = ctx.createGain();
-    master.gain.value = Math.min(Math.max(volume, 0), 1);
+    master.gain.value = Math.min(Math.max(volume, 0), 1) * soundVolume;
     master.connect(ctx.destination);
 
     // 1. The crack and debris: a short burst of filtered noise.
@@ -223,7 +229,7 @@ export function speakTargetAcquired(delayMs = 350): void {
             utterance.voice = voice;
             utterance.lang = voice.lang;
         }
-        utterance.volume = 1;
+        utterance.volume = soundVolume;
         utterance.rate = 0.92;
         utterance.pitch = 0.6;
         synth.speak(utterance);

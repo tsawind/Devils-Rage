@@ -13,14 +13,13 @@ use App\Http\Controllers\DocumentationController;
 use App\Http\Controllers\EveController;
 use App\Http\Controllers\EveScoutConnectionController;
 use App\Http\Controllers\EveSearchController;
+use App\Http\Controllers\HoleCheckedController;
 use App\Http\Controllers\HomeSystemController;
 use App\Http\Controllers\IgnoreListController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\MapAccessController;
 use App\Http\Controllers\MapAlertController;
-use App\Http\Controllers\MapRageRollController;
-use App\Http\Controllers\MapRallyPingController;
 use App\Http\Controllers\MapAlertStateController;
 use App\Http\Controllers\MapBackgroundImageController;
 use App\Http\Controllers\MapBookmarkFormatController;
@@ -33,12 +32,15 @@ use App\Http\Controllers\MapIgnoredSolarsystemController;
 use App\Http\Controllers\MapImportController;
 use App\Http\Controllers\MapLayoutController;
 use App\Http\Controllers\MapPreferencesController;
+use App\Http\Controllers\MapRageRollController;
+use App\Http\Controllers\MapRallyPingController;
 use App\Http\Controllers\MapRouteSolarsystemController;
 use App\Http\Controllers\MapRoutingSettingsController;
 use App\Http\Controllers\MapScopeController;
 use App\Http\Controllers\MapSearchController;
 use App\Http\Controllers\MapSelectionController;
 use App\Http\Controllers\MapSettingsController;
+use App\Http\Controllers\MapShareLinkController;
 use App\Http\Controllers\MapSolarsystemController;
 use App\Http\Controllers\MapTransferController;
 use App\Http\Controllers\MapUndoController;
@@ -49,9 +51,11 @@ use App\Http\Controllers\PasteSignatureController;
 use App\Http\Controllers\PingController;
 use App\Http\Controllers\PreferredCharacterController;
 use App\Http\Controllers\RallyPointController;
+use App\Http\Controllers\RouteMailController;
+use App\Http\Controllers\RouteShareController;
+use App\Http\Controllers\RouteWaypointController;
 use App\Http\Controllers\ScopeController;
 use App\Http\Controllers\SettingsController;
-use App\Http\Controllers\HoleCheckedController;
 use App\Http\Controllers\SignatureArmController;
 use App\Http\Controllers\SignatureController;
 use App\Http\Controllers\StatisticsController;
@@ -151,6 +155,12 @@ Route::middleware('auth')->group(function () {
 
     Route::post('waypoints', [WaypointController::class, 'store'])->name('waypoints.store');
     Route::post('waypoints/bulk', [BulkWaypointController::class, 'store'])->name('waypoints.bulk');
+    Route::post('waypoints/route', [RouteWaypointController::class, 'store'])->name('waypoints.route');
+    // Patch 37: viewer links (Share button) and the mailed route report.
+    Route::post('maps/{map}/share-links', [MapShareLinkController::class, 'store'])->name('maps.share-links.store');
+    Route::patch('share-links/{mapShareLink}', [MapShareLinkController::class, 'update'])->name('share-links.update');
+    Route::delete('share-links/{mapShareLink}', [MapShareLinkController::class, 'destroy'])->name('share-links.destroy');
+    Route::post('maps/{map}/route-mail', [RouteMailController::class, 'store'])->name('maps.route-mail.store');
 
     Route::prefix('scopes')->name('scopes.')->group(function () {
         Route::get('/', [ScopeController::class, 'index'])->name('index');
@@ -200,3 +210,5 @@ Route::middleware('auth')->group(function () {
 Route::get('maps/{map}', [MapController::class, 'show'])->middleware(SetMapShareToken::class)->name('maps.show');
 Route::put('maps/{map}/user-settings', [MapUserSettingController::class, 'update'])->name('maps.user-settings.update');
 Route::get('share/{token}', [MapController::class, 'showByToken'])->name('maps.share');
+// Patch 37: a mailed route report's page (24 h, no login).
+Route::get('r/{token}', [RouteShareController::class, 'show'])->name('share.route');

@@ -30,6 +30,8 @@ final class MapSettingsController extends Controller
             'permission' => $map->getUserPermission(auth()->user())?->value,
             'is_public' => $map->is_public,
             'share_token' => $map->share_token,
+            // Patch 37: the viewer links (the same list as the map's Share button).
+            'share_links' => MapShareLinkController::linksFor($map, auth()->user()),
         ]);
     }
 

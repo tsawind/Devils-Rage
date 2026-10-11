@@ -26,6 +26,8 @@ use Staudenmeir\EloquentHasManyDeep\HasRelationships;
  *
  * @property int $id
  * @property string $name
+ * @property string|null $seat_main_name Patch 37: the main SeAT has for this character
+ * @property int|null $seat_main_id
  * @property string|null $description
  * @property int $race_id
  * @property int $bloodline_id

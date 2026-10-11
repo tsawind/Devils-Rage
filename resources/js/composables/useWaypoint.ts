@@ -1,4 +1,5 @@
 import BulkWaypointController from '@/actions/App/Http/Controllers/BulkWaypointController';
+import RouteWaypointController from '@/actions/App/Http/Controllers/RouteWaypointController';
 import useUser from '@/composables/useUser';
 import Waypoints from '@/routes/waypoints';
 import { router } from '@inertiajs/vue3';
@@ -43,5 +44,21 @@ export function useWaypoint() {
         );
     }
 
-    return { setWaypoint, setWaypointAll, onlineCharacters };
+    /**
+     * Patch 37: a route's waypoints in order on your own online characters (all of them when
+     * `characterIds` is null). The first replaces the in-game route, the rest come after it.
+     */
+    function setRouteWaypoints(destinationIds: number[], characterIds: number[] | null = null) {
+        router.post(
+            RouteWaypointController.store().url,
+            { destination_ids: destinationIds, character_ids: characterIds },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                only: ['notification'],
+            },
+        );
+    }
+
+    return { setWaypoint, setWaypointAll, setRouteWaypoints, onlineCharacters };
 }

@@ -1,10 +1,24 @@
 <script setup lang="ts">
 import AutopilotSettings from '@/components/autopilot/AutopilotSettings.vue';
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useWaypoint } from '@/composables/useWaypoint';
+import RouteMailDialog from '@/components/map/RouteMailDialog.vue';
+import { ref } from 'vue';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ROUTE_KIND_LABELS, type TRouteKind, useRouteCopy } from '@/composables/useRouteCopy';
-import { ChevronDown, ClipboardCopy, Radar, ShieldCheck, TriangleAlert, Zap } from 'lucide-vue-next';
+import { ChevronDown, ClipboardCopy, Mail, Navigation, Radar, ShieldCheck, TriangleAlert, Users, Zap } from 'lucide-vue-next';
 import type { Component } from 'vue';
+import { toast } from 'vue-sonner';
 
 /**
  * Patch 26: copy a route for fleet chat. `bar`: in the map bar (Default, Safest, ▾ for the
@@ -13,7 +27,17 @@ import type { Component } from 'vue';
  */
 const { variant } = defineProps<{ variant: 'bar' | 'panel' }>();
 
-const { roundTrip, copyForLinking, notepadLinks, copyRoute, copyHoldFacts, copyScanPlan, canCopy } = useRouteCopy();
+const { roundTrip, copyForLinking, notepadLinks, copyRoute, copyHoldFacts, copyScanPlan, canCopy, waypointsFor } = useRouteCopy();
+
+// Patch 37: set the route in game on your own characters, and mail a route report.
+const { onlineCharacters, setRouteWaypoints } = useWaypoint();
+const mailOpen = ref(false);
+
+async function setRouteInGame(characterIds: number[] | null): Promise<void> {
+    const ids = await waypointsFor('default');
+    if (ids.length) setRouteWaypoints(ids, characterIds);
+    else toast.warning('Nothing to set in game', { description: 'The route has no gate legs (autopilot only uses gates).' });
+}
 
 /** Patch 37: the bar's copy buttons, each backup right after its route. */
 const barButtons: { kind: TRouteKind; icon: Component; tip: string; backup?: boolean }[] = [
@@ -91,11 +115,34 @@ const hint = 'Pick To in Routing first (From is home while it is empty)';
                 <p v-if="notepadLinks" class="px-2 pb-1 text-[11px] leading-snug text-muted-foreground">
                     Paste in the in-game Notepad, select it, right-click → Copy Selected With Formatting, then paste in fleet chat.
                 </p>
+                <DropdownMenuSeparator />
+                <!-- Patch 37: the Default route's gate legs as in-game waypoints, on your own characters -->
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger class="text-xs" :disabled="!canCopy">
+                        <Navigation class="size-3.5" /> Set route in game
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent class="w-56">
+                        <template v-if="onlineCharacters.length">
+                            <DropdownMenuItem v-for="character in onlineCharacters" :key="character.id" class="text-xs" @select="setRouteInGame([character.id])">
+                                {{ character.name }}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem v-if="onlineCharacters.length > 1" class="text-xs" @select="setRouteInGame(null)">
+                                <Users class="size-3.5" /> All my online characters ({{ onlineCharacters.length }})
+                            </DropdownMenuItem>
+                        </template>
+                        <p v-else class="px-2 py-1.5 text-xs text-muted-foreground">None of your characters is online.</p>
+                        <p class="px-2 pb-1.5 text-[11px] leading-snug text-muted-foreground">
+                            Waypoints at the end of every gate leg (Default route). Autopilot can't use holes: take those yourself.
+                        </p>
+                    </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuItem class="text-xs" :disabled="!canCopy" @select="mailOpen = true"> <Mail class="size-3.5" /> Mail route report… </DropdownMenuItem>
                 <slot name="extra" />
             </DropdownMenuContent>
         </DropdownMenu>
         <!-- Patch 26: route settings (the same as Navigation's gear) -->
         <AutopilotSettings variant="bar" />
+        <RouteMailDialog v-model:open="mailOpen" />
     </div>
 
     <div v-else class="border-t border-border/30 px-3 py-2">

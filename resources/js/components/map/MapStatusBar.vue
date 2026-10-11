@@ -51,6 +51,7 @@ import RallyChip from './RallyChip.vue';
 import { useRageRoll } from '@/composables/useRageRoll';
 import RouteCopyButtons from './RouteCopyButtons.vue';
 import MapSwitcher from './MapSwitcher.vue';
+import MapSharePopover from './MapSharePopover.vue';
 import RoutingBox from './RoutingBox.vue';
 import TrackingSignatureDialog from './TrackingSignatureDialog.vue';
 
@@ -75,6 +76,8 @@ usePing(map);
 
 const character = useActiveMapCharacter();
 const { canEdit, canManageAccess } = usePermission();
+// Patch 37: members and up can make viewer links.
+const canShare = canEdit;
 
 const echoStatus = typeof window !== 'undefined' ? useConnectionStatus() : ref<ConnectionStatus>('connected');
 const connectionStatus = computed(() => echoStatus.value);
@@ -198,6 +201,8 @@ const settingsUrl = computed(() => {
     >
         <!-- Map Name (patch 26: opens a list of your maps, plus New map) -->
         <MapSwitcher :map="map" />
+        <!-- Patch 37: share the map read only (timed viewer links; permanent for managers) -->
+        <MapSharePopover v-if="canShare" :map-slug="map.slug" />
 
         <div class="hidden h-4 w-px bg-border/50 sm:block" />
 

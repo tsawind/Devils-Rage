@@ -62,7 +62,17 @@ final class Map extends Model
 
     public function isPubliclyAccessible(): bool
     {
-        return $this->is_public || $this->share_token !== null;
+        return $this->is_public || $this->share_token !== null || $this->shareLinks()->where('kind', 'map')->live()->exists();
+    }
+
+    /**
+     * Patch 37: viewer links (timed or permanent).
+     *
+     * @return HasMany<MapShareLink, $this>
+     */
+    public function shareLinks(): HasMany
+    {
+        return $this->hasMany(MapShareLink::class);
     }
 
     /**

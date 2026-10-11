@@ -31,13 +31,16 @@ final class MapPolicy
             return true;
         }
 
-        if ($map->share_token !== null) {
-            $providedToken = request()->query('share_token')
-                ?? session("map_share_token_{$map->id}");
+        $providedToken = request()->query('share_token')
+            ?? session("map_share_token_{$map->id}");
 
-            if ($providedToken === $map->share_token) {
-                return true;
-            }
+        if ($map->share_token !== null && $providedToken === $map->share_token) {
+            return true;
+        }
+
+        // Patch 37: a live viewer link (timed or permanent).
+        if (is_string($providedToken) && $providedToken !== '' && $map->shareLinks()->where('kind', 'map')->where('token', $providedToken)->live()->exists()) {
+            return true;
         }
 
         if (! $user instanceof User) {

@@ -5,7 +5,7 @@ import { useShowMap } from '@/composables/useShowMap';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import { displayAlias } from '@/lib/alias';
 import { FLEET_RULES } from '@/lib/fleetRules';
-import { gateWaypoints, holdFacts, routeSummary, scanPlan, type TRouteFormat, type TRouteHole, type TRouteHop, type TRouteInput, type TRouteStep, type TScanCandidate } from '@/lib/routeSummary';
+import { gateWaypoints, holdFacts, routeEntries, routeSummary, scanPlan, type TRouteFormat, type TRouteHole, type TRouteHop, type TRouteInput, type TRouteStep, type TScanCandidate } from '@/lib/routeSummary';
 import { wormholeMass } from '@/lib/wormholeMass';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import type { TMapConnection } from '@/pages/maps';
@@ -27,6 +27,14 @@ export const ROUTE_KIND_LABELS: Record<TRouteKind, string> = {
     shortestBackup: 'Shortest backup',
     safest: 'Safest',
     safestBackup: 'Safest backup',
+};
+
+/** Patch 37: the routes on a mailed report's 24 h page. */
+export type TRouteReport = {
+    title: string;
+    note: string | null;
+    sent_at: string;
+    routes: { title: string; lines: string[]; stops: { name: string; kspace: boolean; leave: string | null }[] }[];
 };
 
 /** Patch 29c: what a rally ping includes. */
@@ -356,24 +364,38 @@ export function useRouteCopy() {
 
     /**
      * Patch 37: the route report for EVE mail: every route kind, one real system per line with
-     * EVE mail links. Null without a From / To.
+     * EVE mail links, plus `report`: the same routes for the 24 h route page. `{{route_link}}`
+     * in the body becomes that page's address on the server. Null without a From / To.
      */
-    async function routeReport(note: string | null, link: string | null): Promise<{ subject: string; body: string; from: number; to: number } | null> {
+    async function routeReport(note: string | null): Promise<{ subject: string; body: string; report: TRouteReport } | null> {
         const ends = endpoints();
         if (!ends) return null;
         const clock = new Date();
         const time = `${String(clock.getUTCHours()).padStart(2, '0')}:${String(clock.getUTCMinutes()).padStart(2, '0')}`;
         const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const parts: string[] = [`<b>Route ${escape(nameOf(ends.from))} → ${escape(nameOf(ends.to))} · ${time} EVE</b>`];
+        const title = `Route ${nameOf(ends.from)} → ${nameOf(ends.to)} · ${time} EVE`;
+        const parts: string[] = [`<b>${escape(title)}</b>`];
         if (note) parts.push(escape(note));
-        if (link) parts.push(`<a href="${link}">Open this route on the mapper</a> (link works 24 h)`);
+        parts.push('<a href="{{route_link}}">Open these routes on the mapper</a> (link works 24 h)');
+        const report: TRouteReport = { title, note, sent_at: clock.toISOString(), routes: [] };
         for (const kind of ['default', 'shortest', 'safest', 'shortestBackup', 'safestBackup'] as TRouteKind[]) {
             const { route } = await routeFor(kind, ends.from, ends.to);
             if (!route) continue;
-            const text = routeSummary(toInput(route, undefined, kind), null, { layout: 'lines', links: 'mail' });
-            parts.push(text.replace(/^([^<]*)/, (head) => `<b>${head.toUpperCase()}</b>`));
+            const input = toInput(route, undefined, kind);
+            const text = routeSummary(input, null, { layout: 'lines', links: 'mail' });
+            parts.push(text.replace(/^([^<]*)/, (head) => `<b>${head}</b>`));
+            const plain = routeSummary(input, null, { layout: 'lines' }).split('\n');
+            report.routes.push({
+                title: plain[0] ?? ROUTE_KIND_LABELS[kind],
+                lines: plain.slice(1),
+                stops: routeEntries(input.steps, input.hops).map((entry) => ({
+                    name: entry.label,
+                    kspace: Boolean(entry.linkName),
+                    leave: entry.leave ? (entry.leave.kind === 'gates' ? `${entry.leave.count} ${entry.leave.count === 1 ? 'gate' : 'gates'}` : entry.leave.kind === 'evescout' ? 'EVE-Scout hole' : 'hole') : null,
+                })),
+            });
         }
-        return { subject: `Route ${nameOf(ends.from)} → ${nameOf(ends.to)} · ${time} EVE`.slice(0, 100), body: parts.join('<br><br>'), from: ends.from, to: ends.to };
+        return { subject: title.slice(0, 100), body: parts.join('<br><br>'), report };
     }
 
     /** Patch 37: in-game waypoints for a route kind (the end of every gate leg). */

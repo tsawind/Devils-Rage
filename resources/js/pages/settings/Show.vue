@@ -47,6 +47,8 @@ const managedScopes = [
     { scope: 'esi-location.read_location.v1', name: 'Location' },
     { scope: 'esi-location.read_ship_type.v1', name: 'Ship' },
     { scope: 'esi-ui.write_waypoint.v1', name: 'Waypoints' },
+    // Patch 37: mail a route report to yourself or your main.
+    { scope: 'esi-mail.send_mail.v1', name: 'Mail' },
 ];
 const allScopeNames = managedScopes.map(({ scope }) => scope).join(',');
 const preferredCharacterId = computed(() => props.characters.find((character) => character.is_preferred)?.id.toString());

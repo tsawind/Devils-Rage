@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import MapSharePopover from '@/components/map/MapSharePopover.vue';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import useIsMapOwner from '@/composables/useIsMapOwner';
@@ -231,34 +232,11 @@ function copyShareLink() {
                         <Link2 class="size-5" />
                         Share Link
                     </CardTitle>
-                    <CardDescription>Generate a shareable link for viewer-only access</CardDescription>
+                    <CardDescription>Viewer-only links: timed (up to 7 days) or permanent</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div class="space-y-4">
-                        <p class="text-sm text-muted-foreground">
-                            Share links provide viewer-only access to this map. Anyone with the link can view the map topology, signatures, killmails,
-                            and EVE Scout connections.
-                        </p>
-
-                        <div v-if="share_token" class="space-y-3">
-                            <div class="flex items-center gap-2">
-                                <Input :model-value="shareUrl" readonly class="font-mono text-sm" />
-                                <Button variant="outline" size="icon" @click="copyShareLink">
-                                    <Check v-if="copied" class="size-4 text-green-500" />
-                                    <Copy v-else class="size-4" />
-                                </Button>
-                            </div>
-                            <Button variant="destructive" size="sm" @click="revokeShareToken">
-                                <Link2Off class="mr-2 size-4" />
-                                Revoke Share Link
-                            </Button>
-                        </div>
-
-                        <Button v-else variant="outline" @click="generateShareToken">
-                            <Link2 class="mr-2 size-4" />
-                            Generate Share Link
-                        </Button>
-                    </div>
+                    <!-- Patch 37: the same viewer links as the map's Share button (timed, or permanent for managers) -->
+                    <MapSharePopover :map-slug="map.slug" inline />
                 </CardContent>
             </Card>
 

@@ -12,7 +12,7 @@ import { TMapBackgroundMode, useMapBackground } from '@/composables/useMapBackgr
 import { updateMapUserSettings } from '@/map/actions/updateMapUserSettings';
 import { useMapStore } from '@/map/store/mapStore';
 import { router } from '@inertiajs/vue3';
-import { CircleDashed, ImageUp, Loader2, Trash2, Volume2, VolumeX, Waypoints, Workflow } from 'lucide-vue-next';
+import { CircleDashed, ImageUp, Loader2, Trash2, Volume1, Volume2, VolumeX, Waypoints, Workflow } from 'lucide-vue-next';
 import { useMapEffects } from '@/composables/useMapEffects';
 import { pulseKill } from '@/composables/useKillPulses';
 import { playKillSound, playTargetAcquired } from '@/lib/rageSound';
@@ -206,6 +206,12 @@ function onDrop(event: DragEvent) {
                     <label class="flex items-center justify-between gap-2">
                         <span>Sounds</span>
                         <input v-model="effects.sounds" type="checkbox" class="size-4 accent-red-600" />
+                    </label>
+                    <!-- Patch 37: volume of every mapper sound (and the tests) -->
+                    <label class="flex items-center gap-2" :class="{ 'opacity-50': !effects.sounds }">
+                        <Volume1 class="size-4 shrink-0" />
+                        <input v-model.number="effects.volume" type="range" min="0" max="1" step="0.05" class="flex-1 accent-red-600" aria-label="Volume" />
+                        <span class="w-9 text-right text-xs tabular-nums">{{ Math.round(effects.volume * 100) }}%</span>
                     </label>
                     <label class="flex items-center justify-between gap-2">
                         <span>Kill effects on the map</span>

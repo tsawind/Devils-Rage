@@ -1,3 +1,4 @@
+import { setSoundVolume } from '@/lib/rageSound';
 import { ref, watch } from 'vue';
 
 /**
@@ -13,9 +14,11 @@ type TMapEffects = {
     fullScreenBackground: boolean;
     /** How solid the side windows are over a full-screen background: 0.3 (quite see-through) … 1 (solid). */
     panelSolidity: number;
+    /** Patch 37: volume of every mapper sound (0–1). */
+    volume: number;
 };
 
-const DEFAULTS: TMapEffects = { sounds: true, killEffects: true, fullScreenBackground: false, panelSolidity: 0.75 };
+const DEFAULTS: TMapEffects = { sounds: true, killEffects: true, fullScreenBackground: false, panelSolidity: 0.75, volume: 0.7 };
 
 function read(): TMapEffects {
     try {
@@ -27,6 +30,7 @@ function read(): TMapEffects {
             killEffects: typeof parsed.killEffects === 'boolean' ? parsed.killEffects : DEFAULTS.killEffects,
             fullScreenBackground: typeof parsed.fullScreenBackground === 'boolean' ? parsed.fullScreenBackground : DEFAULTS.fullScreenBackground,
             panelSolidity: typeof parsed.panelSolidity === 'number' ? Math.min(Math.max(parsed.panelSolidity, 0.3), 1) : DEFAULTS.panelSolidity,
+            volume: typeof parsed.volume === 'number' ? Math.min(Math.max(parsed.volume, 0), 1) : DEFAULTS.volume,
         };
     } catch {
         return { ...DEFAULTS };
@@ -34,6 +38,11 @@ function read(): TMapEffects {
 }
 
 const effects = ref<TMapEffects>(read());
+setSoundVolume(effects.value.volume);
+watch(
+    () => effects.value.volume,
+    (volume) => setSoundVolume(volume),
+);
 
 watch(
     effects,

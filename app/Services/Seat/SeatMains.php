@@ -60,6 +60,8 @@ final class SeatMains
 
         /** @var array<int, string> $mainOf character id => main name */
         $mainOf = [];
+        /** @var array<int, int> $mainIdOf character id => main character id */
+        $mainIdOf = [];
         $url = mb_rtrim((string) config('services.seat.url'), '/').'/api/v2/users';
         $pages = 0;
 
@@ -86,6 +88,9 @@ final class SeatMains
                 }
                 foreach ($characterIds as $characterId) {
                     $mainOf[$characterId] = $mainName;
+                    if ($mainId !== null) {
+                        $mainIdOf[$characterId] = $mainId;
+                    }
                 }
             }
 
@@ -94,12 +99,14 @@ final class SeatMains
         }
 
         foreach (collect($mainOf)->groupBy(fn (string $main): string => $main, preserveKeys: true) as $main => $characters) {
-            Character::query()->whereKey($characters->keys()->all())->update(['seat_main_name' => $main]);
+            $ids = $characters->keys()->all();
+            $mainId = $mainIdOf[$ids[0]] ?? null;
+            Character::query()->whereKey($ids)->update(['seat_main_name' => $main, 'seat_main_id' => $mainId]);
         }
         Character::query()
             ->whereNotNull('seat_main_name')
             ->when($mainOf !== [], fn ($query) => $query->whereKeyNot(array_keys($mainOf)))
-            ->update(['seat_main_name' => null]);
+            ->update(['seat_main_name' => null, 'seat_main_id' => null]);
 
         Cache::forever(self::SYNCED_KEY, now()->getTimestamp());
 

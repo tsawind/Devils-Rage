@@ -24,6 +24,7 @@ use App\Http\Requests\UpdateMapRequest;
 use App\Http\Resources\MapCardResource;
 use App\Http\Resources\MapResource;
 use App\Models\Map;
+use App\Models\MapShareLink;
 use App\Models\MapSolarsystem;
 use App\Models\MapWebhook;
 use App\Models\MapWebhookRole;
@@ -84,6 +85,8 @@ final class MapController extends Controller
             'can_create_map' => Gate::allows('create', Map::class),
             // Patch 29: where a rally ping can go and who it can mention (loaded when the ping box opens).
             'rally_ping_targets' => Inertia::optional(fn (): array => $this->rallyPingTargets($map)),
+            // Patch 37: the Share popup's viewer links (loaded when it opens).
+            'share_links' => Inertia::optional(fn (): array => MapShareLinkController::linksFor($map, $user)),
             // Patch 37: each character's main from SeAT, for "Alt - Main" names.
             'pilot_mains' => fn (): array => ['enabled' => SeatMains::enabled(), 'mains' => SeatMains::byName()],
         ])
@@ -146,6 +149,14 @@ final class MapController extends Controller
 
     public function showByToken(string $token): RedirectResponse
     {
+        // Patch 37: a live viewer link (timed or permanent); the old single share token still works.
+        $link = MapShareLink::query()->where('token', $token)->where('kind', 'map')->live()->with('map')->first();
+        if ($link instanceof MapShareLink) {
+            $link->forceFill(['last_used_at' => now(), 'uses' => $link->uses + 1])->save();
+
+            return redirect()->route('maps.show', ['map' => $link->map, 'share_token' => $token]);
+        }
+
         $map = Map::query()->where('share_token', $token)->firstOrFail();
 
         return redirect()->route('maps.show', ['map' => $map, 'share_token' => $token]);
