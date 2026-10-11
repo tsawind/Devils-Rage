@@ -25,6 +25,7 @@ use App\Models\SignatureCategory;
 use App\Models\Solarsystem;
 use App\Traits\PositionsMapSolarsystems;
 use App\Support\Broadcasting\MapBroadcaster;
+use App\Support\ChainMemory;
 use App\Utilities\StargatePairDetector;
 use App\Utilities\WormholeConnectionClassifier;
 use Illuminate\Container\Attributes\Config;
@@ -94,13 +95,20 @@ final readonly class StoreTrackingAction
             */
             $existing_map_solarsystem = $this->getMapSolarsystemOnMap($origin->map, $to_solarsystem);
             // Patch 36 (chain memory): a system hidden by a clear comes back as it was.
-            $was_hidden = ! $existing_map_solarsystem instanceof MapSolarsystem && MapSolarsystem::withHidden()
+            $hidden_row = $existing_map_solarsystem instanceof MapSolarsystem ? null : MapSolarsystem::withHidden()
                 ->where('map_id', $origin->map_id)
                 ->isSolarsystem($to_solarsystem)
                 ->whereNotNull('hidden_at')
-                ->exists();
+                ->first();
+            $was_hidden = $hidden_row instanceof MapSolarsystem;
+            // Patch 37: a cleared system with no remembered chain beyond it is just a system again:
+            // reached through a named hole it takes that hole's name, not its old one ("Alpha@1917").
+            $old_chain = $was_hidden && $hidden_row->memory_links !== null && $hidden_row->memory_links !== [];
             $target_map_solarsystem = $existing_map_solarsystem ?? $this->addSolarsystemToMap($origin, $to_solarsystem);
-            $restored_name = $was_hidden && filled($target_map_solarsystem->alias) ? (string) $target_map_solarsystem->alias : null;
+            if ($was_hidden && ! $old_chain && filled($data->alias)) {
+                ChainMemory::dropOldName($target_map_solarsystem);
+            }
+            $restored_name = $was_hidden && $old_chain && filled($target_map_solarsystem->alias) ? (string) $target_map_solarsystem->alias : null;
 
             /* The alias goes through the update action so the broadcast payload
              * carries it — a raw update() here left other viewers (and the

@@ -190,6 +190,27 @@ final class ChainMemory
             ->update(['alias' => null]);
     }
 
+    /**
+     * Patch 37: a system that came back with nothing remembered beyond it lets go of its old
+     * name: the system's alias and its unjumped holes' names that came from it ("A0@1917",
+     * "ALPHA1"). Names typed on holes that don't come from the old name stay.
+     */
+    public static function dropOldName(MapSolarsystem $system): void
+    {
+        $plain = mb_strtoupper((string) self::plainAlias($system->alias));
+
+        Signature::query()
+            ->where('map_solarsystem_id', $system->id)
+            ->whereNull('map_connection_id')
+            ->whereNotNull('alias')
+            ->get()
+            ->filter(fn (Signature $signature): bool => self::isStamped($signature->alias)
+                || ($plain !== '' && str_starts_with(mb_strtoupper((string) $signature->alias), $plain)))
+            ->each(fn (Signature $signature) => $signature->update(['alias' => null]));
+
+        $system->forceFill(['alias' => null])->save();
+    }
+
     /** Connection columns not copied when a remembered pipe comes back. */
     private const array NOT_REMEMBERED = ['id', 'map_id', 'from_map_solarsystem_id', 'to_map_solarsystem_id', 'updated_at', 'from_memory'];
 

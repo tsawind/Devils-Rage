@@ -260,3 +260,23 @@ it('patch 37: a jump through a K162 leaves the far side alone when several types
         ->whereNotNull('signature_type_id')
         ->exists())->toBeFalse();
 });
+
+it('patch 37: a cleared system with nothing remembered beyond it takes the jumped hole\'s name', function () {
+    $map = Map::factory()->create();
+    $origin = placeMapSolarsystem($map, 31000961);
+    $old = placeMapSolarsystem($map, 31000962, 300, 300);
+    $old->forceFill(['alias' => 'ALPHA@1917', 'hidden_at' => now()->subHours(2), 'memory_links' => null])->save();
+    $oldStatic = Signature::create(['map_solarsystem_id' => $old->id, 'signature_id' => 'OLD-001', 'alias' => 'A0@1917']);
+    $typed = Signature::create(['map_solarsystem_id' => $old->id, 'signature_id' => 'GAS-001', 'alias' => 'Gas']);
+
+    app(StoreTrackingAction::class)->handle(TrackingData::from([
+        'from_map_solarsystem_id' => $origin->id,
+        'to_solarsystem_id' => 31000962,
+        'alias' => 'A',
+    ]));
+
+    expect($old->fresh()->alias)->toBe('A')
+        ->and($old->fresh()->hidden_at)->toBeNull()
+        ->and($oldStatic->fresh()->alias)->toBeNull()
+        ->and($typed->fresh()->alias)->toBe('Gas');
+});
