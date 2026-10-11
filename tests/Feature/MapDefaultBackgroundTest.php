@@ -65,6 +65,10 @@ it('patch 37: a manager can use their own picture as the map default', function 
 
     expect($map->refresh()->background_image_path)->toStartWith("map-backgrounds/{$map->id}/default/");
     Storage::disk('public')->assertExists($map->background_image_path);
+
+    // The same picture again keeps the file (it lands on the same path).
+    actingAs($manager)->post(route('maps.default-background.store', $map), ['from_own' => '1'])->assertRedirect();
+    Storage::disk('public')->assertExists($map->refresh()->background_image_path);
 });
 
 it('patch 37: a member cannot set the map default', function () {

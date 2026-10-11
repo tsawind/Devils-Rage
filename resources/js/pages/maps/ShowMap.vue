@@ -168,8 +168,9 @@ const fullScreenBackgroundStyle = computed((): Record<string, string> => {
     return style;
 });
 
-// Patch 37: join the map's presence channel (managers see who has the map open).
-if (page.props.auth?.user) useMapPresence(map.id);
+// Patch 37: check in as "has the map open" (viewer links too); managers fetch the list.
+const { canManageAccess: presenceManager } = usePermission();
+useMapPresence(map.slug, () => presenceManager.value);
 
 // Patch 37: the event now carries the kill's system and ship (it carried nothing, so the flash never fired).
 useOnClient(() =>

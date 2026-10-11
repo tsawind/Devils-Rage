@@ -23,6 +23,7 @@ use App\Http\Controllers\MapAlertController;
 use App\Http\Controllers\MapAlertStateController;
 use App\Http\Controllers\MapBackgroundImageController;
 use App\Http\Controllers\MapDefaultBackgroundController;
+use App\Http\Controllers\MapPresenceController;
 use App\Http\Controllers\MapBookmarkFormatController;
 use App\Http\Controllers\MapCombatController;
 use App\Http\Controllers\MapConnectionController;
@@ -214,6 +215,9 @@ Route::middleware('auth')->group(function () {
 
 // Public map access (no auth required)
 Route::get('maps/{map}', [MapController::class, 'show'])->middleware(SetMapShareToken::class)->name('maps.show');
+// Patch 37: every open map checks in (viewer-link visitors too); managers read who is here.
+Route::post('maps/{map}/presence', [MapPresenceController::class, 'store'])->middleware('throttle:20,1')->name('maps.presence.store');
+Route::get('maps/{map}/presence', [MapPresenceController::class, 'index'])->middleware('auth')->name('maps.presence.index');
 Route::put('maps/{map}/user-settings', [MapUserSettingController::class, 'update'])->name('maps.user-settings.update');
 Route::get('share/{token}', [MapController::class, 'showByToken'])->name('maps.share');
 // Patch 37: a mailed route report's page (24 h, no login).

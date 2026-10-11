@@ -158,9 +158,14 @@ function linkOpened(iso: string | null): string {
                 </summary>
                 <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
                     <span v-for="person in presentSorted" :key="person.id" class="inline-flex items-center gap-1">
-                        <span class="size-1.5 rounded-full bg-green-500" />{{ person.name
-                        }}<span v-if="mainSuffix(person.name)" class="text-muted-foreground"> - {{ mainSuffix(person.name) }}</span>
-                        <span class="text-muted-foreground">({{ person.permission ?? '?' }})</span>
+                        <template v-if="person.kind === 'link'">
+                            <span class="size-1.5 rounded-full bg-amber-500" /><span class="text-muted-foreground">Viewer link "{{ person.name }}"</span>
+                        </template>
+                        <template v-else>
+                            <span class="size-1.5 rounded-full bg-green-500" />{{ person.name
+                            }}<span v-if="mainSuffix(person.name)" class="text-muted-foreground"> - {{ mainSuffix(person.name) }}</span>
+                            <span class="text-muted-foreground">({{ person.permission ?? '?' }}{{ person.tabs > 1 ? ` · ${person.tabs} tabs` : '' }})</span>
+                        </template>
                     </span>
                     <span v-for="link in recentLinks" :key="`link-${link.id}`" class="inline-flex items-center gap-1 text-muted-foreground">
                         <span class="size-1.5 rounded-full bg-amber-500" />Viewer link "{{ link.label ?? 'no label' }}" · opened {{ linkOpened(link.last_used_at) }}

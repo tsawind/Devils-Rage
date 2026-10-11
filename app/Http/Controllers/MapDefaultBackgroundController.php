@@ -24,6 +24,7 @@ final class MapDefaultBackgroundController extends Controller
 {
     public function store(StoreMapDefaultBackgroundRequest $request, Map $map, #[CurrentUser] User $user): RedirectResponse
     {
+        $previous = $map->background_image_path;
         $path = null;
         if ($request->hasFile('background_image')) {
             $path = $request->file('background_image')?->store("map-backgrounds/{$map->id}/default", 'public');
@@ -39,7 +40,10 @@ final class MapDefaultBackgroundController extends Controller
             return back()->withErrors(['background_image' => 'Upload a picture, or set your own background first.']);
         }
 
-        $this->deleteDefault($map);
+        // The same picture copied again lands on the same path: only delete a different old one.
+        if (is_string($previous) && $previous !== '' && $previous !== $path) {
+            Storage::disk('public')->delete($previous);
+        }
         $map->forceFill([
             'background_image_path' => $path,
             'background_image_mode' => $map->background_image_mode ?? MapBackgroundMode::Viewport->value,

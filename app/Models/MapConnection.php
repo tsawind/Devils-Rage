@@ -96,7 +96,9 @@ final class MapConnection extends Model
             if (! $connection->exists || ! (bool) ($attributes['from_memory'] ?? false) || $connection->isDirty('from_memory')) {
                 return;
             }
-            if (array_diff(array_keys($connection->getDirty()), ['updated_at']) !== []) {
+            // The scheduled age check only moves the life status: that is nobody looking at it.
+            $automatic = ['updated_at', 'lifetime', 'lifetime_updated_at', 'eol_since', 'critical_since'];
+            if (array_diff(array_keys($connection->getDirty()), $automatic) !== []) {
                 $connection->from_memory = false;
             }
         });
