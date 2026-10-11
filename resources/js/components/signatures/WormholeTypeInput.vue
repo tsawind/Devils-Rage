@@ -106,7 +106,7 @@ const rows = computed<TComboboxRow<TSignatureType | null>[]>(() => {
             { key: 'often', heading: 'Often seen on this map', items: rest(often.value) },
             { key: 'wormholes', heading: 'Wormholes', items: rest(common) },
             { key: 'other', heading: 'Other wormholes (not listed for this class)', items: rest(otherCommon) },
-            { key: 'rare', heading: 'Rare: frigate, Thera, Turnur, drifter', items: rest(rare) },
+            { key: 'rare', heading: 'Rare: Thera, Turnur, drifter', items: rest(rare) },
             { key: 'unknown', heading: '', items: [null] },
         ]);
     }
@@ -125,7 +125,7 @@ const rows = computed<TComboboxRow<TSignatureType | null>[]>(() => {
         { key: 'often', heading: 'Often seen on this map', items: often.value.filter(matches) },
         { key: 'wormholes', heading: 'Wormholes', items: common.filter(matches) },
         { key: 'other', heading: 'Other wormholes (not listed for this class)', items: otherCommon.filter(matches) },
-        { key: 'rare', heading: 'Rare: frigate, Thera, Turnur, drifter', items: rare.filter(matches) },
+        { key: 'rare', heading: 'Rare: Thera, Turnur, drifter', items: rare.filter(matches) },
     ]);
 });
 

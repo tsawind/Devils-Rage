@@ -1,7 +1,5 @@
 import { matchesQuickKey } from '@/lib/arming';
 import { isK162Frigate, k162Classes, k162Order } from '@/lib/k162';
-import { isFrigateHole } from '@/lib/massEstimate';
-import { wormholeMass } from '@/lib/wormholeMass';
 
 /**
  * Patch 20: the order of the Type lists.
@@ -22,12 +20,10 @@ export function isQuickKey(query: string): boolean {
     return QUICK.has(query.trim().toLowerCase());
 }
 
-/** Rare holes: frigate-only, or special ones (Thera, Turnur, drifters, Pochven…). */
+/** Rare holes: the special ones (Thera, Turnur, drifters, Pochven…). Patch 37: frigate holes are common, they list with the rest. */
 export function isRareType(type: TOrderType): boolean {
     if (type.signature.toUpperCase() === 'K162') return false;
-    if (type.extra) return true;
-    const mass = wormholeMass(type.signature);
-    return Boolean(mass && isFrigateHole(mass.maxJump));
+    return Boolean(type.extra);
 }
 
 /** Where a type ranks for a quick key (lower = higher in the list), or null when it doesn't match. */
@@ -119,7 +115,7 @@ export function typeSections<T extends TOrderType & { name?: string | null; spaw
         { key: 'often', label: 'Often seen on this map', items: often },
         { key: 'wormholes', label: 'Wormholes', items: common },
         { key: 'other', label: 'Other wormholes (not listed for this class)', items: otherCommon },
-        { key: 'rare', label: 'Rare: frigate, Thera, Turnur, drifter', items: rare },
+        { key: 'rare', label: 'Rare: Thera, Turnur, drifter', items: rare },
     ];
     const needle = params.query.trim().toLowerCase();
     if (isQuickKey(needle)) {

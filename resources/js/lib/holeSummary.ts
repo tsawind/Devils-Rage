@@ -70,11 +70,18 @@ export function lifeLine(params: {
     const age = hoursSince(params.addedAt) ?? 0;
     const [low, high] = hours;
     const type = low === high ? `${low} h hole` : `${low}–${high} h hole`;
-    const leftLow = Math.max(0, low - age);
-    const leftHigh = Math.max(0, high - age);
-    const left = low === high ? `about ${formatHours(leftHigh)} left at most` : `${formatHours(leftLow)}–${formatHours(leftHigh)} left at most`;
-    return `Fresh · ${type} · ${left}`;
+    // Patch 37: a hole goes end-of-life for its last 4 h, and the map lets it go 3 h after its
+    // life (holes live a little past it); both counted from when it was added (it may be older).
+    const span = (from: number, to: number) => (from === to ? formatHours(from) : `${formatHours(from)}–${formatHours(to)}`);
+    const eol = span(Math.max(0, low - EOL_HOURS - age), Math.max(0, high - EOL_HOURS - age));
+    const gone = span(Math.max(0, low + GRACE_HOURS - age), Math.max(0, high + GRACE_HOURS - age));
+    return `Fresh · ${type} · EOL within ${eol} · gone within ${gone}`;
 }
+
+/** A hole shows end-of-life for its last 4 h. */
+const EOL_HOURS = 4;
+/** The map keeps a hole 3 h past its life (HoleExpiry). */
+const GRACE_HOURS = 3;
 
 function formatHours(hours: number): string {
     if (hours < 1) return `${Math.max(0, Math.round(hours * 60))} min`;

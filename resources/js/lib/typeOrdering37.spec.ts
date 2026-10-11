@@ -33,3 +33,11 @@ describe('patch 37: Type lists', () => {
         expect(startsWithFirst('', here)).toEqual([]);
     });
 });
+
+describe('patch 37: frigate holes are not rare', () => {
+    it('lists A009 with the other holes and keeps Thera / drifters rare', async () => {
+        const { isRareType } = await import('@/lib/typeOrdering');
+        expect(isRareType({ id: 1, signature: 'A009', target_class: '13', extra: null })).toBe(false);
+        expect(isRareType({ id: 2, signature: 'Q063', target_class: 'h', extra: 'Thera' })).toBe(true);
+    });
+});
