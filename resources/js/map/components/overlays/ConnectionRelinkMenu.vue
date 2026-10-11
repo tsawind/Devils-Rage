@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePilotNames } from '@/composables/usePilotNames';
 import { ContextMenuItem, ContextMenuLabel, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger } from '@/components/ui/context-menu';
 import usePermission from '@/composables/usePermission';
 import { displayAlias } from '@/lib/alias';
@@ -18,6 +19,9 @@ import { toast } from 'vue-sonner';
 const { connection } = defineProps<{
     connection: TMapConnection & { source: TMapSolarsystem; target: TMapSolarsystem };
 }>();
+
+// Patch 37: name the human behind the alt (SeAT main).
+const { label: pilotName } = usePilotNames();
 
 const { canEdit } = usePermission();
 const store = useMapStore();
@@ -45,7 +49,7 @@ const sides = computed(() => {
 
 function describe(hole: TPendingHole): string {
     const parts = [hole.wormhole, hole.target_class ? hole.target_class.toUpperCase() : null, hole.alias ? `#${displayAlias(hole.alias)}` : null];
-    if (hole.armed_by_name) parts.push(`armed: ${hole.armed_by_name}`);
+    if (hole.armed_by_name) parts.push(`armed: ${pilotName(hole.armed_by_name)}`);
     return parts.filter(Boolean).join(' · ');
 }
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePilotNames } from '@/composables/usePilotNames';
 import { CharacterImage } from '@/components/images';
 import { useSelectedMapSolarsystem } from '@/composables/useSelectedMapSolarsystem';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
@@ -12,6 +13,8 @@ import { computed } from 'vue';
 const { audit } = defineProps<{
     audit: TAudit;
 }>();
+
+const { label: pilotName } = usePilotNames();
 
 const selectedMapSolarsystem = useSelectedMapSolarsystem();
 
@@ -132,8 +135,9 @@ const timeAgo = computed(() => {
 });
 
 const actor = computed(() => {
+    // Patch 37: the human behind the alt (SeAT main).
     if (audit.character?.name) {
-        return audit.character.name;
+        return pilotName(audit.character.name);
     }
 
     return 'System';

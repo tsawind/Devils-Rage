@@ -314,6 +314,12 @@ export type TMapUserSetting = {
     is_pinned: boolean;
     background_image_url: string | null;
     background_image_mode: 'grid' | 'viewport';
+    /** Patch 37: which background this pilot sees: the map's default, none, or their own. */
+    background_choice?: 'map' | 'none' | 'own';
+    own_background_image_url?: string | null;
+    own_background_image_mode?: 'grid' | 'viewport';
+    map_background_image_url?: string | null;
+    map_background_image_mode?: 'grid' | 'viewport';
     layout_override: 'manual' | 'tree' | null;
     /** Your own combat mode (combat speed, 60 s popup countdowns). */
     combat_mode?: boolean;

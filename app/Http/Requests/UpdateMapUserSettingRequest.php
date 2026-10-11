@@ -67,6 +67,8 @@ final class UpdateMapUserSettingRequest extends FormRequest
             'is_archived' => ['boolean'],
             'is_pinned' => ['boolean'],
             'background_image_mode' => ['nullable', 'string', Rule::enum(MapBackgroundMode::class)],
+            // Patch 37: which background this pilot sees on the map.
+            'background_choice' => ['nullable', 'string', Rule::in(['map', 'none', 'own'])],
             'layout_override' => ['nullable', 'sometimes', Rule::enum(MapLayout::class)],
         ];
     }

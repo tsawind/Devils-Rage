@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import MapBackgroundImageController from '@/actions/App/Http/Controllers/MapBackgroundImageController';
+import MapDefaultBackgroundController from '@/actions/App/Http/Controllers/MapDefaultBackgroundController';
+import usePermission from '@/composables/usePermission';
 import HubLayoutIcon from '@/components/icons/HubLayoutIcon.vue';
 import BackgroundImageIcon from '@/components/icons/BackgroundImageIcon.vue';
 import MinusIcon from '@/components/icons/MinusIcon.vue';
@@ -61,7 +63,51 @@ function setPlacement(mode: TMapLayoutMode) {
 const allowLayoutOverride = computed(() => store.meta.value?.allow_layout_override ?? false);
 const mapSlug = computed(() => store.meta.value?.slug ?? null);
 
-const { backgroundImageUrl, backgroundMode, canUpload } = useMapBackground();
+const { backgroundImageUrl, backgroundMode, canUpload, backgroundChoice, ownBackgroundUrl, mapBackgroundUrl } = useMapBackground();
+const { canManageAccess } = usePermission();
+
+// Patch 37: which background you see, and the map's default (managers).
+const choiceOptions: { value: 'map' | 'none' | 'own'; label: string; hint: string }[] = [
+    { value: 'map', label: 'Map default', hint: "The map's background, set by its managers" },
+    { value: 'none', label: 'None', hint: 'No picture behind the map' },
+    { value: 'own', label: 'My own', hint: 'Your own picture: only you see it' },
+];
+const defaultInput = useTemplateRef<HTMLInputElement>('default-input');
+
+function setChoice(choice: 'map' | 'none' | 'own'): void {
+    if (!mapSlug.value) return;
+    updateMapUserSettings(mapSlug.value, { background_choice: choice }, ['map_user_settings']);
+}
+
+function sendDefault(data: Record<string, File | string>): void {
+    if (!mapSlug.value) return;
+    router.post(MapDefaultBackgroundController.store(mapSlug.value).url, data, {
+        forceFormData: true,
+        preserveScroll: true,
+        preserveState: true,
+        only: ['map_user_settings'],
+        onStart: () => (is_uploading.value = true),
+        onFinish: () => (is_uploading.value = false),
+        onSuccess: () => toast.success('Map default background set'),
+        onError: (errors) => toast.error(errors.background_image ?? 'Could not set the map default background'),
+    });
+}
+
+function onDefaultSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) sendDefault({ background_image: file });
+}
+
+function useOwnAsDefault(): void {
+    sendDefault({ from_own: '1' });
+}
+
+function removeDefault(): void {
+    if (!mapSlug.value) return;
+    router.delete(MapDefaultBackgroundController.destroy(mapSlug.value).url, { preserveScroll: true, preserveState: true, only: ['map_user_settings'] });
+}
 
 // Patch 37: the speaker menu and the full-screen background (per browser).
 const { effects } = useMapEffects();
@@ -121,6 +167,11 @@ function removeBackground() {
 
 function setMode(mode: TMapBackgroundMode) {
     if (!mapSlug.value) return;
+    // Patch 37: on the map default, a manager sets the position for everyone.
+    if (backgroundChoice.value === 'map') {
+        router.patch(MapDefaultBackgroundController.update(mapSlug.value).url, { mode }, { preserveScroll: true, preserveState: true, only: ['map_user_settings'] });
+        return;
+    }
     updateMapUserSettings(mapSlug.value, { background_image_mode: mode }, ['map_user_settings']);
 }
 
@@ -242,58 +293,105 @@ function onDrop(event: DragEvent) {
             </PopoverTrigger>
             <PopoverContent class="w-72 p-3" side="top" align="end">
                 <div class="flex flex-col gap-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm font-medium">Background</span>
-                        <Button
-                            v-if="backgroundImageUrl"
-                            variant="ghost"
-                            size="sm"
-                            class="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-destructive"
-                            :disabled="is_uploading"
-                            @click="removeBackground"
+                    <span class="text-sm font-medium">Background</span>
+                    <!-- Patch 37: the map's default (set by managers), none, or your own picture -->
+                    <div class="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1">
+                        <button
+                            v-for="option in choiceOptions"
+                            :key="option.value"
+                            type="button"
+                            class="rounded-md px-2 py-1.5 text-xs font-medium transition-colors"
+                            :class="backgroundChoice === option.value ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+                            :title="option.hint"
+                            :disabled="option.value === 'own' && !canUpload"
+                            @click="setChoice(option.value)"
                         >
-                            <Trash2 class="size-3.5" />
-                            Remove
-                        </Button>
+                            {{ option.label }}
+                        </button>
                     </div>
 
                     <input ref="file-input" type="file" accept="image/*" class="hidden" @change="onFileSelected" />
-                    <div
-                        v-if="canUpload"
-                        class="group relative flex aspect-video cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed transition-colors"
-                        :class="is_dragging ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50 hover:bg-muted/40'"
-                        @click="triggerUpload"
-                        @dragover.prevent="is_dragging = true"
-                        @dragleave="is_dragging = false"
-                        @drop.prevent="onDrop"
-                    >
-                        <template v-if="backgroundImageUrl">
-                            <img :src="backgroundImageUrl" alt="Map background preview" class="absolute inset-0 h-full w-full object-cover" />
-                            <div
-                                class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                    <input ref="default-input" type="file" accept="image/*" class="hidden" @change="onDefaultSelected" />
+
+                    <template v-if="backgroundChoice === 'map'">
+                        <div class="relative flex aspect-video items-center justify-center overflow-hidden rounded-xl border border-border bg-muted/40">
+                            <img v-if="mapBackgroundUrl" :src="mapBackgroundUrl" alt="The map's default background" class="absolute inset-0 h-full w-full object-cover" />
+                            <span v-else class="px-3 text-center text-xs text-muted-foreground">No map default yet{{ canManageAccess ? '' : ': a manager can set one' }}.</span>
+                            <div v-if="is_uploading" class="absolute inset-0 flex items-center justify-center bg-background/70">
+                                <Loader2 class="size-5 animate-spin text-primary" />
+                            </div>
+                        </div>
+                        <div v-if="canManageAccess" class="flex flex-col gap-1.5 rounded-lg border border-dashed border-border p-2">
+                            <span class="text-[11px] font-medium text-muted-foreground">Managers: the map default every pilot sees</span>
+                            <div class="flex flex-wrap gap-1">
+                                <Button variant="outline" size="sm" class="h-7 text-xs" :disabled="is_uploading" @click="defaultInput?.click()">
+                                    <ImageUp class="size-3.5" />
+                                    Upload
+                                </Button>
+                                <Button v-if="ownBackgroundUrl" variant="outline" size="sm" class="h-7 text-xs" :disabled="is_uploading" @click="useOwnAsDefault">
+                                    Use my picture
+                                </Button>
+                                <Button
+                                    v-if="mapBackgroundUrl"
+                                    variant="ghost"
+                                    size="sm"
+                                    class="h-7 text-xs text-muted-foreground hover:text-destructive"
+                                    :disabled="is_uploading"
+                                    @click="removeDefault"
+                                >
+                                    <Trash2 class="size-3.5" />
+                                    Remove
+                                </Button>
+                            </div>
+                        </div>
+                    </template>
+
+                    <template v-else-if="backgroundChoice === 'own'">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-muted-foreground">Only you see it · max 8 MB</span>
+                            <Button
+                                v-if="ownBackgroundUrl"
+                                variant="ghost"
+                                size="sm"
+                                class="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-destructive"
+                                :disabled="is_uploading"
+                                @click="removeBackground"
                             >
-                                <ImageUp class="size-5" />
-                                <span class="text-xs font-medium">Replace image</span>
-                            </div>
-                        </template>
-                        <div v-else class="flex flex-col items-center gap-1.5 text-muted-foreground">
-                            <div class="flex size-9 items-center justify-center rounded-full bg-muted transition-colors group-hover:bg-primary/10">
-                                <ImageUp class="size-4" />
-                            </div>
-                            <span class="text-xs font-medium text-foreground">Drag &amp; drop or click</span>
-                            <span class="text-[11px]">PNG, JPG, GIF or WebP · max 8 MB</span>
+                                <Trash2 class="size-3.5" />
+                                Remove
+                            </Button>
                         </div>
-
-                        <div v-if="is_uploading" class="absolute inset-0 flex items-center justify-center bg-background/70">
-                            <Loader2 class="size-5 animate-spin text-primary" />
+                        <div
+                            v-if="canUpload"
+                            class="group relative flex aspect-video cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed transition-colors"
+                            :class="is_dragging ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50 hover:bg-muted/40'"
+                            @click="triggerUpload"
+                            @dragover.prevent="is_dragging = true"
+                            @dragleave="is_dragging = false"
+                            @drop.prevent="onDrop"
+                        >
+                            <template v-if="ownBackgroundUrl">
+                                <img :src="ownBackgroundUrl" alt="Your background" class="absolute inset-0 h-full w-full object-cover" />
+                                <div class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/55 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                                    <ImageUp class="size-5" />
+                                    <span class="text-xs font-medium">Replace image</span>
+                                </div>
+                            </template>
+                            <div v-else class="flex flex-col items-center gap-1.5 text-muted-foreground">
+                                <div class="flex size-9 items-center justify-center rounded-full bg-muted transition-colors group-hover:bg-primary/10">
+                                    <ImageUp class="size-4" />
+                                </div>
+                                <span class="text-xs font-medium text-foreground">Drag &amp; drop or click</span>
+                                <span class="text-[11px]">PNG, JPG, GIF or WebP · max 8 MB</span>
+                            </div>
+                            <div v-if="is_uploading" class="absolute inset-0 flex items-center justify-center bg-background/70">
+                                <Loader2 class="size-5 animate-spin text-primary" />
+                            </div>
                         </div>
-                    </div>
-                    <p v-else class="rounded-xl border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
-                        Sign in to set a background image for this map.
-                    </p>
+                    </template>
 
-                    <div v-if="backgroundImageUrl" class="flex flex-col gap-1.5">
-                        <span class="text-xs font-medium text-muted-foreground">Position</span>
+                    <div v-if="backgroundImageUrl && (backgroundChoice === 'own' || canManageAccess)" class="flex flex-col gap-1.5">
+                        <span class="text-xs font-medium text-muted-foreground">Position{{ backgroundChoice === 'map' ? ' (for everyone)' : '' }}</span>
                         <div class="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
                             <button
                                 v-for="option in modeOptions"

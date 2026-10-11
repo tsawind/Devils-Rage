@@ -36,6 +36,7 @@ final readonly class MapSettingsFeature implements ProvidesInertiaProperties
         'show_statics_first' => true,
         'compact_signature_list' => false,
         'background_image_mode' => 'grid',
+        'background_choice' => null,
         'layout_override' => null,
         'combat_mode' => false,
         'combat_color' => null,

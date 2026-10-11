@@ -1,4 +1,4 @@
-import { aliasesBelow, aliasForSlot, guessNextAlias, homeCallsign, isIgnoredAlias, planSignatureAliases, staticSlotAlias, suggestAlias } from '@/lib/alias';
+import { aliasesBelow, aliasForSlot, guessNextAlias, homeCallsign, isCustomName, isIgnoredAlias, planSignatureAliases, renameProblem, staticSlotAlias, suggestAlias } from '@/lib/alias';
 import { describe, expect, it } from 'vitest';
 
 describe('guessNextAlias (numeric, default)', () => {
@@ -109,16 +109,16 @@ describe('guessNextAlias (ignoredAlias)', () => {
         expect(guessNextAlias('AB', [], { ignoredAlias: 'HOME' })).toBe('AB1');
     });
 
-    it('is a no-op when ignoredAlias is empty', () => {
+    it('is a no-op when ignoredAlias is empty (patch 37: a typed name numbers by its first letter)', () => {
         expect(guessNextAlias('HOME', [], { scheme: 'alphabetical', ignoredAlias: '' })).toBe('HOMEA');
-        expect(guessNextAlias('HOME', [], { ignoredAlias: '' })).toBe('HOME1');
+        expect(guessNextAlias('HOME', [], { ignoredAlias: '' })).toBe('H1');
     });
 });
 
 describe('guessNextAlias (case handling)', () => {
     it('upper-cases the suggestion even for a lowercase parent alias', () => {
         expect(guessNextAlias('a', [], { scheme: 'alphabetical' })).toBe('AA');
-        expect(guessNextAlias('foo', [])).toBe('FOO1');
+        expect(guessNextAlias('ab', [])).toBe('AB1');
     });
 
     it('counts lowercase existing aliases as taken wormhole letters', () => {
@@ -130,7 +130,7 @@ describe('guessNextAlias (case handling)', () => {
     });
 
     it('counts lowercase existing aliases as taken numeric children', () => {
-        expect(guessNextAlias('foo', ['foo1', 'FOO2'])).toBe('FOO3');
+        expect(guessNextAlias('ab', ['ab1', 'AB2'])).toBe('AB3');
     });
 });
 
@@ -343,5 +343,33 @@ describe('patch 15: systems mapped further down a hole', () => {
         expect(aliasesBelow(['Daisy', 'D1', 'D12', 'B', 'DA'], 'D', 'Daisy')).toEqual(['D1', 'D12', 'DA']);
         expect(aliasesBelow(['Daisy', 'B1'], 'D', 'Daisy')).toEqual([]);
         expect(aliasesBelow(['A1'], '', 'Daisy')).toEqual([]);
+    });
+});
+
+describe('patch 37: typed names', () => {
+    it('tells a typed name from a chain number', () => {
+        expect(isCustomName('Gas')).toBe(true);
+        expect(isCustomName('Hawks pos')).toBe(true);
+        expect(isCustomName('GAS')).toBe(true);
+        expect(isCustomName('A12')).toBe(false);
+        expect(isCustomName('ah1')).toBe(false);
+        expect(isCustomName('B')).toBe(false);
+        expect(isCustomName('A@1958')).toBe(false);
+    });
+
+    it('numbers the holes beyond a typed name by its first letter', () => {
+        expect(guessNextAlias('Gas', [])).toBe('G1');
+        expect(guessNextAlias('Gas', ['G1', 'G2'])).toBe('G3');
+        expect(staticSlotAlias('Gas', 'Daisy')).toBe('G0');
+    });
+
+    it('refuses a name on the map, the home name, or a first letter another chain uses', () => {
+        const others = ['Daisy', 'A', 'A1', 'G', 'G1', 'Turnur'];
+        expect(renameProblem('A1', others, 'Daisy')).toBe('A1 is already on the map.');
+        expect(renameProblem('daisy', others, 'Daisy')).toBe('daisy is already on the map.');
+        expect(renameProblem('Gas', others, 'Daisy')).toBe("G is already Golf's chain: pick a name with another first letter.");
+        expect(renameProblem('Tango', others, 'Daisy')).toBe("T is already Turnur's chain: pick a name with another first letter.");
+        expect(renameProblem('Hawks', others, 'Daisy')).toBeNull();
+        expect(renameProblem('', others, 'Daisy')).toBe('Type a name.');
     });
 });

@@ -27,7 +27,8 @@ export function pilotLabel(name: string | null | undefined, data: TPilotMains | 
 
 export function usePilotNames() {
     const page = usePage();
-    const data = computed(() => (page.props as unknown as { pilot_mains?: TPilotMains }).pilot_mains ?? null);
+    // Outside a map page (or in tests) there are no page props: names show as they are.
+    const data = computed(() => (page?.props as unknown as { pilot_mains?: TPilotMains } | undefined)?.pilot_mains ?? null);
     return {
         label: (name: string | null | undefined) => pilotLabel(name, data.value),
         suffix: (name: string) => mainSuffix(name, data.value),

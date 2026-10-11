@@ -236,7 +236,8 @@ export function guessNextAlias(parentAlias: string | null | undefined, aliases: 
     }
     const combatHome = Boolean(opts?.combatHome);
     const isHome = usesHomeLetters(parentAlias, opts?.ignoredAlias, combatHome);
-    const prefix = isHome || combatHome ? '' : (parentAlias ?? '').trim().toUpperCase();
+    // Patch 37: beyond a hand-typed name ("Gas") the chain uses its first letter (G1, G2…).
+    const prefix = isHome || combatHome ? '' : opts?.scheme !== 'alphabetical' && isCustomName(parentAlias) ? customLetter(parentAlias) : (parentAlias ?? '').trim().toUpperCase();
 
     const knownAliases = aliases.map((alias) => alias.trim().toUpperCase());
 
@@ -336,7 +337,49 @@ function namesWithStamp(aliases: readonly string[], stamp: string): string[] {
 export function chainPrefix(parentAlias: string | null | undefined, ignoredAlias?: string | null, combatHome = false): string {
     if (combatHome) return '';
     const prefix = splitStamp(parentAlias).base.toUpperCase();
-    return isIgnoredAlias(prefix, ignoredAlias) ? '' : prefix;
+    if (isIgnoredAlias(prefix, ignoredAlias)) return '';
+    // Patch 37: beyond a hand-typed name ("Gas") the chain uses its first letter (G0, G1…).
+    return isCustomName(parentAlias) ? customLetter(parentAlias) : prefix;
+}
+
+/**
+ * Patch 37: a name someone typed ("Gas", "Hawks pos") rather than a chain number. Chain
+ * numbers are letters and digits ("A", "A12", "1A", typed lower-case too: "ah1"); a name
+ * with a space or other sign, or three or more letters and no digit, is typed.
+ */
+export function isCustomName(alias: string | null | undefined): boolean {
+    const base = splitStamp(alias).base.trim();
+    if (!base) return false;
+    return /[^A-Za-z0-9-]/.test(base) || /^[A-Za-z]{3,}$/.test(base);
+}
+
+/** Patch 37: the letter a typed name's chain uses: its first letter ("Gas" → "G"). */
+export function customLetter(alias: string | null | undefined): string {
+    const letter = splitStamp(alias).base.trim().match(/[A-Za-z]/)?.[0];
+    return (letter ?? 'X').toUpperCase();
+}
+
+/**
+ * Patch 37: why a new name can't be used, or null when it can. A name already on the
+ * map is refused, and so is a typed name whose first letter another chain already
+ * starts with (it would number its holes into that chain: "Gas" → G1 next to Golf's G1).
+ * `others` are the names on the map except the system being renamed and its chain below.
+ */
+export function renameProblem(name: string, others: readonly string[], ignoredAlias?: string | null): string | null {
+    const value = name.trim();
+    if (!value) return 'Type a name.';
+    if (value.includes('@')) return 'A name can\'t contain "@".';
+    if (value.length > 24) return 'Keep it to 24 characters.';
+    const upper = value.toUpperCase();
+    const bases = others.map((other) => splitStamp(other)).filter((split) => !split.stamp).map((split) => split.base.trim()).filter(Boolean);
+    if (bases.some((other) => other.toUpperCase() === upper)) return `${value} is already on the map.`;
+    if (isIgnoredAlias(value, ignoredAlias)) return `${value} is the home system's name.`;
+    if (!isCustomName(value)) return null;
+    const letter = customLetter(value);
+    const clash = bases.find((other) => !isIgnoredAlias(other, ignoredAlias) && (isCustomName(other) ? customLetter(other) : other[0]?.toUpperCase()) === letter);
+    if (!clash) return null;
+    const owner = isCustomName(clash) ? clash : (homeCallsign(letter) ?? displayAlias(clash));
+    return `${letter} is already ${owner}'s chain: pick a name with another first letter.`;
 }
 
 /** The alias reserved for a system's static: "A" (Alpha) in home, "0" in a combat home, otherwise slot 0, e.g. "A0", "10". */

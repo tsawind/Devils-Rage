@@ -47,6 +47,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $is_pinned
  * @property string|null $background_image_path
  * @property string|MapBackgroundMode $background_image_mode
+ * @property string|null $background_choice Patch 37: map (default) / none / own
  * @property CarbonImmutable|string $created_at
  * @property CarbonImmutable|string $updated_at
  */

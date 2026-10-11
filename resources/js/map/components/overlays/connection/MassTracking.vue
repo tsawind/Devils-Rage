@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePilotNames } from '@/composables/usePilotNames';
 import { CharacterImage, TypeImage } from '@/components/images';
 import { Button } from '@/components/ui/button';
 import { Combobox, ComboboxAnchor, ComboboxInput, ComboboxItem, ComboboxVirtualList } from '@/components/ui/combobox';
@@ -26,6 +27,9 @@ const props = defineProps<{
     };
     wormhole: { total_mass: number } | null;
 }>();
+
+// Patch 37: the jump log names the human behind the alt (SeAT main) on hover.
+const { label: pilotName } = usePilotNames();
 
 const now = useNowUTC();
 
@@ -317,7 +321,8 @@ function submitForm() {
                                         :character_name="jump.character_name || ''"
                                         class="size-4 shrink-0 rounded-full"
                                     />
-                                    <span class="max-w-20 truncate text-[11px] text-muted-foreground">{{ jump.character_name }}</span>
+                                    <!-- Patch 37: hover for the human behind the alt (SeAT main) -->
+                                    <span class="max-w-20 truncate text-[11px] text-muted-foreground" :title="pilotName(jump.character_name)">{{ jump.character_name }}</span>
                                 </div>
                                 <div v-else class="flex items-center gap-1 text-[11px] text-muted-foreground italic">
                                     <PencilLine class="size-3 shrink-0" />

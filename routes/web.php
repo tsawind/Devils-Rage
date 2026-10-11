@@ -22,6 +22,7 @@ use App\Http\Controllers\MapAccessController;
 use App\Http\Controllers\MapAlertController;
 use App\Http\Controllers\MapAlertStateController;
 use App\Http\Controllers\MapBackgroundImageController;
+use App\Http\Controllers\MapDefaultBackgroundController;
 use App\Http\Controllers\MapBookmarkFormatController;
 use App\Http\Controllers\MapCombatController;
 use App\Http\Controllers\MapConnectionController;
@@ -202,6 +203,9 @@ Route::middleware('auth')->group(function () {
 
     Route::post('maps/{map}/background-image', [MapBackgroundImageController::class, 'store'])->name('maps.background-image.store');
     Route::delete('maps/{map}/background-image', [MapBackgroundImageController::class, 'destroy'])->name('maps.background-image.destroy');
+    Route::post('maps/{map}/default-background', [MapDefaultBackgroundController::class, 'store'])->name('maps.default-background.store');
+    Route::patch('maps/{map}/default-background', [MapDefaultBackgroundController::class, 'update'])->name('maps.default-background.update');
+    Route::delete('maps/{map}/default-background', [MapDefaultBackgroundController::class, 'destroy'])->name('maps.default-background.destroy');
 
     Route::put('maps/{map}/layout', [MapLayoutController::class, 'update'])->name('maps.layout.update');
 

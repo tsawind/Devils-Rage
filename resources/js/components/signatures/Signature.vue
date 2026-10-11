@@ -5,6 +5,7 @@ import TrashIcon from '@/components/icons/TrashIcon.vue';
 import MapConnectionInput from '@/components/signatures/MapConnectionInput.vue';
 import SignatureTimeDetails from '@/components/signatures/SignatureTimeDetails.vue';
 import SignatureTypeInput from '@/components/signatures/SignatureTypeInput.vue';
+import RenameHoleDialog from '@/components/signatures/RenameHoleDialog.vue';
 import StaticRenameDialog from '@/components/signatures/StaticRenameDialog.vue';
 import WormholeTypeInput from '@/components/signatures/WormholeTypeInput.vue';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ import { aliasesBelow, aliasForSlot, displayAlias, isIgnoredAlias, staticSlotFor
 import { autoCopy, clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
 import type { TArmAsOption } from '@/lib/arming';
 import { buildSignatureBookmark, formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
+import { wayBackBookmark } from '@/map/holeBookmark';
 import { chainAliases, combatColorLabel } from '@/lib/combat';
 import { planPendingHoles } from '@/lib/placeholders';
 import { isK162, validateManualAlias } from '@/lib/chainNumbering';
@@ -854,6 +856,60 @@ const bookmark_name = computed(() =>
     }),
 );
 
+// ---- Rename by double-click (patch 37) -------------------------------------
+
+const hole_rename_open = ref(false);
+const rename_store = useMapStore();
+
+/** The name a double-click starts from: the system it leads to, or its locked / planned number. */
+const hole_name = computed(() => selected_connection.value?.target?.alias ?? signature.alias ?? planned_alias ?? '');
+
+/** Every name on the map, except this hole's system and the chain below it. */
+const rename_others = computed(() => {
+    const targetId = selected_connection.value?.target?.id ?? null;
+    const names = map_solarsystems.value.filter((system) => system.id !== targetId).flatMap((system) => (system.alias ? [system.alias] : []));
+    const below = new Set(hole_name.value ? aliasesBelow(names, hole_name.value, page.props.map.bookmark_ignored_alias) : []);
+    const holes = (selected_map_solarsystem.signatures ?? []).filter((other) => other.id !== signature.id).flatMap((other) => (other.alias ? [other.alias] : []));
+    return [...names.filter((name) => !below.has(name)), ...holes];
+});
+
+function renameBookmarks(name: string): { thisSide: string; wayBack: string | null } {
+    const target = selected_connection.value?.target ?? null;
+    const thisSide = buildSignatureBookmark({
+        signature: { ...signature, alias: name },
+        currentSystem: {
+            alias: selected_map_solarsystem.alias,
+            class: selected_map_solarsystem.solarsystem.class,
+            combatHome: is_combat_home.value,
+            combatColor: map_system.value?.combat_color ?? null,
+        },
+        connectionTarget: target ? { ...target, alias: name } : null,
+        aliases: chainAliases(map_solarsystems.value, map_system.value),
+        formats: page.props.map,
+        detectReturn: true,
+        plannedAlias: name,
+    });
+    const far = target ? rename_store.systems.get(target.id) : null;
+    const here = map_system.value;
+    const wayBack = far && here ? wayBackBookmark(rename_store, { ...far, alias: name }, here) : null;
+    return { thisSide, wayBack };
+}
+
+function openHoleRename(): void {
+    if (isWormhole.value && can_write.value) hole_rename_open.value = true;
+}
+
+function applyHoleRename(name: string, copy: boolean): void {
+    handleChange({ alias: name, rename_system: true });
+    const bookmark = renameBookmarks(name).thisSide;
+    const copying = copy && clipboardAllowed();
+    if (copying) void autoCopy(bookmark);
+    toast.success(`Renamed to ${name}`, {
+        description: copying ? `Copied ${visibleBookmarkName(bookmark)}` : `New name ${visibleBookmarkName(bookmark)}`,
+        ...(copying ? {} : { action: copyButton(bookmark), duration: 15_000 }),
+    });
+}
+
 // ---- Arming (patch 13) -----------------------------------------------------
 
 const can_arm = computed(() => isWormhole.value && !selected_connection.value && can_write.value);
@@ -890,7 +946,9 @@ function copyBookmark() {
         <!-- Name (patch 23: far left, two letters wide; hover for the full name) -->
         <div
             class="w-[5ch] shrink-0 overflow-hidden font-mono text-xs whitespace-nowrap"
-            :title="armed_label ? `${name_title ?? ''} · ${armed_by_me ? 'armed by you: your next jump' : `armed by ${pilotName(signature.armed_by_name)}`}` : name_title"
+            :class="isWormhole && can_write ? 'cursor-text select-none' : undefined"
+            :title="`${armed_label ? `${name_title ?? ''} · ${armed_by_me ? 'armed by you: your next jump' : `armed by ${pilotName(signature.armed_by_name)}`}` : (name_title ?? '')}${isWormhole && can_write ? '\nDouble-click to rename' : ''}`"
+            @dblclick="openHoleRename"
         >
             <span :class="name_class">{{ name_short }}</span>
         </div>
@@ -1159,6 +1217,17 @@ function copyBookmark() {
         </div>
 
         <!-- Already bookmarked hole is the static: rename or keep? -->
+        <!-- Patch 37: double-click the name to rename the hole (and the system it leads to) -->
+        <RenameHoleDialog
+            v-if="hole_rename_open"
+            v-model:open="hole_rename_open"
+            :current-name="hole_name"
+            :others="rename_others"
+            :ignored-alias="page.props.map.bookmark_ignored_alias ?? null"
+            :bookmarks="renameBookmarks"
+            :jumped="Boolean(selected_connection?.target)"
+            @rename="applyHoleRename"
+        />
         <StaticRenameDialog
             v-if="rename_open"
             v-model:open="rename_open"

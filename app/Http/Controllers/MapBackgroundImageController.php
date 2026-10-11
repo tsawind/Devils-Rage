@@ -22,7 +22,8 @@ final class MapBackgroundImageController extends Controller
 
         $path = $request->file('background_image')->store("map-backgrounds/{$map->id}", 'public');
 
-        $settings->update(['background_image_path' => $path]);
+        // Patch 37: uploading your own picture also picks it.
+        $settings->update(['background_image_path' => $path, 'background_choice' => 'own']);
 
         return back();
     }
@@ -35,7 +36,8 @@ final class MapBackgroundImageController extends Controller
 
         $this->deleteStoredImage($settings);
 
-        $settings->update(['background_image_path' => null]);
+        // Patch 37: back to the map's default.
+        $settings->update(['background_image_path' => null, 'background_choice' => null]);
 
         return back();
     }

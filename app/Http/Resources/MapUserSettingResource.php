@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Enums\MapBackgroundMode;
+use App\Models\Map;
 use App\Models\MapUserSetting;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -49,13 +50,41 @@ final class MapUserSettingResource extends JsonResource
             'compact_signature_list' => $this->compact_signature_list,
             'is_archived' => $this->is_archived ?? false,
             'is_pinned' => $this->is_pinned ?? false,
-            'background_image_url' => $this->background_image_path
-                ? Storage::disk('public')->url($this->background_image_path)
-                : null,
-            'background_image_mode' => $this->background_image_mode ?? MapBackgroundMode::Grid,
+            // Patch 37: the background shown is the pilot's choice: the map's default (set by
+            // managers), none, or their own picture. Pilots who already had their own keep it.
+            ...$this->backgroundFields(),
             'layout_override' => $this->layout_override,
             'combat_mode' => $this->combat_mode ?? false,
             'combat_color' => $this->combat_color ?? null,
+        ];
+    }
+
+    /**
+     * @return array{background_choice: string, background_image_url: string|null, background_image_mode: string, own_background_image_url: string|null, own_background_image_mode: string, map_background_image_url: string|null, map_background_image_mode: string}
+     */
+    private function backgroundFields(): array
+    {
+        $disk = Storage::disk('public');
+        $own = is_string($this->background_image_path) && $this->background_image_path !== '' ? $disk->url($this->background_image_path) : null;
+        $ownMode = $this->background_image_mode instanceof MapBackgroundMode ? $this->background_image_mode->value : ($this->background_image_mode ?? MapBackgroundMode::Grid->value);
+        $map = $this->map_id !== null ? Map::query()->find($this->map_id, ['id', 'background_image_path', 'background_image_mode']) : null;
+        $mapPath = $map?->background_image_path;
+        $mapUrl = is_string($mapPath) && $mapPath !== '' ? $disk->url($mapPath) : null;
+        $mapMode = $map?->background_image_mode ?? MapBackgroundMode::Viewport->value;
+        $choice = in_array($this->background_choice, ['map', 'none', 'own'], true) ? $this->background_choice : ($own !== null ? 'own' : 'map');
+
+        return [
+            'background_choice' => $choice,
+            'background_image_url' => match ($choice) {
+                'own' => $own,
+                'map' => $mapUrl,
+                default => null,
+            },
+            'background_image_mode' => $choice === 'map' ? $mapMode : $ownMode,
+            'own_background_image_url' => $own,
+            'own_background_image_mode' => $ownMode,
+            'map_background_image_url' => $mapUrl,
+            'map_background_image_mode' => $mapMode,
         ];
     }
 }
