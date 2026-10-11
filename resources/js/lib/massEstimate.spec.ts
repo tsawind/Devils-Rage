@@ -1,4 +1,4 @@
-import { describeEstimate, estimateMass, formatMass, estimateHoleMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
+import { describeEstimate, estimateMass, formatMass, estimateHoleMass, isFrigateHole, massHints, pipeWidth } from '@/lib/massEstimate';
 import { describe, expect, it } from 'vitest';
 
 const D845 = 5_000_000_000;
@@ -8,9 +8,9 @@ describe('patch 12: mass left on a wormhole', () => {
         expect(estimateMass({ totalMass: D845, jumped: 0, status: 'fresh' })).toEqual({ capacity: 5.5e9, min: 2.25e9, max: 5.5e9 });
     });
 
-    it('patch 32: logged jumps since the status was set only bring the top down', () => {
+    it('patch 37: logged jumps since the mark bring both ends down', () => {
         const estimate = estimateMass({ totalMass: D845, jumped: 1.2e9, status: 'fresh' })!;
-        expect(estimate.min).toBe(2.25e9);
+        expect(Math.round(estimate.min)).toBe(1.05e9);
         expect(Math.round(estimate.max)).toBe(4.3e9);
     });
 
@@ -19,7 +19,7 @@ describe('patch 12: mass left on a wormhole', () => {
         expect(flagOnly.max).toBe(2.75e9);
         expect(flagOnly.min).toBe(4.5e8);
         const withJumps = estimateMass({ totalMass: D845, jumped: 1e9, status: 'reduced' })!;
-        expect(withJumps.min).toBe(4.5e8);
+        expect(withJumps.min).toBe(0);
         expect(Math.round(withJumps.max)).toBe(1.75e9);
     });
 
@@ -44,7 +44,8 @@ describe('patch 12: mass left on a wormhole', () => {
     it('patch 32: the bottom never goes above the top', () => {
         const estimate = estimateMass({ totalMass: D845, jumped: 4e9, status: 'fresh' })!;
         expect(Math.round(estimate.max)).toBe(1.5e9);
-        expect(Math.round(estimate.min)).toBe(1.5e9);
+        expect(estimate.min).toBeLessThanOrEqual(estimate.max);
+        expect(estimate.min).toBe(0);
     });
 
     it('never goes negative, and has no estimate without a known type', () => {
@@ -93,5 +94,42 @@ describe('estimateHoleMass (patch 18)', () => {
     it('nothing known: no guess', () => {
         expect(estimateHoleMass({ classes: [null, 'unknown'], types })).toBeNull();
         expect(estimateHoleMass({ classes: ['3'], types })).toBeNull();
+    });
+});
+
+describe('patch 37: a mark restarts the math', () => {
+    const H296 = 3_300_000_000;
+
+    it('reduced, then 400 M logged: 0 ↔ 1,415 M and "may be Crit now"', () => {
+        const estimate = estimateMass({ totalMass: H296, jumped: 400e6, jumpedSinceStatus: 400e6, status: 'reduced' })!;
+        expect(Math.round(estimate.max / 1e6)).toBe(1415);
+        expect(estimate.min).toBe(0);
+        expect(massHints({ estimate, totalMass: H296, status: 'reduced', jumpedSinceStatus: 400e6 })).toEqual({ shouldBe: null, mayBe: 'critical' });
+    });
+
+    it('a small jump after a mark is no reason to check', () => {
+        const estimate = estimateMass({ totalMass: H296, jumped: 100e6, jumpedSinceStatus: 100e6, status: 'reduced' })!;
+        expect(massHints({ estimate, totalMass: H296, status: 'reduced', jumpedSinceStatus: 100e6 })).toEqual({ shouldBe: null, mayBe: null });
+    });
+
+    it('marking again restarts: jumps before the newest mark no longer count against its band', () => {
+        const estimate = estimateMass({ totalMass: H296, jumped: 1.5e9, jumpedSinceStatus: 0, status: 'reduced' })!;
+        expect(Math.round(estimate.max / 1e6)).toBe(1815);
+        expect(Math.round(estimate.min / 1e6)).toBe(297);
+    });
+
+    it('everything left below the 10 % line: should be Crit by now', () => {
+        const estimate = estimateMass({ totalMass: H296, jumped: 1.5e9, jumpedSinceStatus: 1.5e9, status: 'reduced' })!;
+        expect(massHints({ estimate, totalMass: H296, status: 'reduced', jumpedSinceStatus: 1.5e9 }).shouldBe).toBe('critical');
+    });
+
+    it('fresh with half the hole logged: should be Reduced by now', () => {
+        const estimate = estimateMass({ totalMass: H296, jumped: 1.9e9, jumpedSinceStatus: 1.9e9, status: 'fresh' })!;
+        expect(massHints({ estimate, totalMass: H296, status: 'fresh', jumpedSinceStatus: 1.9e9 }).shouldBe).toBe('reduced');
+    });
+
+    it('nothing to say about a crit hole or an unknown status', () => {
+        const estimate = estimateMass({ totalMass: H296, jumped: 0, status: 'critical' })!;
+        expect(massHints({ estimate, totalMass: H296, status: 'critical', jumpedSinceStatus: 0 })).toEqual({ shouldBe: null, mayBe: null });
     });
 });

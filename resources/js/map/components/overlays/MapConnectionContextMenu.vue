@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { markConnectionChecked } from '@/map/actions/holeChecked';
 import {
     ContextMenuContent,
     ContextMenuItem,
@@ -97,7 +98,7 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
         <!-- Patch 16: the jump went through another signature -->
         <ConnectionRelinkMenu :connection="map_connection" />
         <!-- Patch 37: I looked at Show Info, mass and life are as shown (resets the 4 h "?"; replaces patch 16's "Checked: still healthy") -->
-        <ContextMenuItem v-if="map_connection.type !== 'stargate'" @select="handleLifetimeChange(map_connection.lifetime_status)">
+        <ContextMenuItem v-if="map_connection.type !== 'stargate'" @select="markConnectionChecked(map_connection.id)">
             <Check class="size-4" />
             Checked in game
         </ContextMenuItem>

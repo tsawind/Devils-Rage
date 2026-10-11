@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePilotNames } from '@/composables/usePilotNames';
 import { recordSignatureDelete, recordSignatureEdit } from '@/composables/signatures/signatureUndo';
 import TrashIcon from '@/components/icons/TrashIcon.vue';
 import MapConnectionInput from '@/components/signatures/MapConnectionInput.vue';
@@ -51,6 +52,8 @@ import { AcceptableValue } from 'reka-ui';
 import { type Component, computed, nextTick, ref, toRef } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
 
+// Patch 37: hover texts name the human behind the alt (SeAT main).
+const { label: pilotName } = usePilotNames();
 const {
     signature,
     unconnected_connections,
@@ -887,7 +890,7 @@ function copyBookmark() {
         <!-- Name (patch 23: far left, two letters wide; hover for the full name) -->
         <div
             class="w-[5ch] shrink-0 overflow-hidden font-mono text-xs whitespace-nowrap"
-            :title="armed_label ? `${name_title ?? ''} · ${armed_by_me ? 'armed by you: your next jump' : `armed by ${signature.armed_by_name ?? 'someone'}`}` : name_title"
+            :title="armed_label ? `${name_title ?? ''} · ${armed_by_me ? 'armed by you: your next jump' : `armed by ${pilotName(signature.armed_by_name)}`}` : name_title"
         >
             <span :class="name_class">{{ name_short }}</span>
         </div>
@@ -910,7 +913,7 @@ function copyBookmark() {
                     armed_by_me
                         ? 'Armed by you: click to disarm'
                         : signature.armed_by_user_id
-                          ? `Armed by ${signature.armed_by_name ?? 'someone else'}`
+                          ? `Armed by ${pilotName(signature.armed_by_name)}`
                           : 'Arm this hole as your next jump (copies its bookmark)'
                 "
                 @click="armed_by_me ? emit('disarm') : emit('arm', null, false)"

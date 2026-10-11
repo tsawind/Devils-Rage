@@ -106,6 +106,12 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
                         <ArrowDown v-else-if="indicator.arrow === 'down'" class="ml-px size-3" aria-label="Opened at the upper end: it goes down toward its K162 exit" />
                     </span>
                     <span
+                        v-else-if="indicator.type === 'checknow'"
+                        class="text-[12px] leading-none font-bold text-amber-400"
+                        aria-label="May have crossed into the next mass band: check Show Info"
+                        >?</span
+                    >
+                    <span
                         v-else-if="indicator.type === 'unchecked'"
                         class="rounded-full border border-purple-400 px-[3px] text-[10px] leading-[10px] font-bold text-purple-300"
                         aria-label="Not checked for 4 hours or more"

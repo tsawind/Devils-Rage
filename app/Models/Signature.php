@@ -7,6 +7,7 @@ namespace App\Models;
 use App\Enums\LifetimeStatus;
 use App\Enums\MassStatus;
 use App\Enums\ShipSize;
+use App\Support\Actor;
 use Carbon\CarbonImmutable;
 use Database\Factories\SignatureFactory;
 use DateTimeImmutable;
@@ -39,6 +40,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property ShipSize|null $ship_size
  * @property CarbonImmutable $created_at
  * @property CarbonImmutable $updated_at
+ * @property string|null $created_by_name Patch 37: who pasted or added it
+ * @property string|null $type_set_by_name Patch 37: who set its type
+ * @property CarbonImmutable|null $type_set_at
+ * @property CarbonImmutable|null $checked_at Patch 37: last looked at in game (status picked or ✓ Checked)
+ * @property string|null $checked_by_name
+ * @property string|null $checked_note
  * @property-read MapSolarsystem $mapSolarsystem
  * @property-read MapConnection|null $mapConnection
  * @property-read Wormhole|null $wormhole
@@ -58,6 +65,8 @@ final class Signature extends Model
         'ship_size' => ShipSize::class,
         'lifetime' => LifetimeStatus::class,
         'lifetime_updated_at' => 'immutable_datetime',
+        'type_set_at' => 'immutable_datetime',
+        'checked_at' => 'immutable_datetime',
         'is_static' => 'boolean',
         'is_wandering' => 'boolean',
         'armed_at' => 'immutable_datetime',
@@ -70,6 +79,26 @@ final class Signature extends Model
     protected static function booted(): void
     {
         // Jumping a hole (it gets linked to a connection) uses up its arm; the number stays.
+        // Patch 37: who added the hole, who set its type, and who last looked at it in game.
+        self::creating(function (Signature $signature): void {
+            $signature->created_by_name ??= Actor::name();
+        });
+        self::saving(function (Signature $signature): void {
+            $actor = Actor::name();
+            if ($actor === null) {
+                return;
+            }
+            $typed = $signature->isDirty('wormhole_id') || $signature->isDirty('signature_type_id');
+            if ($typed && ($signature->getAttributes()['wormhole_id'] ?? $signature->getAttributes()['signature_type_id'] ?? null) !== null) {
+                $signature->type_set_by_name = $actor;
+                $signature->type_set_at = now()->toImmutable();
+            }
+            if ($signature->exists && ($signature->isDirty('mass_status') || $signature->isDirty('lifetime'))) {
+                $signature->checked_at = now()->toImmutable();
+                $signature->checked_by_name = $actor;
+                $signature->checked_note = self::checkNote($signature->isDirty('mass_status') ? $signature->getAttributes()['mass_status'] ?? null : null, $signature->isDirty('lifetime') ? $signature->getAttributes()['lifetime'] ?? null : null);
+            }
+        });
         self::saving(function (Signature $signature): void {
             if ($signature->map_connection_id !== null && $signature->armed_by_user_id !== null) {
                 $signature->armed_by_user_id = null;
@@ -78,6 +107,25 @@ final class Signature extends Model
                 $signature->armed_claimed_alias = false;
             }
         });
+    }
+
+    /**
+     * Patch 37: how someone looked at a hole, for "Last checked … (marked Reduced)".
+     */
+    public static function checkNote(mixed $massStatus, mixed $lifetime): string
+    {
+        $mass = $massStatus instanceof MassStatus ? $massStatus->value : (is_string($massStatus) ? $massStatus : null);
+        $life = $lifetime instanceof LifetimeStatus ? $lifetime->value : (is_string($lifetime) ? $lifetime : null);
+
+        return match (true) {
+            $mass === 'critical' => 'marked Crit',
+            $mass === 'reduced' => 'marked Reduced',
+            $mass === 'fresh' => 'marked Fresh',
+            $life === 'critical' => 'marked EOL!',
+            $life === 'eol' => 'marked EOL',
+            $life === 'healthy' => 'marked healthy',
+            default => 'checked',
+        };
     }
 
     /** Armed by someone, and not run out yet. */

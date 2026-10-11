@@ -51,6 +51,7 @@ use App\Http\Controllers\PreferredCharacterController;
 use App\Http\Controllers\RallyPointController;
 use App\Http\Controllers\ScopeController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\HoleCheckedController;
 use App\Http\Controllers\SignatureArmController;
 use App\Http\Controllers\SignatureController;
 use App\Http\Controllers\StatisticsController;
@@ -134,6 +135,8 @@ Route::middleware('auth')->group(function () {
     Route::resource('map-solarsystems.signatures', SignatureController::class)->only(['store', 'update', 'destroy'])->shallow();
     Route::resource('paste-signatures', PasteSignatureController::class)->only(['store']);
     Route::post('signatures/{signature}/arm', [SignatureArmController::class, 'store'])->name('signatures.arm.store');
+    Route::post('map-connections/{mapConnection}/checked', [HoleCheckedController::class, 'connection'])->name('map-connections.checked');
+    Route::post('signatures/{signature}/checked', [HoleCheckedController::class, 'signature'])->name('signatures.checked');
     Route::post('map-connections/{mapConnection}/hole-type', [ConnectionHoleTypeController::class, 'store'])->name('map-connections.hole-type.store');
     Route::post('map-connections/{mapConnection}/relink', [ConnectionHoleTypeController::class, 'relink'])->name('map-connections.relink');
     Route::post('signatures/{signature}/absorb', [ConnectionHoleTypeController::class, 'absorb'])->name('signatures.absorb');

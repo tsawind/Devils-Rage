@@ -36,6 +36,9 @@ final class MapConnectionSignatureResource extends JsonResource
             'lifetime_status' => $this->lifetime,
             'lifetime_status_updated_at' => $this->lifetime_updated_at,
             'created_at' => $this->created_at,
+            'created_by_name' => $this->created_by_name,
+            'type_set_by_name' => $this->type_set_by_name,
+            'type_set_at' => $this->type_set_at,
             'updated_at' => $this->updated_at,
             'wormhole' => $this->wormhole?->toResource(WormholeResource::class),
         ];

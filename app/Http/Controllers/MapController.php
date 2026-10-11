@@ -30,6 +30,7 @@ use App\Models\MapWebhookRole;
 use App\Models\User;
 use App\Scopes\WithVisibleSolarsystems;
 use App\Services\EveScoutService;
+use App\Services\Seat\SeatMains;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -83,6 +84,8 @@ final class MapController extends Controller
             'can_create_map' => Gate::allows('create', Map::class),
             // Patch 29: where a rally ping can go and who it can mention (loaded when the ping box opens).
             'rally_ping_targets' => Inertia::optional(fn (): array => $this->rallyPingTargets($map)),
+            // Patch 37: each character's main from SeAT, for "Alt - Main" names.
+            'pilot_mains' => fn (): array => ['enabled' => SeatMains::enabled(), 'mains' => SeatMains::byName()],
         ])
             ->with(new MapPermissionsFeature($map, $user))
             ->with($settingsFeature)

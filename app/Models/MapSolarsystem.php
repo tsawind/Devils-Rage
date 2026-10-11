@@ -8,6 +8,7 @@ use App\Builders\MapSolarsystemBuilder;
 use App\Collections\MapSolarsystemCollection;
 use App\Relations\HasManyMapConnections;
 use Database\Factories\MapSolarsystemFactory;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\CollectedBy;
 use Illuminate\Database\Eloquent\Attributes\UseEloquentBuilder;
 use Illuminate\Database\Eloquent\Attributes\UseFactory;
@@ -204,6 +205,15 @@ final class MapSolarsystem extends Model
                 'ship_size' => $signature->ship_size,
                 // Patch 13: armed as someone's next jump.
                 ...$signature->armedPayload(),
+                // Patch 37: the details box (added / type set / last checked) and the 4 h purple "?".
+                'created_at' => $signature->created_at->toISOString(),
+                'created_by_name' => $signature->created_by_name,
+                'type_set_by_name' => $signature->type_set_by_name,
+                'type_set_at' => $signature->type_set_at?->toISOString(),
+                'lifetime_updated_at' => $signature->lifetime_updated_at instanceof DateTimeInterface ? $signature->lifetime_updated_at->format(DATE_ATOM) : $signature->lifetime_updated_at,
+                'checked_at' => $signature->checked_at?->toISOString(),
+                'checked_by_name' => $signature->checked_by_name,
+                'checked_note' => $signature->checked_note,
             ])
             ->values()
             ->all();

@@ -2,10 +2,14 @@
 import { CharacterImage } from '@/components/images';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TCharacter } from '@/types/models';
+import { usePilotNames } from '@/composables/usePilotNames';
 
 defineProps<{
     pilots: TCharacter[];
 }>();
+
+// Patch 37: the hover list shows each pilot's main (from SeAT).
+const { suffix } = usePilotNames();
 </script>
 
 <template>
@@ -22,7 +26,9 @@ defineProps<{
             <div class="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
                 <div v-for="pilot in pilots" :key="pilot.id" class="flex items-center gap-2">
                     <CharacterImage :character_id="pilot.id" :character_name="pilot.name" :size="32" class="size-5 shrink-0 rounded-full" />
-                    <span class="truncate font-medium">{{ pilot.name }}</span>
+                    <span class="truncate font-medium"
+                        >{{ pilot.name }}<span v-if="suffix(pilot.name)" class="font-normal text-muted-foreground"> - {{ suffix(pilot.name) }}</span></span
+                    >
                     <span v-if="pilot.corporation" class="shrink-0 text-muted-foreground">[{{ pilot.corporation.ticker }}]</span>
                     <span v-if="pilot.status?.ship_type" class="ml-auto truncate pl-2 text-muted-foreground">{{ pilot.status.ship_type.name }}</span>
                 </div>

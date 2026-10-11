@@ -10,7 +10,7 @@ import { useMinuteNow } from '@/composables/useMinuteNow';
 import { holeAge } from '@/lib/holeAge';
 import { uncheckedFor } from '@/lib/holeChecked';
 import { guessHole } from '@/map/holeGuess';
-import { describeEstimate, estimateMass, formatMass, isFrigateHole, pipeWidth } from '@/lib/massEstimate';
+import { describeEstimate, estimateMass, formatMass, isFrigateHole, massHints, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { edgePathAndCenter } from '@/map/core/geometry/paths';
 import type { EdgeGeometry } from '@/map/core/types';
@@ -140,6 +140,9 @@ const indicators = computed<EdgeIndicator[]>(() => {
         });
     }
 
+    // Patch 37: the logged jumps may have pushed it into the next band: an amber "?".
+    if (hints.value.mayBe || hints.value.shouldBe) items.push({ type: 'checknow', fill: 'var(--color-amber-400)', stroke: 'var(--color-amber-500)' });
+
     // Patch 37: nobody checked, jumped or changed it for 4 h: a light purple "?".
     if (unchecked.value) items.push({ type: 'unchecked', fill: 'var(--color-purple-400)', stroke: 'var(--color-purple-500)' });
 
@@ -252,12 +255,33 @@ const estimate = computed(() => {
     return estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, status: massStatus.value });
 });
 
+/** Patch 37: should be Crit / Reduced by now (amber-red pipe), or may have crossed a line (amber "?"). */
+const hints = computed(() =>
+    connection
+        ? massHints({
+              estimate: estimate.value,
+              totalMass: holeType.value?.total_mass ?? guessedMass.value,
+              status: massStatus.value,
+              jumpedSinceStatus: connection.jumps_mass_since_status ?? connection.jumps_mass_sum,
+          })
+        : { shouldBe: null, mayBe: null },
+);
+
 const pipe = computed(() => {
     const current = estimate.value;
     if (!current) return null;
     const factor = Math.min(scale, 1.5) * pipeScale;
     // Patch 20: dark ink pipes in light mode.
-    const color = massStatus.value === 'critical' ? '#ef4444' : massStatus.value === 'reduced' ? '#f59e0b' : isDark.value ? '#a3a3a3' : '#57534e';
+    const color =
+        massStatus.value === 'critical'
+            ? '#ef4444'
+            : hints.value.shouldBe === 'critical'
+              ? '#ea580c'
+              : massStatus.value === 'reduced'
+                ? '#f59e0b'
+                : isDark.value
+                  ? '#a3a3a3'
+                  : '#57534e';
     // Frigate holes always draw thin, whatever their mass (patch 13).
     const width = (mass: number) => (isFrigateHole(holeType.value?.maximum_jump_mass) ? (mass > 0 ? 2 : 0) : pipeWidth(mass) * factor);
     return {

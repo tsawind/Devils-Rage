@@ -9,7 +9,9 @@ use App\Enums\LifetimeStatus;
 use App\Enums\MassStatus;
 use App\Enums\ShipSize;
 use App\Models\MapConnection;
+use App\Models\Signature;
 use App\Models\Wormhole;
+use App\Support\Actor;
 use App\Support\Broadcasting\MapBroadcaster;
 use Illuminate\Support\Facades\DB;
 use Spatie\LaravelData\Optional;
@@ -47,6 +49,19 @@ final readonly class UpdateMapConnectionAction
              */
             if (! $data->lifetime instanceof Optional || ! $data->mass_status instanceof Optional || ! $data->ship_size instanceof Optional || ! $data->wormhole_id instanceof Optional) {
                 $data_array['checked_at'] = now();
+                $data_array['checked_by_name'] = Actor::name();
+                $data_array['checked_note'] = $data->wormhole_id instanceof Optional
+                    ? Signature::checkNote($data->mass_status instanceof Optional ? null : $data->mass_status, $data->lifetime instanceof Optional ? null : $data->lifetime)
+                    : 'set the type';
+            }
+
+            /* Patch 37: marking a mass status again (even the same one) restarts the jump log:
+             * only jumps after the newest mark count against it.
+             */
+            if (! $data->mass_status instanceof Optional && $data->mass_status !== null) {
+                $data_array['mass_status_updated_at'] = now();
+                $data_array['mass_status_from_log'] = false;
+                $data_array['mass_status_set_by_name'] = Actor::name();
             }
 
             $mapConnection->update($data_array);

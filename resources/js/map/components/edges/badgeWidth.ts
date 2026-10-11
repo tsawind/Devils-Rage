@@ -1,6 +1,6 @@
 /** One part of a pipe's pill. */
 export type EdgeIndicator = {
-    type: 'text' | 'clock' | 'weight' | 'gate' | 'preserve' | 'static' | 'eol' | 'unchecked';
+    type: 'text' | 'clock' | 'weight' | 'gate' | 'preserve' | 'static' | 'eol' | 'unchecked' | 'checknow';
     label?: string;
     /**
      * Patch 21: text parts: 'type' is the hole's type (second line); anything else
@@ -24,7 +24,7 @@ export type EdgeIndicator = {
  * gate icons), then the type, then Static, then EOL. Empty lines are left out.
  */
 export function badgeLines(indicators: readonly EdgeIndicator[]): EdgeIndicator[][] {
-    const top = indicators.filter((item) => (item.type === 'text' && item.role !== 'type') || ['weight', 'clock', 'gate', 'preserve', 'unchecked'].includes(item.type));
+    const top = indicators.filter((item) => (item.type === 'text' && item.role !== 'type') || ['weight', 'clock', 'gate', 'preserve', 'unchecked', 'checknow'].includes(item.type));
     const type = indicators.filter((item) => item.type === 'text' && item.role === 'type');
     const statics = indicators.filter((item) => item.type === 'static');
     const eol = indicators.filter((item) => item.type === 'eol');
@@ -35,6 +35,7 @@ const LINE_HEIGHT = 14;
 
 function partWidth(item: EdgeIndicator): number {
     if (item.type === 'unchecked') return 14;
+    if (item.type === 'checknow') return 8;
     if (item.type === 'static' || item.type === 'eol') return (item.label ?? '').length * 6 + 8;
     if (item.type === 'text' && item.role === 'type') return (item.label ?? '').length * 6.7 + (item.copy ? 8 : 0);
     if (item.type === 'text') return (item.label ?? '').length * 7.5 + (item.arrow ? 13 : 0);

@@ -142,6 +142,15 @@ export type TPendingHole = {
     armed_by_user_id?: number | null;
     armed_by_name?: string | null;
     armed_claimed?: boolean;
+    /** Patch 37: the details box and the 4 h purple "?". */
+    created_at?: string | null;
+    created_by_name?: string | null;
+    type_set_by_name?: string | null;
+    type_set_at?: string | null;
+    lifetime_updated_at?: string | null;
+    checked_at?: string | null;
+    checked_by_name?: string | null;
+    checked_note?: string | null;
 };
 
 export type TMapSolarsystem = TMapSolarsystemBase & {
@@ -264,6 +273,11 @@ export type TMapConnection = {
     mass_status_updated_at?: string | null;
     /** Patch 37: someone last picked a type / mass / life status or pressed ✓ Checked in game. */
     checked_at?: string | null;
+    checked_by_name?: string | null;
+    /** How they looked: "checked", "marked Reduced", "set the type", … */
+    checked_note?: string | null;
+    /** Who set the mass status (null: the jump log or unknown). */
+    mass_status_set_by_name?: string | null;
     /** Patch 33: the jump log set this status (not a person). */
     mass_status_from_log?: boolean;
     /** Patch 33: the log says more went through than the hole can hold. */
@@ -317,6 +331,10 @@ export type TTailoredSignature = {
     alias?: string | null;
     is_static?: boolean;
     is_wandering?: boolean;
+    /** Patch 37: who pasted or added it, and who set its type. */
+    created_by_name?: string | null;
+    type_set_by_name?: string | null;
+    type_set_at?: string | null;
 };
 
 export type TSelectedMapSolarsystemBase = Omit<TMapSolarsystemBase, 'signatures'> & {

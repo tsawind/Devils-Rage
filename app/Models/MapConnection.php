@@ -9,6 +9,7 @@ use App\Enums\ConnectionType;
 use App\Enums\LifetimeStatus;
 use App\Enums\MassStatus;
 use App\Enums\ShipSize;
+use App\Support\Actor;
 use Carbon\CarbonImmutable;
 use Database\Factories\MapConnectionFactory;
 use DateTimeImmutable;
@@ -36,6 +37,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property DateTimeImmutable|string|null $lifetime_updated_at
  * @property CarbonImmutable|null $mass_status_updated_at
  * @property CarbonImmutable|null $checked_at
+ * @property string|null $checked_by_name Patch 37: who last looked at it in game
+ * @property string|null $checked_note
+ * @property string|null $mass_status_set_by_name Patch 37: who set the mass status (null: the jump log)
  * @property bool $mass_status_from_log
  * @property bool $should_have_rolled
  * @property CarbonImmutable|null $connected_at
@@ -84,6 +88,10 @@ final class MapConnection extends Model
                 // Patch 33: set by hand unless the jump log set it.
                 if (! $connection->isDirty('mass_status_from_log')) {
                     $connection->mass_status_from_log = false;
+                }
+                // Patch 37: who set it (the "Reduced by X at 09:20" line); nobody when the log did.
+                if (! $connection->isDirty('mass_status_set_by_name')) {
+                    $connection->mass_status_set_by_name = $connection->mass_status_from_log ? null : Actor::name();
                 }
             }
         });

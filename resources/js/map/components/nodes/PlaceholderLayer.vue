@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useMinuteNow } from '@/composables/useMinuteNow';
+import { uncheckedFor } from '@/lib/holeChecked';
 import { isDark } from '@/composables/useIsDark';
 import { combatColorHex } from '@/lib/combat';
 import { isFrigateHole, pipeWidth } from '@/lib/massEstimate';
@@ -39,9 +41,11 @@ const COMPACT_WIDTH = 100;
 const FULL_HEIGHT = 40;
 
 /** Patch 21: the parts of a dotted pipe's pill: Static, its type, its size (or a guess), mass, EOL. */
-function pillParts(placeholder: TPlaceholder, facts: ReturnType<typeof holeFacts>): EdgeIndicator[] {
+function pillParts(placeholder: TPlaceholder, facts: ReturnType<typeof holeFacts>, unchecked = false): EdgeIndicator[] {
     const neutral = { fill: 'var(--color-neutral-500)', stroke: 'var(--color-neutral-600)' };
     const parts: EdgeIndicator[] = [];
+    // Patch 37: nobody looked at it in game for 4 h: a light purple "?".
+    if (unchecked) parts.push({ type: 'unchecked', fill: 'var(--color-purple-400)', stroke: 'var(--color-purple-500)' });
     // Patch 37: the type is a green chip that copies the hole's bookmark; an expected static has no sig yet (faint).
     const copy: 'on' | 'faint' = placeholder.expected ? 'faint' : 'on';
     if (placeholder.isStatic || placeholder.expected) {
@@ -68,13 +72,18 @@ function pillParts(placeholder: TPlaceholder, facts: ReturnType<typeof holeFacts
     return parts;
 }
 
+const minuteNow = useMinuteNow();
+
 /** Patch 21: every dotted pipe's pill parts, by placeholder node id (kept apart from the drawing, which moves with zoom). */
 const pills = computed(() => {
     const result = new Map<number, EdgeIndicator[]>();
     if (!store.isTreeLayout.value) return result;
     for (const placeholder of store.placeholders.value) {
         const parent = store.systems.get(placeholder.parentId);
-        if (parent) result.set(placeholder.nodeId, pillParts(placeholder, holeFacts(placeholder, parent)));
+        if (!parent) continue;
+        const hole = parent.pending_holes?.find((candidate) => candidate.id === placeholder.signatureId) ?? null;
+        const unchecked = hole ? uncheckedFor({ created_at: hole.created_at, lifetime_status_updated_at: hole.lifetime_updated_at, checked_at: hole.checked_at }, minuteNow.value) !== null : false;
+        result.set(placeholder.nodeId, pillParts(placeholder, holeFacts(placeholder, parent), unchecked));
     }
     return result;
 });
@@ -327,6 +336,16 @@ const chips = computed(() => {
                         :stroke-opacity="item.thin.color ? 1 : 0.7"
                     />
                 </template>
+                <!-- Patch 37: click anywhere on the dotted pipe for its details, not just the pill -->
+                <path
+                    :d="item.path"
+                    fill="none"
+                    stroke="transparent"
+                    stroke-width="18"
+                    class="pointer-events-auto cursor-pointer"
+                    @click.stop="(event) => openDetails(event, item.nodeId)"
+                    @pointerdown.stop
+                />
                 <!-- Patch 21: every dotted pipe's pill (Static, type, size, mass, EOL); click for details -->
                 <EdgeBadges
                     v-if="item.pill && item.pill.parts.length"

@@ -2,7 +2,19 @@
 import { PopoverContent } from '@/components/ui/popover';
 import { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { computed } from 'vue';
+import usePermission from '@/composables/usePermission';
+import { useMinuteNow } from '@/composables/useMinuteNow';
+import { uncheckedFor } from '@/lib/holeChecked';
+import { lastLook, lifeLine } from '@/lib/holeSummary';
+import { estimateMass, formatMass, massHints } from '@/lib/massEstimate';
+import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
+import { lifetimeRange, wormholeLifetimeHours } from '@/lib/wormholeLifetime';
+import { markConnectionChecked } from '@/map/actions/holeChecked';
+import { copyForwardBookmark, forwardSides } from '@/map/holeBookmark';
+import { guessHole, holeCandidates } from '@/map/holeGuess';
+import { tryUseMapStore } from '@/map/store/mapStore';
 import ConnectionStatus from './connection/ConnectionStatus.vue';
+import HoleSummary, { type THoleSummary } from './connection/HoleSummary.vue';
 import MassTracking from './connection/MassTracking.vue';
 import SignatureSection from './connection/SignatureSection.vue';
 import WormholeProperties from './connection/WormholeProperties.vue';
@@ -31,6 +43,65 @@ const wormhole = computed(() => {
 const showMassTracking = computed(() => {
     return connection.type === 'wormhole';
 });
+
+// ---- Patch 37: the summary at the top (type, who and when, life, mass left, last look) ----
+const store = tryUseMapStore();
+const { canEdit } = usePermission();
+const now = useMinuteNow();
+
+const MARKED: Record<string, string> = { fresh: 'marked Fresh', reduced: 'marked Reduced', critical: 'marked Crit' };
+
+const summary = computed((): THoleSummary | null => {
+    if (connection.type !== 'wormhole') return null;
+    const type = outSignature.value?.wormhole ?? null;
+    const classes = [connection.source?.solarsystem?.class ?? null, connection.target?.solarsystem?.class ?? null] as const;
+    const candidates = type ? [] : holeCandidates({ endClasses: classes });
+    const guessTotal = type ? null : (guessHole({ endClasses: classes })?.total ?? null);
+    const total = type?.total_mass ?? guessTotal;
+    const since = connection.jumps_mass_since_status ?? connection.jumps_mass_sum ?? 0;
+    const estimate = total ? estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, status: connection.mass_status }) : null;
+    const hints = massHints({ estimate, totalMass: total, status: connection.mass_status, jumpedSinceStatus: since });
+    const signatures = connection.signatures ?? [];
+    const first = [...signatures].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))[0] ?? null;
+    const typed = signatures.find((signature) => signature.type_set_at && !signature.wormhole?.name.startsWith('K162')) ?? signatures.find((signature) => signature.type_set_at) ?? null;
+    const jumps = [...new Set(candidates.map((candidate) => candidate.maxJump))];
+    const size = connection.ship_size ? SHIP_SIZE_LETTERS[connection.ship_size] : null;
+    const lastJump = connection.jumps?.[0] ?? null;
+    return {
+        typeLine: type ? `${type.name}${type.leads_to ? ` → ${type.leads_to}` : ''}${size ? ` · ${size}` : ''}` : null,
+        couldBe: candidates.map((candidate) => candidate.name.toUpperCase()).slice(0, 8),
+        addedAt: first?.created_at ?? connection.created_at,
+        addedBy: first?.created_by_name ?? null,
+        typeSetAt: typed?.type_set_at ?? null,
+        typeSetBy: typed?.type_set_by_name ?? null,
+        life: lifeLine({
+            lifetime: connection.lifetime_status,
+            markedAt: connection.lifetime_status_updated_at,
+            hours: type ? (wormholeLifetimeHours(type.name) ? [wormholeLifetimeHours(type.name)!, wormholeLifetimeHours(type.name)!] : null) : lifetimeRange(candidates.map((candidate) => candidate.name)),
+            addedAt: first?.created_at ?? connection.created_at,
+            now: now.value,
+        }),
+        perJump: type ? `${formatMass(type.maximum_jump_mass)} kg` : jumps.length === 1 ? `${formatMass(jumps[0])} kg (all of them)` : null,
+        estimate,
+        status: connection.mass_status,
+        loggedSinceMark: connection.mass_status_updated_at ? since : 0,
+        markedAt: connection.mass_status_updated_at ?? null,
+        markedBy: connection.mass_status_set_by_name ?? null,
+        hints,
+        lastLook: lastLook([
+            { at: connection.checked_at, by: connection.checked_by_name, note: connection.checked_note ?? 'checked' },
+            { at: connection.mass_status_updated_at, by: connection.mass_status_set_by_name, note: MARKED[connection.mass_status] ?? 'marked' },
+            { at: lastJump?.created_at, by: lastJump?.character_name, note: 'jumped' },
+        ]),
+        unchecked: uncheckedFor(connection, now.value),
+        canCheck: canEdit.value,
+        canCopy: Boolean(store && forwardSides(store, connection)?.pasted),
+    };
+});
+
+function copyBookmark(): void {
+    if (store) copyForwardBookmark(store, connection);
+}
 </script>
 
 <template>
@@ -38,8 +109,9 @@ const showMassTracking = computed(() => {
         The jump list grows without bound, so the popup is capped to the space the
         popover actually has and scrolls past it.
     -->
-    <PopoverContent class="max-h-(--reka-popover-content-available-height) w-60 overflow-y-auto">
+    <PopoverContent class="max-h-(--reka-popover-content-available-height) w-80 overflow-y-auto">
         <div class="space-y-3">
+            <HoleSummary v-if="summary" :summary="summary" :now="now" @checked="markConnectionChecked(connection.id)" @copy="copyBookmark" />
             <SignatureSection v-if="outSignature" :signature="outSignature" title="Out Sig" />
             <SignatureSection v-if="inSignature" :signature="inSignature" title="In Sig" />
             <div v-if="!outSignature && !inSignature" class="space-y-1">

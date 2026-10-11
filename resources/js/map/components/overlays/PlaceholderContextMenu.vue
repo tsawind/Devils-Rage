@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { markSignatureChecked } from '@/map/actions/holeChecked';
+import { usePilotNames } from '@/composables/usePilotNames';
 import { k162Hint, offersK162 } from '@/lib/k162';
 import { oftenSeenCounts, typeSections } from '@/lib/typeOrdering';
 import { autoCopy, copyButton } from '@/composables/useClipboardSetting';
@@ -44,6 +46,8 @@ import { signatureToast as toast } from '@/lib/signatureToast';
  * signature list); open it in the signature list; delete the signature.
  */
 const { placeholder } = defineProps<{ placeholder: TPlaceholder }>();
+// Patch 37: name the human behind the alt (SeAT main).
+const { label: pilotName } = usePilotNames();
 
 const store = useMapStore();
 const { canEdit } = usePermission();
@@ -270,7 +274,7 @@ function removeSignature(): void {
         <template v-if="canEdit">
             <ContextMenuItem v-if="armedByOther" disabled>
                 <Crosshair class="size-4 text-red-400" />
-                Armed by {{ hole?.armed_by_name ?? 'someone' }}
+                Armed by {{ pilotName(hole?.armed_by_name) }}
             </ContextMenuItem>
             <template v-else>
                 <ContextMenuItem :disabled="!hole" @select="arm()">
@@ -371,6 +375,11 @@ function removeSignature(): void {
         <ContextMenuItem :disabled="!bookmark" @select="copyBookmark">
             <ClipboardCopy class="size-4" />
             Copy bookmark
+        </ContextMenuItem>
+        <!-- Patch 37: I looked at Show Info: mass and life are as shown (resets the 4 h purple "?") -->
+        <ContextMenuItem v-if="canEdit" @select="markSignatureChecked(placeholder.signatureId)">
+            <Check class="size-4" />
+            Checked in game
         </ContextMenuItem>
         <ContextMenuItem @select="openInList">
             <ListTree class="size-4" />

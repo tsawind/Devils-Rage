@@ -50,3 +50,24 @@ export function guessHole(params: {
     const fallback = estimateHoleMass({ k162Class: params.k162Class ?? null, classes, types });
     return fallback ? { total: fallback, name: null, size: null } : null;
 }
+
+/**
+ * Patch 37: every hole type that fits what the map knows ("Could be: N432, H296, V753"
+ * in the details box), by name, without frigate-only holes unless nothing else fits.
+ */
+export function holeCandidates(params: {
+    k162Class?: string | null;
+    spawnClasses?: readonly string[] | null;
+    endClasses?: readonly (string | null | undefined)[] | null;
+}): TPossibleType[] {
+    const fits = possibleHoleTypes({ ...params, types: guessTypes() });
+    const big = fits.filter((type) => type.maxJump > 5_000_000);
+    const list = big.length ? big : fits;
+    const seen = new Set<string>();
+    return list.filter((type) => {
+        const name = type.name.toUpperCase();
+        if (seen.has(name)) return false;
+        seen.add(name);
+        return true;
+    });
+}

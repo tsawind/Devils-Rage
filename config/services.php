@@ -57,6 +57,12 @@ return [
         // Delay when caught up or after an error. 6s matches R2Z2's recommended minimum backoff.
         'catchup_delay_ms' => env('ZKILLBOARD_CATCHUP_DELAY_MS', 6_000),
     ],
+    // Patch 37: SeAT's API, for each character's main ("Alt - Main" names).
+    'seat' => [
+        'url' => env('SEAT_URL'),
+        'token' => env('SEAT_API_TOKEN'),
+    ],
+
     'eveonline' => [
         'client_id' => env('EVE_CLIENT_ID'),
         'client_secret' => env('EVE_CLIENT_SECRET'),

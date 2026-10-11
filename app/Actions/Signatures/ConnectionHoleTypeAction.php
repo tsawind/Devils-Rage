@@ -12,6 +12,7 @@ use App\Models\MapConnection;
 use App\Models\MapSolarsystem;
 use App\Models\Signature;
 use App\Models\SignatureType;
+use App\Support\Actor;
 use App\Support\Broadcasting\MapBroadcaster;
 use BackedEnum;
 use Illuminate\Support\Facades\DB;
@@ -48,7 +49,7 @@ final readonly class ConnectionHoleTypeAction
         $isK162 = self::isK162($type);
 
         DB::transaction(function () use ($connection, $sideId, $type, $isK162): void {
-            $connection->forceFill(['checked_at' => now()])->save();
+            $connection->forceFill(['checked_at' => now(), 'checked_by_name' => Actor::name(), 'checked_note' => 'set the type'])->save();
             $fields = [
                 'signature_category_id' => $type->signature_category_id,
                 'signature_type_id' => $type->id,

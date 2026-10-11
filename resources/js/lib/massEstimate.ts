@@ -51,11 +51,38 @@ export function estimateMass(params: {
     const [bandLow, bandHigh] = bands[params.status ?? ''] ?? [0.5, 1];
 
     // Patch 32/33: the top is the tighter of "the biggest it can be, minus everything logged"
-    // and "the top of the status band, minus what was logged since the status was set". The
-    // bottom is the band's bottom: not every jump gets logged.
+    // and "the top of the status band, minus what was logged since the status was set".
+    // Patch 37: a mark restarts the math at both ends: what was logged since the newest mark
+    // also comes off the band's bottom (it surely went through). Not every jump gets logged,
+    // so the bottom can still be lower than shown.
     const max = Math.max(0, Math.min(high - jumped, high * bandHigh - since));
-    const min = Math.min(low * bandLow, max);
+    const min = Math.min(low * bandLow - since, max);
     return { capacity: high, min: Math.max(0, min), max };
+}
+
+/**
+ * Patch 37: what the range says about the hole's real status.
+ * - `shouldBe`: everything that may be left is already below the next line (should be
+ *   Crit / Reduced by now): the pipe turns amber-red for Crit.
+ * - `mayBe`: the jumps logged since the newest mark are a real share of the band (a
+ *   quarter of it), so the hole may have crossed into the next band: an amber "?".
+ */
+export type TMassHints = { shouldBe: 'critical' | 'reduced' | null; mayBe: 'critical' | 'reduced' | null };
+
+export const CHECK_NOW_SHARE = 0.25;
+
+export function massHints(params: { estimate: TMassEstimate | null; totalMass: number | null | undefined; status: string | null | undefined; jumpedSinceStatus: number | null | undefined }): TMassHints {
+    const none: TMassHints = { shouldBe: null, mayBe: null };
+    const { estimate, status } = params;
+    const total = params.totalMass ?? 0;
+    if (!estimate || !(total > 0) || status === 'critical' || status === 'unknown') return none;
+    const since = Math.max(0, params.jumpedSinceStatus ?? 0);
+    const next: 'critical' | 'reduced' = status === 'reduced' ? 'critical' : 'reduced';
+    const line = estimate.capacity * (next === 'critical' ? 0.1 : 0.5);
+    if (estimate.max <= estimate.capacity * 0.1) return { shouldBe: 'critical', mayBe: null };
+    if (next === 'reduced' && estimate.max <= line) return { shouldBe: 'reduced', mayBe: null };
+    const bandWidth = total * (status === 'reduced' ? 0.4 : 0.5);
+    return { shouldBe: null, mayBe: since > 0 && since >= bandWidth * CHECK_NOW_SHARE ? next : null };
 }
 
 /** Pipe width for a mass: 2 px + 30 px × (mass ÷ 5.5 B), so 32 px for the biggest hole (0 for nothing). */

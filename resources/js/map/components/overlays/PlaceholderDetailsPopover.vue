@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { Button } from '@/components/ui/button';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import usePermission from '@/composables/usePermission';
 import { displayAlias } from '@/lib/alias';
@@ -10,8 +9,15 @@ import { openPlaceholderDetails } from '@/map/components/overlays/placeholderDet
 import { copyPlaceholderBookmark } from '@/map/holeBookmark';
 import { holeFacts } from '@/map/placeholderFacts';
 import { useMapStore } from '@/map/store/mapStore';
-import { ClipboardCopy } from 'lucide-vue-next';
 import { computed } from 'vue';
+import { useMinuteNow } from '@/composables/useMinuteNow';
+import { uncheckedFor } from '@/lib/holeChecked';
+import { lifeLine } from '@/lib/holeSummary';
+import { estimateMass, massHints } from '@/lib/massEstimate';
+import { lifetimeRange, wormholeLifetimeHours } from '@/lib/wormholeLifetime';
+import { markSignatureChecked } from '@/map/actions/holeChecked';
+import { holeCandidates } from '@/map/holeGuess';
+import HoleSummary, { type THoleSummary } from '@/map/components/overlays/connection/HoleSummary.vue';
 
 /**
  * Patch 21: the details of an unjumped hole, opened by clicking its dotted
@@ -74,6 +80,54 @@ const details = computed(() => {
     };
 });
 
+// ---- Patch 37: who and when, life, mass left, last look (same box as jumped pipes) ----
+const now = useMinuteNow();
+
+const summary = computed((): THoleSummary | null => {
+    const current = placeholder.value;
+    const parent = current ? store.systems.get(current.parentId) : null;
+    if (!current || !parent) return null;
+    const hole = parent.pending_holes?.find((candidate) => candidate.id === current.signatureId) ?? null;
+    const facts = holeFacts(current, parent);
+    const knownType = current.wormhole && !facts.isK162 ? current.wormhole.toUpperCase() : null;
+    const candidates = knownType || facts.isK162 ? [] : holeCandidates({ endClasses: [facts.parentClass, current.targetClass ?? null] });
+    const total = facts.typeMass?.total ?? facts.guess?.total ?? null;
+    const status = hole?.mass_status ?? current.massStatus ?? 'fresh';
+    const estimate = total ? estimateMass({ totalMass: total, jumped: 0, jumpedSinceStatus: 0, status }) : null;
+    const jumps = [...new Set(candidates.map((candidate) => candidate.maxJump))];
+    const lifeHours = knownType ? wormholeLifetimeHours(knownType) : null;
+    return {
+        typeLine: null,
+        couldBe: candidates.map((candidate) => candidate.name.toUpperCase()).slice(0, 8),
+        addedAt: hole?.created_at ?? null,
+        addedBy: hole?.created_by_name ?? null,
+        typeSetAt: hole?.type_set_at ?? null,
+        typeSetBy: hole?.type_set_by_name ?? null,
+        life: lifeLine({
+            lifetime: hole?.lifetime ?? current.lifetime,
+            markedAt: hole?.lifetime_updated_at ?? null,
+            hours: lifeHours ? [lifeHours, lifeHours] : lifetimeRange(candidates.map((candidate) => candidate.name)),
+            addedAt: hole?.created_at ?? null,
+            now: now.value,
+        }),
+        perJump: facts.typeMass ? `${formatMass(facts.typeMass.maxJump)} kg` : jumps.length === 1 ? `${formatMass(jumps[0])} kg (all of them)` : null,
+        estimate,
+        status,
+        loggedSinceMark: 0,
+        markedAt: null,
+        markedBy: null,
+        hints: massHints({ estimate, totalMass: total, status, jumpedSinceStatus: 0 }),
+        lastLook: hole?.checked_at ? { at: Date.parse(hole.checked_at), by: hole.checked_by_name ?? null, note: hole.checked_note ?? 'checked' } : null,
+        unchecked: hole ? uncheckedFor({ created_at: hole.created_at, lifetime_status_updated_at: hole.lifetime_updated_at, checked_at: hole.checked_at }, now.value) : null,
+        canCheck: Boolean(hole) && canEdit.value,
+        canCopy: Boolean(hole),
+    };
+});
+
+function checked(): void {
+    if (placeholder.value) markSignatureChecked(placeholder.value.signatureId);
+}
+
 function copy(): void {
     if (placeholder.value) copyPlaceholderBookmark(store, placeholder.value, canEdit.value);
 }
@@ -82,7 +136,7 @@ function copy(): void {
 <template>
     <Popover v-model:open="open">
         <PopoverAnchor :reference="reference" />
-        <PopoverContent v-if="details" class="w-64 text-sm">
+        <PopoverContent v-if="details" class="w-80 text-sm">
             <div class="flex items-baseline justify-between gap-2">
                 <span class="font-semibold">{{ details.title }}</span>
                 <span class="text-xs text-muted-foreground">not jumped yet</span>
@@ -99,13 +153,8 @@ function copy(): void {
                 <dd>{{ details.size }}</dd>
                 <dt class="text-muted-foreground">Mass</dt>
                 <dd>{{ details.mass }}</dd>
-                <dt class="text-muted-foreground">Life</dt>
-                <dd>{{ details.life }}</dd>
             </dl>
-            <Button v-if="details.canCopy" variant="outline" size="sm" class="mt-3 w-full" @click="copy">
-                <ClipboardCopy class="size-3.5" />
-                Copy bookmark
-            </Button>
+            <HoleSummary v-if="summary" class="mt-2 border-t pt-2" :summary="summary" :now="now" @checked="checked" @copy="copy" />
         </PopoverContent>
     </Popover>
 </template>
