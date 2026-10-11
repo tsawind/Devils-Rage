@@ -8,7 +8,11 @@ import { useJumpCounts } from '@/composables/useJumpCounts';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import type { TMap, TResolvedSelectedMapSolarsystem, TResolvedSolarsystem } from '@/pages/maps';
 import { TCharacter } from '@/types/models';
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
+import usePermission from '@/composables/usePermission';
+import { useMapPresent } from '@/composables/useMapPresence';
+import { usePilotNames } from '@/composables/usePilotNames';
+import { router, usePage } from '@inertiajs/vue3';
 
 const { map_characters, map, selected_map_solarsystem, ignored_systems } = defineProps<{
     map_characters: TCharacter[];
@@ -112,6 +116,28 @@ function resolveRoute(targetId: number | null): TResolvedSolarsystem[] {
         })
         .filter((entry): entry is TResolvedSolarsystem => entry !== null);
 }
+
+// ---- Patch 37: who has the map open (managers only) ----
+const { canManageAccess } = usePermission();
+const { present } = useMapPresent();
+// Viewer links opened lately (the same list as the Share button's).
+onMounted(() => {
+    if (canManageAccess.value) router.reload({ only: ['share_links'] });
+});
+const { suffix: mainSuffix } = usePilotNames();
+const presentSorted = computed(() => [...present.value].sort((a, b) => a.name.localeCompare(b.name)));
+const page = usePage();
+type TLinkSeen = { id: number; label: string | null; last_used_at: string | null; kind: string };
+const recentLinks = computed(() =>
+    (((page.props as unknown as { share_links?: TLinkSeen[] }).share_links ?? []) as TLinkSeen[]).filter(
+        (link) => link.last_used_at && Date.now() - Date.parse(link.last_used_at) < 60 * 60_000,
+    ),
+);
+function linkOpened(iso: string | null): string {
+    if (!iso) return '';
+    const date = new Date(iso);
+    return `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')} EVE`;
+}
 </script>
 
 <template>
@@ -124,6 +150,24 @@ function resolveRoute(targetId: number | null): TResolvedSolarsystem[] {
             <span class="ml-1 font-mono text-amber-400">{{ sorted_characters.length }}</span>
         </MapPanelHeader>
         <MapPanelContent>
+            <!-- Patch 37: managers see everyone who has the map open right now (and viewer links opened lately) -->
+            <details v-if="canManageAccess" class="border-b border-border/50 px-3 py-1.5 text-xs" open>
+                <summary class="cursor-pointer font-sans text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                    In the mapper <span class="font-mono text-amber-400">{{ present.length }}</span>
+                    <span class="ml-1 font-normal normal-case">live</span>
+                </summary>
+                <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                    <span v-for="person in presentSorted" :key="person.id" class="inline-flex items-center gap-1">
+                        <span class="size-1.5 rounded-full bg-green-500" />{{ person.name
+                        }}<span v-if="mainSuffix(person.name)" class="text-muted-foreground"> - {{ mainSuffix(person.name) }}</span>
+                        <span class="text-muted-foreground">({{ person.permission ?? '?' }})</span>
+                    </span>
+                    <span v-for="link in recentLinks" :key="`link-${link.id}`" class="inline-flex items-center gap-1 text-muted-foreground">
+                        <span class="size-1.5 rounded-full bg-amber-500" />Viewer link "{{ link.label ?? 'no label' }}" · opened {{ linkOpened(link.last_used_at) }}
+                    </span>
+                    <span v-if="!present.length && !recentLinks.length" class="text-muted-foreground">Nobody else right now.</span>
+                </div>
+            </details>
             <template v-if="sorted_characters?.length">
                 <div class="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] text-sm">
                     <div

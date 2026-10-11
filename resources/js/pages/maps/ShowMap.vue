@@ -26,6 +26,7 @@ import { getMapChannelName } from '@/const/channels';
 import { KillmailReceivedEvent } from '@/const/events';
 import { useMapLayout } from '@/composables/useMapLayout';
 import { useOnClient } from '@/composables/useOnClient';
+import { useMapPresence } from '@/composables/useMapPresence';
 import usePermission from '@/composables/usePermission';
 import { useRallyRoute } from '@/composables/useRallyRoute';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
@@ -166,6 +167,9 @@ const fullScreenBackgroundStyle = computed((): Record<string, string> => {
     style['--panel-solidity'] = String(mapEffects.value.panelSolidity);
     return style;
 });
+
+// Patch 37: join the map's presence channel (managers see who has the map open).
+if (page.props.auth?.user) useMapPresence(map.id);
 
 // Patch 37: the event now carries the kill's system and ship (it carried nothing, so the flash never fired).
 useOnClient(() =>
