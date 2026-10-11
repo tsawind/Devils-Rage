@@ -256,3 +256,22 @@ it('patch 37: a pipe to a system that stayed on the map is not remembered', func
     expect(MapSolarsystem::withHidden()->find($a1->id)->memory_links)->toBeNull()
         ->and(MapSolarsystem::query()->find($alpha->id)->memory_links)->toBeNull();
 });
+
+it('patch 37 cleanup: a hole marked EOL goes 5½ h after the first mark, a pipe without signature too', function () {
+    ['map' => $map, 'alpha' => $alpha, 'a1' => $a1, 'alpha_a1' => $alpha_a1, 'daisy_alpha' => $daisy_alpha] = chainMap();
+    $hole = Signature::factory()->create([
+        'map_solarsystem_id' => $alpha->id, 'signature_id' => 'ABC-123', 'map_connection_id' => $alpha_a1->id,
+        'signature_category_id' => wormholeCategoryId(), 'created_at' => CarbonImmutable::now()->subHours(8),
+    ]);
+    Signature::query()->whereKey($hole->id)->update(['lifetime' => 'eol', 'eol_since' => CarbonImmutable::now()->subHours(6)]);
+    MapConnection::query()->whereKey($daisy_alpha->id)->update([
+        'type' => 'wormhole', 'created_at' => CarbonImmutable::now()->subHours(3), 'connected_at' => null,
+        'critical_since' => CarbonImmutable::now()->subMinutes(130),
+    ]);
+
+    artisan(DeleteOldSignaturesCommand::class)->assertSuccessful();
+
+    expect($hole->fresh())->toBeNull()
+        ->and(MapConnection::query()->find($alpha_a1->id))->toBeNull()
+        ->and(MapConnection::query()->find($daisy_alpha->id))->toBeNull();
+});
