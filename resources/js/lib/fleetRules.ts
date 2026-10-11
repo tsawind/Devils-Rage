@@ -34,6 +34,13 @@ export const FLEET_RULES = {
     /** At most this many chokepoints, risks and scan targets in one copy. */
     maxChokepoints: 3,
     maxRisks: 3,
+
+    /** Patch 37: the mail and the route page list up to this many chokes and risks, one per line. */
+    maxListed: 5,
+    /** Patch 37: there a hole is a choke within this factor of the tightest hole. */
+    wideChokeFactor: 2,
+    /** Patch 37: a hole nobody has looked at for this many hours is a risk (the purple "?"). */
+    uncheckedHours: 4,
     maxScanTargets: 3,
 } as const;
 

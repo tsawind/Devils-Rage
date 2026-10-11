@@ -22,6 +22,9 @@ export type TRouteStep = {
     system?: string | null;
     /** Patch 37: the solar system id, for in-game links (Notepad, mail). */
     id?: number | null;
+    /** Patch 37: class ("5", "h", "l", "n") and security, for the route page's picture. */
+    cls?: string | null;
+    security?: number | null;
 };
 
 /**
@@ -54,6 +57,10 @@ export type TRouteHole = {
     /** Patch 37: when it turned "closure imminent". */
     imminentSince?: string | null;
     lastLookAt?: string | null;
+    /** Patch 37: when the hole was added (no look since then = "not checked for 5h"). */
+    addedAt?: string | null;
+    /** Patch 37: a pipe that came back with an old chain, not seen since. */
+    fromMemory?: boolean;
     /** The near side's signature ("ABC-123"), for the way out of the map. */
     nearSignature: string | null;
 };
@@ -278,14 +285,16 @@ function massLine(input: TRouteInput, holes: THoleOnRoute[]): string | null {
     return parts.join(' · ');
 }
 
-function chokepoints(holes: THoleOnRoute[]): THoleOnRoute[] {
+function chokepoints(holes: THoleOnRoute[], wide = false): THoleOnRoute[] {
     const estimated = holes.filter((entry) => entry.estimate);
     if (estimated.length === 0) return [];
     const tightest = Math.min(...estimated.map((entry) => entry.estimate!.max));
+    // Patch 37: the mail and the route page list more (up to 5, within 2× the tightest).
+    const factor = wide ? FLEET_RULES.wideChokeFactor : FLEET_RULES.chokeFactor;
     return estimated
-        .filter((entry) => entry.estimate!.max <= tightest * FLEET_RULES.chokeFactor)
+        .filter((entry) => entry.estimate!.max <= tightest * factor)
         .sort((a, b) => a.estimate!.max - b.estimate!.max)
-        .slice(0, FLEET_RULES.maxChokepoints);
+        .slice(0, wide ? FLEET_RULES.maxListed : FLEET_RULES.maxChokepoints);
 }
 
 function chokeText(entry: THoleOnRoute): string {
@@ -304,6 +313,25 @@ export function holeCollapse(hole: TRouteHole, now: Date): TCollapseWindow | nul
         lastLookAt: hole.lastLookAt,
         now: now.getTime(),
     });
+}
+
+/** Patch 37: hours since anyone last looked at a hole (life mark, ✓ Checked in game, or added), when 4 h or more. */
+function hoursUnchecked(hole: TRouteHole, now: Date): number | null {
+    const at = hole.lastLookAt ?? hole.addedAt ?? null;
+    if (!at) return null;
+    const hours = Math.floor((now.getTime() - Date.parse(at)) / 3_600_000);
+    return Number.isFinite(hours) && hours >= FLEET_RULES.uncheckedHours ? hours : null;
+}
+
+/** Patch 37: the extra risks the mail and the route page list (one line per hole). */
+function moreRiskText(entry: THoleOnRoute, now: Date): string | null {
+    const parts: string[] = [];
+    if (entry.hole.massStatus === 'reduced') parts.push('reduced');
+    const unchecked = hoursUnchecked(entry.hole, now);
+    if (unchecked !== null) parts.push(`not checked for ${unchecked}h`);
+    if (entry.hole.fromMemory) parts.push('faded (from an old chain), not seen since');
+    if (!entry.hole.typeName) parts.push('type unknown, mass guessed');
+    return parts.length ? `${entry.label} ${parts.join(', ')}` : null;
 }
 
 function riskText(entry: THoleOnRoute, now: Date): string | null {
@@ -330,13 +358,14 @@ export function routeSummary(input: TRouteInput, extra: string | null = null, fo
     const scout = eveScoutNote(eveScoutHub(input.steps, input.hops));
     // Patch 32: no chokepoints on a frigate-only route (mass doesn't matter there).
     const frigateOnly = holes.some((entry) => isFrigateHole(entry.hole.maxJumpMass));
-    const chokes = frigateOnly ? [] : chokepoints(holes).map(chokeText);
-    const risks = holes
-        .map((entry) => riskText(entry, input.now))
-        .filter((text): text is string => text !== null)
-        .slice(0, FLEET_RULES.maxRisks);
+    const chokes = frigateOnly ? [] : chokepoints(holes, lines).map(chokeText);
+    const main = holes.map((entry) => riskText(entry, input.now)).filter((text): text is string => text !== null);
+    // Patch 37: one line per choke and per risk in the mail / route page, more kinds of risk there.
+    const more = lines ? holes.filter((entry) => riskText(entry, input.now) === null).map((entry) => moreRiskText(entry, input.now)).filter((text): text is string => text !== null) : [];
+    const risks = [...main, ...more].slice(0, lines ? FLEET_RULES.maxListed : FLEET_RULES.maxRisks);
     const build = (c: string[], r: string[], m: string | null, e: string | null) => {
-        const notes = [scout, c.length ? `Choke: ${c.join(', ')}` : null, r.length ? `Risk: ${r.join(', ')}` : null, e].filter((part): part is string => Boolean(part));
+        const listed = lines ? [...c.map((text) => `Choke: ${text}`), ...r.map((text) => `Risk: ${text}`)] : [c.length ? `Choke: ${c.join(', ')}` : null, r.length ? `Risk: ${r.join(', ')}` : null];
+        const notes = [scout, ...listed, e].filter((part): part is string => Boolean(part));
         if (lines) {
             // Patch 37: one real system per line; the head and the notes on their own lines.
             const breakAt = format.links === 'mail' ? '<br>' : '\n';
@@ -416,4 +445,52 @@ export function scanPlan(candidates: readonly TScanCandidate[], noBackup: boolea
         });
     const head = noBackup ? 'No backup route. ' : '';
     return picks.length ? `${head}Scan (experimental): ${picks.join(', ')}` : `${head}Scan (experimental): nothing unscanned near the chokepoint.`;
+}
+
+/** Patch 37: the route page's picture: the systems where something changes, and how you get between them. */
+export type TRouteDiagramNode = { name: string; kspace: boolean; cls: string | null; security: number | null };
+export type TRouteDiagramLink = {
+    kind: 'hole' | 'gates' | 'evescout';
+    count: number;
+    type: string | null;
+    life: string | null;
+    mass: string | null;
+    frigate: boolean;
+    choke: boolean;
+    unchecked: boolean;
+};
+export type TRouteDiagram = { nodes: TRouteDiagramNode[]; links: TRouteDiagramLink[] };
+
+export function routeDiagram(input: TRouteInput): TRouteDiagram {
+    const isKspace = (step: TRouteStep) => ['h', 'l', 'n'].includes(String(step.cls ?? '').toLowerCase()) || (!step.mapped && step.cls == null);
+    const node = (step: TRouteStep): TRouteDiagramNode => ({ name: step.name, kspace: isKspace(step), cls: step.cls ?? null, security: step.security ?? null });
+    const chokes = new Set(chokepoints(holesOnRoute(input), true).map((entry) => entry.index));
+    const nodes: TRouteDiagramNode[] = input.steps.length ? [node(input.steps[0])] : [];
+    const links: TRouteDiagramLink[] = [];
+    let gates = 0;
+    input.hops.forEach((hop, index) => {
+        const next = input.steps[index + 1];
+        if (!next) return;
+        if (hop.via === 'stargate') {
+            gates++;
+            if (input.hops[index + 1]?.via === 'stargate') return;
+            links.push({ kind: 'gates', count: gates, type: null, life: null, mass: null, frigate: false, choke: false, unchecked: false });
+            gates = 0;
+            nodes.push(node(next));
+            return;
+        }
+        const hole = hop.hole;
+        links.push({
+            kind: hop.via === 'evescout' ? 'evescout' : 'hole',
+            count: 1,
+            type: hole?.typeName ?? null,
+            life: hole?.lifetimeStatus ?? null,
+            mass: hole?.massStatus ?? null,
+            frigate: isFrigateHole(hole?.maxJumpMass ?? null),
+            choke: chokes.has(index),
+            unchecked: hole ? hoursUnchecked(hole, input.now) !== null : false,
+        });
+        nodes.push(node(next));
+    });
+    return { nodes, links };
 }

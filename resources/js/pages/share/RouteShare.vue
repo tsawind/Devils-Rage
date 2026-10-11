@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RouteDiagram from '@/components/share/RouteDiagram.vue';
 import type { TRouteReport } from '@/composables/useRouteCopy';
 import { Head } from '@inertiajs/vue3';
 import { computed } from 'vue';
@@ -18,7 +19,7 @@ const ends = computed(() => (expires_at ? new Date(expires_at) : null));
 <template>
     <Head :title="report?.title ?? 'Route'" />
     <div class="min-h-screen bg-neutral-950 px-4 py-6 text-neutral-200">
-        <div class="mx-auto max-w-3xl space-y-5">
+        <div class="mx-auto max-w-4xl space-y-5">
             <header class="space-y-1">
                 <h1 class="text-xl font-semibold text-white">{{ report?.title ?? 'Route' }}</h1>
                 <p v-if="report?.note" class="text-neutral-300">{{ report.note }}</p>
@@ -29,7 +30,12 @@ const ends = computed(() => (expires_at ? new Date(expires_at) : null));
                 </p>
             </header>
             <p v-if="!report || !report.routes.length" class="text-neutral-400">No routes in this report.</p>
-            <section v-for="(route, index) in report?.routes ?? []" :key="index" class="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+            <section
+                v-for="(route, index) in report?.routes ?? []"
+                :key="index"
+                class="flex flex-col gap-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4 sm:flex-row"
+            >
+                <div class="min-w-0 flex-1">
                 <h2 class="mb-3 font-mono text-sm font-semibold text-white">{{ route.title }}</h2>
                 <div class="flex flex-wrap items-center gap-y-2">
                     <template v-for="(stop, position) in route.stops" :key="position">
@@ -46,6 +52,11 @@ const ends = computed(() => (expires_at ? new Date(expires_at) : null));
                     </template>
                 </div>
                 <pre class="mt-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-neutral-400">{{ route.lines.join('\n') }}</pre>
+                </div>
+                <!-- Patch 37: a small picture of the route on the right -->
+                <div v-if="route.diagram?.nodes.length" class="shrink-0 border-neutral-800 sm:border-l sm:pl-4">
+                    <RouteDiagram :diagram="route.diagram" />
+                </div>
             </section>
         </div>
     </div>

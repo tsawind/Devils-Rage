@@ -5,7 +5,7 @@ import { useShowMap } from '@/composables/useShowMap';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import { displayAlias } from '@/lib/alias';
 import { FLEET_RULES } from '@/lib/fleetRules';
-import { gateWaypoints, holdFacts, routeEntries, routeSummary, scanPlan, type TRouteFormat, type TRouteHole, type TRouteHop, type TRouteInput, type TRouteStep, type TScanCandidate } from '@/lib/routeSummary';
+import { gateWaypoints, holdFacts, routeDiagram, routeEntries, routeSummary, scanPlan, type TRouteDiagram, type TRouteFormat, type TRouteHole, type TRouteHop, type TRouteInput, type TRouteStep, type TScanCandidate } from '@/lib/routeSummary';
 import { wormholeMass } from '@/lib/wormholeMass';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import type { TMapConnection } from '@/pages/maps';
@@ -34,7 +34,7 @@ export type TRouteReport = {
     title: string;
     note: string | null;
     sent_at: string;
-    routes: { title: string; lines: string[]; stops: { name: string; kspace: boolean; leave: string | null }[] }[];
+    routes: { title: string; lines: string[]; stops: { name: string; kspace: boolean; leave: string | null }[]; diagram?: TRouteDiagram }[];
 };
 
 /** Patch 29c: what a rally ping includes. */
@@ -175,7 +175,9 @@ export function useRouteCopy() {
             eolSince: ['eol', 'critical', 'imminent'].includes(connection.lifetime_status) ? (connection.eol_since ?? connection.lifetime_status_updated_at) : null,
             criticalSince: ['critical', 'imminent'].includes(connection.lifetime_status) ? (connection.critical_since ?? connection.lifetime_status_updated_at) : null,
             imminentSince: connection.lifetime_status === 'imminent' ? (connection.imminent_since ?? connection.lifetime_status_updated_at) : null,
-            lastLookAt: latestIso(connection.lifetime_status_updated_at, connection.checked_at),
+            lastLookAt: latestIso(connection.lifetime_status_updated_at, connection.checked_at, connection.jumps?.[0]?.created_at),
+            addedAt: connection.created_at ?? null,
+            fromMemory: Boolean(connection.from_memory),
             nearSignature: nearSide?.signature_id ?? null,
         };
     }
@@ -200,6 +202,8 @@ export function useRouteCopy() {
             rage: Boolean(bySolarsystem.value.get(step.id)?.combat_color),
             system: getSolarsystemById(step.id)?.name ?? null,
             id: step.id,
+            cls: getSolarsystemById(step.id)?.class ?? bySolarsystem.value.get(step.id)?.solarsystem?.class ?? null,
+            security: getSolarsystemById(step.id)?.security ?? null,
         }));
         const hops: TRouteHop[] = route.slice(1).map((step, index) => {
             const from = route[index].id;
@@ -394,6 +398,7 @@ export function useRouteCopy() {
                     kspace: Boolean(entry.linkName),
                     leave: entry.leave ? (entry.leave.kind === 'gates' ? `${entry.leave.count} ${entry.leave.count === 1 ? 'gate' : 'gates'}` : entry.leave.kind === 'evescout' ? 'EVE-Scout hole' : 'hole') : null,
                 })),
+                diagram: routeDiagram(input),
             });
         }
         return { subject: title.slice(0, 100), body: parts.join('<br><br>'), report };

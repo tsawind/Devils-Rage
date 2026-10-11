@@ -1,5 +1,5 @@
 import { FLEET_RULES } from '@/lib/fleetRules';
-import { condenseRoute, EVE_SCOUT_FOLDER, gateWaypoints, holdFacts, routeSummary, scanPlan, type TRouteHole, type TRouteHop, type TRouteStep } from '@/lib/routeSummary';
+import { condenseRoute, EVE_SCOUT_FOLDER, gateWaypoints, holdFacts, routeDiagram, routeSummary, scanPlan, type TRouteHole, type TRouteHop, type TRouteStep } from '@/lib/routeSummary';
 import { describe, expect, it } from 'vitest';
 
 const step = (name: string, depth: number | null, extra: Partial<TRouteStep> = {}): TRouteStep => ({ name, mapped: depth !== null, depth, rage: false, ...extra });
@@ -233,5 +233,34 @@ describe('patch 37: EVE-Scout holes, linking and waypoints', () => {
         const text = holdFacts({ steps, hops: [wh({ massStatus: 'reduced', totalMass: 1_000_000_000, maxJumpMass: 62_000_000 })], roundTrip: false, now });
         expect(text).toContain('cruisers worst case');
         expect(text).not.toContain('BS');
+    });
+});
+
+describe('patch 37: the mail and route page list every choke and risk', () => {
+    const steps = [step('Daisy', 0), step('Bravo', 1), step('B0', 2), step('B01', 3), step('Jita', null, { cls: 'h' })];
+    const hops: TRouteHop[] = [
+        wh({ typeName: 'V753', massStatus: 'fresh', totalMass: 3_000_000_000, maxJumpMass: 1_000_000_000 }),
+        wh({ typeName: 'L477', massStatus: 'reduced', totalMass: 2_000_000_000 }),
+        wh({ typeName: null, totalMass: 2_000_000_000, lastLookAt: '2026-10-05T06:00:00Z' }),
+        gate,
+    ];
+
+    it('puts each choke and risk on its own line', () => {
+        const text = routeSummary({ steps, hops, roundTrip: false, now }, null, { layout: 'lines' });
+        const listed = text.split('\n').filter((line) => line.startsWith('Choke:') || line.startsWith('Risk:'));
+        expect(listed.length).toBeGreaterThan(1);
+        expect(text).toContain('not checked for 6h');
+        expect(text).toContain('type unknown');
+    });
+
+    it('keeps the one-line chat copy short', () => {
+        const text = routeSummary({ steps, hops, roundTrip: false, now });
+        expect(text).not.toContain('not checked');
+    });
+
+    it('draws the route: holes one by one, gates as one link', () => {
+        const diagram = routeDiagram({ steps, hops, roundTrip: false, now });
+        expect(diagram.links.map((link) => link.kind)).toEqual(['hole', 'hole', 'hole', 'gates']);
+        expect(diagram.nodes.at(-1)?.kspace).toBe(true);
     });
 });
