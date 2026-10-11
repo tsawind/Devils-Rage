@@ -22,6 +22,7 @@ import PlaceholderLayer from '@/map/components/nodes/PlaceholderLayer.vue';
 import PlaceholderContextMenu from '@/map/components/overlays/PlaceholderContextMenu.vue';
 import PlaceholderDetailsPopover from '@/map/components/overlays/PlaceholderDetailsPopover.vue';
 import ConnectionPopover from '@/map/components/overlays/ConnectionPopover.vue';
+import ChainBeyondDialog from '@/map/components/overlays/ChainBeyondDialog.vue';
 import ClearChainDialog from '@/map/components/overlays/ClearChainDialog.vue';
 import ClearSideChainsDialog from '@/map/components/overlays/ClearSideChainsDialog.vue';
 import MapAddConnectionDialog from '@/map/components/overlays/MapAddConnectionDialog.vue';
@@ -298,6 +299,7 @@ whenever(Delete, () => {
     <MapAddConnectionDialog />
     <AddNoteDialog />
     <ClearChainDialog />
+    <ChainBeyondDialog />
     <ClearSideChainsDialog />
     <StaticCertainDialog />
     <StaticConfirmDialog />

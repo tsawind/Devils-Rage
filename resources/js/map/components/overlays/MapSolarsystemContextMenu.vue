@@ -29,8 +29,9 @@ import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { useAddConnectionDialog } from '@/map/interactions/useAddConnectionDialog';
 import { TMapSolarsystem } from '@/pages/maps';
 import { TMapSolarsystemStatus } from '@/types/models';
-import { Brush, ClipboardCopy, Compass, Eraser, Flag, Home, Map, MapPin, Navigation, NotebookPen, Pin, Route, Trash2, Users, Waypoints } from 'lucide-vue-next';
+import { Brush, ClipboardCopy, Compass, Eraser, Flag, Home, Map, MapPin, Navigation, NotebookPen, Pin, Route, Scissors, Trash2, Users, Waypoints } from 'lucide-vue-next';
 import { addNoteTarget } from '@/map/components/overlays/AddNoteDialog.vue';
+import { chainBeyondTarget } from '@/map/components/overlays/ChainBeyondDialog.vue';
 import { displayAlias } from '@/lib/alias';
 import type { AcceptableValue } from 'reka-ui';
 import { toast } from 'vue-sonner';
@@ -252,6 +253,10 @@ const options: TMapSolarsystemStatus[] = ['unknown', 'friendly', 'hostile', 'act
             <ContextMenuItem @select="handleRemoveFromMap" class="text-destructive focus:text-destructive">
                 <Trash2 class="size-4" />
                 Remove
+            </ContextMenuItem>
+            <ContextMenuItem @select="chainBeyondTarget = map_solarsystem.id" class="text-destructive focus:text-destructive">
+                <Scissors class="size-4" />
+                Delete system and chain beyond…
             </ContextMenuItem>
         </template>
     </ContextMenuContent>
