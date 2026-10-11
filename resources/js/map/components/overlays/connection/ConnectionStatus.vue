@@ -117,7 +117,9 @@ const countdown = computed(() => {
         {
             startedAt: props.connection.created_at,
             lifetimeStatus: props.connection.lifetime_status,
-            lifetimeStatusUpdatedAt: props.connection.lifetime_status_updated_at,
+            // Patch 37: counted from the FIRST EOL / Critical mark, so a later check doesn't reset it.
+            lifetimeStatusUpdatedAt:
+                (props.connection.lifetime_status === 'critical' ? props.connection.critical_since : props.connection.eol_since) ?? props.connection.lifetime_status_updated_at,
         },
         { from: props.connection.source?.solarsystem?.class, to: props.connection.target?.solarsystem?.class },
         now.value,

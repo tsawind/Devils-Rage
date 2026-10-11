@@ -148,6 +148,8 @@ export type TPendingHole = {
     type_set_by_name?: string | null;
     type_set_at?: string | null;
     lifetime_updated_at?: string | null;
+    eol_since?: string | null;
+    critical_since?: string | null;
     checked_at?: string | null;
     checked_by_name?: string | null;
     checked_note?: string | null;
@@ -265,6 +267,9 @@ export type TMapConnection = {
     mass_status: TMassStatus;
     lifetime_status: TLifetimeStatus;
     lifetime_status_updated_at: string | null;
+    /** Patch 37: first marked End of life / Critical (the latest collapse time counts from these). */
+    eol_since?: string | null;
+    critical_since?: string | null;
     signatures: TTailoredSignature[] | null;
     ship_size: TShipSize | null;
     jumps_mass_sum: number;

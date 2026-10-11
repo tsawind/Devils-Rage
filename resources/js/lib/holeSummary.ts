@@ -1,3 +1,4 @@
+import { collapseIn, collapseText, collapseWindow, eveClock } from '@/lib/collapseWindow';
 import type { TMassEstimate, TMassHints } from '@/lib/massEstimate';
 
 /**
@@ -30,20 +31,33 @@ export function whenLine(iso: string | null | undefined, now: number): string | 
 }
 
 /**
- * How long the hole may still live, as worst cases:
- * - End of life: under 4 h from when it was marked; critical: under 1 h.
+ * How long the hole may still live:
+ * - End of life / EOL!: the collapse window in EVE time (patch 37: see collapseWindow).
  * - Otherwise its type's life (or the range of the types it could be) minus its age on the map.
  */
-export function lifeLine(params: { lifetime: string | null | undefined; markedAt: string | null | undefined; hours: [number, number] | null; addedAt: string | null | undefined; now: number }): string {
+export function lifeLine(params: {
+    lifetime: string | null | undefined;
+    markedAt: string | null | undefined;
+    eolSince?: string | null;
+    criticalSince?: string | null;
+    hours: [number, number] | null;
+    addedAt: string | null | undefined;
+    now: number;
+}): string {
     const { lifetime, now } = params;
     const hoursSince = (iso: string | null | undefined) => (iso && Number.isFinite(Date.parse(iso)) ? (now - Date.parse(iso)) / 3_600_000 : null);
     if (lifetime === 'eol' || lifetime === 'critical') {
-        const limit = lifetime === 'critical' ? 1 : 4;
-        const since = hoursSince(params.markedAt);
         const label = lifetime === 'critical' ? 'EOL! (under 1 h)' : 'End of life (under 4 h)';
-        if (since === null) return label;
-        const left = limit - since;
-        return left > 0 ? `${label} · marked ${ago(since * 3_600_000)} · under ${formatHours(left)} left` : `${label} · marked ${ago(since * 3_600_000)} · may be gone`;
+        const window = collapseWindow({
+            lifetime,
+            eolSince: params.eolSince ?? params.markedAt,
+            criticalSince: params.criticalSince ?? (lifetime === 'critical' ? params.markedAt : null),
+            lastLookAt: params.markedAt,
+            now,
+        });
+        if (!window) return label;
+        if (window.gone) return `${label} · probably gone (since ${eveClock(window.latest)} EVE)`;
+        return `${label} · ${collapseText(window)} EVE (in ${collapseIn(window, now)})`;
     }
     const hours = params.hours;
     if (!hours) return 'Fresh';

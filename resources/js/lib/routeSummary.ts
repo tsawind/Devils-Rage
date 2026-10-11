@@ -32,8 +32,11 @@ export type TRouteHole = {
     jumpedSinceStatus?: number | null;
     massStatus: string | null;
     lifetimeStatus: string | null;
-    /** When it was marked end-of-life (ISO), if it is. */
+    /** When it was first marked end-of-life (ISO), if it is. */
     eolSince: string | null;
+    /** Patch 37: first marked Critical, and the newest look (a life mark or ✓ Checked in game). */
+    criticalSince?: string | null;
+    lastLookAt?: string | null;
     /** The near side's signature ("ABC-123"), for the way out of the map. */
     nearSignature: string | null;
 };
@@ -64,14 +67,6 @@ export function mill(kg: number): string {
 function about(kg: number): string {
     if (kg >= 1_000_000_000) return `${(kg / 1_000_000_000).toLocaleString('en-US', { maximumFractionDigits: kg >= 1_950_000_000 ? 0 : 1 })}b`;
     return mill(kg);
-}
-
-/** Minutes → "40m", "1h20m". */
-function duration(minutes: number): string {
-    const rounded = Math.max(0, Math.round(minutes));
-    const hours = Math.floor(rounded / 60);
-    const rest = rounded % 60;
-    return hours ? `${hours}h${rest ? `${String(rest).padStart(2, '0')}m` : ''}` : `${rest}m`;
 }
 
 /** Which steps a fleet needs written down, and which go home-ward (a * way-back bookmark). */
@@ -171,20 +166,15 @@ function chokeText(entry: THoleOnRoute): string {
     return `${entry.label} "${entry.hole.typeName ?? '?'}"${middle !== null ? ` ${about(middle)}±` : ''}${status}`;
 }
 
-/** Worst case minutes left on an end-of-life hole (null when it isn't end-of-life). */
-export function eolMinutesLeft(hole: TRouteHole, now: Date): number | null {
-    if (hole.lifetimeStatus !== 'eol' && hole.lifetimeStatus !== 'critical') return null;
-    if (!hole.eolSince) return null;
-    const since = (now.getTime() - new Date(hole.eolSince).getTime()) / 60_000;
-    return FLEET_RULES.eolHours * 60 - since;
+/** Patch 37: when an end-of-life hole on the route collapses (null when it isn't end-of-life or nothing is known). */
+export function holeCollapse(hole: TRouteHole, now: Date): TCollapseWindow | null {
+    return collapseWindow({ lifetime: hole.lifetimeStatus, eolSince: hole.eolSince, criticalSince: hole.criticalSince, lastLookAt: hole.lastLookAt, now: now.getTime() });
 }
 
 function riskText(entry: THoleOnRoute, now: Date): string | null {
-    const left = eolMinutesLeft(entry.hole, now);
-    if (left !== null) {
-        const ago = duration(FLEET_RULES.eolHours * 60 - left);
-        return left > 0 ? `${entry.label} EOL, worst case ≤ ${duration(left)} left (marked ${ago} ago): scout it` : `${entry.label} EOL, may be gone (marked ${ago} ago): scout it`;
-    }
+    // Patch 37: "Daisy↔Alpha EOL, collapsing 14:52–15:32" (EVE time); "scout it" only near the end.
+    const window = holeCollapse(entry.hole, now);
+    if (window) return `${entry.label} ${window.critical ? 'EOL!' : 'EOL'}, ${collapseText(window)}${window.scout ? ': scout it' : ''}`;
     if (entry.hole.lifetimeStatus === 'eol' || entry.hole.lifetimeStatus === 'critical') return `${entry.label} EOL: scout it`;
     if (entry.hole.massStatus === 'critical') return `${entry.label} crit`;
     return null;
@@ -230,8 +220,8 @@ export function holdFacts(input: TRouteInput): string {
     const facts: string[] = [];
     for (const entry of holes) {
         const status = entry.hole.massStatus;
-        const left = eolMinutesLeft(entry.hole, input.now);
-        const risky = choke.has(entry.index) || status === 'reduced' || status === 'critical' || left !== null;
+        const window = holeCollapse(entry.hole, input.now);
+        const risky = choke.has(entry.index) || status === 'reduced' || status === 'critical' || window !== null;
         if (!risky) continue;
         const parts: string[] = [];
         if (entry.estimate) {
@@ -244,7 +234,7 @@ export function holdFacts(input: TRouteInput): string {
         } else if (status && status !== 'fresh') {
             parts.push(`${status}, type unknown`);
         }
-        if (left !== null) parts.push(left > 0 ? `EOL worst case ≤ ${duration(left)}` : 'EOL, may be gone');
+        if (window) parts.push(`${window.critical ? 'EOL!' : 'EOL'} ${collapseText(window)}`);
         facts.push(`${entry.label}${entry.hole.typeName ? ` "${entry.hole.typeName}"` : ''}: ${parts.join('; ')}`);
     }
     const head = `Will it hold? (experimental${input.roundTrip ? ', in+out' : ', one way'})`;

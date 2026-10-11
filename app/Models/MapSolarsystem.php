@@ -212,6 +212,8 @@ final class MapSolarsystem extends Model
                 'type_set_at' => $signature->type_set_at?->toISOString(),
                 'lifetime_updated_at' => $signature->lifetime_updated_at instanceof DateTimeInterface ? $signature->lifetime_updated_at->format(DATE_ATOM) : $signature->lifetime_updated_at,
                 'checked_at' => $signature->checked_at?->toISOString(),
+                'eol_since' => $signature->eol_since?->toISOString(),
+                'critical_since' => $signature->critical_since?->toISOString(),
                 'checked_by_name' => $signature->checked_by_name,
                 'checked_note' => $signature->checked_note,
             ])

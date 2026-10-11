@@ -8,6 +8,7 @@ use App\Enums\LifetimeStatus;
 use App\Enums\MassStatus;
 use App\Enums\ShipSize;
 use App\Support\Actor;
+use App\Support\LifeMarks;
 use Carbon\CarbonImmutable;
 use Database\Factories\SignatureFactory;
 use DateTimeImmutable;
@@ -43,6 +44,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $created_by_name Patch 37: who pasted or added it
  * @property string|null $type_set_by_name Patch 37: who set its type
  * @property CarbonImmutable|null $type_set_at
+ * @property CarbonImmutable|null $eol_since Patch 37: first marked End of life
+ * @property CarbonImmutable|null $critical_since Patch 37: first marked Critical
  * @property CarbonImmutable|null $checked_at Patch 37: last looked at in game (status picked or ✓ Checked)
  * @property string|null $checked_by_name
  * @property string|null $checked_note
@@ -67,6 +70,8 @@ final class Signature extends Model
         'lifetime_updated_at' => 'immutable_datetime',
         'type_set_at' => 'immutable_datetime',
         'checked_at' => 'immutable_datetime',
+        'eol_since' => 'immutable_datetime',
+        'critical_since' => 'immutable_datetime',
         'is_static' => 'boolean',
         'is_wandering' => 'boolean',
         'armed_at' => 'immutable_datetime',
@@ -83,6 +88,7 @@ final class Signature extends Model
         self::creating(function (Signature $signature): void {
             $signature->created_by_name ??= Actor::name();
         });
+        self::saving(fn (Signature $signature) => LifeMarks::apply($signature));
         self::saving(function (Signature $signature): void {
             $actor = Actor::name();
             if ($actor === null) {

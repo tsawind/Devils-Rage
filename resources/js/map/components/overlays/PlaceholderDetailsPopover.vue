@@ -105,7 +105,9 @@ const summary = computed((): THoleSummary | null => {
         typeSetBy: hole?.type_set_by_name ?? null,
         life: lifeLine({
             lifetime: hole?.lifetime ?? current.lifetime,
-            markedAt: hole?.lifetime_updated_at ?? null,
+            markedAt: [hole?.lifetime_updated_at, hole?.checked_at].filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
+            eolSince: hole?.eol_since ?? null,
+            criticalSince: hole?.critical_since ?? null,
             hours: lifeHours ? [lifeHours, lifeHours] : lifetimeRange(candidates.map((candidate) => candidate.name)),
             addedAt: hole?.created_at ?? null,
             now: now.value,

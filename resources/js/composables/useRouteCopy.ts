@@ -130,9 +130,17 @@ export function useRouteCopy() {
             jumpedSinceStatus: connection.jumps_mass_since_status ?? null,
             massStatus: connection.mass_status ?? null,
             lifetimeStatus: connection.lifetime_status ?? null,
-            eolSince: connection.lifetime_status === 'eol' || connection.lifetime_status === 'critical' ? connection.lifetime_status_updated_at : null,
+            // Patch 37: the first EOL / Critical mark (old marks fall back to the last life update) and the newest look.
+            eolSince: connection.lifetime_status === 'eol' || connection.lifetime_status === 'critical' ? (connection.eol_since ?? connection.lifetime_status_updated_at) : null,
+            criticalSince: connection.lifetime_status === 'critical' ? (connection.critical_since ?? connection.lifetime_status_updated_at) : null,
+            lastLookAt: latestIso(connection.lifetime_status_updated_at, connection.checked_at),
             nearSignature: nearSide?.signature_id ?? null,
         };
+    }
+
+    function latestIso(...values: (string | null | undefined)[]): string | null {
+        const known = values.filter((value): value is string => Boolean(value) && Number.isFinite(Date.parse(value as string)));
+        return known.length ? known.reduce((best, value) => (Date.parse(value) > Date.parse(best) ? value : best)) : null;
     }
 
     function isFrigateOnly(connection: TMapConnection): boolean {

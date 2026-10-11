@@ -76,7 +76,10 @@ const summary = computed((): THoleSummary | null => {
         typeSetBy: typed?.type_set_by_name ?? null,
         life: lifeLine({
             lifetime: connection.lifetime_status,
-            markedAt: connection.lifetime_status_updated_at,
+            // Patch 37: the newest look (a life mark or ✓ Checked in game) moves the earliest collapse.
+            markedAt: [connection.lifetime_status_updated_at, connection.checked_at].filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
+            eolSince: connection.eol_since ?? null,
+            criticalSince: connection.critical_since ?? null,
             hours: type ? (wormholeLifetimeHours(type.name) ? [wormholeLifetimeHours(type.name)!, wormholeLifetimeHours(type.name)!] : null) : lifetimeRange(candidates.map((candidate) => candidate.name)),
             addedAt: first?.created_at ?? connection.created_at,
             now: now.value,

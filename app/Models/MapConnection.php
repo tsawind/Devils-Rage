@@ -10,6 +10,7 @@ use App\Enums\LifetimeStatus;
 use App\Enums\MassStatus;
 use App\Enums\ShipSize;
 use App\Support\Actor;
+use App\Support\LifeMarks;
 use Carbon\CarbonImmutable;
 use Database\Factories\MapConnectionFactory;
 use DateTimeImmutable;
@@ -37,6 +38,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property DateTimeImmutable|string|null $lifetime_updated_at
  * @property CarbonImmutable|null $mass_status_updated_at
  * @property CarbonImmutable|null $checked_at
+ * @property CarbonImmutable|null $eol_since Patch 37: first marked End of life
+ * @property CarbonImmutable|null $critical_since Patch 37: first marked Critical
  * @property string|null $checked_by_name Patch 37: who last looked at it in game
  * @property string|null $checked_note
  * @property string|null $mass_status_set_by_name Patch 37: who set the mass status (null: the jump log)
@@ -73,6 +76,8 @@ final class MapConnection extends Model
         'lifetime_updated_at' => 'immutable_datetime',
         'mass_status_updated_at' => 'immutable_datetime',
         'checked_at' => 'immutable_datetime',
+        'eol_since' => 'immutable_datetime',
+        'critical_since' => 'immutable_datetime',
         'mass_status_from_log' => 'boolean',
         'should_have_rolled' => 'boolean',
     ];
@@ -82,6 +87,7 @@ final class MapConnection extends Model
      */
     protected static function booted(): void
     {
+        self::saving(fn (MapConnection $connection) => LifeMarks::apply($connection));
         self::saving(function (MapConnection $connection): void {
             if ($connection->exists && $connection->isDirty('mass_status')) {
                 $connection->mass_status_updated_at = now()->toImmutable();

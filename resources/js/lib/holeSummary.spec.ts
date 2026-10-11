@@ -20,10 +20,14 @@ describe('patch 37: the pipe details box', () => {
         expect(lifeLine({ lifetime: 'healthy', markedAt: null, hours: [16, 24], addedAt, now })).toBe('Fresh · 16–24 h hole · 13 h–21 h left at most');
     });
 
-    it('counts end of life from the mark', () => {
-        const markedAt = new Date(now - 1.5 * hour).toISOString();
-        expect(lifeLine({ lifetime: 'eol', markedAt, hours: [24, 24], addedAt: null, now })).toBe('End of life (under 4 h) · marked 1 h 30 min ago · under 2 h left');
-        expect(lifeLine({ lifetime: 'critical', markedAt, hours: null, addedAt: null, now })).toBe('EOL! (under 1 h) · marked 1 h 30 min ago · may be gone');
+    it('patch 37: end of life as a collapse window in EVE time', () => {
+        const eolSince = new Date(now - 1.5 * hour).toISOString();
+        const checked = new Date(now - 5 * 60_000).toISOString();
+        expect(lifeLine({ lifetime: 'eol', markedAt: checked, eolSince, hours: [24, 24], addedAt: null, now })).toBe('End of life (under 4 h) · collapsing 09:52–11:32 EVE (in 50m–2h30m)');
+        const criticalSince = new Date(now - 18 * 60_000).toISOString();
+        expect(lifeLine({ lifetime: 'critical', markedAt: criticalSince, eolSince, criticalSince, hours: null, addedAt: null, now })).toBe('EOL! (under 1 h) · collapsing now–09:44 EVE (in 0–42m)');
+        const old = new Date(now - 5 * hour).toISOString();
+        expect(lifeLine({ lifetime: 'eol', markedAt: old, eolSince: old, hours: null, addedAt: null, now })).toBe('End of life (under 4 h) · probably gone (since 08:02 EVE)');
     });
 
     it('draws the range left and the jumps logged since the mark', () => {

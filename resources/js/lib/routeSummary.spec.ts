@@ -68,9 +68,29 @@ describe('patch 26: size, mass, chokepoints and risks', () => {
         expect(text).not.toContain(' BS');
     });
 
-    it('EOL: the worst case time left from when it was marked', () => {
+    it('patch 37: EOL as a collapse window in EVE time, from the first mark', () => {
         const text = routeSummary({ steps, hops: [wh({ lifetimeStatus: 'eol', eolSince: '2026-10-05T08:40:00Z' }), wh(), wh()], roundTrip: false, now });
-        expect(text).toContain('Risk: Daisy↔Alpha EOL, worst case ≤ 40m left (marked 3h20m ago): scout it');
+        expect(text).toContain('Risk: Daisy↔Alpha EOL, collapsing now–12:40');
+        expect(text).not.toContain('scout it');
+    });
+
+    it('patch 37: a check 5 minutes ago guarantees 55 minutes, no "scout it"', () => {
+        const hop = wh({ lifetimeStatus: 'eol', eolSince: '2026-10-05T11:30:00Z', lastLookAt: '2026-10-05T11:55:00Z' });
+        const text = routeSummary({ steps, hops: [hop, wh(), wh()], roundTrip: false, now });
+        expect(text).toContain('Risk: Daisy↔Alpha EOL, collapsing 12:50–15:30');
+        expect(text).not.toContain('scout it');
+    });
+
+    it('patch 37: critical: now until an hour after the first critical mark, "scout it" in the last 10 minutes', () => {
+        const early = wh({ lifetimeStatus: 'critical', eolSince: '2026-10-05T10:00:00Z', criticalSince: '2026-10-05T11:30:00Z' });
+        expect(routeSummary({ steps, hops: [early, wh(), wh()], roundTrip: false, now })).toContain('Risk: Daisy↔Alpha EOL!, collapsing now–12:30');
+        const late = wh({ lifetimeStatus: 'critical', eolSince: '2026-10-05T10:00:00Z', criticalSince: '2026-10-05T11:05:00Z' });
+        expect(routeSummary({ steps, hops: [late, wh(), wh()], roundTrip: false, now })).toContain('Risk: Daisy↔Alpha EOL!, collapsing now–12:05: scout it');
+    });
+
+    it('patch 37: past the latest time it is probably gone', () => {
+        const text = routeSummary({ steps, hops: [wh({ lifetimeStatus: 'eol', eolSince: '2026-10-05T07:00:00Z' }), wh(), wh()], roundTrip: false, now });
+        expect(text).toContain('Risk: Daisy↔Alpha EOL, probably gone (since 11:00): scout it');
     });
 
     it('never longer than the chat limit, and the route always stays', () => {
