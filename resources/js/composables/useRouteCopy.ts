@@ -148,6 +148,7 @@ export function useRouteCopy() {
             mapped: bySolarsystem.value.has(step.id),
             depth: depths.value.get(step.id) ?? null,
             rage: Boolean(bySolarsystem.value.get(step.id)?.combat_color),
+            system: getSolarsystemById(step.id)?.name ?? null,
         }));
         const hops: TRouteHop[] = route.slice(1).map((step, index) => {
             const from = route[index].id;

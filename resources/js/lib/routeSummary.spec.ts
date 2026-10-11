@@ -122,6 +122,13 @@ describe('patch 29d: jump counts and the route kind', () => {
         const steps = [step('Daisy', 0), ...kspace];
         expect(condenseRoute(steps, [wh(), ...kspace.slice(1).map(() => gate)])).toBe('Daisy → K0 → 7j → K7');
     });
+
+    it('patch 37: out through a mapped k-space system, one gate count to the end ("A324-0 Turba → 15j → Jita")', () => {
+        const gates = Array.from({ length: 14 }, (_, index) => step(index === 0 ? 'Yooh' : `G${index}`, null));
+        const steps = [step('Daisy', 0), step('A3', 1), step('A32', 2), step('A324', 3), step('A324-0', 4, { system: 'Turba' }), ...gates, step('Jita', null)];
+        const hops = [wh(), wh(), wh(), wh(), ...Array.from({ length: 15 }, () => gate)];
+        expect(condenseRoute(steps, hops)).toBe('Daisy → A324-0 Turba → 15j → Jita');
+    });
 });
 
 describe('patch 32: frigate-only routes skip the mass', () => {

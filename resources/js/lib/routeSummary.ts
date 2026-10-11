@@ -17,6 +17,8 @@ export type TRouteStep = {
     depth: number | null;
     /** In a rage chain. */
     rage: boolean;
+    /** Patch 37: the real system name of a mapped system (shown where the gates start: "A324-0 Turba"). */
+    system?: string | null;
 };
 
 export type TRouteHole = {
@@ -82,7 +84,9 @@ export function condenseRoute(steps: readonly TRouteStep[], hops: readonly TRout
         const after = hops[index]?.via === 'stargate' ? 'gate' : 'hole';
         const step = steps[index];
         if (before !== after) keep[index] = true; // into or out of k-space by gate
-        if (step.mapped !== steps[index + 1].mapped || step.mapped !== steps[index - 1].mapped) keep[index] = true; // leaving / entering the map
+        // Leaving / entering the map through a hole. Patch 37: by gate it isn't written down, the
+        // gate jumps are counted in one go ("A324-0 Turba → 15j → Jita", not "→ 1j → Yooh → 14j →").
+        if ((step.mapped !== steps[index + 1].mapped && after === 'hole') || (step.mapped !== steps[index - 1].mapped && before === 'hole')) keep[index] = true;
         if (step.rage && (!steps[index - 1].rage || !steps[index + 1].rage)) keep[index] = true; // a rage run's first and last
         const up = depth(index) < depth(index - 1);
         const nextUp = depth(index + 1) < depth(index);
@@ -100,7 +104,9 @@ export function condenseRoute(steps: readonly TRouteStep[], hops: readonly TRout
         const hop = hops[index];
         // The way out of the map into k-space: the hole's signature, so a scout can find it.
         const exitSig = step.mapped && hop?.via !== 'stargate' && steps[index + 1] && !steps[index + 1].mapped ? hop?.hole?.nearSignature?.slice(0, 3).toUpperCase() : null;
-        parts.push(`${homeward ? '*' : ''}${step.name}${exitSig ? ` (${exitSig})` : ''}`);
+        // Patch 37: where the gates start from a mapped system, its real name too ("A324-0 Turba").
+        const label = step.mapped && hop?.via === 'stargate' && step.system && step.system !== step.name ? `${step.name} ${step.system}` : step.name;
+        parts.push(`${homeward ? '*' : ''}${label}${exitSig ? ` (${exitSig})` : ''}`);
     });
     return parts.join(' → ');
 }
