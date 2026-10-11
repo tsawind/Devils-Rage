@@ -294,6 +294,8 @@ export type TMapUserSetting = {
     route_allow_mass_status: TMassStatus;
     route_use_evescout: boolean;
     route_use_wormholes: boolean;
+    /** Patch 37: routes may go through frigate-only holes. */
+    route_use_frigate_holes?: boolean;
     route_preference: TRoutePreference;
     security_penalty: number;
     killmail_filter: 'all' | 'jspace' | 'kspace';

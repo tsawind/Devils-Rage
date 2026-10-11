@@ -56,6 +56,12 @@ function handleToggleWormholes(value: boolean | 'indeterminate') {
     });
 }
 
+function handleToggleFrigateHoles(value: boolean | 'indeterminate') {
+    updateMapUserSettings({
+        route_use_frigate_holes: value === true,
+    });
+}
+
 function handleMassStatusChange(value: AcceptableValue) {
     if (typeof value === 'string' && (value === 'critical' || value === 'reduced' || value === 'fresh')) {
         updateMapUserSettings({
@@ -129,6 +135,16 @@ function handleSecurityPenaltyCommit(value: number[]) {
                             <div class="text-sm text-muted-foreground">Include EVE Scout wormhole data in route calculations</div>
                         </div>
                         <Checkbox :model-value="map_user_settings.route_use_evescout" @update:model-value="handleToggleEveScout" />
+                    </div>
+
+                    <div class="flex items-center justify-between">
+                        <div class="space-y-0.5">
+                            <Label class="text-sm font-medium">Use Frigate Holes</Label>
+                            <div class="text-sm text-muted-foreground">
+                                Let routes go through frigate-only holes (5m per jump). Turn it off when the fleet is bigger than frigates.
+                            </div>
+                        </div>
+                        <Checkbox :model-value="map_user_settings.route_use_frigate_holes ?? true" @update:model-value="handleToggleFrigateHoles" />
                     </div>
 
                     <div class="space-y-3">

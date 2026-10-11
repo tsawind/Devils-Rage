@@ -52,6 +52,12 @@ function handleToggleWormholes(value: boolean | 'indeterminate') {
     });
 }
 
+function handleToggleFrigateHoles(value: boolean | 'indeterminate') {
+    updateMapUserSettings(page.props.map.slug, {
+        route_use_frigate_holes: value === true,
+    });
+}
+
 function handleRoutePreferenceChange(value: AcceptableValue) {
     if (value === 'shorter' || value === 'safer' || value === 'less_secure') {
         updateMapUserSettings(page.props.map.slug, {
@@ -148,6 +154,15 @@ function handleSecurityPenaltyCommit(value: number[]) {
                 <div class="col-span-3 grid grid-cols-subgrid">
                     <Checkbox :model-value="map_user_settings.route_use_evescout" @update:model-value="handleToggleEveScout" id="evescout-checkbox" />
                     <label for="evescout-checkbox" class="col-span-2 cursor-pointer text-xs font-medium"> Use EVE Scout </label>
+                </div>
+                <div class="col-span-3 grid grid-cols-subgrid">
+                    <Checkbox
+                        :model-value="map_user_settings.route_use_frigate_holes ?? true"
+                        @update:model-value="handleToggleFrigateHoles"
+                        id="frigate-holes-checkbox"
+                    />
+                    <label for="frigate-holes-checkbox" class="cursor-pointer text-xs font-medium"> Use frigate holes </label>
+                    <span class="text-xs text-muted-foreground">≤ 5m per jump</span>
                 </div>
 
                 <h4 class="col-span-3 mt-2 text-xs text-muted-foreground">Route Preference</h4>

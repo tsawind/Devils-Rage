@@ -30,6 +30,7 @@ export function useRoutingSetup(params: UseRoutingSetupParams) {
         massStatus: mapUserSettings.value.route_allow_mass_status,
         useEveScout: useEveScout.value,
         useWormholes: mapUserSettings.value.route_use_wormholes,
+        useFrigateHoles: mapUserSettings.value.route_use_frigate_holes ?? true,
     }));
 
     // Patch 33: a hole the jump log says must have rolled is left out of every route.

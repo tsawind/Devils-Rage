@@ -2,6 +2,19 @@ import type { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import type { RoutingConnection } from '@/routing/types';
 import type { TEveScoutConnection } from '@/types/eve-scout';
 import type { TLifetimeStatus, TMassStatus } from '@/types/models';
+import { isFrigateHole } from '@/lib/massEstimate';
+import { wormholeMass } from '@/lib/wormholeMass';
+
+/** Patch 37: a frigate-only hole: marked frigate size, or its type (either side) is a frigate hole. */
+function isFrigateConnection(connection: TMapConnection): boolean {
+    if (connection.ship_size === 'frigate') return true;
+    return (connection.signatures ?? []).some((signature) => {
+        if (signature.signature_type?.extra?.toLowerCase() === 'frigate') return true;
+        const wormhole = signature.wormhole;
+        if (!wormhole || wormhole.name.toUpperCase().startsWith('K162')) return false;
+        return isFrigateHole(wormhole.maximum_jump_mass ?? wormholeMass(wormhole.name)?.maxJump);
+    });
+}
 
 export function convertMapConnectionsToWorkerEdges(
     mapConnections: TMapConnection[] | undefined | null,
@@ -30,6 +43,7 @@ export function convertMapConnectionsToWorkerEdges(
             type: 'wormhole',
             massStatus: connection.mass_status,
             lifetimeStatus: connection.lifetime_status,
+            frigate: isFrigateConnection(connection),
         });
     }
 
@@ -52,6 +66,7 @@ export function convertEveScoutConnections(connections: TEveScoutConnection[] | 
             from: connection.in_system_id,
             to: connection.out_system_id,
             type: 'evescout',
+            frigate: isFrigateHole(wormholeMass(connection.wormhole_type)?.maxJump),
             massStatus: normalizeMassStatus(connection.mass),
             lifetimeStatus: normalizeLifetimeStatus(connection.life),
         });

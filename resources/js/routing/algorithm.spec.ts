@@ -89,3 +89,20 @@ describe('findClosestSystems with wormholes excluded', () => {
         expect(found.map((entry) => entry.solarsystem_id)).not.toContain(HOME);
     });
 });
+
+describe('patch 37: Use frigate holes', () => {
+    const frigateChain: RoutingConnection[] = [
+        { from: HOME, to: EXIT, type: 'wormhole', massStatus: 'fresh', lifetimeStatus: 'healthy' },
+        { from: HOME, to: HUB, type: 'wormhole', massStatus: 'fresh', lifetimeStatus: 'healthy', frigate: true },
+    ];
+
+    it('takes a frigate hole while frigate holes are allowed', () => {
+        expect(findRoute(settings({ useFrigateHoles: true }), EXIT, HUB, frigateChain, [], []).jumps).toBe(2);
+    });
+
+    it('goes round a frigate hole once they are switched off', () => {
+        const route = findRoute(settings({ useFrigateHoles: false }), EXIT, HUB, frigateChain, [], []);
+        expect(route.jumps).toBe(3);
+        expect(route.route.map((step) => step.id)).toEqual([EXIT, NEIGHBOUR, MIDPOINT, HUB]);
+    });
+});

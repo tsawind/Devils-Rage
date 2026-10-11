@@ -10,6 +10,8 @@ export type RoutingSettings = {
     massStatus: TMassStatus;
     useEveScout: boolean;
     useWormholes: boolean;
+    /** Patch 37: off = frigate-only holes are left out. */
+    useFrigateHoles?: boolean;
 };
 
 export type RoutingConnection = {
@@ -18,6 +20,8 @@ export type RoutingConnection = {
     type: ConnectionType;
     massStatus?: TMassStatus;
     lifetimeStatus?: TLifetimeStatus;
+    /** Patch 37: a frigate-only hole. */
+    frigate?: boolean;
 };
 
 export type RouteStep = {

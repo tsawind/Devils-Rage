@@ -33,6 +33,7 @@ final class MapUserSettingResource extends JsonResource
             'route_allow_mass_status' => $this->route_allow_mass_status,
             'route_use_evescout' => $this->route_use_evescout,
             'route_use_wormholes' => $this->route_use_wormholes ?? true,
+            'route_use_frigate_holes' => $this->route_use_frigate_holes ?? true,
             'route_preference' => $this->route_preference,
             'security_penalty' => $this->security_penalty,
             'killmail_filter' => $this->killmail_filter,

@@ -48,6 +48,7 @@ final class UpdateMapUserSettingRequest extends FormRequest
             'route_allow_mass_status' => ['nullable', 'string', Rule::enum(MassStatus::class)],
             'route_use_evescout' => ['boolean'],
             'route_use_wormholes' => ['boolean'],
+            'route_use_frigate_holes' => ['boolean'],
             'route_preference' => ['nullable', 'string', Rule::enum(RoutePreference::class)],
             'security_penalty' => ['nullable', 'integer', 'min:0', 'max:100'],
             'killmail_filter' => ['nullable', 'string', Rule::enum(KillmailFilter::class)],

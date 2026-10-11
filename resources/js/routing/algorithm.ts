@@ -293,6 +293,11 @@ function isEdgeAllowed(edge: RoutingConnection, settings: RoutingSettings): bool
         return false;
     }
 
+    // Patch 37: "Use frigate holes" off.
+    if (edge.frigate && settings.useFrigateHoles === false) {
+        return false;
+    }
+
     if (edge.lifetimeStatus && !lifetimeStatusAllowList[settings.lifetimeStatus].has(edge.lifetimeStatus)) {
         return false;
     }
