@@ -29,3 +29,10 @@ it('picks the earliest of several marks', function () use ($found) {
     expect(HoleExpiry::earliest(null, $found->addHour(), $found))->toEqual($found)
         ->and(HoleExpiry::earliest(null, null))->toBeNull();
 });
+
+it('patch 37: an imminent hole leaves the map an hour after it turned imminent', function () {
+    $created = CarbonImmutable::parse('2026-10-11 10:00');
+    $imminent = CarbonImmutable::parse('2026-10-11 20:00');
+
+    expect(HoleExpiry::deadline($created, 86_400, null, null, $imminent)->toDateTimeString())->toBe('2026-10-11 21:00:00');
+});

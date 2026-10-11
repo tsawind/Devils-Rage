@@ -215,6 +215,7 @@ final class MapSolarsystem extends Model
                 'checked_at' => $signature->checked_at?->toISOString(),
                 'eol_since' => $signature->eol_since?->toISOString(),
                 'critical_since' => $signature->critical_since?->toISOString(),
+                'imminent_since' => $signature->imminent_since?->toISOString(),
                 'checked_by_name' => $signature->checked_by_name,
                 'checked_note' => $signature->checked_note,
             ])

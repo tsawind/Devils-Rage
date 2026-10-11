@@ -40,12 +40,18 @@ export function lifeLine(params: {
     markedAt: string | null | undefined;
     eolSince?: string | null;
     criticalSince?: string | null;
+    imminentSince?: string | null;
     hours: [number, number] | null;
     addedAt: string | null | undefined;
     now: number;
 }): string {
     const { lifetime, now } = params;
     const hoursSince = (iso: string | null | undefined) => (iso && Number.isFinite(Date.parse(iso)) ? (now - Date.parse(iso)) / 3_600_000 : null);
+    // Patch 37: "Expired, closure imminent": it could close any moment.
+    if (lifetime === 'imminent') {
+        const window = collapseWindow({ lifetime, eolSince: params.eolSince ?? null, criticalSince: params.criticalSince ?? null, imminentSince: params.imminentSince ?? params.markedAt, now });
+        return window ? `Imminent collapse · ${collapseText(window)} EVE` : 'Imminent collapse · closing now';
+    }
     if (lifetime === 'eol' || lifetime === 'critical') {
         const label = lifetime === 'critical' ? 'EOL! (under 1 h)' : 'End of life (under 4 h)';
         const window = collapseWindow({

@@ -17,6 +17,8 @@ export type EdgeIndicator = {
     strong?: boolean;
     /** Patch 37: the type (and Static) is a green chip that copies the forward bookmark; 'faint' = dashed, nothing to copy yet. */
     copy?: 'on' | 'faint';
+    /** Patch 37: "CLOSING" (closure imminent): dark red, pulsing. */
+    closing?: boolean;
 };
 
 /**

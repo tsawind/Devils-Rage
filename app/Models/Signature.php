@@ -46,6 +46,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $type_set_at
  * @property CarbonImmutable|null $eol_since Patch 37: first marked End of life
  * @property CarbonImmutable|null $critical_since Patch 37: first marked Critical
+ * @property CarbonImmutable|null $imminent_since Patch 37: turned "closure imminent"
  * @property CarbonImmutable|null $checked_at Patch 37: last looked at in game (status picked or ✓ Checked)
  * @property string|null $checked_by_name
  * @property string|null $checked_note
@@ -72,6 +73,7 @@ final class Signature extends Model
         'checked_at' => 'immutable_datetime',
         'eol_since' => 'immutable_datetime',
         'critical_since' => 'immutable_datetime',
+        'imminent_since' => 'immutable_datetime',
         'is_static' => 'boolean',
         'is_wandering' => 'boolean',
         'armed_at' => 'immutable_datetime',
@@ -127,6 +129,7 @@ final class Signature extends Model
             $mass === 'critical' => 'marked Crit',
             $mass === 'reduced' => 'marked Reduced',
             $mass === 'fresh' => 'marked Fresh',
+            $life === 'imminent' => 'marked Imminent',
             $life === 'critical' => 'marked EOL!',
             $life === 'eol' => 'marked EOL',
             $life === 'healthy' => 'marked healthy',

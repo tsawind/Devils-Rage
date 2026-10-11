@@ -129,6 +129,14 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
                         </span>
                         <span class="text-muted-foreground">&lt; 1h</span>
                     </ContextMenuRadioItem>
+                    <!-- Patch 37: "Expired, closure imminent" in Show Info -->
+                    <ContextMenuRadioItem value="imminent" class="flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-2">
+                            <span class="inline-block size-2 rounded-full bg-red-800" />
+                            Imminent
+                        </span>
+                        <span class="text-muted-foreground">closing now</span>
+                    </ContextMenuRadioItem>
                 </ContextMenuRadioGroup>
             </ContextMenuSubContent>
         </ContextMenuSub>

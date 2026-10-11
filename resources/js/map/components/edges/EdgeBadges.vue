@@ -75,9 +75,11 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
                                 ? indicator.strong
                                     ? 'bg-yellow-700 text-yellow-100'
                                     : 'bg-green-800 text-green-100'
-                                : indicator.strong
-                                  ? 'bg-fuchsia-600 text-white'
-                                  : 'bg-purple-700 text-purple-100'
+                                : indicator.closing
+                                  ? 'animate-pulse bg-red-800 text-red-50'
+                                  : indicator.strong
+                                    ? 'bg-fuchsia-600 text-white'
+                                    : 'bg-purple-700 text-purple-100'
                         "
                         >{{ indicator.label }}</span
                     >

@@ -172,8 +172,9 @@ export function useRouteCopy() {
             massStatus: connection.mass_status ?? null,
             lifetimeStatus: connection.lifetime_status ?? null,
             // Patch 37: the first EOL / Critical mark (old marks fall back to the last life update) and the newest look.
-            eolSince: connection.lifetime_status === 'eol' || connection.lifetime_status === 'critical' ? (connection.eol_since ?? connection.lifetime_status_updated_at) : null,
-            criticalSince: connection.lifetime_status === 'critical' ? (connection.critical_since ?? connection.lifetime_status_updated_at) : null,
+            eolSince: ['eol', 'critical', 'imminent'].includes(connection.lifetime_status) ? (connection.eol_since ?? connection.lifetime_status_updated_at) : null,
+            criticalSince: ['critical', 'imminent'].includes(connection.lifetime_status) ? (connection.critical_since ?? connection.lifetime_status_updated_at) : null,
+            imminentSince: connection.lifetime_status === 'imminent' ? (connection.imminent_since ?? connection.lifetime_status_updated_at) : null,
             lastLookAt: latestIso(connection.lifetime_status_updated_at, connection.checked_at),
             nearSignature: nearSide?.signature_id ?? null,
         };

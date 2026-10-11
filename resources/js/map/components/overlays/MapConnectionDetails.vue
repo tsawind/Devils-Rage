@@ -80,6 +80,7 @@ const summary = computed((): THoleSummary | null => {
             markedAt: [connection.lifetime_status_updated_at, connection.checked_at].filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
             eolSince: connection.eol_since ?? null,
             criticalSince: connection.critical_since ?? null,
+            imminentSince: connection.imminent_since ?? null,
             hours: type ? (wormholeLifetimeHours(type.name) ? [wormholeLifetimeHours(type.name)!, wormholeLifetimeHours(type.name)!] : null) : lifetimeRange(candidates.map((candidate) => candidate.name)),
             addedAt: first?.created_at ?? connection.created_at,
             now: now.value,

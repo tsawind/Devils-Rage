@@ -266,6 +266,7 @@ final readonly class UpdateSignatureAction
             LifetimeStatus::Healthy => 1,
             LifetimeStatus::EndOfLife => 2,
             LifetimeStatus::Critical => 3,
+            LifetimeStatus::Imminent => 4,
         };
     }
 

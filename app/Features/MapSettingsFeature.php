@@ -18,7 +18,7 @@ final readonly class MapSettingsFeature implements ProvidesInertiaProperties
         'tracking_allowed' => false,
         'is_tracking' => false,
         'route_allow_lifetime_status' => 'critical',
-        'route_allow_mass_status' => 'reduced',
+        'route_allow_mass_status' => 'critical',
         'route_use_evescout' => false,
         'route_use_wormholes' => true,
         'route_preference' => 'shorter',

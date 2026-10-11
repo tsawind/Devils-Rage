@@ -91,6 +91,11 @@ describe('patch 26: size, mass, chokepoints and risks', () => {
         expect(routeSummary({ steps, hops: [late, wh(), wh()], roundTrip: false, now })).toContain('Risk: Daisy↔Alpha EOL!, collapsing now–12:05: scout it');
     });
 
+    it('patch 37: imminent: closing now, scout it', () => {
+        const hop = wh({ lifetimeStatus: 'imminent', eolSince: '2026-10-05T09:00:00Z', criticalSince: '2026-10-05T10:40:00Z', imminentSince: '2026-10-05T11:40:00Z' });
+        expect(routeSummary({ steps, hops: [hop, wh(), wh()], roundTrip: false, now })).toContain('Risk: Daisy↔Alpha closing now (imminent since 11:40): scout it');
+    });
+
     it('patch 37: past the latest time it is probably gone', () => {
         const text = routeSummary({ steps, hops: [wh({ lifetimeStatus: 'eol', eolSince: '2026-10-05T07:00:00Z' }), wh(), wh()], roundTrip: false, now });
         expect(text).toContain('Risk: Daisy↔Alpha EOL, probably gone (since 11:00): scout it');

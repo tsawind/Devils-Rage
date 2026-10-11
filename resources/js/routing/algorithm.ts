@@ -15,6 +15,8 @@ const lifetimeStatusAllowList: Record<TLifetimeStatus, Set<TLifetimeStatus>> = {
     healthy: new Set(['healthy']),
     eol: new Set(['healthy', 'eol']),
     critical: new Set(['healthy', 'eol', 'critical']),
+    // Patch 37: "Expired, closure imminent" is its own, last step.
+    imminent: new Set(['healthy', 'eol', 'critical', 'imminent']),
 };
 
 // Zarzakh uses Jovian stargates that require special access - don't route THROUGH it

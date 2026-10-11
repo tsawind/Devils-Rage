@@ -1135,6 +1135,13 @@ function copyBookmark() {
                                     Critical
                                 </span>
                             </DropdownMenuRadioItem>
+                            <!-- Patch 37: "Expired, closure imminent" in Show Info -->
+                            <DropdownMenuRadioItem value="imminent" class="text-xs">
+                                <span class="flex items-center gap-2">
+                                    <span class="inline-block size-2 rounded-full bg-red-800" />
+                                    Imminent
+                                </span>
+                            </DropdownMenuRadioItem>
                         </DropdownMenuRadioGroup>
 
                         <DropdownMenuSeparator />

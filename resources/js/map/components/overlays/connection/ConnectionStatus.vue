@@ -119,7 +119,11 @@ const countdown = computed(() => {
             lifetimeStatus: props.connection.lifetime_status,
             // Patch 37: counted from the FIRST EOL / Critical mark, so a later check doesn't reset it.
             lifetimeStatusUpdatedAt:
-                (props.connection.lifetime_status === 'critical' ? props.connection.critical_since : props.connection.eol_since) ?? props.connection.lifetime_status_updated_at,
+                (props.connection.lifetime_status === 'imminent'
+                    ? props.connection.imminent_since
+                    : props.connection.lifetime_status === 'critical'
+                      ? props.connection.critical_since
+                      : props.connection.eol_since) ?? props.connection.lifetime_status_updated_at,
         },
         { from: props.connection.source?.solarsystem?.class, to: props.connection.target?.solarsystem?.class },
         now.value,
@@ -134,6 +138,8 @@ const lifetimeMeta = computed(() => {
             return { label: 'End of Life (<4h)', text: 'text-purple-500', dot: 'bg-purple-500' };
         case 'critical':
             return { label: 'Critical (<1h)', text: 'text-red-500', dot: 'bg-red-500' };
+        case 'imminent':
+            return { label: 'Imminent collapse', text: 'text-red-700 dark:text-red-400', dot: 'bg-red-800' };
         default:
             return { label: 'Unknown', text: 'text-muted-foreground', dot: 'bg-neutral-500' };
     }

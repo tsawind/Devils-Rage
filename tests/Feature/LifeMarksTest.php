@@ -49,3 +49,32 @@ it('patch 37: back to healthy clears the marks', function () {
     $connection->fresh()->update(['lifetime' => LifetimeStatus::Healthy]);
     expect($connection->fresh()->eol_since)->toBeNull()->and($connection->fresh()->critical_since)->toBeNull();
 });
+
+it('patch 37: marking imminent keeps the first EOL and critical marks and adds imminent_since', function () {
+    $connection = lifeConnection();
+    $connection->update(['lifetime' => LifetimeStatus::EndOfLife]);
+    $eolSince = $connection->fresh()->eol_since;
+
+    $this->travel(20)->minutes();
+    $connection->fresh()->update(['lifetime' => LifetimeStatus::Imminent]);
+
+    $fresh = $connection->fresh();
+    expect($fresh->eol_since->equalTo($eolSince))->toBeTrue()
+        ->and($fresh->critical_since)->not->toBeNull()
+        ->and($fresh->imminent_since)->not->toBeNull();
+});
+
+it('patch 37: an EOL! hole turns imminent by itself when its hour runs out', function () {
+    $connection = lifeConnection();
+    $connection->update(['lifetime' => LifetimeStatus::Critical]);
+
+    $this->travel(30)->minutes();
+    $this->artisan('app:check-connection-age')->assertSuccessful();
+    expect($connection->fresh()->lifetime)->toBe(LifetimeStatus::Critical);
+
+    $this->travel(35)->minutes();
+    $this->artisan('app:check-connection-age')->assertSuccessful();
+    expect($connection->fresh()->lifetime)->toBe(LifetimeStatus::Imminent)
+        ->and($connection->fresh()->imminent_since)->not->toBeNull()
+        ->and($connection->fresh()->checked_at)->toBeNull();
+});

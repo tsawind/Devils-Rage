@@ -168,8 +168,12 @@ const indicators = computed<EdgeIndicator[]>(() => {
         items.push({ type: 'eol', label: 'ROLLED?', strong: true, fill: 'var(--color-red-700)', stroke: 'var(--color-red-800)' });
     }
 
+    // Patch 37: closure imminent: a pulsing dark-red CLOSING.
+    if (lifetime.value === 'imminent') {
+        items.push({ type: 'eol', label: 'CLOSING', strong: true, closing: true, fill: 'var(--color-red-800)', stroke: 'var(--color-red-900)' });
+    }
     // Patch 21: end of life inside the pill, in purple ("EOL!" when critical).
-    if (lifetime.value === 'eol' || lifetime.value === 'critical') {
+    else if (lifetime.value === 'eol' || lifetime.value === 'critical') {
         const critical = lifetime.value === 'critical';
         items.push({ type: 'eol', label: critical ? 'EOL!' : 'EOL', strong: critical, fill: critical ? 'var(--color-fuchsia-600)' : 'var(--color-purple-700)', stroke: 'var(--color-purple-800)' });
     } else if (lifetime.value && lifetime.value !== 'healthy') {
@@ -371,7 +375,7 @@ const pill = computed(() => {
 
 function getDashArray(): string | undefined {
     if (!massStatus.value) return '0';
-    if (lifetime.value === 'eol' || lifetime.value === 'critical') return '2,6';
+    if (lifetime.value === 'eol' || lifetime.value === 'critical' || lifetime.value === 'imminent') return '2,6';
     return undefined;
 }
 </script>

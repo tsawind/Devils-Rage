@@ -9,4 +9,5 @@ enum LifetimeStatus: string
     case Healthy = 'healthy';
     case EndOfLife = 'eol'; // <4 hours remaining
     case Critical = 'critical'; // <1 hour remaining
+    case Imminent = 'imminent'; // Patch 37: "Expired, closure imminent" (seen holding 40 min+)
 }

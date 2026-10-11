@@ -51,6 +51,8 @@ export type TRouteHole = {
     eolSince: string | null;
     /** Patch 37: first marked Critical, and the newest look (a life mark or ✓ Checked in game). */
     criticalSince?: string | null;
+    /** Patch 37: when it turned "closure imminent". */
+    imminentSince?: string | null;
     lastLookAt?: string | null;
     /** The near side's signature ("ABC-123"), for the way out of the map. */
     nearSignature: string | null;
@@ -294,13 +296,22 @@ function chokeText(entry: THoleOnRoute): string {
 
 /** Patch 37: when an end-of-life hole on the route collapses (null when it isn't end-of-life or nothing is known). */
 export function holeCollapse(hole: TRouteHole, now: Date): TCollapseWindow | null {
-    return collapseWindow({ lifetime: hole.lifetimeStatus, eolSince: hole.eolSince, criticalSince: hole.criticalSince, lastLookAt: hole.lastLookAt, now: now.getTime() });
+    return collapseWindow({
+        lifetime: hole.lifetimeStatus,
+        eolSince: hole.eolSince,
+        criticalSince: hole.criticalSince,
+        imminentSince: hole.imminentSince,
+        lastLookAt: hole.lastLookAt,
+        now: now.getTime(),
+    });
 }
 
 function riskText(entry: THoleOnRoute, now: Date): string | null {
     // Patch 37: "Daisy↔Alpha EOL, collapsing 14:52–15:32" (EVE time); "scout it" only near the end.
     const window = holeCollapse(entry.hole, now);
+    if (window?.imminent) return `${entry.label} ${collapseText(window)}: scout it`;
     if (window) return `${entry.label} ${window.critical ? 'EOL!' : 'EOL'}, ${collapseText(window)}${window.scout ? ': scout it' : ''}`;
+    if (entry.hole.lifetimeStatus === 'imminent') return `${entry.label} closing now: scout it`;
     if (entry.hole.lifetimeStatus === 'eol' || entry.hole.lifetimeStatus === 'critical') return `${entry.label} EOL: scout it`;
     if (entry.hole.massStatus === 'critical') return `${entry.label} crit`;
     return null;
@@ -375,7 +386,7 @@ export function holdFacts(input: TRouteInput): string {
         } else if (status && status !== 'fresh') {
             parts.push(`${status}, type unknown`);
         }
-        if (window) parts.push(`${window.critical ? 'EOL!' : 'EOL'} ${collapseText(window)}`);
+        if (window) parts.push(window.imminent ? collapseText(window) : `${window.critical ? 'EOL!' : 'EOL'} ${collapseText(window)}`);
         facts.push(`${entry.label}${entry.hole.typeName ? ` "${entry.hole.typeName}"` : ''}: ${parts.join('; ')}`);
     }
     const head = `Will it hold? (experimental${input.roundTrip ? ', in+out' : ', one way'})`;

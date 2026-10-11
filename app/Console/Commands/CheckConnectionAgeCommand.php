@@ -9,6 +9,10 @@ use App\Data\MapConnectionData;
 use App\Enums\LifetimeStatus;
 use App\Enums\SolarsystemClass;
 use App\Models\MapConnection;
+use App\Models\MapSolarsystem;
+use App\Models\Signature;
+use App\Support\Broadcasting\MapBroadcaster;
+use App\Support\HoleExpiry;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -31,7 +35,8 @@ final class CheckConnectionAgeCommand extends AppCommand
     protected $description = 'Check the age of wormhole connections and updates their lifetime status';
 
     public function __construct(
-        private readonly UpdateMapConnectionAction $updateMapConnectionAction
+        private readonly UpdateMapConnectionAction $updateMapConnectionAction,
+        private readonly MapBroadcaster $mapBroadcaster,
     ) {
         parent::__construct();
     }
@@ -50,7 +55,50 @@ final class CheckConnectionAgeCommand extends AppCommand
 
         $this->info("Updated lifetime status for {$connections->count()} connections.");
 
+        $this->escalateCriticalToImminent();
+
         return self::SUCCESS;
+    }
+
+    /**
+     * Patch 37: an EOL! hole whose hour has run out shows "Expired, closure imminent" in
+     * game: it turns imminent by itself (and leaves the map an hour later). Jumped holes
+     * go through the connection (its signatures follow), unjumped ones directly.
+     *
+     * @throws Throwable
+     */
+    private function escalateCriticalToImminent(): void
+    {
+        $due = now()->subMinutes(HoleExpiry::CRITICAL_TO_IMMINENT_MINUTES);
+
+        MapConnection::query()
+            ->where('lifetime', LifetimeStatus::Critical)
+            ->whereNotNull('critical_since')
+            ->where('critical_since', '<=', $due)
+            ->get()
+            ->each(fn (MapConnection $connection) => $this->updateMapConnectionAction->handle($connection, MapConnectionData::from([
+                'lifetime' => LifetimeStatus::Imminent,
+                'lifetime_updated_at' => now(),
+            ])));
+
+        $systems = [];
+        Signature::query()
+            ->whereNull('map_connection_id')
+            ->where('lifetime', LifetimeStatus::Critical)
+            ->whereNotNull('critical_since')
+            ->where('critical_since', '<=', $due)
+            ->get()
+            ->each(function (Signature $signature) use (&$systems): void {
+                $signature->update(['lifetime' => LifetimeStatus::Imminent, 'lifetime_updated_at' => now()]);
+                $systems[$signature->map_solarsystem_id] = true;
+            });
+
+        foreach (array_keys($systems) as $system_id) {
+            $system = MapSolarsystem::query()->find($system_id);
+            if ($system instanceof MapSolarsystem) {
+                $this->mapBroadcaster->signaturesChanged($system);
+            }
+        }
     }
 
     /**
@@ -86,6 +134,7 @@ final class CheckConnectionAgeCommand extends AppCommand
             LifetimeStatus::Healthy => 1,
             LifetimeStatus::EndOfLife => 2,
             LifetimeStatus::Critical => 3,
+            LifetimeStatus::Imminent => 4,
         };
     }
 

@@ -12,6 +12,8 @@ use Carbon\CarbonImmutable;
  *   type not known (or K162 with no far side known): 27 h;
  * - End of life: 5½ h after it was first marked (EOL is under 4 h left);
  * - Critical (EOL!): 2 h after it was first marked.
+ * - Imminent ("Expired, closure imminent"): 1 h after it turned imminent (an EOL!
+ *   hole turns imminent by itself when its hour runs out).
  * Whichever comes first.
  */
 final class HoleExpiry
@@ -24,6 +26,11 @@ final class HoleExpiry
 
     public const int CRITICAL_MINUTES = 120;
 
+    public const int IMMINENT_MINUTES = 60;
+
+    /** Patch 37: an EOL! hole turns imminent this long after it was first marked critical. */
+    public const int CRITICAL_TO_IMMINENT_MINUTES = 60;
+
     /**
      * @param  int|null  $lifetime_seconds  the hole type's life (null: not known)
      */
@@ -32,6 +39,7 @@ final class HoleExpiry
         ?int $lifetime_seconds,
         ?CarbonImmutable $eol_since = null,
         ?CarbonImmutable $critical_since = null,
+        ?CarbonImmutable $imminent_since = null,
     ): CarbonImmutable {
         $deadline = $lifetime_seconds !== null && $lifetime_seconds > 0
             ? $created_at->addSeconds($lifetime_seconds)->addHours(self::GRACE_HOURS)
@@ -43,6 +51,9 @@ final class HoleExpiry
 
         if ($critical_since instanceof CarbonImmutable) {
             $deadline = $deadline->min($critical_since->addMinutes(self::CRITICAL_MINUTES));
+        }
+        if ($imminent_since instanceof CarbonImmutable) {
+            $deadline = $deadline->min($imminent_since->addMinutes(self::IMMINENT_MINUTES));
         }
 
         return $deadline;

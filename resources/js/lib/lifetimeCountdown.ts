@@ -8,6 +8,8 @@ import type { TLifetimeStatus } from '@/types/models';
 const LIFETIME_BUDGET_MS: Partial<Record<TLifetimeStatus, number>> = {
     eol: 4 * 60 * 60 * 1000,
     critical: 60 * 60 * 1000,
+    // Patch 37: "Expired, closure imminent": counted to when it leaves the map (an hour on).
+    imminent: 60 * 60 * 1000,
 };
 
 export type LifetimeCountdown = {

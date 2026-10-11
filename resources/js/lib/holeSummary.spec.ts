@@ -30,6 +30,11 @@ describe('patch 37: the pipe details box', () => {
         expect(lifeLine({ lifetime: 'eol', markedAt: old, eolSince: old, hours: null, addedAt: null, now })).toBe('End of life (under 4 h) · probably gone (since 08:02 EVE)');
     });
 
+    it('patch 37: imminent collapse', () => {
+        const imminentSince = new Date(now - 12 * 60_000).toISOString();
+        expect(lifeLine({ lifetime: 'imminent', markedAt: imminentSince, imminentSince, hours: null, addedAt: null, now })).toBe('Imminent collapse · closing now (imminent since 08:50) EVE');
+    });
+
     it('draws the range left and the jumps logged since the mark', () => {
         const estimate = estimateMass({ totalMass: 3.3e9, jumped: 400e6, jumpedSinceStatus: 400e6, status: 'reduced' })!;
         const bar = massBar({ estimate, loggedSinceMark: 400e6, status: 'reduced', hints: { shouldBe: null, mayBe: 'critical' } });

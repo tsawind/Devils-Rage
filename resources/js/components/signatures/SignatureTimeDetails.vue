@@ -80,6 +80,8 @@ const lifetime_display = computed(() => {
             return 'End of Life (<4h)';
         case 'critical':
             return 'Critical (<1h)';
+        case 'imminent':
+            return 'Imminent collapse';
         default:
             return null;
     }
@@ -180,6 +182,12 @@ const current_lifetime = computed(() => {
 /* Pure lifetime states */
 .time[data-lifetime='critical'] {
     color: var(--color-red-500);
+}
+
+/* Patch 37: closure imminent */
+.time[data-lifetime='imminent'] {
+    color: var(--color-red-700);
+    font-weight: 700;
 }
 
 .time[data-lifetime='eol'] {

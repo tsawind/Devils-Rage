@@ -277,7 +277,7 @@ function handleDontAskAgain() {
 }
 
 function handleLifetimeChange(value: AcceptableValue) {
-    if (value === 'healthy' || value === 'eol' || value === 'critical') {
+    if (value === 'healthy' || value === 'eol' || value === 'critical' || value === 'imminent') {
         lifetime.value = value;
     }
 }
@@ -299,6 +299,7 @@ const lifetimeMeta: Record<TLifetimeStatus, { label: string; dot: string; hint?:
     healthy: { label: 'Healthy', dot: 'bg-neutral-500' },
     eol: { label: 'End of Life', dot: 'bg-purple-500', hint: '< 4h' },
     critical: { label: 'Critical', dot: 'bg-red-500', hint: '< 1h' },
+    imminent: { label: 'Imminent', dot: 'bg-red-800', hint: 'closing now' },
 };
 
 const massMeta: Record<TMassStatus, { label: string; dot: string; hint?: string }> = {

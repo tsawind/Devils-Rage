@@ -234,6 +234,8 @@ const lifeOptions = [
     { value: 'healthy', label: 'Healthy', dot: 'bg-neutral-500' },
     { value: 'eol', label: 'End of life', dot: 'bg-purple-500' },
     { value: 'critical', label: 'Critical (under 1 h)', dot: 'bg-red-500' },
+    // Patch 37: "Expired, closure imminent" in Show Info.
+    { value: 'imminent', label: 'Imminent (closing now)', dot: 'bg-red-800' },
 ] as const;
 
 const massLabel = computed(() => massOptions.find((option) => option.value === hole.value?.mass_status)?.label.replace(' mass', '') ?? 'Unknown');

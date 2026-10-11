@@ -108,6 +108,7 @@ const summary = computed((): THoleSummary | null => {
             markedAt: [hole?.lifetime_updated_at, hole?.checked_at].filter((value): value is string => Boolean(value)).sort().at(-1) ?? null,
             eolSince: hole?.eol_since ?? null,
             criticalSince: hole?.critical_since ?? null,
+            imminentSince: hole?.imminent_since ?? null,
             hours: lifeHours ? [lifeHours, lifeHours] : lifetimeRange(candidates.map((candidate) => candidate.name)),
             addedAt: hole?.created_at ?? null,
             now: now.value,

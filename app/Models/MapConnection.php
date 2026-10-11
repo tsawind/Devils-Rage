@@ -40,6 +40,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $checked_at
  * @property CarbonImmutable|null $eol_since Patch 37: first marked End of life
  * @property CarbonImmutable|null $critical_since Patch 37: first marked Critical
+ * @property CarbonImmutable|null $imminent_since Patch 37: turned "closure imminent"
  * @property string|null $checked_by_name Patch 37: who last looked at it in game
  * @property string|null $checked_note
  * @property string|null $mass_status_set_by_name Patch 37: who set the mass status (null: the jump log)
@@ -79,6 +80,7 @@ final class MapConnection extends Model
         'checked_at' => 'immutable_datetime',
         'eol_since' => 'immutable_datetime',
         'critical_since' => 'immutable_datetime',
+        'imminent_since' => 'immutable_datetime',
         'mass_status_from_log' => 'boolean',
         'should_have_rolled' => 'boolean',
         'from_memory' => 'boolean',
@@ -97,7 +99,7 @@ final class MapConnection extends Model
                 return;
             }
             // The scheduled age check only moves the life status: that is nobody looking at it.
-            $automatic = ['updated_at', 'lifetime', 'lifetime_updated_at', 'eol_since', 'critical_since'];
+            $automatic = ['updated_at', 'lifetime', 'lifetime_updated_at', 'eol_since', 'critical_since', 'imminent_since'];
             if (array_diff(array_keys($connection->getDirty()), $automatic) !== []) {
                 $connection->from_memory = false;
             }

@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * Patch 37: remembers when a hole was FIRST marked End of life and first marked
  * Critical (eol_since / critical_since), so the latest collapse time doesn't move
- * when someone checks or re-marks it later. Back to healthy clears both.
+ * when someone checks or re-marks it later. Patch 37: also the first Imminent mark
+ * (imminent_since). Back to healthy clears them all.
  */
 final class LifeMarks
 {
@@ -27,17 +28,24 @@ final class LifeMarks
         if ($new === LifetimeStatus::Healthy->value || $new === null) {
             $model->setAttribute('eol_since', null);
             $model->setAttribute('critical_since', null);
+            $model->setAttribute('imminent_since', null);
 
             return;
         }
 
-        $wasDying = in_array($old, [LifetimeStatus::EndOfLife->value, LifetimeStatus::Critical->value], true);
-        if (! $wasDying) {
+        $dying = [LifetimeStatus::EndOfLife->value, LifetimeStatus::Critical->value, LifetimeStatus::Imminent->value];
+        if (! in_array($old, $dying, true)) {
             $model->setAttribute('eol_since', $now);
             $model->setAttribute('critical_since', null);
+            $model->setAttribute('imminent_since', null);
         }
-        if ($new === LifetimeStatus::Critical->value && $old !== LifetimeStatus::Critical->value) {
+        $pastCritical = [LifetimeStatus::Critical->value, LifetimeStatus::Imminent->value];
+        if (in_array($new, $pastCritical, true) && ! in_array($old, $pastCritical, true)) {
             $model->setAttribute('critical_since', $now);
+        }
+        // Patch 37: "Expired, closure imminent" (marked, or EOL! whose hour ran out).
+        if ($new === LifetimeStatus::Imminent->value && $old !== LifetimeStatus::Imminent->value) {
+            $model->setAttribute('imminent_since', $now);
         }
     }
 

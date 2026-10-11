@@ -65,7 +65,10 @@ function pillParts(placeholder: TPlaceholder, facts: ReturnType<typeof holeFacts
         const critical = placeholder.massStatus === 'critical';
         parts.push({ type: 'weight', fill: critical ? 'var(--color-red-500)' : 'var(--color-amber-500)', stroke: critical ? 'var(--color-red-600)' : 'var(--color-amber-600)' });
     }
-    if (placeholder.lifetime === 'eol' || placeholder.lifetime === 'critical') {
+    // Patch 37: closure imminent: a pulsing dark-red CLOSING.
+    if (placeholder.lifetime === 'imminent') {
+        parts.push({ type: 'eol', label: 'CLOSING', strong: true, closing: true, fill: 'var(--color-red-800)', stroke: 'var(--color-red-900)' });
+    } else if (placeholder.lifetime === 'eol' || placeholder.lifetime === 'critical') {
         const critical = placeholder.lifetime === 'critical';
         parts.push({ type: 'eol', label: critical ? 'EOL!' : 'EOL', strong: critical, fill: critical ? 'var(--color-fuchsia-600)' : 'var(--color-purple-700)', stroke: 'var(--color-purple-800)' });
     }
@@ -142,8 +145,8 @@ const items = computed(() => {
         const guessed = facts.guess?.total ?? null;
         const mass = typeMass ?? (guessed ? { total: guessed, maxJump: Number.POSITIVE_INFINITY } : null);
         const massColor = placeholder.massStatus === 'critical' ? '#ef4444' : placeholder.massStatus === 'reduced' ? '#f59e0b' : null;
-        const eol = placeholder.lifetime === 'eol' || placeholder.lifetime === 'critical';
-        const eolCritical = placeholder.lifetime === 'critical';
+        const eol = placeholder.lifetime === 'eol' || placeholder.lifetime === 'critical' || placeholder.lifetime === 'imminent';
+        const eolCritical = placeholder.lifetime === 'critical' || placeholder.lifetime === 'imminent';
         const pipe = mass
             ? {
                   width: isFrigateHole(mass.maxJump) ? 2 : pipeWidth(mass.total * 1.1) * Math.min(scale, 1.5) * (compact ? 0.5 : 1),

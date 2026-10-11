@@ -47,7 +47,9 @@ final readonly class UpdateMapConnectionAction
             /* Patch 37: picking a type, size, mass or life status (even the same one again)
              * counts as someone looking at the hole in game.
              */
-            if (! $data->lifetime instanceof Optional || ! $data->mass_status instanceof Optional || ! $data->ship_size instanceof Optional || ! $data->wormhole_id instanceof Optional) {
+            // Only a person counts as a look: the scheduled age check (no one signed in) doesn't.
+            $actor = Actor::name();
+            if ($actor !== null && (! $data->lifetime instanceof Optional || ! $data->mass_status instanceof Optional || ! $data->ship_size instanceof Optional || ! $data->wormhole_id instanceof Optional)) {
                 $data_array['checked_at'] = now();
                 $data_array['checked_by_name'] = Actor::name();
                 $data_array['checked_note'] = $data->wormhole_id instanceof Optional
@@ -181,6 +183,7 @@ final readonly class UpdateMapConnectionAction
             LifetimeStatus::Healthy => 1,
             LifetimeStatus::EndOfLife => 2,
             LifetimeStatus::Critical => 3,
+            LifetimeStatus::Imminent => 4,
         };
     }
 

@@ -37,7 +37,7 @@ function updateMapUserSettings(settings: Partial<TMapUserSetting>) {
 }
 
 function handleLifetimeStatusChange(value: AcceptableValue) {
-    if (typeof value === 'string' && (value === 'critical' || value === 'eol' || value === 'healthy')) {
+    if (typeof value === 'string' && (value === 'imminent' || value === 'critical' || value === 'eol' || value === 'healthy')) {
         updateMapUserSettings({
             route_allow_lifetime_status: value as TLifetimeStatus,
         });
@@ -103,7 +103,8 @@ function handleSecurityPenaltyCommit(value: number[]) {
                                 <SelectValue placeholder="Select lifetime status filter" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="critical">All Connections</SelectItem>
+                                <SelectItem value="imminent">All Connections (even Imminent)</SelectItem>
+                                <SelectItem value="critical">Up to EOL! (skip Imminent)</SelectItem>
                                 <SelectItem value="eol">Healthy & EOL</SelectItem>
                                 <SelectItem value="healthy">Healthy Only</SelectItem>
                             </SelectContent>

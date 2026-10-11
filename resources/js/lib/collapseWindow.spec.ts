@@ -41,3 +41,17 @@ describe('patch 37: when an end-of-life hole collapses', () => {
         expect(collapseWindow({ lifetime: 'eol', eolSince: null, now })).toBeNull();
     });
 });
+
+describe('patch 37: imminent collapse', () => {
+    it('closing now, with when it turned imminent; scout it', () => {
+        const window = collapseWindow({ lifetime: 'imminent', eolSince: at('11:00'), criticalSince: at('12:30'), imminentSince: at('13:30'), now })!;
+        expect(collapseText(window)).toBe('closing now (imminent since 13:30)');
+        expect(window.scout).toBe(true);
+        expect(window.gone).toBe(false);
+    });
+
+    it('an hour after it turned imminent it is probably gone', () => {
+        const window = collapseWindow({ lifetime: 'imminent', eolSince: at('11:00'), imminentSince: at('12:50'), now })!;
+        expect(collapseText(window)).toBe('probably gone (imminent since 12:50)');
+    });
+});

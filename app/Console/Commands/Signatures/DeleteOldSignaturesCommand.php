@@ -120,6 +120,7 @@ final class DeleteOldSignaturesCommand extends AppCommand
                 $life,
                 HoleExpiry::earliest($signature->eol_since, $connection?->eol_since),
                 HoleExpiry::earliest($signature->critical_since, $connection?->critical_since),
+                HoleExpiry::earliest($signature->imminent_since, $connection?->imminent_since),
             )->lessThan($now);
         });
 
@@ -146,6 +147,7 @@ final class DeleteOldSignaturesCommand extends AppCommand
             $lifetimes[(int) $connection->wormhole_id] ?? null,
             $connection->eol_since,
             $connection->critical_since,
+            $connection->imminent_since,
         )->lessThan($now));
 
         if ($old->isEmpty()) {
