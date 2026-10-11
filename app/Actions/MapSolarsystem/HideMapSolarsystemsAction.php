@@ -18,7 +18,8 @@ use Throwable;
 /**
  * Patch 36: chain memory. Clears hide systems instead of deleting them. A
  * hidden system keeps its row, notes and signatures; its pipes go (their
- * holes are gone from the map), and its name gets a "@hhmm" stamp so it never
+ * holes are gone from the map, patch 37: pipes inside the cleared chain are
+ * remembered on its systems), and its name gets a "@hhmm" stamp so it never
  * blocks a new system of the same name. Reconnecting within 27 h brings it
  * back as it was ({@see ChainMemory::unhide()}).
  */
@@ -72,6 +73,8 @@ final readonly class HideMapSolarsystemsAction
                 ->map(fn (mixed $id): int => (int) $id)
                 ->all();
 
+            $memory = ChainMemory::rememberLinks($ids, $connection_ids);
+
             // The hidden systems' own signatures stay (as unjumped holes); the pipes go.
             if ($connection_ids !== []) {
                 Signature::query()
@@ -93,6 +96,7 @@ final readonly class HideMapSolarsystemsAction
                     'combat_started_at' => null,
                     'combat_previous_color' => null,
                     'cleanup_return_pending' => false,
+                    'memory_links' => $memory[$system->id] ?? null,
                 ])->save();
 
                 Signature::query()

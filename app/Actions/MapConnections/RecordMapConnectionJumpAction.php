@@ -111,6 +111,9 @@ final readonly class RecordMapConnectionJumpAction
             $jump->update(['map_connection_id' => $connection->id]);
         }
 
+        // Patch 37: a jump proves a remembered (faded) pipe is real.
+        MapConnection::query()->whereKey($connection->id)->where('from_memory', true)->update(['from_memory' => false]);
+
         // Patch 33: the log may prove the hole reduced / critical / rolled.
         $this->inferMassStatus->handle($connection);
         $this->broadcastMapConnection->handle($connection);

@@ -45,6 +45,7 @@ final class MapConnectionResource extends JsonResource
             'mass_status_set_by_name' => $this->mass_status_set_by_name,
             'mass_status_from_log' => (bool) $this->mass_status_from_log,
             'should_have_rolled' => (bool) $this->should_have_rolled,
+            'from_memory' => (bool) ($this->resource->getAttributes()['from_memory'] ?? false),
             'jumps_count' => $this->whenHas('jumps_count', fn (int|string|null $count): int => (int) $count, 0),
             'jumps' => $this->whenLoaded('jumps', fn () => $this->jumps->toResourceCollection(MapConnectionJumpResource::class)),
             'created_at' => $this->created_at,

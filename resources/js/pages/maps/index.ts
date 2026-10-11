@@ -283,6 +283,8 @@ export type TMapConnection = {
     checked_note?: string | null;
     /** Who set the mass status (null: the jump log or unknown). */
     mass_status_set_by_name?: string | null;
+    /** Patch 37: an old chain's pipe that came back with a reconnect, drawn faded until someone jumps, marks or checks it. */
+    from_memory?: boolean;
     /** Patch 33: the jump log set this status (not a person). */
     mass_status_from_log?: boolean;
     /** Patch 33: the log says more went through than the hole can hold. */

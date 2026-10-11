@@ -29,6 +29,8 @@ use function sprintf;
  * @property bool $allow_layout_override
  * @property bool $constant_width_enabled
  * @property string|null $share_token
+ * @property string|null $background_image_path Patch 37: the map's default background
+ * @property string|null $background_image_mode
  * @property int|null $home_solarsystem_id
  * @property int|null $rally_solarsystem_id
  * @property int|null $rage_roll_solarsystem_id Patch 35: the system whose static is being rage rolled

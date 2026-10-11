@@ -41,6 +41,7 @@ use Staudenmeir\EloquentHasManyDeep\HasRelationships;
  * @property bool $cleanup_return_pending
  * @property \Carbon\CarbonImmutable|null $scanned_at
  * @property \Carbon\CarbonImmutable|null $hidden_at Patch 36: hidden by a clear (chain memory), not on the map
+ * @property list<array{peer: int, outgoing: bool, attributes: array<string, mixed>, signature_ids: list<int>}>|null $memory_links Patch 37: pipes to the rest of its cleared chain
  * @property-read \Carbon\CarbonImmutable $created_at
  * @property-read int|null $signatures_count
  * @property-read int|null $uncategorized_signatures_count
@@ -241,6 +242,7 @@ final class MapSolarsystem extends Model
             'combat_started_at' => 'immutable_datetime',
             'cleanup_return_pending' => 'boolean',
             'hidden_at' => 'immutable_datetime',
+            'memory_links' => 'array',
         ];
     }
 

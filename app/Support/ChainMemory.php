@@ -6,6 +6,7 @@ namespace App\Support;
 
 use App\Actions\MapRageRoll\NewStaticAction;
 use App\Models\Map;
+use App\Models\MapConnection;
 use App\Models\MapSolarsystem;
 use App\Models\Signature;
 use Carbon\CarbonImmutable;
@@ -187,5 +188,143 @@ final class ChainMemory
             ->where('map_solarsystem_id', $system->id)
             ->where('alias', 'like', '%@%')
             ->update(['alias' => null]);
+    }
+
+    /** Connection columns not copied when a remembered pipe comes back. */
+    private const array NOT_REMEMBERED = ['id', 'map_id', 'from_map_solarsystem_id', 'to_map_solarsystem_id', 'updated_at', 'from_memory'];
+
+    /**
+     * Patch 37: before a clear deletes the pipes, remember the ones between two
+     * systems that are both being hidden, on both ends, so a reconnect to any
+     * of them brings the whole old chain back.
+     *
+     * @param  list<int>  $hiding_ids
+     * @param  list<int>  $connection_ids  the pipes touching the systems being hidden
+     * @return array<int, list<array{peer: int, outgoing: bool, attributes: array<string, mixed>, signature_ids: list<int>}>>
+     */
+    public static function rememberLinks(array $hiding_ids, array $connection_ids): array
+    {
+        if ($connection_ids === []) {
+            return [];
+        }
+
+        $memory = [];
+        $connections = MapConnection::query()
+            ->whereIn('id', $connection_ids)
+            ->whereIn('from_map_solarsystem_id', $hiding_ids)
+            ->whereIn('to_map_solarsystem_id', $hiding_ids)
+            ->get();
+
+        foreach ($connections as $connection) {
+            $attributes = $connection->getAttributes();
+            $from = (int) $attributes['from_map_solarsystem_id'];
+            $to = (int) $attributes['to_map_solarsystem_id'];
+            $kept = array_diff_key($attributes, array_flip(self::NOT_REMEMBERED));
+            $signature_ids = Signature::query()
+                ->where('map_connection_id', $connection->id)
+                ->pluck('id')
+                ->map(fn (mixed $id): int => (int) $id)
+                ->all();
+
+            $memory[$from][] = ['peer' => $to, 'outgoing' => true, 'attributes' => $kept, 'signature_ids' => $signature_ids];
+            $memory[$to][] = ['peer' => $from, 'outgoing' => false, 'attributes' => $kept, 'signature_ids' => $signature_ids];
+        }
+
+        return $memory;
+    }
+
+    /**
+     * Patch 37: a cleared system came back (someone reconnected to it). The
+     * rest of its old chain, still hidden and remembered, comes back with it,
+     * moved along with it, and its old pipes return faded ("from memory")
+     * until someone jumps, marks or checks them.
+     *
+     * @param  array{0: int, 1: int}  $moved_by  how far the system came back from where it was (x, y)
+     * @return array{systems: list<int>, connections: list<int>} what else came back
+     */
+    public static function restoreChain(MapSolarsystem $root, array $moved_by = [0, 0]): array
+    {
+        $systems = [];
+        $connections = [];
+        $queue = [$root];
+        $oldest = CarbonImmutable::now()->subHours(self::HIDDEN_NAME_KEPT_HOURS);
+
+        while ($queue !== []) {
+            $system = array_shift($queue);
+
+            foreach ($system->memory_links ?? [] as $link) {
+                $peer = MapSolarsystem::withHidden()
+                    ->where('map_id', $system->map_id)
+                    ->whereKey($link['peer'])
+                    ->first();
+                if (! $peer instanceof MapSolarsystem) {
+                    continue;
+                }
+
+                if ($peer->isHidden()) {
+                    if ($peer->hidden_at === null || $peer->hidden_at->lessThan($oldest)) {
+                        continue;
+                    }
+                    self::unhide($peer);
+                    $peer->forceFill([
+                        'position_x' => (int) $peer->position_x + $moved_by[0],
+                        'position_y' => (int) $peer->position_y + $moved_by[1],
+                    ])->save();
+                    $systems[] = (int) $peer->id;
+                    $queue[] = $peer;
+                }
+
+                $connection_id = self::restoreLink($system, $peer, $link);
+                if ($connection_id !== null) {
+                    $connections[] = $connection_id;
+                }
+            }
+
+            if ($system->memory_links !== null) {
+                $system->forceFill(['memory_links' => null])->saveQuietly();
+            }
+        }
+
+        return ['systems' => $systems, 'connections' => $connections];
+    }
+
+    /**
+     * @param  array{peer: int, outgoing: bool, attributes: array<string, mixed>, signature_ids: list<int>}  $link
+     * @return int|null the pipe put back (null: it was already there)
+     */
+    private static function restoreLink(MapSolarsystem $system, MapSolarsystem $peer, array $link): ?int
+    {
+        $from = $link['outgoing'] ? (int) $system->id : (int) $peer->id;
+        $to = $link['outgoing'] ? (int) $peer->id : (int) $system->id;
+
+        $exists = MapConnection::query()
+            ->where('map_id', $system->map_id)
+            ->where(fn ($query) => $query
+                ->where(fn ($pair) => $pair->where('from_map_solarsystem_id', $from)->where('to_map_solarsystem_id', $to))
+                ->orWhere(fn ($pair) => $pair->where('from_map_solarsystem_id', $to)->where('to_map_solarsystem_id', $from)))
+            ->exists();
+        if ($exists) {
+            return null;
+        }
+
+        $connection = new MapConnection;
+        $connection->forceFill([
+            ...$link['attributes'],
+            'map_id' => $system->map_id,
+            'from_map_solarsystem_id' => $from,
+            'to_map_solarsystem_id' => $to,
+            'from_memory' => true,
+        ]);
+        $connection->saveQuietly();
+
+        if ($link['signature_ids'] !== []) {
+            Signature::query()
+                ->whereIn('id', $link['signature_ids'])
+                ->whereIn('map_solarsystem_id', [$from, $to])
+                ->whereNull('map_connection_id')
+                ->update(['map_connection_id' => $connection->id]);
+        }
+
+        return (int) $connection->id;
     }
 }

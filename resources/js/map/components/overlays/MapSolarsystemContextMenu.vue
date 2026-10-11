@@ -29,9 +29,12 @@ import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { useAddConnectionDialog } from '@/map/interactions/useAddConnectionDialog';
 import { TMapSolarsystem } from '@/pages/maps';
 import { TMapSolarsystemStatus } from '@/types/models';
-import { Brush, ClipboardCopy, Compass, Eraser, Flag, Home, Map, MapPin, Navigation, Pin, Route, Trash2, Users, Waypoints } from 'lucide-vue-next';
+import { Brush, ClipboardCopy, Compass, Eraser, Flag, Home, Map, MapPin, Navigation, NotebookPen, Pin, Route, Trash2, Users, Waypoints } from 'lucide-vue-next';
+import { addNoteTarget } from '@/map/components/overlays/AddNoteDialog.vue';
+import { displayAlias } from '@/lib/alias';
 import type { AcceptableValue } from 'reka-ui';
 import { toast } from 'vue-sonner';
+import { computed } from 'vue';
 
 /**
  * The per-node context menu, ported from the old tree as content-only: the new
@@ -43,6 +46,8 @@ const { map_solarsystem } = defineProps<{
 }>();
 
 const user = useUser();
+// Patch 37: the system's name in the Add note box.
+const displayName = computed(() => displayAlias(map_solarsystem.alias) || map_solarsystem.solarsystem.name);
 
 const { canEdit: can_write } = usePermission();
 
@@ -118,6 +123,11 @@ const options: TMapSolarsystemStatus[] = ['unknown', 'friendly', 'hostile', 'act
         <ContextMenuItem @select="handleAddConnection" v-if="can_write">
             <Waypoints class="size-4" />
             Add connection
+        </ContextMenuItem>
+        <!-- Patch 37: add a stamped note at the end of the system's notes -->
+        <ContextMenuItem v-if="can_write" @select="addNoteTarget = { id: map_solarsystem.id, name: displayName }">
+            <NotebookPen class="size-4" />
+            Add note…
         </ContextMenuItem>
         <ContextMenuSub v-if="can_write">
             <ContextMenuSubTrigger>

@@ -59,6 +59,7 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SignatureArmController;
 use App\Http\Controllers\SignatureController;
 use App\Http\Controllers\StatisticsController;
+use App\Http\Controllers\SystemNoteController;
 use App\Http\Controllers\TokenManagementController;
 use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\UserCharacterController;
@@ -128,6 +129,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('map-solarsystems/{mapSolarsystem}/combat', [MapCombatController::class, 'clear'])->name('map-solarsystems.combat.clear');
     Route::delete('maps/{map}/combat-chains/{color}', [MapCombatController::class, 'clearChain'])->name('maps.combat-chains.destroy');
     Route::post('map-solarsystems/{mapSolarsystem}/cleanup', [ChainCleanupController::class, 'store'])->name('map-solarsystems.cleanup.store');
+    Route::post('map-solarsystems/{mapSolarsystem}/notes', [SystemNoteController::class, 'store'])->name('map-solarsystems.notes.store');
     Route::post('map-solarsystems/{mapSolarsystem}/cleanup-convert', [ChainCleanupController::class, 'convert'])->name('map-solarsystems.cleanup.convert');
     Route::delete('map-solarsystems/{mapSolarsystem}/cleanup-return', [ChainCleanupController::class, 'returnDone'])->name('map-solarsystems.cleanup.return');
     Route::post('map-undo/{token}', [MapUndoController::class, 'store'])->whereUuid('token')->name('map-undo.store');

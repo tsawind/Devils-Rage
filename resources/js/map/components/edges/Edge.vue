@@ -308,7 +308,17 @@ const age = computed(() => {
     });
 });
 
+/** Patch 37: an old chain's pipe that came back with a reconnect: faded until someone jumps, marks or checks it. */
+const fromMemory = computed(() => Boolean(connection?.from_memory));
+
 const pipeTitle = computed(() => {
+    const memory = fromMemory.value ? 'From an old chain (came back with a reconnect): may be gone, check it in game' : null;
+    const title = pipeTitleWithCheck.value;
+    if (!memory) return title;
+    return title ? `${memory} · ${title}` : memory;
+});
+
+const pipeTitleWithCheck = computed(() => {
     const base = pipeTitleBase.value;
     if (!unchecked.value) return base;
     const note = `Not checked for ${unchecked.value}: look at Show Info (right-click → ✓ Checked in game)`;
@@ -378,7 +388,7 @@ function getDashArray(): string | undefined {
         stroke-linejoin="round"
         class="pointer-events-none stroke-stone-100 dark:stroke-neutral-950"
     />
-    <g v-else pointer-events="visiblePainted" class="group text-stone-600 dark:text-neutral-700">
+    <g v-else pointer-events="visiblePainted" class="group text-stone-600 dark:text-neutral-700" :opacity="fromMemory ? 0.4 : undefined">
         <!-- Patch 35: the static being rage rolled glows red -->
         <path
             v-if="rolling"
@@ -397,7 +407,16 @@ function getDashArray(): string | undefined {
         </template>
         <!-- Mass pipe: outline = size when new, light band = could be up to, solid core = at least -->
         <template v-if="pipe">
-            <path :d="path.d" stroke="currentColor" fill="none" :stroke-width="pipe.outline" stroke-opacity="0.5" stroke-linejoin="round" class="pointer-events-none" />
+            <path
+                :d="path.d"
+                stroke="currentColor"
+                fill="none"
+                :stroke-width="pipe.outline"
+                stroke-opacity="0.5"
+                stroke-linejoin="round"
+                :stroke-dasharray="fromMemory ? '3,4' : undefined"
+                class="pointer-events-none"
+            />
             <path :d="path.d" fill="none" :stroke-width="pipe.hollow" stroke-linejoin="round" class="pointer-events-none stroke-stone-100 dark:stroke-neutral-950" />
             <path v-if="pipe.max > 0" :d="path.d" :stroke="pipe.color" fill="none" :stroke-width="pipe.max" stroke-opacity="0.35" stroke-linejoin="round" class="pointer-events-none" />
             <path v-if="pipe.min > 0" :d="path.d" :stroke="pipe.color" fill="none" :stroke-width="pipe.min" stroke-linejoin="round" class="pointer-events-none" />

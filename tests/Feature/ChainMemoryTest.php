@@ -91,8 +91,8 @@ it('brings a hidden system back as it was within 27 h, dropping the stamp when t
         ->and($back->fresh()->alias)->toBe('A1')
         ->and($back->fresh()->hidden_at)->toBeNull()
         ->and($note->fresh()->alias)->toBe('A11')
-        // Only that system comes back; the ones behind it stay hidden.
-        ->and(MapSolarsystem::query()->find($alpha->id))->toBeNull();
+        // Patch 37: the rest of its old chain comes back with it.
+        ->and(MapSolarsystem::query()->find($alpha->id))->not->toBeNull();
 });
 
 it('keeps the stamp when the plain name is taken again', function () {
@@ -211,3 +211,48 @@ function wormholeCategoryId(): int
     return (int) (App\Models\SignatureCategory::query()->where('code', App\Enums\SignatureCategory::Wormhole)->value('id')
         ?? App\Models\SignatureCategory::query()->insertGetId(['name' => 'Wormhole', 'code' => App\Enums\SignatureCategory::Wormhole->value]));
 }
+
+it('patch 37: a reconnect brings the whole old chain back, moved along, its pipes faded', function () {
+    ['map' => $map, 'daisy' => $daisy, 'alpha' => $alpha, 'a1' => $a1, 'alpha_a1' => $alpha_a1] = chainMap();
+    $alpha->update(['position_x' => 100, 'position_y' => 100]);
+    $a1->update(['position_x' => 300, 'position_y' => 120]);
+    $sig = Signature::factory()->create(['map_solarsystem_id' => $alpha->id, 'signature_id' => 'ABC-123', 'map_connection_id' => $alpha_a1->id]);
+    $alpha_a1->forceFill(['lifetime' => 'eol'])->save();
+
+    app(HideMapSolarsystemsAction::class)->handle($map, [$alpha->id, $a1->id], broadcast: false);
+
+    expect(MapConnection::query()->where('map_id', $map->id)->count())->toBe(0)
+        ->and(MapSolarsystem::withHidden()->find($alpha->id)->memory_links)->toHaveCount(1);
+
+    app(StoreMapSolarsystemAction::class)->handle($map, [
+        'solarsystem_id' => $alpha->solarsystem_id,
+        'position_x' => 150,
+        'position_y' => 200,
+        'connect_to_map_solarsystem_id' => $daisy->id,
+    ]);
+
+    $back = MapSolarsystem::query()->find($a1->id);
+    $pipe = MapConnection::query()->where('from_map_solarsystem_id', $alpha->id)->where('to_map_solarsystem_id', $a1->id)->first();
+
+    expect($back)->not->toBeNull()
+        ->and($back->alias)->toBe('A1')
+        ->and([$back->position_x, $back->position_y])->toBe([350, 220])
+        ->and($pipe)->not->toBeNull()
+        ->and($pipe->from_memory)->toBeTrue()
+        ->and($pipe->lifetime->value)->toBe('eol')
+        ->and($sig->fresh()->map_connection_id)->toBe($pipe->id)
+        ->and(MapSolarsystem::query()->find($alpha->id)->memory_links)->toBeNull();
+
+    $pipe->update(['mass_status' => 'reduced']);
+
+    expect($pipe->fresh()->from_memory)->toBeFalse();
+});
+
+it('patch 37: a pipe to a system that stayed on the map is not remembered', function () {
+    ['map' => $map, 'alpha' => $alpha, 'a1' => $a1] = chainMap();
+
+    app(HideMapSolarsystemsAction::class)->handle($map, [$a1->id], broadcast: false);
+
+    expect(MapSolarsystem::withHidden()->find($a1->id)->memory_links)->toBeNull()
+        ->and(MapSolarsystem::query()->find($alpha->id)->memory_links)->toBeNull();
+});

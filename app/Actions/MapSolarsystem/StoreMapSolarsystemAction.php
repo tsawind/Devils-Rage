@@ -38,6 +38,7 @@ final readonly class StoreMapSolarsystemAction
         $map_solarsystem->map_solarsystem_details_id = $details->id;
 
         $was_hidden = $map_solarsystem->exists && $map_solarsystem->isHidden();
+        $old_position = [(int) ($map_solarsystem->getAttributes()['position_x'] ?? 0), (int) ($map_solarsystem->getAttributes()['position_y'] ?? 0)];
         if ($was_hidden) {
             ChainMemory::unhide($map_solarsystem);
         }
@@ -50,15 +51,32 @@ final readonly class StoreMapSolarsystemAction
         }
         $map_solarsystem->save();
 
+        // Patch 37: the rest of its old chain comes back with it, its pipes faded.
+        $restored = ['systems' => [], 'connections' => []];
+        if ($was_hidden) {
+            $restored = ChainMemory::restoreChain($map_solarsystem, [
+                (int) $map_solarsystem->position_x - $old_position[0],
+                (int) $map_solarsystem->position_y - $old_position[1],
+            ]);
+        }
+
         EvaluateMapAlertsJob::dispatch($map_solarsystem->id)->afterCommit();
 
         $this->connectToOrigin($map, $map_solarsystem, $data['connect_to_map_solarsystem_id'] ?? null);
 
         $this->mapBroadcaster->systemsUpserted($map->id, MapSolarsystem::query()
-            ->whereKey($map_solarsystem->id)
+            ->whereKey([$map_solarsystem->id, ...$restored['systems']])
             ->with('details')
             ->withCount('signatures', 'wormholeSignatures', 'mapConnections', 'uncategorizedSignatures')
             ->get());
+
+        if ($restored['connections'] !== []) {
+            $this->mapBroadcaster->connectionsUpserted($map->id, MapConnection::query()
+                ->whereKey($restored['connections'])
+                ->with('signatures.signatureType', 'signatures.wormhole')
+                ->withJumpSummary()
+                ->get());
+        }
 
         return $map_solarsystem;
     }

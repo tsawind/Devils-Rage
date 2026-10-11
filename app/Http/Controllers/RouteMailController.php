@@ -76,7 +76,7 @@ final class RouteMailController extends Controller
         }
 
         if ($result->failed()) {
-            throw ValidationException::withMessages(['to' => sprintf('EVE refused the mail (error %d; it limits how often mail can be sent): %s', $result->error?->code ?? 0, mb_substr((string) ($result->error?->body ?? ''), 0, 200))]);
+            throw ValidationException::withMessages(['to' => sprintf('EVE refused the mail (error %d; it limits how often mail can be sent): %s', $result->error->code, mb_substr((string) $result->error->body, 0, 200))]);
         }
 
         return back()->notify('Route report mailed', message: $validated['to'] === 'self' ? sprintf('Sent to %s.', $sender->name) : 'Sent to your main.');

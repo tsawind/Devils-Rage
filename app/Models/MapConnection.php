@@ -45,6 +45,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $mass_status_set_by_name Patch 37: who set the mass status (null: the jump log)
  * @property bool $mass_status_from_log
  * @property bool $should_have_rolled
+ * @property bool $from_memory Patch 37: an old chain's pipe that came back with a reconnect (faded)
  * @property CarbonImmutable|null $connected_at
  * @property-read string|CarbonImmutable $created_at
  * @property-read string|CarbonImmutable $updated_at
@@ -80,6 +81,7 @@ final class MapConnection extends Model
         'critical_since' => 'immutable_datetime',
         'mass_status_from_log' => 'boolean',
         'should_have_rolled' => 'boolean',
+        'from_memory' => 'boolean',
     ];
 
     /**
@@ -88,6 +90,16 @@ final class MapConnection extends Model
     protected static function booted(): void
     {
         self::saving(fn (MapConnection $connection) => LifeMarks::apply($connection));
+        // Patch 37: any change by hand (type, mass, life, checked…) proves a remembered pipe is real.
+        self::saving(function (MapConnection $connection): void {
+            $attributes = $connection->getAttributes();
+            if (! $connection->exists || ! (bool) ($attributes['from_memory'] ?? false) || $connection->isDirty('from_memory')) {
+                return;
+            }
+            if (array_diff(array_keys($connection->getDirty()), ['updated_at']) !== []) {
+                $connection->from_memory = false;
+            }
+        });
         self::saving(function (MapConnection $connection): void {
             if ($connection->exists && $connection->isDirty('mass_status')) {
                 $connection->mass_status_updated_at = now()->toImmutable();
