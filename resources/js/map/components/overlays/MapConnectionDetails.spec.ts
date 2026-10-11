@@ -3,8 +3,14 @@ import { Popover, PopoverTrigger } from '@/components/ui/popover';
 import MapConnectionDetails from '@/map/components/overlays/MapConnectionDetails.vue';
 import type { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { flushPromises, mount } from '@vue/test-utils';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { h } from 'vue';
+
+// Patch 37: the summary at the top reads the page (permission, SeAT mains).
+vi.mock('@inertiajs/vue3', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@inertiajs/vue3')>()),
+    usePage: () => ({ props: { permission: 'member' } }),
+}));
 
 const system = { id: 1, solarsystem: { id: 30000001, name: 'J123456', class: 'c3' } } as unknown as TMapSolarsystem;
 
@@ -44,6 +50,7 @@ async function renderPanel(connection: DetailsConnection): Promise<HTMLElement> 
                 ConnectionStatus: true,
                 WormholeProperties: true,
                 MassTracking: true,
+                HoleSummary: true,
             },
         },
     });
@@ -71,10 +78,17 @@ describe('MapConnectionDetails', () => {
     it('keeps every section in one narrow column', async () => {
         const panel = await renderPanel(connection());
 
-        expect(panel.className).toContain('w-60');
+        // Patch 37: wider, for the summary (type, who and when, mass bar).
+        expect(panel.className).toContain('w-80');
         expect(panel.className).not.toContain('sm:w-[30rem]');
         expect(panel.querySelector('.grid')).toBeNull();
         expect(panel.querySelector('mass-tracking-stub')).not.toBeNull();
+    });
+
+    it('patch 37: puts the hole summary on top of a wormhole', async () => {
+        const panel = await renderPanel(connection());
+
+        expect(panel.querySelector('hole-summary-stub')).not.toBeNull();
     });
 
     it('leaves out mass tracking for stargates, which track no mass', async () => {
