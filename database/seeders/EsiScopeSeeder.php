@@ -20,6 +20,15 @@ final class EsiScopeSeeder extends Seeder
             EsiScope::ReadShip,
             EsiScope::ReadOnlineStatus,
             EsiScope::WriteWaypoint,
+            EsiScope::SendMail,
+            EsiScope::OpenWindow,
+            EsiScope::ReadFleet,
+            EsiScope::WriteFleet,
+            EsiScope::ReadFittings,
+            EsiScope::ReadSkills,
+            EsiScope::ReadImplants,
+            EsiScope::ReadCharacterStandings,
+            EsiScope::ReadCorporationStandings,
         ];
         foreach (EsiScope::cases() as $scope) {
             \App\Models\EsiScope::query()->updateOrCreate(

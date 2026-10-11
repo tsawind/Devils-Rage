@@ -49,6 +49,15 @@ const managedScopes = [
     { scope: 'esi-ui.write_waypoint.v1', name: 'Waypoints' },
     // Patch 37: mail a route report to yourself or your main.
     { scope: 'esi-mail.send_mail.v1', name: 'Mail' },
+    // Patch 37: open windows in game, read / run the fleet, fits, skills, implants, standings.
+    { scope: 'esi-ui.open_window.v1', name: 'Open window' },
+    { scope: 'esi-fleets.read_fleet.v1', name: 'Read fleet' },
+    { scope: 'esi-fleets.write_fleet.v1', name: 'Run fleet' },
+    { scope: 'esi-fittings.read_fittings.v1', name: 'Fittings' },
+    { scope: 'esi-skills.read_skills.v1', name: 'Skills' },
+    { scope: 'esi-clones.read_implants.v1', name: 'Implants' },
+    { scope: 'esi-characters.read_standings.v1', name: 'Standings' },
+    { scope: 'esi-corporations.read_standings.v1', name: 'Corp standings' },
 ];
 const allScopeNames = managedScopes.map(({ scope }) => scope).join(',');
 const preferredCharacterId = computed(() => props.characters.find((character) => character.is_preferred)?.id.toString());
