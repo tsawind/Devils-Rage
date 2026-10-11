@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { AllianceLogo, CorporationLogo } from '@/components/images';
+import CommandPaletteActions from '@/components/map/CommandPaletteActions.vue';
 import CommandPaletteAddBadge from '@/components/map/CommandPaletteAddBadge.vue';
 import SolarsystemSearchResult from '@/components/solarsystem/SolarsystemSearchResult.vue';
 import { useCommandPalette } from '@/composables/useCommandPalette';
@@ -7,6 +8,7 @@ import { useMapSearch } from '@/composables/useMapSearch';
 import usePermission from '@/composables/usePermission';
 import { useShowMap } from '@/composables/useShowMap';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
+import { parsePaletteCommand } from '@/lib/paletteCommand';
 import { takeRanked } from '@/lib/searchRank';
 import { createMapSolarsystem, useMapSolarsystems, useSolarsystemSearch } from '@/map/api';
 import type { TMapSolarsystem, TResolvedSolarsystem } from '@/pages/maps';
@@ -42,13 +44,16 @@ const label_classes = 'col-span-full px-2 py-1.5 font-sans font-semibold text-[1
 
 const { open } = useCommandPalette();
 const search = ref('');
+// Patch 37: "blops Amamake", "dest Jita"…: the command picks the actions, the rest is searched.
+const parsed = computed(() => parsePaletteCommand(search.value));
+const query = computed(() => parsed.value.query);
 
 const page = useShowMap();
 const { map_solarsystems } = useMapSolarsystems();
 const { resolveSolarsystem } = useStaticSolarsystems();
 const { canEdit: can_write } = usePermission();
 const { threat_results, note_results, occupier_results, search: searchMap } = useMapSearch(() => page.props.map.slug);
-const { new_solarsystems } = useSolarsystemSearch(search, () => map_solarsystems.value);
+const { new_solarsystems } = useSolarsystemSearch(query, () => map_solarsystems.value);
 
 const keys = useMagicKeys({
     passive: false,
@@ -84,12 +89,12 @@ onUnmounted(() => {
     open.value = false;
 });
 
-watch(search, (value) => {
+watch(query, (value) => {
     void searchMap(value);
 });
 
 const matched_systems = computed(() => {
-    const needle = search.value.trim().toLowerCase();
+    const needle = query.value.trim().toLowerCase();
 
     if (!needle) {
         return [];
@@ -143,6 +148,14 @@ const note_matches = computed(() =>
         .filter((note): note is typeof note & { map_solarsystem: TMapSolarsystem } => note.map_solarsystem !== null),
 );
 
+/** Patch 37: the system the actions are for: the best match on the map, else in all of EVE. */
+const focus = computed(() => {
+    const onMap = matched_systems.value[0];
+    if (onMap) return { solarsystem: onMap.solarsystem, onMap: true };
+    const anywhere = off_map_systems.value[0];
+    return anywhere ? { solarsystem: anywhere.solarsystem, onMap: false } : null;
+});
+
 const hasResults = computed(
     () => matched_systems.value.length > 0 || off_map_systems.value.length > 0 || threat_entities.value.length > 0 || note_matches.value.length > 0,
 );
@@ -191,7 +204,7 @@ function handleThreatSystemSelect(system: TThreatSystemMatch) {
                             v-model="search"
                             auto-focus
                             data-slot="command-input"
-                            placeholder="Search systems, aliases, occupiers, threats..."
+                            placeholder="Search systems, aliases, occupiers, threats… or blops / cap / dest + a system"
                             class="h-11 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                             @keydown.esc.prevent="open = false"
                         />
@@ -200,6 +213,17 @@ function handleThreatSystemSelect(system: TThreatSystemMatch) {
                     <!-- reka forces inline flex styles on the content element, so the grid lives on an inner div. -->
                     <ComboboxContent position="inline" class="max-h-80 overflow-y-auto p-1">
                         <div class="grid grid-cols-[auto_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto] content-start gap-x-2">
+                            <!-- Patch 37: actions for the system you typed (destination, route, jump in) -->
+                            <CommandPaletteActions
+                                v-if="focus && page.props.auth?.user"
+                                :target="{ id: focus.solarsystem.id, name: focus.solarsystem.name, security: focus.solarsystem.security, class: focus.solarsystem.class ?? null }"
+                                :command="parsed.command"
+                                :map-slug="page.props.map.slug"
+                                :on-map="focus.onMap"
+                                :can-write="can_write"
+                                @close="open = false"
+                                @add="handleAddSystem"
+                            />
                             <!-- Systems on the map, then matching systems anywhere in EVE -->
                             <ComboboxGroup v-if="matched_systems.length || off_map_systems.length" class="col-span-full grid grid-cols-subgrid">
                                 <ComboboxLabel :class="label_classes"> Systems </ComboboxLabel>
