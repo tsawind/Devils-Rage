@@ -18,6 +18,7 @@ function onToggle(event: Event): void {
     else stop();
 }
 
+const message = computed(() => ('message' in state.value ? state.value.message : null));
 const members = computed(() => (state.value.status === 'ok' ? state.value.members : []));
 const coming = computed(() => members.value.filter(comesWithUs));
 const mass = computed(() => coming.value.reduce((sum, member) => sum + member.jump_mass, 0));
@@ -53,7 +54,7 @@ function toggle(member: TFleetMember, value: boolean | 'indeterminate'): void {
         <div class="mt-1 grid gap-1">
             <p v-if="state.status === 'loading' || state.status === 'idle'" class="text-muted-foreground">Reading the fleet…</p>
             <p v-else-if="state.status !== 'ok'" class="text-muted-foreground">
-                {{ state.message }}
+                {{ message }}
                 <button type="button" class="ml-1 underline" @click="refresh()">Try again</button>
             </p>
             <template v-else>

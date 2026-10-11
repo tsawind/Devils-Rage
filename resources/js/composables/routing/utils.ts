@@ -9,7 +9,7 @@ import { wormholeMass } from '@/lib/wormholeMass';
 function isFrigateConnection(connection: TMapConnection): boolean {
     if (connection.ship_size === 'frigate') return true;
     return (connection.signatures ?? []).some((signature) => {
-        if (signature.signature_type?.extra?.toLowerCase() === 'frigate') return true;
+        if ((signature.signature_type as { extra?: string | null } | null)?.extra?.toLowerCase() === 'frigate') return true;
         const wormhole = signature.wormhole;
         if (!wormhole || wormhole.name.toUpperCase().startsWith('K162')) return false;
         return isFrigateHole(wormhole.maximum_jump_mass ?? wormholeMass(wormhole.name)?.maxJump);
