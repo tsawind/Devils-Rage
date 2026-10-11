@@ -9,8 +9,9 @@ import { FLEET_RULES } from '@/lib/fleetRules';
  * - Earliest: someone who saw plain EOL knows it had at least 1 h left; the newest look
  *   (an EOL mark or ✓ Checked in game) guarantees CHECK_GUARANTEE_MINUTES (1 h minus a few
  *   minutes between looking and clicking). A Critical hole guarantees nothing: "now".
- * - "scout it" only near the end: the last SCOUT_WARN_MINUTES before the earliest time
- *   (EOL) or the latest time (Critical), and once it's past.
+ * - "scout it" whenever nothing guarantees it is still up ("collapsing now…": Critical, or
+ *   the newest look is over 55 min old), in the last SCOUT_WARN_MINUTES before the earliest
+ *   time, and once it's past.
  */
 export const CHECK_GUARANTEE_MINUTES = 55;
 export const SCOUT_WARN_MINUTES = 10;
@@ -65,8 +66,10 @@ export function collapseWindow(params: {
     }
 
     const gone = now > latest;
-    const warnFrom = (critical || earliest === null ? latest : earliest) - SCOUT_WARN_MINUTES * MINUTE;
-    return { earliest, latest, gone, scout: gone || now >= warnFrom, critical };
+    // Nothing guarantees it is still up ("collapsing now…": Critical, or the last look is over 55 min old): scout it.
+    // Otherwise only in the last few minutes of the guaranteed time.
+    const scout = gone || earliest === null || now >= earliest - SCOUT_WARN_MINUTES * MINUTE;
+    return { earliest, latest, gone, scout, critical };
 }
 
 /** "14:52" in EVE time (UTC). */

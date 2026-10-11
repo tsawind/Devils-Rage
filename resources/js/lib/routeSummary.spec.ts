@@ -70,8 +70,7 @@ describe('patch 26: size, mass, chokepoints and risks', () => {
 
     it('patch 37: EOL as a collapse window in EVE time, from the first mark', () => {
         const text = routeSummary({ steps, hops: [wh({ lifetimeStatus: 'eol', eolSince: '2026-10-05T08:40:00Z' }), wh(), wh()], roundTrip: false, now });
-        expect(text).toContain('Risk: Daisy↔Alpha EOL, collapsing now–12:40');
-        expect(text).not.toContain('scout it');
+        expect(text).toContain('Risk: Daisy↔Alpha EOL, collapsing now–12:40: scout it');
     });
 
     it('patch 37: a check 5 minutes ago guarantees 55 minutes, no "scout it"', () => {
@@ -81,9 +80,9 @@ describe('patch 26: size, mass, chokepoints and risks', () => {
         expect(text).not.toContain('scout it');
     });
 
-    it('patch 37: critical: now until an hour after the first critical mark, "scout it" in the last 10 minutes', () => {
+    it('patch 37: critical: now until an hour after the first critical mark, always "scout it"', () => {
         const early = wh({ lifetimeStatus: 'critical', eolSince: '2026-10-05T10:00:00Z', criticalSince: '2026-10-05T11:30:00Z' });
-        expect(routeSummary({ steps, hops: [early, wh(), wh()], roundTrip: false, now })).toContain('Risk: Daisy↔Alpha EOL!, collapsing now–12:30');
+        expect(routeSummary({ steps, hops: [early, wh(), wh()], roundTrip: false, now })).toContain('Risk: Daisy↔Alpha EOL!, collapsing now–12:30: scout it');
         const late = wh({ lifetimeStatus: 'critical', eolSince: '2026-10-05T10:00:00Z', criticalSince: '2026-10-05T11:05:00Z' });
         expect(routeSummary({ steps, hops: [late, wh(), wh()], roundTrip: false, now })).toContain('Risk: Daisy↔Alpha EOL!, collapsing now–12:05: scout it');
     });

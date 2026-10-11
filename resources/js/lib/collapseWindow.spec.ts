@@ -18,11 +18,16 @@ describe('patch 37: when an end-of-life hole collapses', () => {
         expect(window.scout).toBe(true);
     });
 
-    it('critical: could go now, at most an hour after the first critical mark', () => {
+    it('critical: could go now, at most an hour after the first critical mark: scout it', () => {
         const window = collapseWindow({ lifetime: 'critical', eolSince: at('12:00'), criticalSince: at('13:30'), lastLookAt: at('13:55'), now })!;
         expect(collapseText(window)).toBe('collapsing now–14:30');
-        expect(window.scout).toBe(false);
-        expect(collapseWindow({ lifetime: 'critical', eolSince: at('12:00'), criticalSince: at('13:05'), now })!.scout).toBe(true);
+        expect(window.scout).toBe(true);
+    });
+
+    it('EOL with the last look over 55 minutes old: collapsing now, scout it', () => {
+        const window = collapseWindow({ lifetime: 'eol', eolSince: at('12:00'), now })!;
+        expect(collapseText(window)).toBe('collapsing now–16:00');
+        expect(window.scout).toBe(true);
     });
 
     it('past the latest time: probably gone', () => {
