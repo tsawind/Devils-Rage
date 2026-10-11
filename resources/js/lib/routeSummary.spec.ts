@@ -264,3 +264,20 @@ describe('patch 37: the mail and route page list every choke and risk', () => {
         expect(diagram.nodes.at(-1)?.kspace).toBe(true);
     });
 });
+
+describe('patch 37: Will it hold with the real fleet', () => {
+    const steps = [step('Daisy', 0), step('Golf', 1)];
+    const fleet = { ships: 3, mass: 300_000_000, ofTotal: 5, hulls: [{ ship: 'Megathron', jumpMass: 100_000_000 }, { ship: 'Megathron', jumpMass: 100_000_000 }, { ship: 'Archon', jumpMass: 1_100_000_000 }] };
+
+    it('names the ships too big for the hole', () => {
+        const text = holdFacts({ steps, hops: [wh({ maxJumpMass: 375_000_000, massStatus: 'reduced', totalMass: 2_000_000_000 })], roundTrip: false, now }, fleet);
+        expect(text).toContain('fleet 3 of 5 ships');
+        expect(text).toContain('1 too big for 375m per jump (Archon)');
+    });
+
+    it('says whether the fleet mass holds', () => {
+        const text = holdFacts({ steps, hops: [wh({ maxJumpMass: 2_000_000_000, massStatus: 'critical', totalMass: 3_300_000_000 })], roundTrip: false, now }, { ...fleet, hulls: fleet.hulls.slice(0, 2), mass: 200_000_000 });
+        expect(text).toMatch(/fleet 200m: (holds|may not hold|won't hold)/);
+        expect(text).not.toContain('BS worst case');
+    });
+});

@@ -1,4 +1,5 @@
 import { useRoutingSetup } from '@/composables/routing/useRoutingSetup';
+import { fleetForHold } from '@/composables/useFleet';
 import { useNavigationSystems } from '@/composables/useNavigationSystems';
 import { findRoute } from '@/composables/useRoutingWorker';
 import { useShowMap } from '@/composables/useShowMap';
@@ -341,7 +342,7 @@ export function useRouteCopy() {
         }
         if (picks.hold || picks.scan) {
             const { route } = await routeFor('default', from, to);
-            if (route && picks.hold) sections.push({ title: 'Will it hold? (experimental)', text: holdFacts(toInput(route, picks.roundTrip)) });
+            if (route && picks.hold) sections.push({ title: 'Will it hold? (experimental)', text: holdFacts(toInput(route, picks.roundTrip), fleetForHold.value) });
             if (route && picks.scan) {
                 const backup = await routeFor('shortestBackup', from, to);
                 sections.push({ title: 'Scan plan (experimental)', text: scanPlan(scanCandidates(route), backup.noBackup) });
@@ -355,7 +356,7 @@ export function useRouteCopy() {
         if (!ends) return;
         const { route } = await routeFor('default', ends.from, ends.to);
         if (!route) return void toast.warning('No route', { description: 'Nothing links From (or home) to To.' });
-        await writeOut('Will it hold? (experimental)', holdFacts(toInput(route)));
+        await writeOut('Will it hold? (experimental)', holdFacts(toInput(route), fleetForHold.value));
     }
 
     async function copyScanPlan(): Promise<void> {

@@ -393,8 +393,14 @@ export function routeSummary(input: TRouteInput, extra: string | null = null, fo
     return visible(minimal) <= limit ? minimal : minimal.slice(0, limit);
 }
 
-/** Experimental: the facts about each risky hole, no verdicts. */
-export function holdFacts(input: TRouteInput): string {
+/** Patch 37: the ticked ships of the real fleet (see useFleet). */
+export type THoldFleet = { ships: number; mass: number; ofTotal: number; hulls: { ship: string; jumpMass: number }[] };
+
+/**
+ * Experimental: the facts about each risky hole. Patch 37: with the real fleet (the ticked
+ * ships), whether it fits: ships too big for the hole, and the fleet's mass against what's left.
+ */
+export function holdFacts(input: TRouteInput, fleet: THoldFleet | null = null): string {
     const holes = holesOnRoute(input);
     const choke = new Set(chokepoints(holes).map((entry) => entry.index));
     const { shipMass } = FLEET_RULES;
@@ -402,29 +408,42 @@ export function holdFacts(input: TRouteInput): string {
     for (const entry of holes) {
         const status = entry.hole.massStatus;
         const window = holeCollapse(entry.hole, input.now);
-        const risky = choke.has(entry.index) || status === 'reduced' || status === 'critical' || window !== null;
+        const maxJump = entry.hole.maxJumpMass;
+        const tooBig = fleet && maxJump !== null ? fleet.hulls.filter((hull) => hull.jumpMass > maxJump) : [];
+        const low = entry.estimate ? share(input, entry.estimate.min) : null;
+        const high = entry.estimate ? share(input, entry.estimate.max) : null;
+        const fleetRisk = fleet !== null && (tooBig.length > 0 || (low !== null && fleet.mass > low));
+        const risky = choke.has(entry.index) || status === 'reduced' || status === 'critical' || window !== null || fleetRisk;
         if (!risky) continue;
         const parts: string[] = [];
-        const maxJump = entry.hole.maxJumpMass;
         if (maxJump !== null && isFrigateHole(maxJump)) {
             // Patch 37: a frigate hole: no battleships, and frigates never run its mass out.
-            parts.push(`frigates only (${mill(maxJump)} per jump)`);
-        } else if (entry.estimate) {
-            const low = share(input, entry.estimate.min);
-            const high = share(input, entry.estimate.max);
-            parts.push(`${status && status !== 'fresh' ? `${status}: ` : ''}${mill(low)}–${mill(high)} kg left${input.roundTrip ? ' (in+out)' : ''}`);
-            const capitalFits = entry.hole.maxJumpMass === null || entry.hole.maxJumpMass >= shipMass.capital;
-            // Patch 37: count the biggest ship the hole lets through (a medium hole: cruisers, not BS).
-            const ship = maxJump === null || maxJump >= shipMass.battleship ? { mass: shipMass.battleship, label: 'BS' } : { mass: shipMass.cruiser, label: 'cruisers' };
-            parts.push(`fits ${Math.floor(low / ship.mass)} ${ship.label} worst case, ${Math.floor(high / ship.mass)} best case`);
-            if (capitalFits) parts.push(low >= shipMass.capital ? 'a capital fits' : high >= shipMass.capital ? 'a capital only best case (may collapse it)' : 'no capital');
-        } else if (status && status !== 'fresh') {
-            parts.push(`${status}, type unknown`);
+            parts.push(fleet && tooBig.length ? `${tooBig.length} ${tooBig.length === 1 ? 'ship' : 'ships'} too big (${mill(maxJump)} per jump)` : `frigates only (${mill(maxJump)} per jump)`);
+        } else {
+            if (tooBig.length && maxJump !== null) {
+                const names = [...new Set(tooBig.map((hull) => hull.ship))].slice(0, 3).join(', ');
+                parts.push(`${tooBig.length} too big for ${mill(maxJump)} per jump (${names})`);
+            }
+            if (low !== null && high !== null) {
+                parts.push(`${status && status !== 'fresh' ? `${status}: ` : ''}${mill(low)}–${mill(high)} kg left${input.roundTrip ? ' (in+out)' : ''}`);
+                if (fleet) {
+                    parts.push(fleet.mass <= low ? `fleet ${mill(fleet.mass)}: holds` : fleet.mass <= high ? `fleet ${mill(fleet.mass)}: may not hold` : `fleet ${mill(fleet.mass)}: won't hold`);
+                } else {
+                    const capitalFits = maxJump === null || maxJump >= shipMass.capital;
+                    // Patch 37: count the biggest ship the hole lets through (a medium hole: cruisers, not BS).
+                    const ship = maxJump === null || maxJump >= shipMass.battleship ? { mass: shipMass.battleship, label: 'BS' } : { mass: shipMass.cruiser, label: 'cruisers' };
+                    parts.push(`fits ${Math.floor(low / ship.mass)} ${ship.label} worst case, ${Math.floor(high / ship.mass)} best case`);
+                    if (capitalFits) parts.push(low >= shipMass.capital ? 'a capital fits' : high >= shipMass.capital ? 'a capital only best case (may collapse it)' : 'no capital');
+                }
+            } else if (status && status !== 'fresh') {
+                parts.push(`${status}, type unknown`);
+            }
         }
         if (window) parts.push(window.imminent ? collapseText(window) : `${window.critical ? 'EOL!' : 'EOL'} ${collapseText(window)}`);
         facts.push(`${entry.label}${entry.hole.typeName ? ` "${entry.hole.typeName}"` : ''}: ${parts.join('; ')}`);
     }
-    const head = `Will it hold? (experimental${input.roundTrip ? ', in+out' : ', one way'})`;
+    const who = fleet ? `, fleet ${fleet.ships}${fleet.ofTotal > fleet.ships ? ` of ${fleet.ofTotal}` : ''} ships / ${mill(fleet.mass)}` : '';
+    const head = `Will it hold? (experimental${input.roundTrip ? ', in+out' : ', one way'}${who})`;
     const text = facts.length ? `${head} ${facts.join(' | ')}` : `${head} Nothing risky known on this route.`;
     return text.length <= FLEET_RULES.maxCopyLength ? text : `${text.slice(0, FLEET_RULES.maxCopyLength - 1)}…`;
 }

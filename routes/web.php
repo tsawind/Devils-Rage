@@ -32,6 +32,8 @@ use App\Http\Controllers\MapController;
 use App\Http\Controllers\MapDiscordController;
 use App\Http\Controllers\MapIgnoredSolarsystemController;
 use App\Http\Controllers\MapImportController;
+use App\Http\Controllers\FleetController;
+use App\Http\Controllers\JumpInController;
 use App\Http\Controllers\MapLayoutController;
 use App\Http\Controllers\MapPreferencesController;
 use App\Http\Controllers\MapRageRollController;
@@ -209,6 +211,10 @@ Route::middleware('auth')->group(function () {
     Route::delete('maps/{map}/default-background', [MapDefaultBackgroundController::class, 'destroy'])->name('maps.default-background.destroy');
 
     Route::put('maps/{map}/layout', [MapLayoutController::class, 'update'])->name('maps.layout.update');
+
+    // Patch 37: the fleet you're in (read with the boss's token) and jump-in plans for the search.
+    Route::get('maps/{map}/fleet', [FleetController::class, 'show'])->middleware('throttle:30,1')->name('maps.fleet.show');
+    Route::get('maps/{map}/jump-in', [JumpInController::class, 'show'])->middleware('throttle:60,1')->name('maps.jump-in.show');
 
     Route::put('maps/{map}/bookmark-format', [MapBookmarkFormatController::class, 'update'])->name('maps.bookmark-format.update');
 });
