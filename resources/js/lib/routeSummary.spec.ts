@@ -220,4 +220,18 @@ describe('patch 37: EVE-Scout holes, linking and waypoints', () => {
     it('in-game waypoints: the end of every gate leg', () => {
         expect(gateWaypoints(steps, hops)).toEqual([30002, 30000142]);
     });
+
+    it('patch 37: Will it hold never sends battleships down a frigate hole', () => {
+        const steps = [step('Daisy', 0), step('Golf', 1)];
+        const text = holdFacts({ steps, hops: [wh({ typeName: 'Z006', lifetimeStatus: 'eol', eolSince: now.toISOString(), totalMass: 3_000_000_000, maxJumpMass: 5_000_000 })], roundTrip: false, now });
+        expect(text).toContain('frigates only');
+        expect(text).not.toContain('BS');
+    });
+
+    it('patch 37: Will it hold counts cruisers on a medium hole', () => {
+        const steps = [step('Daisy', 0), step('Golf', 1)];
+        const text = holdFacts({ steps, hops: [wh({ massStatus: 'reduced', totalMass: 1_000_000_000, maxJumpMass: 62_000_000 })], roundTrip: false, now });
+        expect(text).toContain('cruisers worst case');
+        expect(text).not.toContain('BS');
+    });
 });

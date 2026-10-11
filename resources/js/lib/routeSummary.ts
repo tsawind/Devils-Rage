@@ -376,12 +376,18 @@ export function holdFacts(input: TRouteInput): string {
         const risky = choke.has(entry.index) || status === 'reduced' || status === 'critical' || window !== null;
         if (!risky) continue;
         const parts: string[] = [];
-        if (entry.estimate) {
+        const maxJump = entry.hole.maxJumpMass;
+        if (maxJump !== null && isFrigateHole(maxJump)) {
+            // Patch 37: a frigate hole: no battleships, and frigates never run its mass out.
+            parts.push(`frigates only (${mill(maxJump)} per jump)`);
+        } else if (entry.estimate) {
             const low = share(input, entry.estimate.min);
             const high = share(input, entry.estimate.max);
             parts.push(`${status && status !== 'fresh' ? `${status}: ` : ''}${mill(low)}–${mill(high)} kg left${input.roundTrip ? ' (in+out)' : ''}`);
             const capitalFits = entry.hole.maxJumpMass === null || entry.hole.maxJumpMass >= shipMass.capital;
-            parts.push(`fits ${Math.floor(low / shipMass.battleship)} BS worst case, ${Math.floor(high / shipMass.battleship)} best case`);
+            // Patch 37: count the biggest ship the hole lets through (a medium hole: cruisers, not BS).
+            const ship = maxJump === null || maxJump >= shipMass.battleship ? { mass: shipMass.battleship, label: 'BS' } : { mass: shipMass.cruiser, label: 'cruisers' };
+            parts.push(`fits ${Math.floor(low / ship.mass)} ${ship.label} worst case, ${Math.floor(high / ship.mass)} best case`);
             if (capitalFits) parts.push(low >= shipMass.capital ? 'a capital fits' : high >= shipMass.capital ? 'a capital only best case (may collapse it)' : 'no capital');
         } else if (status && status !== 'fresh') {
             parts.push(`${status}, type unknown`);
