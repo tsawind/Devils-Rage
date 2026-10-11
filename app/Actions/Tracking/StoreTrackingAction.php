@@ -9,6 +9,7 @@ use App\Actions\MapConnections\CreateMapConnectionAction;
 use App\Actions\MapSolarsystem\StoreMapSolarsystemAction;
 use App\Actions\MapSolarsystem\UpdateMapSolarsystemAction;
 use App\Actions\Signatures\FillFarSideK162Action;
+use App\Actions\Signatures\InferFarSideTypeAction;
 use App\Actions\Signatures\UpdateSignatureAction;
 use App\Data\SignatureData;
 use App\Data\TrackingData;
@@ -49,6 +50,7 @@ final readonly class StoreTrackingAction
         private CreateMapConnectionAction $storeMapConnectionRequest,
         private UpdateSignatureAction $updateSignatureAction,
         private FillFarSideK162Action $fillFarSideK162Action,
+        private InferFarSideTypeAction $inferFarSideTypeAction,
         private MapBroadcaster $mapBroadcaster,
         private BroadcastMapConnectionAction $broadcastMapConnectionAction,
         #[Config('map.max_size.x')]
@@ -155,6 +157,8 @@ final readonly class StoreTrackingAction
                     ->update($signature_update);
 
                 $this->fillFarSideK162Action->handle($connection->id);
+                // Patch 37: through a K162, the far side's type when only one fits (frigate K162 C5 → C5 = C008).
+                $this->inferFarSideTypeAction->handle($connection->id);
 
                 // The hole is jumped: everyone's map drops its placeholder (patch 12).
                 $this->mapBroadcaster->signaturesChanged($origin);
@@ -365,6 +369,11 @@ final readonly class StoreTrackingAction
 
     private function getWormholeShipSize(?Signature $signature): ?ShipSize
     {
+        // Patch 37: a "K162 - Frigate" only lets frigates through (its K162 type has no mass of its own).
+        if (mb_strtolower((string) $signature?->signatureType?->extra) === 'frigate') {
+            return ShipSize::Frigate;
+        }
+
         return ShipSize::fromWormhole($signature?->wormhole);
     }
 

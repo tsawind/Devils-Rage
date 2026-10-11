@@ -5,7 +5,7 @@ import { Combobox, ComboboxAnchor, ComboboxInput, ComboboxItem, ComboboxTrigger,
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { typeSearchMatches } from '@/lib/arming';
 import { comboboxRowText, flattenComboboxSections, type TComboboxRow } from '@/lib/comboboxSections';
-import { k162Hint, k162Order, offersK162 } from '@/lib/k162';
+import { k162Classes, k162Hint, k162Order, offersK162 } from '@/lib/k162';
 import { isQuickKey, isRareType, oftenSeen, oftenSeenCounts, quickKeyRank } from '@/lib/typeOrdering';
 import { useMapStore } from '@/map/store/mapStore';
 import type { TSignatureType } from '@/types/models';
@@ -55,7 +55,9 @@ const k162_options = computed<TSignatureType[]>(() => {
     return wormhole_options
         .filter((option: TSignatureType) => option.signature === 'K162' && offersK162(option, standing_class))
         .filter(filterByCurrentClass)
-        .toSorted((a, b) => k162Order(a) - k162Order(b));
+        .toSorted((a, b) => k162Order(a) - k162Order(b))
+        // Patch 37: the K162 that matches where the pipe goes first, K162 frigate last.
+        .toSorted((a, b) => Number(k162Fits(b)) - Number(k162Fits(a)));
 });
 
 const wormholes = computed<TSignatureType[]>(() => {
@@ -89,7 +91,7 @@ const rows = computed<TComboboxRow<TSignatureType | null>[]>(() => {
 
     // Patch 20: a quick key lifts its matches to the top and keeps everything else below.
     if (isQuickKey(needle)) {
-        const all = [...statics.value, ...k162_options.value, ...often.value, ...common, ...otherCommon, ...rare];
+        const all = [...k162_options.value, ...statics.value, ...often.value, ...common, ...otherCommon, ...rare];
         const ranked = all
             .map((option, index) => ({ option, index, rank: quickKeyRank(needle, option, upperStatics) }))
             .filter((entry) => entry.rank !== null)
@@ -99,8 +101,8 @@ const rows = computed<TComboboxRow<TSignatureType | null>[]>(() => {
         const rest = (items: TSignatureType[]) => items.filter((option) => !lifted.has(option.id));
         return flattenComboboxSections<TSignatureType | null>([
             { key: 'match', heading: `Matches ${needle.toUpperCase()}`, items: ranked },
-            { key: 'statics', heading: 'Statics', items: rest(statics.value) },
             { key: 'k162', heading: 'K162', items: rest(k162_options.value) },
+            { key: 'statics', heading: 'Statics', items: rest(statics.value) },
             { key: 'often', heading: 'Often seen on this map', items: rest(often.value) },
             { key: 'wormholes', heading: 'Wormholes', items: rest(common) },
             { key: 'other', heading: 'Other wormholes (not listed for this class)', items: rest(otherCommon) },
@@ -114,8 +116,8 @@ const rows = computed<TComboboxRow<TSignatureType | null>[]>(() => {
 
     return flattenComboboxSections<TSignatureType | null>([
         { key: 'unknown', heading: '', items: needle === '' || 'unknown'.includes(needle) ? [null] : [] },
-        { key: 'statics', heading: 'Statics', items: statics.value.filter(matches) },
         { key: 'k162', heading: 'K162', items: k162_options.value.filter(matches) },
+        { key: 'statics', heading: 'Statics', items: statics.value.filter(matches) },
         { key: 'often', heading: 'Often seen on this map', items: often.value.filter(matches) },
         { key: 'wormholes', heading: 'Wormholes', items: common.filter(matches) },
         { key: 'other', heading: 'Other wormholes (not listed for this class)', items: otherCommon.filter(matches) },
@@ -143,7 +145,16 @@ function filterByCurrentClass(option: TSignatureType) {
     if (!current_class) {
         return true;
     }
+    // Patch 37: a K162 stays when its class (or range) holds where the pipe goes; frigate and plain K162 always stay.
+    if (option.signature === 'K162') {
+        const classes = k162Classes(option);
+        return classes.length === 0 || classes.includes(current_class.toString());
+    }
     return option.target_class === current_class.toString();
+}
+
+function k162Fits(option: TSignatureType): boolean {
+    return Boolean(current_class) && k162Classes(option).includes(String(current_class));
 }
 </script>
 

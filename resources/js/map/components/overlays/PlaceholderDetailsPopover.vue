@@ -16,7 +16,7 @@ import { lifeLine } from '@/lib/holeSummary';
 import { estimateMass, massHints } from '@/lib/massEstimate';
 import { lifetimeRange, wormholeLifetimeHours } from '@/lib/wormholeLifetime';
 import { markSignatureChecked } from '@/map/actions/holeChecked';
-import { holeCandidates } from '@/map/holeGuess';
+import { couldBeNames, holeCandidates } from '@/map/holeGuess';
 import HoleSummary, { type THoleSummary } from '@/map/components/overlays/connection/HoleSummary.vue';
 
 /**
@@ -90,7 +90,13 @@ const summary = computed((): THoleSummary | null => {
     const hole = parent.pending_holes?.find((candidate) => candidate.id === current.signatureId) ?? null;
     const facts = holeFacts(current, parent);
     const knownType = current.wormhole && !facts.isK162 ? current.wormhole.toUpperCase() : null;
-    const candidates = knownType || facts.isK162 ? [] : holeCandidates({ endClasses: [facts.parentClass, current.targetClass ?? null] });
+    // Patch 37: a K162's "Could be" lists the holes from its far side (frigate holes for a K162 frigate).
+    const frigate = isK162Frigate(facts.holeTypeInfo) || current.shipSize === 'frigate';
+    const candidates = knownType
+        ? []
+        : facts.isK162
+          ? holeCandidates({ k162Class: facts.parentClass, spawnClasses: facts.farClasses, frigate })
+          : holeCandidates({ endClasses: [facts.parentClass, current.targetClass ?? null], frigate });
     const total = facts.typeMass?.total ?? facts.guess?.total ?? null;
     const status = hole?.mass_status ?? current.massStatus ?? 'fresh';
     const estimate = total ? estimateMass({ totalMass: total, jumped: 0, jumpedSinceStatus: 0, status }) : null;
@@ -98,7 +104,7 @@ const summary = computed((): THoleSummary | null => {
     const lifeHours = knownType ? wormholeLifetimeHours(knownType) : null;
     return {
         typeLine: null,
-        couldBe: candidates.map((candidate) => candidate.name.toUpperCase()).slice(0, 8),
+        couldBe: couldBeNames(candidates),
         addedAt: hole?.created_at ?? null,
         addedBy: hole?.created_by_name ?? null,
         typeSetAt: hole?.type_set_at ?? null,

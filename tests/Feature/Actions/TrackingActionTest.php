@@ -194,3 +194,69 @@ it('locks the connection ship size to the signature wormhole type', function () 
 
     expect(MapConnection::where('map_id', $map->id)->value('ship_size'))->toBe(ShipSize::ExtraLarge);
 });
+
+it('patch 37: a jump through a frigate K162 counts as a frigate hole and types the far side when only one type fits', function () {
+    $map = Map::factory()->create();
+    $origin = placeMapSolarsystem($map, 31000951);
+    $targetId = makeSolarsystem(31000952, -1.0);
+    App\Models\WormholeSystem::query()->forceCreate(['id' => 31000951, 'class' => '5']);
+    App\Models\WormholeSystem::query()->forceCreate(['id' => 31000952, 'class' => '5']);
+    makeWormhole('C008', 5_000_000, 'c5');
+    makeWormhole('H296', 2_000_000_000, 'c5');
+
+    $k162Frigate = App\Models\SignatureType::query()->where('signature', 'K162')->where('extra', 'frigate')->firstOrFail();
+    $signature = Signature::create([
+        'map_solarsystem_id' => $origin->id,
+        'signature_id' => 'FRG-162',
+        'signature_category_id' => $k162Frigate->signature_category_id,
+        'signature_type_id' => $k162Frigate->id,
+    ]);
+
+    app(StoreTrackingAction::class)->handle(TrackingData::from([
+        'from_map_solarsystem_id' => $origin->id,
+        'to_solarsystem_id' => $targetId,
+        'signature_id' => $signature->id,
+    ]));
+
+    $connection = MapConnection::where('map_id', $map->id)->firstOrFail();
+    $farSide = Signature::query()
+        ->where('map_connection_id', $connection->id)
+        ->where('map_solarsystem_id', '!=', $origin->id)
+        ->with('signatureType')
+        ->first();
+
+    expect($connection->fresh()->ship_size)->toBe(ShipSize::Frigate)
+        ->and($farSide?->signatureType?->signature?->value)->toBe('C008');
+});
+
+it('patch 37: a jump through a K162 leaves the far side alone when several types fit', function () {
+    $map = Map::factory()->create();
+    $origin = placeMapSolarsystem($map, 31000953);
+    $targetId = makeSolarsystem(31000954, -1.0);
+    App\Models\WormholeSystem::query()->forceCreate(['id' => 31000953, 'class' => '5']);
+    App\Models\WormholeSystem::query()->forceCreate(['id' => 31000954, 'class' => '5']);
+    makeWormhole('H296', 2_000_000_000, 'c5');
+    makeWormhole('H900', 375_000_000, 'c5');
+
+    $k162 = App\Models\SignatureType::query()->where('signature', 'K162')->whereNull('extra')->where('target_class', '5')->first()
+        ?? App\Models\SignatureType::query()->where('signature', 'K162')->whereNull('extra')->firstOrFail();
+    $signature = Signature::create([
+        'map_solarsystem_id' => $origin->id,
+        'signature_id' => 'BIG-162',
+        'signature_category_id' => $k162->signature_category_id,
+        'signature_type_id' => $k162->id,
+    ]);
+
+    app(StoreTrackingAction::class)->handle(TrackingData::from([
+        'from_map_solarsystem_id' => $origin->id,
+        'to_solarsystem_id' => $targetId,
+        'signature_id' => $signature->id,
+    ]));
+
+    $connection = MapConnection::where('map_id', $map->id)->firstOrFail();
+    expect(Signature::query()
+        ->where('map_connection_id', $connection->id)
+        ->where('map_solarsystem_id', '!=', $origin->id)
+        ->whereNotNull('signature_type_id')
+        ->exists())->toBeFalse();
+});

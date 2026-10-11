@@ -59,15 +59,26 @@ export function holeCandidates(params: {
     k162Class?: string | null;
     spawnClasses?: readonly string[] | null;
     endClasses?: readonly (string | null | undefined)[] | null;
+    frigate?: boolean | null;
 }): TPossibleType[] {
-    const fits = possibleHoleTypes({ ...params, types: guessTypes() });
-    const big = fits.filter((type) => type.maxJump > 5_000_000);
-    const list = big.length ? big : fits;
+    // Patch 37: a K162 whose far side isn't known yet could come from anywhere.
+    const anywhere = params.k162Class && params.k162Class !== 'unknown' && !(params.spawnClasses ?? []).some((cls) => cls && cls !== 'unknown');
+    const fits = possibleHoleTypes({ ...params, spawnClasses: anywhere ? ANY_CLASS : params.spawnClasses, types: guessTypes() });
     const seen = new Set<string>();
-    return list.filter((type) => {
-        const name = type.name.toUpperCase();
-        if (seen.has(name)) return false;
-        seen.add(name);
-        return true;
-    });
+    return fits
+        .filter((type) => {
+            const name = type.name.toUpperCase();
+            if (seen.has(name)) return false;
+            seen.add(name);
+            return true;
+        })
+        .toSorted((a, b) => a.name.localeCompare(b.name));
+}
+
+const ANY_CLASS = ['1', '2', '3', '4', '5', '6', '13', 'h', 'l', 'n', 'p'];
+
+/** Patch 37: the "Could be" line: up to 8 names, "+N more" after. */
+export function couldBeNames(candidates: readonly TPossibleType[]): string[] {
+    const names = candidates.map((candidate) => candidate.name.toUpperCase());
+    return names.length > 8 ? [...names.slice(0, 7), `+${names.length - 7} more`] : names;
 }

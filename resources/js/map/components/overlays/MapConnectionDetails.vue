@@ -11,7 +11,8 @@ import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { lifetimeRange, wormholeLifetimeHours } from '@/lib/wormholeLifetime';
 import { markConnectionChecked } from '@/map/actions/holeChecked';
 import { copyForwardBookmark, forwardSides } from '@/map/holeBookmark';
-import { guessHole, holeCandidates } from '@/map/holeGuess';
+import { couldBeNames, guessHole, holeCandidates } from '@/map/holeGuess';
+import { isK162Frigate } from '@/lib/k162';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import ConnectionStatus from './connection/ConnectionStatus.vue';
 import HoleSummary, { type THoleSummary } from './connection/HoleSummary.vue';
@@ -55,7 +56,16 @@ const summary = computed((): THoleSummary | null => {
     if (connection.type !== 'wormhole') return null;
     const type = outSignature.value?.wormhole ?? null;
     const classes = [connection.source?.solarsystem?.class ?? null, connection.target?.solarsystem?.class ?? null] as const;
-    const candidates = type ? [] : holeCandidates({ endClasses: classes });
+    // Patch 37: with a K162 on one side, the hole spawned on the other side and leads into the K162's class.
+    const k162 = inSignature.value;
+    const k162Side = k162 ? (k162.map_solarsystem_id === connection.source?.id ? connection.source : connection.target) : null;
+    const farSide = k162Side ? (k162Side === connection.source ? connection.target : connection.source) : null;
+    const frigate = isK162Frigate(k162?.signature_type) || connection.ship_size === 'frigate';
+    const candidates = type
+        ? []
+        : k162Side
+          ? holeCandidates({ k162Class: k162Side.solarsystem?.class ?? null, spawnClasses: farSide?.solarsystem?.class ? [farSide.solarsystem.class] : [], frigate })
+          : holeCandidates({ endClasses: classes, frigate });
     const guessTotal = type ? null : (guessHole({ endClasses: classes })?.total ?? null);
     const total = type?.total_mass ?? guessTotal;
     const since = connection.jumps_mass_since_status ?? connection.jumps_mass_sum ?? 0;
@@ -69,7 +79,7 @@ const summary = computed((): THoleSummary | null => {
     const lastJump = connection.jumps?.[0] ?? null;
     return {
         typeLine: type ? `${type.name}${type.leads_to ? ` → ${type.leads_to}` : ''}${size ? ` · ${size}` : ''}` : null,
-        couldBe: candidates.map((candidate) => candidate.name.toUpperCase()).slice(0, 8),
+        couldBe: couldBeNames(candidates),
         addedAt: first?.created_at ?? connection.created_at,
         addedBy: first?.created_by_name ?? null,
         typeSetAt: typed?.type_set_at ?? null,

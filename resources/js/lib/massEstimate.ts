@@ -150,11 +150,13 @@ export function possibleHoleTypes(params: {
     spawnClasses?: readonly string[] | null;
     /** Both ends' classes (a jumped connection), for when neither side's type is known. */
     endClasses?: readonly (string | null | undefined)[] | null;
+    /** Patch 37: a frigate-thin hole (K162 frigate, or jumped as one): only frigate holes fit. */
+    frigate?: boolean | null;
     types: readonly TPossibleType[];
 }): TPossibleType[] {
     const norm = (value: string | null | undefined) => String(value ?? '').toLowerCase().replace(/^c(?=\d)/, '');
     const usable = params.types.filter(
-        (type) => !type.name.toUpperCase().startsWith('K162') && !type.extra && type.total > 0 && !isFrigateHole(type.maxJump),
+        (type) => !type.name.toUpperCase().startsWith('K162') && !type.extra && type.total > 0 && isFrigateHole(type.maxJump) === Boolean(params.frigate),
     );
     const spawnsIn = (type: TPossibleType, cls: string) => (type.spawn_areas ?? []).some((area) => norm(area) === cls);
     const into = params.k162Class ? norm(params.k162Class) : null;

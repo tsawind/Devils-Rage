@@ -45,6 +45,6 @@ export function holeFacts(placeholder: TPlaceholder, parent: TMapSolarsystem) {
             ? null
             : guessHole(isK162 ? { k162Class: parentClass, spawnClasses: farClasses } : { endClasses: [parentClass, placeholder.targetClass ?? null] });
     const size = knownSize(placeholder, parentClass);
-    return { typeMass, isK162, parentClass, holeTypeInfo, guess, size };
+    return { typeMass, isK162, parentClass, holeTypeInfo, guess, size, farClasses };
 }
 
