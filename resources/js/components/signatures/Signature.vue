@@ -876,7 +876,7 @@ const rename_others = computed(() => {
 function renameBookmarks(name: string): { thisSide: string; wayBack: string | null } {
     const target = selected_connection.value?.target ?? null;
     const thisSide = buildSignatureBookmark({
-        signature: { ...signature, alias: name },
+        signature,
         currentSystem: {
             alias: selected_map_solarsystem.alias,
             class: selected_map_solarsystem.solarsystem.class,
