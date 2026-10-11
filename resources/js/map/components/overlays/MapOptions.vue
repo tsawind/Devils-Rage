@@ -15,7 +15,7 @@ import { router } from '@inertiajs/vue3';
 import { CircleDashed, ImageUp, Loader2, Trash2, Volume2, VolumeX, Waypoints, Workflow } from 'lucide-vue-next';
 import { useMapEffects } from '@/composables/useMapEffects';
 import { pulseKill } from '@/composables/useKillPulses';
-import { playRageHitSound } from '@/lib/rageSound';
+import { playKillSound, playTargetAcquired } from '@/lib/rageSound';
 import { computed, ref, useTemplateRef, type Component } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -66,9 +66,12 @@ const { backgroundImageUrl, backgroundMode, canUpload } = useMapBackground();
 // Patch 37: the speaker menu and the full-screen background (per browser).
 const { effects } = useMapEffects();
 
-function testSound(): void {
-    playRageHitSound();
-}
+/** Patch 37: every mapper sound, to hear them all (only on this screen). */
+const soundTests: { label: string; play: () => void }[] = [
+    { label: '🎯 Target acquired (Rage Roll)', play: playTargetAcquired },
+    { label: '💥 Kill', play: () => playKillSound(false) },
+    { label: '☠ Capital kill', play: () => playKillSound(true) },
+];
 
 /** The full kill effect with its sound on the home system, on this screen only. */
 function testKill(): void {
@@ -208,11 +211,20 @@ function onDrop(event: DragEvent) {
                         <span>Kill effects on the map</span>
                         <input v-model="effects.killEffects" type="checkbox" class="size-4 accent-red-600" />
                     </label>
-                    <div class="mt-1 grid grid-cols-2 gap-1.5">
-                        <Button variant="outline" size="sm" class="h-7 text-xs" @click="testSound">▶ Test sound</Button>
-                        <Button variant="outline" size="sm" class="h-7 text-xs" @click="testKill">💥 Test kill</Button>
+                    <span class="mt-1 text-xs font-medium text-muted-foreground">Test the sounds</span>
+                    <div class="flex flex-col gap-1">
+                        <Button
+                            v-for="test in soundTests"
+                            :key="test.label"
+                            variant="outline"
+                            size="sm"
+                            class="h-7 justify-start text-xs"
+                            @click="test.play"
+                            >▶ {{ test.label }}</Button
+                        >
                     </div>
-                    <p class="text-[11px] text-muted-foreground">Tests only play on your screen. The kill test flashes your home system.</p>
+                    <Button variant="outline" size="sm" class="h-7 text-xs" @click="testKill">💥 Show a test kill on home</Button>
+                    <p class="text-[11px] text-muted-foreground">Tests only play on your screen. The test kill flashes your home system with its sound.</p>
                 </div>
             </PopoverContent>
         </Popover>

@@ -1,7 +1,7 @@
 import { useRageRoll } from '@/composables/useRageRoll';
 import { displayAlias } from '@/lib/alias';
 import { targetHits, type TTargetHit } from '@/lib/rageRoll';
-import { playRageHitSound, unlockRageSound } from '@/lib/rageSound';
+import { playTargetAcquired, unlockRageSound } from '@/lib/rageSound';
 import { soundsEnabled } from '@/composables/useMapEffects';
 import { useMapStore } from '@/map/store/mapStore';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
@@ -76,8 +76,8 @@ export function useRageRollWatcher(): void {
                 seen.add(key);
                 rageRollHit.value = { key, text: describe(hit) };
                 if (fresh) {
-                    if (soundsEnabled()) playRageHitSound();
-                    toast.success('🎯 Target hit!', { description: describe(hit), duration: 15_000 });
+                    if (soundsEnabled()) playTargetAcquired();
+                    toast.success('🎯 TARGET ACQUIRED', { description: describe(hit), duration: 15_000 });
                 }
             }
 

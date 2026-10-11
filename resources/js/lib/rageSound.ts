@@ -43,7 +43,7 @@ function distortionCurve(amount: number): Float32Array<ArrayBuffer> {
 }
 
 /** Play the hit sound now (does nothing if the browser has no audio or it is still locked). */
-export function playRageHitSound(volume = 0.5): void {
+export function playRageHitSound(volume = 1): void {
     const ctx = audio();
     if (!ctx) return;
     if (ctx.state === 'suspended') {
@@ -53,7 +53,16 @@ export function playRageHitSound(volume = 0.5): void {
     const t = ctx.currentTime + 0.02;
     const master = ctx.createGain();
     master.gain.value = Math.min(Math.max(volume, 0), 1);
-    master.connect(ctx.destination);
+    // Patch 37: louder: squeezed by a compressor, then turned up (no clipping).
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = -28;
+    compressor.knee.value = 6;
+    compressor.ratio.value = 12;
+    compressor.attack.value = 0.003;
+    compressor.release.value = 0.25;
+    const makeup = ctx.createGain();
+    makeup.gain.value = 2.2;
+    master.connect(compressor).connect(makeup).connect(ctx.destination);
 
     // 1. Three falling blips, each a tritone below the last, each bending down as it plays.
     const blips = [622.25, 440, 311.13];
@@ -180,4 +189,50 @@ export function playKillSound(heavy = false, volume = 0.45): void {
         rumble.start(t + 0.25);
         rumble.stop(t + 2.5);
     }
+}
+
+/**
+ * Patch 37: the Rage Roll call-out, spoken by the browser's own voice (no audio file):
+ * "Target acquired. Target acquired." The voice depends on the computer; an English
+ * male-sounding voice is picked when there is one, low and a little slow.
+ */
+export const TARGET_CALLOUT = 'Target acquired. Target acquired.';
+
+type TVoiceLike = { name: string; lang: string; default?: boolean };
+
+/** The voice for call-outs: English, preferring a male-sounding one, else the default English, else any. */
+export function pickCalloutVoice<T extends TVoiceLike>(voices: readonly T[]): T | null {
+    const english = voices.filter((voice) => voice.lang.toLowerCase().startsWith('en'));
+    const male = /\b(male|david|daniel|guy|alex|fred|george|mark|james|ryan)\b/i;
+    return english.find((voice) => male.test(voice.name)) ?? english.find((voice) => voice.default) ?? english[0] ?? voices[0] ?? null;
+}
+
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    // Some browsers load their voices late; asking once early has them ready for the call-out.
+    window.speechSynthesis.getVoices();
+}
+
+export function speakTargetAcquired(delayMs = 350): void {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    const speak = () => {
+        const synth = window.speechSynthesis;
+        synth.cancel();
+        const utterance = new SpeechSynthesisUtterance(TARGET_CALLOUT);
+        const voice = pickCalloutVoice(synth.getVoices());
+        if (voice) {
+            utterance.voice = voice;
+            utterance.lang = voice.lang;
+        }
+        utterance.volume = 1;
+        utterance.rate = 0.92;
+        utterance.pitch = 0.6;
+        synth.speak(utterance);
+    };
+    window.setTimeout(speak, delayMs);
+}
+
+/** Patch 37: a Rage Roll target hit: the loud drop and bell, with the spoken call-out over it. */
+export function playTargetAcquired(): void {
+    playRageHitSound();
+    speakTargetAcquired();
 }
