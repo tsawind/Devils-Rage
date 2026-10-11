@@ -5,7 +5,7 @@ import { useShowMap } from '@/composables/useShowMap';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import { displayAlias } from '@/lib/alias';
 import { FLEET_RULES } from '@/lib/fleetRules';
-import { holdFacts, routeSummary, scanPlan, type TRouteHole, type TRouteHop, type TRouteInput, type TRouteStep, type TScanCandidate } from '@/lib/routeSummary';
+import { gateWaypoints, holdFacts, routeSummary, scanPlan, type TRouteFormat, type TRouteHole, type TRouteHop, type TRouteInput, type TRouteStep, type TScanCandidate } from '@/lib/routeSummary';
 import { wormholeMass } from '@/lib/wormholeMass';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import type { TMapConnection } from '@/pages/maps';
@@ -43,6 +43,39 @@ function readRoundTrip(): boolean {
 }
 /** In and back out the same way (half the mass); one way by default. Remembered in this browser. */
 const roundTrip = ref(readRoundTrip());
+
+/**
+ * Patch 37: how copies are written. "Copy for linking": one real system per line (double-click
+ * it → Auto Link in game). "Notepad links": EVE link codes (paste in the in-game Notepad, then
+ * Copy Selected With Formatting into chat). Remembered in this browser.
+ */
+const LINKING_KEY = 'route-copy-linking';
+const NOTEPAD_KEY = 'route-copy-notepad-links';
+function readFlag(key: string): boolean {
+    try {
+        return window.localStorage.getItem(key) === '1';
+    } catch {
+        return false;
+    }
+}
+const copyForLinking = ref(readFlag(LINKING_KEY));
+const notepadLinks = ref(readFlag(NOTEPAD_KEY));
+for (const [flag, key] of [
+    [copyForLinking, LINKING_KEY],
+    [notepadLinks, NOTEPAD_KEY],
+] as const) {
+    watch(flag, (value) => {
+        try {
+            window.localStorage.setItem(key, value ? '1' : '0');
+        } catch {
+            // Storage unavailable: it still works for this visit.
+        }
+    });
+}
+
+function copyFormat(): TRouteFormat {
+    return { layout: copyForLinking.value ? 'lines' : 'line', links: notepadLinks.value ? 'notepad' : 'none' };
+}
 watch(roundTrip, (value) => {
     try {
         window.localStorage.setItem(ROUND_TRIP_KEY, value ? '1' : '0');
@@ -157,11 +190,14 @@ export function useRouteCopy() {
             depth: depths.value.get(step.id) ?? null,
             rage: Boolean(bySolarsystem.value.get(step.id)?.combat_color),
             system: getSolarsystemById(step.id)?.name ?? null,
+            id: step.id,
         }));
         const hops: TRouteHop[] = route.slice(1).map((step, index) => {
             const from = route[index].id;
             const connection = connectionBetween(from, step.id);
             const via = step.via ?? (connection ? 'wormhole' : 'stargate');
+            // Patch 37: an EVE-Scout hole (Thera / Turnur) isn't a gate, even when it isn't on the map.
+            if (via === 'evescout' && (!connection || connection.type !== 'stargate')) return { via: 'evescout', hole: connection ? holeOf(connection, from) : null };
             if (via === 'stargate' || !connection || connection.type === 'stargate') return { via: 'stargate', hole: null };
             return { via, hole: holeOf(connection, from) };
         });
@@ -263,7 +299,7 @@ export function useRouteCopy() {
             toast.warning(`No route to ${who ?? nameOf(ends.to)}`, { description: 'Nothing on the map or by gate links From (or home) to it.' });
             return;
         }
-        await writeOut(label, routeSummary(toInput(route, undefined, kind)));
+        await writeOut(label, routeSummary(toInput(route, undefined, kind), null, copyFormat()));
     }
 
     /** Patch 29: the route text without copying it (the rally ping posts it); null when there is no route. */
@@ -318,5 +354,50 @@ export function useRouteCopy() {
         await writeOut('Scan plan (experimental)', scanPlan(scanCandidates(route), backup.noBackup));
     }
 
-    return { roundTrip, nameOf, copyRoute, routeText, pingSections, copyHoldFacts, copyScanPlan, canCopy: computed(() => Boolean(originId.value && toSystemId.value)) };
+    /**
+     * Patch 37: the route report for EVE mail: every route kind, one real system per line with
+     * EVE mail links. Null without a From / To.
+     */
+    async function routeReport(note: string | null, link: string | null): Promise<{ subject: string; body: string; from: number; to: number } | null> {
+        const ends = endpoints();
+        if (!ends) return null;
+        const clock = new Date();
+        const time = `${String(clock.getUTCHours()).padStart(2, '0')}:${String(clock.getUTCMinutes()).padStart(2, '0')}`;
+        const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const parts: string[] = [`<b>Route ${escape(nameOf(ends.from))} → ${escape(nameOf(ends.to))} · ${time} EVE</b>`];
+        if (note) parts.push(escape(note));
+        if (link) parts.push(`<a href="${link}">Open this route on the mapper</a> (link works 24 h)`);
+        for (const kind of ['default', 'shortest', 'safest', 'shortestBackup', 'safestBackup'] as TRouteKind[]) {
+            const { route } = await routeFor(kind, ends.from, ends.to);
+            if (!route) continue;
+            const text = routeSummary(toInput(route, undefined, kind), null, { layout: 'lines', links: 'mail' });
+            parts.push(text.replace(/^([^<]*)/, (head) => `<b>${head.toUpperCase()}</b>`));
+        }
+        return { subject: `Route ${nameOf(ends.from)} → ${nameOf(ends.to)} · ${time} EVE`.slice(0, 100), body: parts.join('<br><br>'), from: ends.from, to: ends.to };
+    }
+
+    /** Patch 37: in-game waypoints for a route kind (the end of every gate leg). */
+    async function waypointsFor(kind: TRouteKind): Promise<number[]> {
+        const ends = endpoints();
+        if (!ends) return [];
+        const { route } = await routeFor(kind, ends.from, ends.to);
+        if (!route) return [];
+        const input = toInput(route, undefined, kind);
+        return gateWaypoints(input.steps, input.hops);
+    }
+
+    return {
+        roundTrip,
+        copyForLinking,
+        notepadLinks,
+        nameOf,
+        copyRoute,
+        routeText,
+        pingSections,
+        copyHoldFacts,
+        copyScanPlan,
+        routeReport,
+        waypointsFor,
+        canCopy: computed(() => Boolean(originId.value && toSystemId.value)),
+    };
 }

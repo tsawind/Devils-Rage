@@ -4,6 +4,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ROUTE_KIND_LABELS, type TRouteKind, useRouteCopy } from '@/composables/useRouteCopy';
 import { ChevronDown, ClipboardCopy, Radar, ShieldCheck, TriangleAlert, Zap } from 'lucide-vue-next';
+import type { Component } from 'vue';
 
 /**
  * Patch 26: copy a route for fleet chat. `bar`: in the map bar (Default, Safest, ▾ for the
@@ -12,55 +13,38 @@ import { ChevronDown, ClipboardCopy, Radar, ShieldCheck, TriangleAlert, Zap } fr
  */
 const { variant } = defineProps<{ variant: 'bar' | 'panel' }>();
 
-const { roundTrip, copyRoute, copyHoldFacts, copyScanPlan, canCopy } = useRouteCopy();
+const { roundTrip, copyForLinking, notepadLinks, copyRoute, copyHoldFacts, copyScanPlan, canCopy } = useRouteCopy();
+
+/** Patch 37: the bar's copy buttons, each backup right after its route. */
+const barButtons: { kind: TRouteKind; icon: Component; tip: string; backup?: boolean }[] = [
+    { kind: 'default', icon: ClipboardCopy, tip: 'Copy the route for chat (your route settings)' },
+    { kind: 'shortest', icon: Zap, tip: 'Copy the Shortest route (frigate holes skipped)' },
+    { kind: 'shortestBackup', icon: Zap, tip: "Copy the Shortest backup: the next route once one of the Shortest route's holes is gone", backup: true },
+    { kind: 'safest', icon: ShieldCheck, tip: 'Copy the Safest route (frigate holes skipped)' },
+    { kind: 'safestBackup', icon: ShieldCheck, tip: "Copy the Safest backup: the next route once one of the Safest route's holes is gone", backup: true },
+];
 const kinds: TRouteKind[] = ['default', 'shortest', 'shortestBackup', 'safest', 'safestBackup'];
 const hint = 'Pick To in Routing first (From is home while it is empty)';
 </script>
 
 <template>
     <div v-if="variant === 'bar'" class="flex items-center gap-1">
-        <Tooltip>
+        <!-- Patch 37: the backups sit next to their route, drawn as a "second" (dashed, dimmer, a small 2) -->
+        <Tooltip v-for="button in barButtons" :key="button.kind">
             <TooltipTrigger as-child>
                 <button
                     type="button"
-                    class="flex items-center rounded border border-border/50 bg-background p-1.5 text-muted-foreground hover:border-border hover:text-foreground disabled:opacity-40"
+                    class="relative flex items-center rounded border bg-background p-1.5 hover:border-border hover:text-foreground disabled:opacity-40"
+                    :class="button.backup ? 'border-dashed border-border/60 text-muted-foreground/70' : 'border-border/50 text-muted-foreground'"
                     :disabled="!canCopy"
-                    aria-label="Copy the Default route"
-                    @click="copyRoute('default')"
+                    :aria-label="`Copy the ${ROUTE_KIND_LABELS[button.kind]} route`"
+                    @click="copyRoute(button.kind)"
                 >
-                    <ClipboardCopy class="size-4" />
+                    <component :is="button.icon" class="size-4" />
+                    <span v-if="button.backup" class="absolute -right-0.5 -bottom-0.5 rounded-sm bg-background px-px font-mono text-[9px] leading-none font-bold">2</span>
                 </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom"><p class="text-xs">{{ canCopy ? 'Copy the route for chat (your route settings)' : hint }}</p></TooltipContent>
-        </Tooltip>
-        <!-- Patch 30: Shortest next to Safest (as on the rally badge) -->
-        <Tooltip>
-            <TooltipTrigger as-child>
-                <button
-                    type="button"
-                    class="flex items-center rounded border border-border/50 bg-background p-1.5 text-muted-foreground hover:border-border hover:text-foreground disabled:opacity-40"
-                    :disabled="!canCopy"
-                    aria-label="Copy the Shortest route"
-                    @click="copyRoute('shortest')"
-                >
-                    <Zap class="size-4" />
-                </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom"><p class="text-xs">{{ canCopy ? 'Copy the Shortest route (frigate holes skipped)' : hint }}</p></TooltipContent>
-        </Tooltip>
-        <Tooltip>
-            <TooltipTrigger as-child>
-                <button
-                    type="button"
-                    class="flex items-center rounded border border-border/50 bg-background p-1.5 text-muted-foreground hover:border-border hover:text-foreground disabled:opacity-40"
-                    :disabled="!canCopy"
-                    aria-label="Copy the Safest route"
-                    @click="copyRoute('safest')"
-                >
-                    <ShieldCheck class="size-4" />
-                </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom"><p class="text-xs">{{ canCopy ? 'Copy the Safest route (frigate holes skipped)' : hint }}</p></TooltipContent>
+            <TooltipContent side="bottom"><p class="text-xs">{{ canCopy ? button.tip : hint }}</p></TooltipContent>
         </Tooltip>
         <DropdownMenu>
             <DropdownMenuTrigger as-child>
@@ -85,6 +69,29 @@ const hint = 'Pick To in Routing first (From is home while it is empty)';
                 >
                     In and back out (½ mass)
                 </DropdownMenuCheckboxItem>
+                <!-- Patch 37: copy for EVE's Auto Link, or with ready-made links for the in-game Notepad -->
+                <DropdownMenuCheckboxItem
+                    class="text-xs"
+                    :model-value="copyForLinking"
+                    title="One real system per line, so a double-click selects it in fleet chat: right-click → Auto Link → Solar System"
+                    @update:model-value="(value: boolean | 'indeterminate') => (copyForLinking = value === true)"
+                    @select.prevent
+                >
+                    Copy for linking (one system per line)
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem
+                    class="text-xs"
+                    :model-value="notepadLinks"
+                    title="Copies with EVE link codes. Paste in the in-game Notepad (the systems become links), select it, right-click → Copy Selected With Formatting, and paste in fleet chat. Fleet chat alone drops the codes."
+                    @update:model-value="(value: boolean | 'indeterminate') => (notepadLinks = value === true)"
+                    @select.prevent
+                >
+                    Notepad links <span class="ml-auto rounded-full border px-1 text-[10px] text-muted-foreground">?</span>
+                </DropdownMenuCheckboxItem>
+                <p v-if="notepadLinks" class="px-2 pb-1 text-[11px] leading-snug text-muted-foreground">
+                    Paste in the in-game Notepad, select it, right-click → Copy Selected With Formatting, then paste in fleet chat.
+                </p>
+                <slot name="extra" />
             </DropdownMenuContent>
         </DropdownMenu>
         <!-- Patch 26: route settings (the same as Navigation's gear) -->
@@ -109,6 +116,17 @@ const hint = 'Pick To in Routing first (From is home while it is empty)';
         <label class="mt-1.5 flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
             <input v-model="roundTrip" type="checkbox" class="size-3" />
             In and back out (½ mass)
+        </label>
+        <label class="mt-1 flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground" title="One real system per line, so a double-click selects it in fleet chat: right-click → Auto Link → Solar System">
+            <input v-model="copyForLinking" type="checkbox" class="size-3" />
+            Copy for linking (one system per line)
+        </label>
+        <label
+            class="mt-1 flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground"
+            title="Copies with EVE link codes. Paste in the in-game Notepad, select it, right-click → Copy Selected With Formatting, and paste in fleet chat."
+        >
+            <input v-model="notepadLinks" type="checkbox" class="size-3" />
+            Notepad links
         </label>
         <p class="mt-2 mb-1.5 font-sans text-[11px] font-semibold tracking-wider text-amber-400/80 uppercase">Experimental</p>
         <div class="flex flex-wrap gap-1.5">

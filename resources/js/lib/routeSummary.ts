@@ -20,7 +20,21 @@ export type TRouteStep = {
     rage: boolean;
     /** Patch 37: the real system name of a mapped system (shown where the gates start: "A324-0 Turba"). */
     system?: string | null;
+    /** Patch 37: the solar system id, for in-game links (Notepad, mail). */
+    id?: number | null;
 };
+
+/**
+ * Patch 37: how the copy is written.
+ * - `layout`: 'line' = one line for fleet chat; 'lines' = one real system per line, so a
+ *   double-click selects it for EVE's Auto Link (fleet chat keeps the line breaks).
+ * - `links`: 'notepad' wraps systems in EVE link codes (paste in the in-game Notepad, then
+ *   Copy Selected With Formatting into chat); 'mail' writes EVE mail links and line breaks.
+ */
+export type TRouteFormat = { layout?: 'line' | 'lines'; links?: 'none' | 'notepad' | 'mail' };
+
+/** Patch 37: the EVE-Scout bookmark folder, exactly as it is named in game. */
+export const EVE_SCOUT_FOLDER = 'EvE-Scout \\\\ Hubs';
 
 export type TRouteHole = {
     typeName: string | null;
@@ -70,9 +84,20 @@ function about(kg: number): string {
     return mill(kg);
 }
 
-/** Which steps a fleet needs written down, and which go home-ward (a * way-back bookmark). */
-export function condenseRoute(steps: readonly TRouteStep[], hops: readonly TRouteHop[]): string {
-    if (steps.length === 0) return '';
+type TRouteEntry = {
+    step: TRouteStep;
+    label: string;
+    /** The real system to link (k-space names; map names link to their system too). */
+    linkName: string | null;
+    homeward: boolean;
+    exitSig: string | null;
+    /** How the route leaves it for the next written stop. */
+    leave: { kind: 'gates'; count: number } | { kind: 'evescout' } | { kind: 'hole' } | null;
+};
+
+/** Which steps a fleet needs written down, and how the route goes from one to the next. */
+export function routeEntries(steps: readonly TRouteStep[], hops: readonly TRouteHop[]): TRouteEntry[] {
+    if (steps.length === 0) return [];
     const depth = (index: number) => steps[index].depth ?? Infinity;
     const keep = steps.map((_, index) => index === 0 || index === steps.length - 1);
     for (let index = 1; index < steps.length - 1; index++) {
@@ -83,28 +108,125 @@ export function condenseRoute(steps: readonly TRouteStep[], hops: readonly TRout
         // Leaving / entering the map through a hole. Patch 37: by gate it isn't written down, the
         // gate jumps are counted in one go ("A324-0 Turba → 15j → Jita", not "→ 1j → Yooh → 14j →").
         if ((step.mapped !== steps[index + 1].mapped && after === 'hole') || (step.mapped !== steps[index - 1].mapped && before === 'hole')) keep[index] = true;
+        // Patch 37: both ends of an EVE-Scout hole (Thera / Turnur) are always written down.
+        if (hops[index - 1]?.via === 'evescout' || hops[index]?.via === 'evescout') keep[index] = true;
         if (step.rage && (!steps[index - 1].rage || !steps[index + 1].rage)) keep[index] = true; // a rage run's first and last
         const up = depth(index) < depth(index - 1);
         const nextUp = depth(index + 1) < depth(index);
         if (step.mapped && up !== nextUp) keep[index] = true; // turns from home-ward to out-ward (or back)
     }
-    const parts: string[] = [];
-    let previous = -1;
-    steps.forEach((step, index) => {
-        if (!keep[index]) return;
-        // Patch 29d: a stretch of k-space by gate says how many jumps it is ("Niarja → 7j → Amarr").
-        if (previous >= 0 && hops.slice(previous, index).every((hop) => hop?.via === 'stargate')) parts.push(`${index - previous}j`);
-        previous = index;
+    const kept = steps.map((_, index) => index).filter((index) => keep[index]);
+    return kept.map((index, position) => {
+        const step = steps[index];
+        const next = kept[position + 1];
+        const between = next === undefined ? [] : hops.slice(index, next);
+        const leave: TRouteEntry['leave'] =
+            next === undefined
+                ? null
+                : between.every((hop) => hop?.via === 'stargate')
+                  ? { kind: 'gates', count: next - index }
+                  : between.some((hop) => hop?.via === 'evescout')
+                    ? { kind: 'evescout' }
+                    : { kind: 'hole' };
         // Reached by going home-ward: the bookmark there is a way-back one (*).
         const homeward = index > 0 && step.mapped && depth(index) < depth(index - 1);
         const hop = hops[index];
         // The way out of the map into k-space: the hole's signature, so a scout can find it.
-        const exitSig = step.mapped && hop?.via !== 'stargate' && steps[index + 1] && !steps[index + 1].mapped ? hop?.hole?.nearSignature?.slice(0, 3).toUpperCase() : null;
+        const exitSig = step.mapped && hop?.via !== 'stargate' && steps[index + 1] && !steps[index + 1].mapped ? (hop?.hole?.nearSignature?.slice(0, 3).toUpperCase() ?? null) : null;
         // Patch 37: where the gates start from a mapped system, its real name too ("A324-0 Turba").
-        const label = step.mapped && hop?.via === 'stargate' && step.system && step.system !== step.name ? `${step.name} ${step.system}` : step.name;
-        parts.push(`${homeward ? '*' : ''}${label}${exitSig ? ` (${exitSig})` : ''}`);
+        const showsSystem = step.mapped && (hop?.via === 'stargate' || hop?.via === 'evescout') && Boolean(step.system) && step.system !== step.name;
+        const label = showsSystem ? `${step.name} ${step.system}` : step.name;
+        // A k-space system the fleet sets a destination to: unmapped, or mapped where gates / EVE-Scout start or end.
+        const arrivesOutside = hops[index - 1]?.via === 'stargate' || hops[index - 1]?.via === 'evescout';
+        const linkName = !step.mapped ? step.name : (showsSystem || arrivesOutside) && step.system ? step.system : null;
+        return { step, label, linkName, homeward, exitSig, leave };
     });
-    return parts.join(' → ');
+}
+
+/** The EVE-Scout hub on a route (Thera or Turnur), when it uses an EVE-Scout hole. */
+export function eveScoutHub(steps: readonly TRouteStep[], hops: readonly TRouteHop[]): string | null {
+    let hub: string | null = null;
+    hops.forEach((hop, index) => {
+        if (hop?.via !== 'evescout') return;
+        for (const step of [steps[index], steps[index + 1]]) {
+            const name = step?.system ?? step?.name ?? '';
+            if (/^(thera|turnur)$/i.test(name)) hub = name;
+        }
+    });
+    if (hub) return hub;
+    return hops.some((hop) => hop?.via === 'evescout') ? 'Thera / Turnur' : null;
+}
+
+/** Patch 37: "bm-folder "EvE-Scout \\ Hubs" via Turnur". */
+export function eveScoutNote(hub: string | null): string | null {
+    return hub ? `bm-folder "${EVE_SCOUT_FOLDER}" via ${hub}` : null;
+}
+
+function linkTo(name: string, id: number | null | undefined, links: TRouteFormat['links']): string {
+    if (!id || links === 'none' || links === undefined) return name;
+    return links === 'mail' ? `<a href="showinfo:5//${id}">${name}</a>` : `<url=showinfo:5//${id}>${name}</url>`;
+}
+
+/** The written route: one line, or one real system per line (patch 37). */
+export function renderRoute(entries: readonly TRouteEntry[], format: TRouteFormat = {}): string {
+    const links = format.links ?? 'none';
+    const text = (entry: TRouteEntry, name: string) => `${entry.homeward ? '*' : ''}${name}${entry.exitSig ? ` (${entry.exitSig})` : ''}`;
+    if ((format.layout ?? 'line') === 'line') {
+        const parts: string[] = [];
+        entries.forEach((entry, index) => {
+            // Map names link to their system too, so a click in game shows the real one.
+            const name = entry.linkName && entry.label.includes(entry.linkName) ? entry.label.replace(entry.linkName, linkTo(entry.linkName, entry.step.id, links)) : linkTo(entry.label, entry.step.id, links);
+            parts.push(text(entry, name));
+            const leave = entry.leave;
+            if (index === entries.length - 1 || !leave) return;
+            parts.push(leave.kind === 'gates' ? ` → ${leave.count}j → ` : leave.kind === 'evescout' ? ' ⇢ES⇢ ' : ' → ');
+        });
+        return parts.join('');
+    }
+    // One real system per line: it starts the line, then how you leave it. Map names (J-space)
+    // stay together on one line ("Daisy → A1 (GNC)"); a hole into the map continues the line.
+    const lines: string[] = [];
+    let current = '';
+    const add = (piece: string) => {
+        current = current ? `${current}${current.endsWith('→') ? ' ' : ' → '}${piece}` : piece;
+    };
+    entries.forEach((entry, index) => {
+        const leave = index === entries.length - 1 ? null : entry.leave;
+        if (!entry.linkName) {
+            add(text(entry, linkTo(entry.label, entry.step.id, links)));
+            return;
+        }
+        const mapPart = entry.step.mapped && entry.label !== entry.linkName ? entry.label.replace(` ${entry.linkName}`, '') : null;
+        if (mapPart) add(text(entry, mapPart));
+        if (current) lines.push(current);
+        const after = !leave ? '' : leave.kind === 'gates' ? ` · ${leave.count} ${leave.count === 1 ? 'gate' : 'gates'}` : leave.kind === 'evescout' ? ' ⇢ EVE-Scout hole' : ' →';
+        current = `${entry.homeward && !mapPart ? '*' : ''}${linkTo(entry.linkName, entry.step.id, links)}${after}`;
+        if (leave?.kind !== 'hole') {
+            lines.push(current);
+            current = '';
+        }
+    });
+    if (current) lines.push(current);
+    return lines.join(links === 'mail' ? '<br>' : '\n');
+}
+
+/**
+ * Patch 37: the in-game waypoints for a route: the end of every gate leg (autopilot can't
+ * use holes; you take those yourself and autopilot re-routes to the next waypoint).
+ */
+export function gateWaypoints(steps: readonly TRouteStep[], hops: readonly TRouteHop[]): number[] {
+    const entries = routeEntries(steps, hops);
+    const ids: number[] = [];
+    entries.forEach((entry, index) => {
+        const previous = entries[index - 1];
+        if (index > 0 && previous?.leave?.kind === 'gates' && entry.step.id) ids.push(entry.step.id);
+    });
+    return ids;
+}
+
+/** Which steps a fleet needs written down, and which go home-ward (a * way-back bookmark). */
+export function condenseRoute(steps: readonly TRouteStep[], hops: readonly TRouteHop[], format: TRouteFormat = {}): string {
+    return renderRoute(routeEntries(steps, hops), format);
 }
 
 function holesOnRoute(input: TRouteInput): THoleOnRoute[] {
@@ -141,10 +263,13 @@ function massLine(input: TRouteInput, holes: THoleOnRoute[]): string | null {
         const high = share(input, Math.min(...estimated.map((entry) => entry.estimate.max)));
         const { shipMass } = FLEET_RULES;
         const fits = (ship: number) => maxJump === null || ship <= maxJump;
+        // Patch 37: battleships as worst ↔ best case; BCs and cruisers as "at least" (worst case +).
+        const lowBs = Math.floor(low / shipMass.battleship);
+        const highBs = Math.floor(high / shipMass.battleship);
         const counts = [
-            fits(shipMass.battleship) ? `${Math.floor(low / shipMass.battleship)} BS` : null,
-            fits(shipMass.battlecruiser) ? `${Math.floor(low / shipMass.battlecruiser)} BC` : null,
-            fits(shipMass.cruiser) ? `${Math.floor(low / shipMass.cruiser)} cruisers` : null,
+            fits(shipMass.battleship) ? `${lowBs === highBs ? lowBs : `${lowBs}↔${highBs}`} BS` : null,
+            fits(shipMass.battlecruiser) ? `${Math.floor(low / shipMass.battlecruiser)}+ BC` : null,
+            fits(shipMass.cruiser) ? `${Math.floor(low / shipMass.cruiser)}+ cruisers` : null,
         ].filter(Boolean);
         parts.push(`${mill(low)}–${mill(high)} kg${input.roundTrip ? ' in+out' : ''}${counts.length ? ` ≈ ${counts.join(' / ')}` : ''}`);
     }
@@ -182,12 +307,16 @@ function riskText(entry: THoleOnRoute, now: Date): string | null {
 }
 
 /** The whole copy for a route, cut to fit FLEET_RULES.maxCopyLength (extras go first, the route stays). */
-export function routeSummary(input: TRouteInput, extra: string | null = null): string {
+export function routeSummary(input: TRouteInput, extra: string | null = null, format: TRouteFormat = {}): string {
     // Patch 29d: "Safest 12j: …" (the kind when known, and the total jumps).
     const jumps = Math.max(0, input.steps.length - 1);
-    const route = `${input.kind ? `${input.kind} ` : ''}${jumps}j: ${condenseRoute(input.steps, input.hops)}`;
+    const lines = format.layout === 'lines';
+    const head = `${input.kind ? `${input.kind} ` : ''}${jumps}j`;
+    const path = condenseRoute(input.steps, input.hops, format);
     const holes = holesOnRoute(input);
     const mass = massLine(input, holes);
+    // Patch 37: an EVE-Scout hole on the route: where its bookmarks are.
+    const scout = eveScoutNote(eveScoutHub(input.steps, input.hops));
     // Patch 32: no chokepoints on a frigate-only route (mass doesn't matter there).
     const frigateOnly = holes.some((entry) => isFrigateHole(entry.hole.maxJumpMass));
     const chokes = frigateOnly ? [] : chokepoints(holes).map(chokeText);
@@ -195,9 +324,19 @@ export function routeSummary(input: TRouteInput, extra: string | null = null): s
         .map((entry) => riskText(entry, input.now))
         .filter((text): text is string => text !== null)
         .slice(0, FLEET_RULES.maxRisks);
-    const build = (c: string[], r: string[], m: string | null, e: string | null) =>
-        [route, m, c.length ? `Choke: ${c.join(', ')}` : null, r.length ? `Risk: ${r.join(', ')}` : null, e].filter(Boolean).join(' | ');
-    // Drop detail until it fits: extra chokepoints, extra risks, the extra line, then the mass line.
+    const build = (c: string[], r: string[], m: string | null, e: string | null) => {
+        const notes = [scout, c.length ? `Choke: ${c.join(', ')}` : null, r.length ? `Risk: ${r.join(', ')}` : null, e].filter((part): part is string => Boolean(part));
+        if (lines) {
+            // Patch 37: one real system per line; the head and the notes on their own lines.
+            const breakAt = format.links === 'mail' ? '<br>' : '\n';
+            return [[head, m].filter(Boolean).join(' · '), path, ...notes].join(breakAt);
+        }
+        return [`${head}: ${path}`, m, ...notes].filter(Boolean).join(' | ');
+    };
+    // Drop detail until it fits (what people see in chat: link codes don't count): extra
+    // chokepoints, extra risks, the extra line, then the mass line.
+    const visible = (text: string) => text.replace(/<url=[^>]*>|<\/url>|<a [^>]*>|<\/a>/g, '').replace(/<br>/g, '\n').length;
+    const limit = format.links === 'mail' ? 7_500 : FLEET_RULES.maxCopyLength;
     const attempts: [string[], string[], string | null, string | null][] = [
         [chokes, risks, mass, extra],
         [chokes.slice(0, 1), risks, mass, extra],
@@ -208,9 +347,10 @@ export function routeSummary(input: TRouteInput, extra: string | null = null): s
     ];
     for (const attempt of attempts) {
         const text = build(...attempt);
-        if (text.length <= FLEET_RULES.maxCopyLength) return text;
+        if (visible(text) <= limit) return text;
     }
-    return route.slice(0, FLEET_RULES.maxCopyLength);
+    const minimal = build([], [], null, null);
+    return visible(minimal) <= limit ? minimal : minimal.slice(0, limit);
 }
 
 /** Experimental: the facts about each risky hole, no verdicts. */

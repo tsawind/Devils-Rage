@@ -1,5 +1,5 @@
 import { FLEET_RULES } from '@/lib/fleetRules';
-import { condenseRoute, holdFacts, routeSummary, scanPlan, type TRouteHole, type TRouteHop, type TRouteStep } from '@/lib/routeSummary';
+import { condenseRoute, EVE_SCOUT_FOLDER, gateWaypoints, holdFacts, routeSummary, scanPlan, type TRouteHole, type TRouteHop, type TRouteStep } from '@/lib/routeSummary';
 import { describe, expect, it } from 'vitest';
 
 const step = (name: string, depth: number | null, extra: Partial<TRouteStep> = {}): TRouteStep => ({ name, mapped: depth !== null, depth, rage: false, ...extra });
@@ -51,7 +51,11 @@ describe('patch 26: size, mass, chokepoints and risks', () => {
     it('size from the smallest hole, mass from the tightest, counted cold with plates on', () => {
         const text = routeSummary({ steps, hops: [wh(), wh({ totalMass: 3_000_000_000, typeName: 'B274' }), wh()], roundTrip: false, now });
         expect(text).toContain('Battleship sized');
-        expect(text).toContain(`≈ ${Math.floor((3_000_000_000 * 0.9 * 0.5) / FLEET_RULES.shipMass.battleship)} BS`);
+        // Patch 37: battleships worst ↔ best case, the rest "at least".
+        const low = Math.floor((3_000_000_000 * 0.9 * 0.5) / FLEET_RULES.shipMass.battleship);
+        const high = Math.floor((3_000_000_000 * 1.1) / FLEET_RULES.shipMass.battleship);
+        expect(text).toContain(`≈ ${low}↔${high} BS / `);
+        expect(text).toMatch(/\d+\+ BC \/ \d+\+ cruisers/);
         expect(text).toContain('Choke: Alpha↔A12 "B274"');
     });
 
@@ -158,5 +162,57 @@ describe('patch 32: frigate-only routes skip the mass', () => {
         expect(text).toContain('Frig sized');
         expect(text).not.toContain(' kg');
         expect(text).not.toContain('Choke');
+    });
+});
+
+describe('patch 37: EVE-Scout holes, linking and waypoints', () => {
+    const scout: TRouteHop = { via: 'evescout', hole: null };
+    const k = (name: string, id: number) => step(name, null, { id });
+    // Daisy → A1 (Zephan) → 5 gates → Naga ⇢ Turnur ⇢ Hampinen → 7 gates → Jita
+    const steps = [
+        step('Daisy', 0, { id: 31002171 }),
+        step('A1', 1, { system: 'Zephan', id: 30001 }),
+        k('G1', 2), k('G2', 3), k('G3', 4), k('G4', 5),
+        k('Naga', 30002),
+        k('Turnur', 30002086),
+        k('Hampinen', 30003),
+        k('H1', 4), k('H2', 5), k('H3', 6), k('H4', 7), k('H5', 8), k('H6', 9),
+        k('Jita', 30000142),
+    ];
+    const hops: TRouteHop[] = [wh(), gate, gate, gate, gate, gate, scout, scout, gate, gate, gate, gate, gate, gate, gate];
+
+    it('keeps both ends of every EVE-Scout hole and marks them', () => {
+        expect(condenseRoute(steps, hops)).toBe('Daisy → A1 Zephan → 5j → Naga ⇢ES⇢ Turnur ⇢ES⇢ Hampinen → 7j → Jita');
+    });
+
+    it('says where the EVE-Scout bookmarks are', () => {
+        expect(EVE_SCOUT_FOLDER).toBe('EvE-Scout \\\\ Hubs');
+        expect(routeSummary({ steps, hops, roundTrip: false, now })).toContain('| bm-folder "EvE-Scout \\\\ Hubs" via Turnur');
+    });
+
+    it('one real system per line, for Auto Link', () => {
+        expect(condenseRoute(steps, hops, { layout: 'lines' }).split('\n')).toEqual([
+            'Daisy → A1',
+            'Zephan · 5 gates',
+            'Naga ⇢ EVE-Scout hole',
+            'Turnur ⇢ EVE-Scout hole',
+            'Hampinen · 7 gates',
+            'Jita',
+        ]);
+    });
+
+    it('Notepad links wrap the systems in EVE link codes; mail uses mail links', () => {
+        expect(condenseRoute(steps, hops, { links: 'notepad' })).toContain('<url=showinfo:5//30000142>Jita</url>');
+        expect(condenseRoute(steps, hops, { links: 'notepad' })).toContain('A1 <url=showinfo:5//30001>Zephan</url>');
+        expect(condenseRoute(steps, hops, { layout: 'lines', links: 'mail' })).toContain('<a href="showinfo:5//30002">Naga</a> ⇢ EVE-Scout hole<br>');
+    });
+
+    it('the chat limit counts what people see, not the link codes', () => {
+        const text = routeSummary({ steps, hops, roundTrip: false, now }, null, { links: 'notepad' });
+        expect(text.replace(/<url=[^>]*>|<\/url>/g, '').length).toBeLessThanOrEqual(FLEET_RULES.maxCopyLength);
+    });
+
+    it('in-game waypoints: the end of every gate leg', () => {
+        expect(gateWaypoints(steps, hops)).toEqual([30002, 30000142]);
     });
 });
