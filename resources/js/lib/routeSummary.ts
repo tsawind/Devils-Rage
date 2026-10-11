@@ -1,3 +1,4 @@
+import { collapseText, collapseWindow, type TCollapseWindow } from '@/lib/collapseWindow';
 import { FLEET_RULES, sizeLabel } from '@/lib/fleetRules';
 import { estimateMass, isFrigateHole, type TMassEstimate } from '@/lib/massEstimate';
 
