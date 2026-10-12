@@ -41,14 +41,14 @@ final readonly class AssetProximity
                     'jumps' => $jumps,
                     'items' => (int) $bySystem[$systemId]['items'],
                     'value' => (float) $bySystem[$systemId]['value'],
-                    'ships' => array_values($bySystem[$systemId]['ships']),
+                    'ships' => $bySystem[$systemId]['ships'],
                 ];
             }
         }
 
         usort($hits, fn (array $a, array $b): int => [$a['jumps'], -$a['value']] <=> [$b['jumps'], -$b['value']]);
 
-        return array_values($hits);
+        return $hits;
     }
 
     /**

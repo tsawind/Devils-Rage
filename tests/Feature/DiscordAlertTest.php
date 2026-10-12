@@ -104,6 +104,9 @@ it('registers a direct autocomplete interaction listener', function () {
     $routeCommand = Mockery::mock(RegisteredCommand::class);
 
     $discord = Mockery::mock(Discord::class);
+    foreach (['help', 'caps', 'assets', 'fit', 'canfly'] as $name) {
+        $discord->shouldReceive('listenCommand')->once()->with($name, Mockery::type('callable'))->andReturn(Mockery::mock(RegisteredCommand::class));
+    }
     $discord->shouldReceive('listenCommand')->once()->with('account', Mockery::type('callable'))->andReturn($accountCommand);
     $discord->shouldReceive('listenCommand')->once()->with('alert', Mockery::type('callable'))->andReturn($alertCommand);
     $discord->shouldReceive('listenCommand')->once()->with('alerts', Mockery::type('callable'))->andReturn($alertsCommand);
