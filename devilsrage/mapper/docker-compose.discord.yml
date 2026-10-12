@@ -1,0 +1,36 @@
+# The mapper's own Discord bot (slash commands /account /alert /alerts /route, and
+# bot-delivered alerts). Upstream ships this service commented out in
+# docker-compose.prod.yml; this file switches it on without editing upstream files.
+#
+# Copy next to the other compose files, then always use all three:
+#   cp ~/wormholesystems-containers/wormhole-systems/devilsrage/mapper/docker-compose.discord.yml ~/wormholesystems-containers/
+#   C="docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.discord.yml"
+#
+# Needs DISCORD_APPLICATION_ID, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET and
+# DISCORD_BOT_TOKEN in ~/wormholesystems-containers/.env. When the app container
+# starts with those set, it registers the slash commands and restarts this bot.
+# Uses the image the app build makes (no build of its own). No secrets in this file.
+
+services:
+  discord:
+    image: wormhole-systems:production
+    pull_policy: never
+    env_file:
+      - .env
+    networks:
+      - ws-internal
+    volumes:
+      - laravel-storage:/app/storage
+      - ./dockerfiles/common/frankenPHP/php.ini:/usr/local/etc/php/conf.d/custom.ini
+    tty: true
+    command: php artisan discord:listen
+    restart: unless-stopped
+    mem_limit: 192m
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "php artisan discord:listen"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
