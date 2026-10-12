@@ -100,7 +100,7 @@ final class SeatClient
     /**
      * Corp structures and their fuel. SeAT only answers this for corp leaders.
      *
-     * @return list<array{name: string, type: string, system_id: int, state: string, fuel_expires: string|null, hours_left: int|null}>|null
+     * @return list<array{kind?: string, name: string, type: string, system_id: int, state: string, fuel_expires: string|null, hours_left: int|null, strontium_hours?: int|null}>|null
      *
      * @throws SeatForbiddenException
      * @throws SeatUnavailableException

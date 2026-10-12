@@ -418,3 +418,18 @@ it('stops both fuel summaries with one /fuel stop', function () {
     expect($reply)->toBe('Stopped "Daily structure fuel", "Weekly structure fuel" in this channel.')
         ->and(DiscordChannelFeed::query()->count())->toBe(0);
 });
+
+it('lists control towers alike on one line with strontium', function () {
+    $system = makeSolarsystem(30009611, -1.0, 'wh');
+    $tower = fn (string $moon): array => ['kind' => 'pos', 'name' => 'Test System '.$system.' VII - Moon '.$moon, 'type' => 'Caldari Control Tower Small', 'system_id' => $system, 'state' => 'online', 'fuel_expires' => null, 'hours_left' => 234, 'strontium_hours' => 41];
+    Http::fake(['seat.test/devilsrage/api/discord/5151/fuel' => Http::response(['structures' => [
+        ['kind' => 'structure', 'name' => 'Old-Daisy', 'type' => 'Fortizar', 'system_id' => $system, 'state' => 'shield_vulnerable', 'fuel_expires' => null, 'hours_left' => 1245, 'strontium_hours' => null],
+        $tower('4'),
+        $tower('3'),
+    ]])]);
+
+    expect(app(ShowStructureFuelAction::class)->handle('5151'))
+        ->toContain('1 structure, 2 POS, 0 under a week')
+        ->toContain('🟢 **2× Caldari Control Tower Small** (Test System '.$system.': VII-4, VII-3) · 9d 18h left · stront 41h')
+        ->toContain('**Old-Daisy** (Fortizar, Test System '.$system.') · 51d 21h left');
+});
