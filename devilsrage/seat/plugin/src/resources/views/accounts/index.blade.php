@@ -110,11 +110,30 @@
             @endif
           </ul>
           <div class="card-footer d-flex flex-column" style="gap: .5rem;">
-            <form method="post" action="{{ route('devilsrage.accounts.omega', $account) }}" class="form-inline" style="gap: .5rem;">
+            <form method="post" action="{{ route('devilsrage.accounts.omega', $account) }}" class="small">
               @csrf
-              <label for="dr-omega-{{ $account->id }}" class="small mb-0">Omega until</label>
-              <input id="dr-omega-{{ $account->id }}" type="date" name="omega_until" value="{{ $account->omega_until?->format('Y-m-d') }}" class="form-control form-control-sm">
-              <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+              <div class="form-inline mb-1" style="gap: .4rem;">
+                <label for="dr-omega-{{ $account->id }}" class="mb-0" style="width: 3.2rem;">Omega</label>
+                <input id="dr-omega-{{ $account->id }}" type="date" name="omega_until" value="{{ $account->omega_until?->format('Y-m-d') }}" class="form-control form-control-sm" title="When Omega runs out">
+                <div class="custom-control custom-checkbox">
+                  <input type="checkbox" class="custom-control-input" id="dr-omega-auto-{{ $account->id }}" name="omega_auto" value="1" @checked($account->omega_auto)>
+                  <label class="custom-control-label" for="dr-omega-auto-{{ $account->id }}">auto-renew</label>
+                </div>
+              </div>
+              <div class="form-inline mb-1" style="gap: .4rem;">
+                <label for="dr-mct-{{ $account->id }}" class="mb-0" style="width: 3.2rem;">MCT</label>
+                <select id="dr-mct-{{ $account->id }}" name="mct_slots" class="form-control form-control-sm" title="Multiple Character Training slots">
+                  @foreach([0 => 'none', 1 => '1 slot', 2 => '2 slots'] as $slots => $label)
+                    <option value="{{ $slots }}" @selected((int) $account->mct_slots === $slots)>{{ $label }}</option>
+                  @endforeach
+                </select>
+                <input type="date" name="mct_until" value="{{ $account->mct_until?->format('Y-m-d') }}" class="form-control form-control-sm" aria-label="MCT until" title="When MCT runs out">
+                <div class="custom-control custom-checkbox">
+                  <input type="checkbox" class="custom-control-input" id="dr-mct-auto-{{ $account->id }}" name="mct_auto" value="1" @checked($account->mct_auto)>
+                  <label class="custom-control-label" for="dr-mct-auto-{{ $account->id }}">auto</label>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-sm btn-outline-secondary">Save Omega / MCT</button>
             </form>
             <form method="post" action="{{ route('devilsrage.accounts.rename', $account) }}" class="form-inline" style="gap: .5rem;">
               @csrf

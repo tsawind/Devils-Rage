@@ -13,6 +13,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $nickname
  * @property \Illuminate\Support\Carbon|null $omega_until
  * @property int|null $omega_reminded
+ * @property bool $omega_auto
+ * @property int $mct_slots
+ * @property \Illuminate\Support\Carbon|null $mct_until
+ * @property bool $mct_auto
+ * @property int|null $mct_reminded
  */
 class Account extends Model
 {
@@ -20,10 +25,18 @@ class Account extends Model
 
     protected $table = 'devilsrage_accounts';
 
-    protected $fillable = ['user_id', 'nickname', 'omega_until', 'omega_reminded'];
+    protected $fillable = ['user_id', 'nickname', 'omega_until', 'omega_reminded', 'omega_auto', 'mct_slots', 'mct_until', 'mct_auto', 'mct_reminded'];
 
     /** @var array<string, string> */
-    protected $casts = ['omega_until' => 'date', 'omega_reminded' => 'integer'];
+    protected $casts = [
+        'omega_until' => 'date',
+        'omega_reminded' => 'integer',
+        'omega_auto' => 'boolean',
+        'mct_slots' => 'integer',
+        'mct_until' => 'date',
+        'mct_auto' => 'boolean',
+        'mct_reminded' => 'integer',
+    ];
 
     public function characters(): HasMany
     {

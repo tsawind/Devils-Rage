@@ -28,7 +28,7 @@ final class OmegaStatus
 
     /**
      * @param  iterable<Account>  $accounts  with characters loaded
-     * @return array<int, array{until: ?Carbon, days_left: ?int, state: string, alpha: bool, alpha_characters: list<int>}>
+     * @return array<int, array{until: ?Carbon, days_left: ?int, auto: bool, mct_slots: int, mct_until: ?Carbon, mct_days_left: ?int, mct_auto: bool, mct_state: string, state: string, alpha: bool, alpha_characters: list<int>}>
      */
     public function forAccounts(iterable $accounts): array
     {
@@ -42,10 +42,26 @@ final class OmegaStatus
             $daysLeft = $until === null ? null : (int) Carbon::today()->diffInDays($until, false);
             $alphaCharacters = $account->characters->pluck('character_id')->map(fn ($id): int => (int) $id)->intersect($alpha)->values()->all();
 
+            $mctDays = $account->mct_until === null ? null : (int) Carbon::today()->diffInDays($account->mct_until, false);
+
             $result[$account->id] = [
                 'until' => $until,
                 'days_left' => $daysLeft,
+                'auto' => (bool) $account->omega_auto,
+                'mct_slots' => (int) $account->mct_slots,
+                'mct_until' => $account->mct_until,
+                'mct_days_left' => $mctDays,
+                'mct_auto' => (bool) $account->mct_auto,
+                'mct_state' => match (true) {
+                    (int) $account->mct_slots === 0 => 'none',
+                    (bool) $account->mct_auto => 'auto',
+                    $mctDays === null => 'unknown',
+                    $mctDays < 0 => 'expired',
+                    $mctDays <= self::SOON_DAYS => 'soon',
+                    default => 'ok',
+                },
                 'state' => match (true) {
+                    (bool) $account->omega_auto => 'auto',
                     $daysLeft === null => 'unknown',
                     $daysLeft < 0 => 'expired',
                     $daysLeft <= self::SOON_DAYS => 'soon',

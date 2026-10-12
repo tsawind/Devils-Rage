@@ -102,25 +102,37 @@ class AccountsController extends Controller
     }
 
     /**
-     * When Omega runs out on this account (empty = unknown / Alpha).
+     * Omega and Multiple Character Training of one account: end dates (empty =
+     * unknown / Alpha / none), whether they renew by themselves, and MCT slots.
      */
     public function setOmega(Request $request, Account $account): RedirectResponse
     {
         $this->authorizeOwner($account);
         $data = $request->validate([
             'omega_until' => ['nullable', 'date', 'after:2003-01-01', 'before:+5 years'],
+            'omega_auto' => ['boolean'],
+            'mct_slots' => ['required', 'integer', 'between:0,2'],
+            'mct_until' => ['nullable', 'date', 'after:2003-01-01', 'before:+5 years'],
+            'mct_auto' => ['boolean'],
         ], [
             'omega_until.before' => 'That date is too far ahead; use the date Omega runs out.',
+            'mct_until.before' => 'That date is too far ahead; use the date MCT runs out.',
         ]);
 
+        $omegaUntil = $data['omega_until'] ?? null;
+        $mctUntil = (int) $data['mct_slots'] > 0 ? ($data['mct_until'] ?? null) : null;
         $account->update([
-            'omega_until' => $data['omega_until'] ?? null,
-            'omega_reminded' => null,
+            'omega_until' => $omegaUntil,
+            'omega_auto' => $request->boolean('omega_auto'),
+            'mct_slots' => (int) $data['mct_slots'],
+            'mct_until' => $mctUntil,
+            'mct_auto' => (int) $data['mct_slots'] > 0 && $request->boolean('mct_auto'),
+            // A new date starts the reminders over.
+            'omega_reminded' => $account->omega_until?->format('Y-m-d') === ($omegaUntil === null ? null : date('Y-m-d', strtotime($omegaUntil))) ? $account->omega_reminded : null,
+            'mct_reminded' => $account->mct_until?->format('Y-m-d') === ($mctUntil === null ? null : date('Y-m-d', strtotime($mctUntil))) ? $account->mct_reminded : null,
         ]);
 
-        return back()->with('success', $account->omega_until === null
-            ? 'Omega date cleared for '.$account->nickname.'.'
-            : 'Omega for '.$account->nickname.' runs until '.$account->omega_until->format('Y-m-d').'. You get a Discord DM 7 days and 1 day before.');
+        return back()->with('success', 'Omega / MCT saved for '.$account->nickname.'. Reminders go out by Discord DM 7 days and 1 day before an end date, unless it renews by itself.');
     }
 
     public function deleteAccount(Account $account): RedirectResponse

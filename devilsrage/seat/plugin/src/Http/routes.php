@@ -35,6 +35,7 @@ Route::group([
 
     Route::get('sp-farm', [SpFarmController::class, 'index'])->name('devilsrage.spfarm.index');
     Route::post('sp-farm', [SpFarmController::class, 'store'])->name('devilsrage.spfarm.store');
+    Route::post('sp-farm/trader', [SpFarmController::class, 'trader'])->name('devilsrage.spfarm.trader');
     Route::post('sp-farm/settings', [SpFarmController::class, 'settings'])->name('devilsrage.spfarm.settings');
     Route::post('sp-farm/{characterId}/delete', [SpFarmController::class, 'destroy'])->whereNumber('characterId')->name('devilsrage.spfarm.delete');
 
