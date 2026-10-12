@@ -293,6 +293,8 @@ export type TMapConnection = {
     should_have_rolled?: boolean;
     jumps_count: number;
     jumps?: TConnectionJump[];
+    /** Patch 37: someone is "⚖ Adding mass…" on this hole (everyone on the map sees it). */
+    mass_session?: { id: number; by: string | null; goal: string } | null;
     created_at: string;
     updated_at: string;
 };

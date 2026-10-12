@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import FleetShips from '@/components/fleet/FleetShips.vue';
 import JumpingHotToggle from '@/components/fleet/JumpingHotToggle.vue';
+import MassSessions from '@/components/fleet/MassSessions.vue';
 import RollPanel from '@/components/fleet/RollPanel.vue';
+import RollingCrews from '@/components/fleet/RollingCrews.vue';
 import ShipProfiles from '@/components/fleet/ShipProfiles.vue';
 import MapPanel from '@/components/ui/map-panel/MapPanel.vue';
 import MapPanelContent from '@/components/ui/map-panel/MapPanelContent.vue';
 import MapPanelHeader from '@/components/ui/map-panel/MapPanelHeader.vue';
 import { countedShips, fleetMembers, fleetScope, setMine, useFleet } from '@/composables/useFleet';
+import { massOpenRequest, massState } from '@/composables/useMassSessions';
 import { useShipProfiles } from '@/composables/useShipProfiles';
 import useUser from '@/composables/useUser';
 import { mill } from '@/lib/routeSummary';
@@ -22,7 +25,15 @@ const { mapSlug } = defineProps<{ mapSlug: string }>();
 const { state, start, refresh } = useFleet(mapSlug);
 const profiles = useShipProfiles(mapSlug);
 const user = useUser();
-const tab = ref<'ships' | 'roll' | 'profiles'>('ships');
+const tab = ref<'ships' | 'mass' | 'crews' | 'roll' | 'profiles'>('ships');
+const root = ref<{ $el?: HTMLElement } | null>(null);
+const standalone = (key: string) => key === 'mass' || key === 'crews' || key === 'roll';
+
+// Patch 37: a session just started from a pipe's menu: show it.
+watch(massOpenRequest, () => {
+    tab.value = 'mass';
+    root.value?.$el?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+});
 
 onMounted(start);
 watch(
@@ -51,7 +62,7 @@ const updated = computed(() => {
 </script>
 
 <template>
-    <MapPanel>
+    <MapPanel ref="root">
         <MapPanelHeader card-id="fleet">
             <span class="inline-flex items-center gap-2">Fleet</span>
             <template #actions>
@@ -66,7 +77,9 @@ const updated = computed(() => {
                 <button
                     v-for="option in [
                         { key: 'ships', label: 'Ships' },
-                        { key: 'roll', label: 'Mass a hole' },
+                        { key: 'mass', label: massState.sessions.length ? `⚖ Sessions (${massState.sessions.length})` : '⚖ Sessions' },
+                        { key: 'crews', label: 'Crews' },
+                        { key: 'roll', label: 'Quick plan' },
                         { key: 'profiles', label: 'Ship profiles' },
                     ] as const"
                     :key="option.key"
@@ -80,13 +93,15 @@ const updated = computed(() => {
                 <span v-if="state.status === 'ok'" class="ml-auto self-center text-[11px] text-muted-foreground">read with {{ state.boss }} (boss) · {{ updated }}</span>
             </div>
             <div class="min-w-0 overflow-x-hidden px-3 py-2">
-                <p v-if="state.status === 'loading' || state.status === 'idle'" class="text-xs text-muted-foreground">Reading the fleet…</p>
-                <p v-else-if="state.status !== 'ok' && tab !== 'roll'" class="text-xs text-muted-foreground">
+                <p v-if="(state.status === 'loading' || state.status === 'idle') && !standalone(tab)" class="text-xs text-muted-foreground">Reading the fleet…</p>
+                <p v-else-if="state.status !== 'ok' && !standalone(tab)" class="text-xs text-muted-foreground">
                     {{ message }} <button type="button" class="ml-1 underline" @click="refresh()">Try again</button>
                 </p>
                 <FleetShips v-else-if="tab === 'ships'" :wings="wings" />
                 <ShipProfiles v-else-if="tab === 'profiles'" :map-slug="mapSlug" />
                 <RollPanel v-if="tab === 'roll'" />
+                <MassSessions v-if="tab === 'mass'" :map-slug="mapSlug" />
+                <RollingCrews v-if="tab === 'crews'" :map-slug="mapSlug" />
             </div>
         </MapPanelContent>
     </MapPanel>

@@ -14,16 +14,18 @@ import { useStaticData } from '@/composables/useStaticData';
 import { displayAlias } from '@/lib/alias';
 import { SHIP_SIZE_OPTIONS, shipSizeFromJumpMass } from '@/lib/shipSize';
 import { formatDateToISO } from '@/lib/utils';
+import { startMassSession } from '@/composables/useMassSessions';
 import { openAddMass } from '@/map/actions/addMass';
 import { deleteMapConnection } from '@/map/actions/deleteMapConnection';
 import { updateMapConnection } from '@/map/actions/updateMapConnection';
+import { tryUseMapStore } from '@/map/store/mapStore';
 import ConnectionHoleTypeMenu from '@/map/components/overlays/ConnectionHoleTypeMenu.vue';
 import ConnectionRelinkMenu from '@/map/components/overlays/ConnectionRelinkMenu.vue';
 import CopyConnectionNameMenu from '@/map/components/overlays/CopyConnectionNameMenu.vue';
 import { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { TConnectionType, TLifetimeStatus, TMassStatus, TShipSize } from '@/types/models';
 import { UTCDate } from '@date-fns/utc';
-import { Check, Clock, Heart, Plus, Ship, Trash2, TriangleAlert, Waypoints, Weight } from 'lucide-vue-next';
+import { Check, Clock, Heart, Plus, Scale, Ship, Trash2, TriangleAlert, Waypoints, Weight } from 'lucide-vue-next';
 import type { AcceptableValue } from 'reka-ui';
 import { computed } from 'vue';
 
@@ -56,6 +58,13 @@ const is_gate_connected = computed(() => {
 function handleAddMass() {
     const name = (system: TMapSolarsystem) => displayAlias(system.alias) || system.solarsystem.name;
     openAddMass({ connectionId: map_connection.id, label: `${name(map_connection.source)} → ${name(map_connection.target)}` });
+}
+
+const store = tryUseMapStore();
+
+/** Patch 37: ⚖ Adding mass…: a mass session on this hole (the Fleet window's Sessions tab). */
+function handleMassSession() {
+    if (store) void startMassSession(store, map_connection);
 }
 
 function handleRemoveFromMap() {
@@ -217,6 +226,10 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
         <ContextMenuItem v-if="map_connection.type !== 'stargate'" @select="handleAddMass">
             <Plus class="size-4" />
             Add mass…
+        </ContextMenuItem>
+        <ContextMenuItem v-if="map_connection.type !== 'stargate'" @select="handleMassSession">
+            <Scale class="size-4" />
+            {{ map_connection.mass_session ? `Mass session (${map_connection.mass_session.by ?? 'running'})…` : 'Adding mass… (session)' }}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem @select.prevent="handleTogglePreserveMass">

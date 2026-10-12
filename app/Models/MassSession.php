@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\MassSessions;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -31,6 +32,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 final class MassSession extends Model
 {
     protected $guarded = [];
+
+    protected static function booted(): void
+    {
+        self::saved(function (): void {
+            MassSessions::forget();
+        });
+        self::deleted(function (): void {
+            MassSessions::forget();
+        });
+    }
 
     /**
      * @return BelongsTo<MapConnection, $this>

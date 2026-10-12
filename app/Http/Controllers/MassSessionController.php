@@ -18,6 +18,7 @@ use App\Models\Type;
 use App\Models\User;
 use App\Support\Actor;
 use App\Support\Broadcasting\MapBroadcaster;
+use App\Support\MassSessions;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -222,6 +223,7 @@ final class MassSessionController extends Controller
 
     private function broadcastConnection(int $connectionId): void
     {
+        MassSessions::forget();
         $connection = MapConnection::query()->whereKey($connectionId)->with('signatures.signatureType', 'signatures.wormhole')->withJumpSummary()->get();
         $first = $connection->first();
         if ($first instanceof MapConnection) {

@@ -184,6 +184,12 @@ const indicators = computed<EdgeIndicator[]>(() => {
         items.push({ type: 'clock', fill: 'var(--color-purple-500)', stroke: 'var(--color-purple-600)', faint: true });
     }
 
+    // Patch 37: someone is "⚖ Adding mass…" on this hole.
+    if (connection?.mass_session) {
+        const by = (connection.mass_session.by ?? '').split(' ')[0].slice(0, 9);
+        items.push({ type: 'eol', label: by ? `⚖ ${by}` : '⚖', fill: 'var(--color-sky-600)', stroke: 'var(--color-sky-700)' });
+    }
+
     return items;
 });
 

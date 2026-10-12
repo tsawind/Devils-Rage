@@ -94,3 +94,17 @@ it('patch 37: only its owner changes a rolling crew; viewers cannot start sessio
     expect($crew->fresh()->name)->toBe('Devoter rollers')
         ->and($crew->fresh()->members[0]['expendable'])->toBeTrue();
 });
+
+it('patch 37: the pill shows a session as soon as it starts and drops it when it ends', function () {
+    ['map' => $map, 'home' => $home, 'connection' => $connection] = massHole();
+    $user = massUser($map);
+
+    expect(MassSessions::forConnection($map->id, $connection->id))->toBeNull();
+
+    actingAs($user)->postJson(route('maps.mass-sessions.store', $map), ['map_connection_id' => $connection->id, 'home_map_solarsystem_id' => $home->id])->assertOk();
+    $session = MassSession::query()->firstOrFail();
+    expect(MassSessions::forConnection($map->id, $connection->id))->toMatchArray(['id' => $session->id, 'goal' => 'watch']);
+
+    actingAs($user)->deleteJson(route('maps.mass-sessions.destroy', [$map, $session]))->assertOk();
+    expect(MassSessions::forConnection($map->id, $connection->id))->toBeNull();
+});

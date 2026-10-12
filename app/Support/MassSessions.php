@@ -16,20 +16,39 @@ use App\Models\Solarsystem;
 final class MassSessions
 {
     /**
+     * Open sessions by connection id, with when they were read (kept for a moment so a map's
+     * worth of pipes costs one query; long-running workers re-read them after that).
+     *
+     * @var array{at: float, open: array<int, array{id: int, by: string|null, goal: string}>}|null
+     */
+    private static ?array $cache = null;
+
+    /**
      * @return array{id: int, by: string|null, goal: string}|null
      */
     public static function forConnection(int $mapId, int $connectionId): ?array
     {
-        // Every open session, once per request (Octane flushes once() between requests).
-        /** @var array<int, array{id: int, by: string|null, goal: string}> $open connection id → session */
-        $open = once(fn (): array => MassSession::query()
-            ->whereNull('ended_at')
-            ->orderBy('id')
-            ->get(['id', 'map_connection_id', 'started_by_name', 'goal'])
-            ->mapWithKeys(fn (MassSession $session): array => [$session->map_connection_id => ['id' => $session->id, 'by' => $session->started_by_name, 'goal' => $session->goal]])
-            ->all());
+        if (self::$cache === null || microtime(true) - self::$cache['at'] > 2.0) {
+            self::$cache = [
+                'at' => microtime(true),
+                'open' => MassSession::query()
+                    ->whereNull('ended_at')
+                    ->orderBy('id')
+                    ->get(['id', 'map_connection_id', 'started_by_name', 'goal'])
+                    ->mapWithKeys(fn (MassSession $session): array => [$session->map_connection_id => ['id' => $session->id, 'by' => $session->started_by_name, 'goal' => $session->goal]])
+                    ->all(),
+            ];
+        }
 
-        return $open[$connectionId] ?? null;
+        return self::$cache['open'][$connectionId] ?? null;
+    }
+
+    /**
+     * A session started, changed or ended: read them again.
+     */
+    public static function forget(): void
+    {
+        self::$cache = null;
     }
 
     /**
