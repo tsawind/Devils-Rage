@@ -12,10 +12,11 @@ import SettingsLayout from '@/layouts/SettingsLayout.vue';
 import { TMapSummary } from '@/pages/maps';
 import { destroy, update } from '@/routes/maps';
 import { router, useForm } from '@inertiajs/vue3';
-import { Check, Copy, Globe, Link2, Link2Off, Waypoints, Workflow, type LucideIcon } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { Globe, Link2, Waypoints, Workflow, type LucideIcon } from 'lucide-vue-next';
+import { ref } from 'vue';
 
-const { map, is_public, share_token } = defineProps<{
+// Patch 37: viewer links live in the Share icon now (the old share token buttons are gone).
+const { map, is_public } = defineProps<{
     map: TMapSummary;
     is_public: boolean;
     share_token: string | null;
@@ -29,8 +30,6 @@ const form = useForm({
 
 const delete_confirmation = ref('');
 const is_deleting = ref(false);
-const copied = ref(false);
-const shareUrl = computed(() => (share_token ? `${window.location.origin}/share/${share_token}` : ''));
 
 function deleteMap() {
     if (delete_confirmation.value !== map.name) {
@@ -93,33 +92,6 @@ function togglePublic() {
             preserveScroll: true,
         },
     );
-}
-
-function generateShareToken() {
-    router.post(
-        `/maps/${map.slug}/settings/generate-share-token`,
-        {},
-        {
-            preserveState: true,
-            preserveScroll: true,
-        },
-    );
-}
-
-function revokeShareToken() {
-    router.delete(`/maps/${map.slug}/settings/revoke-share-token`, {
-        preserveState: true,
-        preserveScroll: true,
-    });
-}
-
-function copyShareLink() {
-    if (!shareUrl.value) return;
-    navigator.clipboard.writeText(shareUrl.value);
-    copied.value = true;
-    setTimeout(() => {
-        copied.value = false;
-    }, 2000);
 }
 </script>
 

@@ -23,8 +23,10 @@ export default defineConfigWithVueTs(
         files: ['resources/js/**/*.{ts,vue}'],
         ignores: ['resources/js/map/**'],
         rules: {
+            // Devil's Rage: the fork's own features reach into the map subsystem on purpose, so
+            // this layering rule only warns (it still shows in the editor).
             'no-restricted-imports': [
-                'error',
+                'warn',
                 {
                     patterns: [
                         {

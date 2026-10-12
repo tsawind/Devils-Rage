@@ -86,7 +86,6 @@ function scrollToCenter(behavior: ScrollBehavior, force: boolean): void {
     const target = centerScroll(view, point, { rage: is_combat.value, force });
     const maxTop = element.scrollHeight - element.clientHeight;
     const maxLeft = element.scrollWidth - element.clientWidth;
-    console.debug('[center]', { rage: is_combat.value, force, point, view, target, maxLeft, maxTop });
     if (!target) return;
     const clamped = { left: Math.min(target.left, Math.max(0, maxLeft)), top: Math.min(target.top, Math.max(0, maxTop)) };
     heading = behavior === 'smooth' ? { ...clamped, until: Date.now() + 700 } : null;
