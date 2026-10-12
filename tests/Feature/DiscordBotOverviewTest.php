@@ -24,6 +24,7 @@ use App\Services\Discord\ChainExitDescriber;
 use App\Services\Discord\Commands\CommandCatalogue;
 use App\Services\Discord\Commands\CommandRegistry;
 use App\Services\Discord\Commands\HelpCommand;
+use App\Services\Discord\DiscordInteractionHandler;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -314,4 +315,10 @@ it('lets map managers stop a chain exit feed but not the corp fuel post', functi
     actingAs($manager)->delete(route('discord-channel-feeds.destroy', $other))->assertForbidden();
 
     expect(DiscordChannelFeed::query()->pluck('id')->all())->toEqualCanonicalizing([$fuel->id, $other->id]);
+});
+
+it('answers autocomplete for every command with an autocompleted option', function () {
+    expect(app(DiscordInteractionHandler::class)->autocompletedCommands())
+        ->toContain('alert', 'alerts', 'route', 'caps', 'assets', 'exits')
+        ->not->toContain('help', 'fuel', 'plex');
 });

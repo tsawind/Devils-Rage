@@ -36,6 +36,8 @@ final readonly class DiscordInteractionHandler
 
     public function listen(Discord $discord): void
     {
+        $autocompleted = $this->autocompletedCommands();
+
         foreach ($this->commands->all() as $command) {
             $discord->listenCommand(
                 $command->definition()->name(),
@@ -43,11 +45,30 @@ final readonly class DiscordInteractionHandler
             );
         }
 
-        $discord->on(Event::INTERACTION_CREATE, function ($interaction) use ($discord): void {
-            if ($interaction instanceof ApplicationCommandAutocomplete && in_array($interaction->data->name, ['alert', 'alerts', 'route', 'caps', 'assets'], true)) {
+        $discord->on(Event::INTERACTION_CREATE, function ($interaction) use ($discord, $autocompleted): void {
+            if ($interaction instanceof ApplicationCommandAutocomplete && in_array($interaction->data->name, $autocompleted, true)) {
                 $this->safeAutocomplete($discord, $interaction);
             }
         });
+    }
+
+    /**
+     * Commands with at least one autocompleted option (read from their definitions, so a
+     * new command can't be forgotten here).
+     *
+     * @return list<string>
+     */
+    public function autocompletedCommands(): array
+    {
+        $names = [];
+        foreach ($this->commands->all() as $command) {
+            $definition = $command->definition()->toArray();
+            if (str_contains((string) json_encode($definition), '"autocomplete":true')) {
+                $names[] = (string) $definition['name'];
+            }
+        }
+
+        return $names;
     }
 
     private function dispatch(CommandDefinition $command, ApplicationCommand $interaction): void
