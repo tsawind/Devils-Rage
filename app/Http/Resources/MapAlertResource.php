@@ -54,6 +54,7 @@ final class MapAlertResource extends JsonResource
             'ship_type' => $this->ship_type?->value,
             'jdc_level' => $this->jdc_level,
             'include_highsec' => $this->include_highsec,
+            'exclude_highsec' => $this->exclude_highsec,
             'max_jumps' => $this->max_jumps,
             'filter_match' => $this->filter_match->value,
             'filters' => $this->filters->map->toArray()->all(),

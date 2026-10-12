@@ -46,6 +46,7 @@ use Illuminate\Support\Collection;
  * @property int|null $jdc_level
  * @property bool $include_highsec
  * @property bool $xl_only
+ * @property bool $exclude_highsec
  * @property int|null $max_jumps
  * @property Collection<int, KillmailFilterRule> $filters
  * @property KillmailFilterMatch $filter_match
@@ -202,6 +203,7 @@ final class MapAlert extends Model
             'jdc_level' => 'integer',
             'include_highsec' => 'boolean',
             'xl_only' => 'boolean',
+            'exclude_highsec' => 'boolean',
             'max_jumps' => 'integer',
             'filters' => KillmailFiltersCast::class,
             'filter_match' => KillmailFilterMatch::class,

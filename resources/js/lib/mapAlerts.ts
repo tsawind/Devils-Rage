@@ -15,7 +15,7 @@ export function alertTriggerLabel(alert: TAlertTriggerFields, resolveSystemName?
     const jumpsPlural = alert.max_jumps === 1 ? '' : 's';
 
     if (alert.type === 'killmail') {
-        return `Kills within ${alert.max_jumps} jump${jumpsPlural} of the chain`;
+        return alert.max_jumps === 0 ? 'Kills inside the chain' : `Kills within ${alert.max_jumps} jump${jumpsPlural} of the chain`;
     }
     if (alert.type === 'jump_range') {
         return `Exits within ${maxRangeLy(alert.ship_type ?? 'dreadnought', alert.jdc_level ?? 5).toFixed(1)} ly of ${systemName}`;

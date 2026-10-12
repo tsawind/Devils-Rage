@@ -12,9 +12,13 @@ final readonly class KillmailAlertCommand implements AlertVariantDefinition
     {
         $subCommand = SubCommand::make('killmail', 'A kill happens within jumps of the map chain')->options(
             $this->mapOption(),
-            $this->jumpsOption(),
+            Option::integer('jumps')->description('Maximum jumps from the chain (0 = only inside the chain)')->required()->between(0, 20),
         );
 
-        return $withMentions ? $subCommand->options(...$this->mentionOptions()) : $subCommand;
+        if ($withMentions) {
+            $subCommand->options(...$this->mentionOptions());
+        }
+
+        return $subCommand->options(Option::boolean('skip-highsec')->description('Skip kills in high-sec systems'));
     }
 }

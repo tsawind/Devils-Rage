@@ -458,6 +458,21 @@ it('creates a killmail alert without a target system', function () {
         ->and($alert->mention_mode)->toBe(MapAlertMentionMode::Everyone);
 });
 
+it('creates an in-chain killmail alert that skips high-sec', function () {
+    $map = Map::factory()->create(['name' => 'Kill Chain']);
+    $account = discordAccountWithMapAccess($map);
+
+    $response = app(CreateDiscordAlertAction::class)->handle(
+        $account, MapAlertType::Killmail, MapAlertDeliveryType::DiscordDm, $map->id, null,
+        0, null, null, false, MapAlertMentionMode::None, null, null, null, null, false, true,
+    );
+
+    $alert = MapAlert::query()->sole();
+    expect($response)->toBe('Alert created for kills inside the **Kill Chain** chain (high-sec kills skipped).')
+        ->and($alert->max_jumps)->toBe(0)
+        ->and($alert->exclude_highsec)->toBeTrue();
+});
+
 it('creates a proximity alert with a fixed starting point', function () {
     $map = Map::factory()->create(['name' => 'Origin Chain']);
     $account = discordAccountWithMapAccess($map);

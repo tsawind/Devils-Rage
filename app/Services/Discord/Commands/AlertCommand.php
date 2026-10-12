@@ -87,6 +87,7 @@ final readonly class AlertCommand implements CommandDefinition
             $roleId === null ? null : (string) $roleId,
             $from === null ? null : (int) $from,
             (bool) $this->option($variant, 'xl'),
+            (bool) $this->option($variant, 'skip-highsec'),
         );
     }
 

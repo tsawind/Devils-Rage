@@ -330,3 +330,30 @@ it('rejects a starting point for killmail alerts', function () {
         'filters' => [],
     ]))->assertInvalid(['origin_solarsystem_id']);
 });
+
+it('lets a kill alert watch only inside the chain and skip high-sec', function () {
+    $map = Map::factory()->create();
+    $webhook = MapWebhook::factory()->for($map)->create();
+    actingAs(mapAlertManager($map, Permission::Manager));
+
+    $this->post(route('map-alerts.store'), validAlertPayload($map, $webhook, [
+        'type' => 'killmail',
+        'target_solarsystem_id' => null,
+        'max_jumps' => 0,
+        'exclude_highsec' => true,
+    ]))->assertRedirect()->assertSessionHasNoErrors();
+
+    $alert = MapAlert::query()->where('map_id', $map->id)->sole();
+
+    expect($alert->max_jumps)->toBe(0)
+        ->and($alert->exclude_highsec)->toBeTrue();
+});
+
+it('still needs at least one jump for proximity alerts', function () {
+    $map = Map::factory()->create();
+    $webhook = MapWebhook::factory()->for($map)->create();
+    actingAs(mapAlertManager($map, Permission::Manager));
+
+    $this->post(route('map-alerts.store'), validAlertPayload($map, $webhook, ['max_jumps' => 0]))
+        ->assertSessionHasErrors('max_jumps');
+});

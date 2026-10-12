@@ -69,7 +69,8 @@ final readonly class DiscordAlertFormatter
         $target = $alert->targetSolarsystem?->name ?? '?';
 
         return match ($alert->type) {
-            MapAlertType::Killmail => sprintf('kills within %s of the chain', $this->jumps($alert->max_jumps)),
+            MapAlertType::Killmail => ($alert->max_jumps === 0 ? 'kills inside the chain' : sprintf('kills within %s of the chain', $this->jumps($alert->max_jumps)))
+                .($alert->exclude_highsec ? ', no high-sec' : ''),
             MapAlertType::JumpRange => sprintf(
                 '%s range from %s%s%s',
                 $alert->ship_type?->label() ?? 'capital',

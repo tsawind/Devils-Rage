@@ -182,6 +182,7 @@ type TAlertForm = {
     ship_type: TJumpShipType;
     jdc_level: number;
     include_highsec: boolean;
+    exclude_highsec: boolean;
     max_jumps: number;
     filter_match: TKillmailFilterMatch;
     filters: TKillmailFilterRule[];
@@ -200,6 +201,7 @@ function emptyAlertForm(type: TMapAlertType = 'proximity'): TAlertForm {
         ship_type: 'dreadnought',
         jdc_level: 5,
         include_highsec: false,
+        exclude_highsec: false,
         max_jumps: 5,
         filter_match: 'any',
         filters: [],
@@ -270,6 +272,7 @@ function openEditAlert(alert: TMapAlert) {
         ship_type: alert.ship_type ?? 'dreadnought',
         jdc_level: alert.jdc_level ?? 5,
         include_highsec: alert.include_highsec,
+        exclude_highsec: alert.exclude_highsec ?? false,
         max_jumps: alert.max_jumps ?? 5,
         filter_match: alert.filter_match,
         filters: alert.filters.map((filter) => ({ ...filter, ids: [...filter.ids] })),
@@ -292,6 +295,7 @@ function submitAlert() {
         ship_type: isJumpRange.value ? alertForm.ship_type : null,
         jdc_level: isJumpRange.value ? alertForm.jdc_level : null,
         include_highsec: isJumpRange.value ? alertForm.include_highsec : false,
+        exclude_highsec: isKillmail.value ? alertForm.exclude_highsec : false,
         max_jumps: isJumpRange.value ? null : alertForm.max_jumps,
         filter_match: alertForm.filter_match,
         filters: isKillmail.value ? alertForm.filters : [],
@@ -915,8 +919,8 @@ function confirmPendingDelete() {
                         <div v-if="isKillmail" class="grid gap-4 sm:grid-cols-2">
                             <div class="space-y-1.5">
                                 <Label for="alert-km-jumps">Max jumps from chain</Label>
-                                <Input id="alert-km-jumps" type="number" min="1" max="20" v-model.number="alertForm.max_jumps" />
-                                <p class="text-xs text-muted-foreground">Gate and wormhole jumps from any chain system (1–20).</p>
+                                <Input id="alert-km-jumps" type="number" min="0" max="20" v-model.number="alertForm.max_jumps" />
+                                <p class="text-xs text-muted-foreground">Gate and wormhole jumps from any chain system (0–20). 0 = only kills inside the chain.</p>
                             </div>
                             <div class="space-y-1.5">
                                 <Label for="alert-filter-match">Match</Label>
@@ -932,6 +936,14 @@ function confirmPendingDelete() {
                                 </Select>
                                 <p class="text-xs text-muted-foreground">"Any" = at least one filter; "all" = every filter. Excludes always block.</p>
                             </div>
+                        </div>
+                        <div v-if="isKillmail" class="flex items-center gap-2">
+                            <Checkbox
+                                id="alert-km-skip-highsec"
+                                :model-value="alertForm.exclude_highsec"
+                                @update:model-value="(v) => (alertForm.exclude_highsec = v === true)"
+                            />
+                            <Label for="alert-km-skip-highsec" class="text-sm font-medium">Skip high-sec kills</Label>
                         </div>
                         <template v-if="isKillmail">
                             <Separator />

@@ -392,6 +392,7 @@ export type TMapAlert = {
     ship_type: TJumpShipType | null;
     jdc_level: number | null;
     include_highsec: boolean;
+    exclude_highsec: boolean;
     max_jumps: number | null;
     filter_match: TKillmailFilterMatch;
     filters: TKillmailFilterRule[];

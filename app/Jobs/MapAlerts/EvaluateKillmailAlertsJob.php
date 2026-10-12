@@ -6,16 +6,18 @@ namespace App\Jobs\MapAlerts;
 
 use App\Enums\KillmailFilterSubject;
 use App\Enums\MapAlertType;
+use App\Enums\SolarsystemClass;
 use App\Models\Killmail;
 use App\Models\Map;
 use App\Models\MapAlert;
 use App\Models\MapIgnoredSolarsystem;
 use App\Models\MapSolarsystem;
+use App\Models\Solarsystem;
 use App\Models\Type;
 use App\Services\Discord\DiscordDelivery;
 use App\Services\Discord\KillmailAlertEmbed;
-use App\Services\MapAlerts\BotAlertDeliverer;
 use App\Services\Killmails\KillmailWebhookMatcher;
+use App\Services\MapAlerts\BotAlertDeliverer;
 use App\Services\Routing\MapProximityPathfinder;
 use App\Services\Routing\ProximityResult;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -74,8 +76,14 @@ final class EvaluateKillmailAlertsJob implements ShouldBeUnique, ShouldQueue
 
         // Index the killmail once; every alert's filters query the same pools.
         $pools = $matcher->buildPools($data, $typeGroupMap);
+        $security = Solarsystem::query()->whereKey($killmail->solarsystem_id)->value('security');
+        $isHighsec = $security !== null && SolarsystemClass::fromSecurity((float) $security) === SolarsystemClass::H;
 
         foreach ($alerts as $alert) {
+            if ($isHighsec && $alert->exclude_highsec) {
+                continue;
+            }
+
             if (! $matcher->matches($pools, $alert->filters, $alert->filter_match)) {
                 continue;
             }

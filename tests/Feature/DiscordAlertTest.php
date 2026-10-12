@@ -45,7 +45,7 @@ it('registers the Discord command surface', function () {
             && collect(collect($dm['options'])->firstWhere('name', 'proximity')['options'])->pluck('name')->all() === ['map', 'system', 'jumps', 'from']
             && collect($channelProximity['options'])->pluck('name')->all() === ['map', 'system', 'jumps', 'mention', 'from', 'role']
             && collect($dmJumpRange['options'])->pluck('name')->all() === ['map', 'system', 'ship', 'jdc', 'xl', 'highsec']
-            && collect($dmKillmail['options'])->pluck('name')->all() === ['map', 'jumps']
+            && collect($dmKillmail['options'])->pluck('name')->all() === ['map', 'jumps', 'skip-highsec']
             && collect(collect($commands)->firstWhere('name', 'route')['options'])->pluck('name')->all() === ['map', 'system', 'from']
             && collect($alerts['options'])->pluck('name')->all() === ['list', 'map', 'enable', 'disable', 'remove']
             && collect($mention['choices'])->pluck('value')->all() === ['none', 'creator', 'role', 'everyone']

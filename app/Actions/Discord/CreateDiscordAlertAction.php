@@ -38,6 +38,7 @@ final readonly class CreateDiscordAlertAction
         ?string $roleId,
         ?int $originSolarsystemId = null,
         bool $xlOnly = false,
+        bool $excludeHighsec = false,
     ): string {
         $map = Map::query()->find($mapId);
         if ($map === null) {
@@ -66,9 +67,11 @@ final readonly class CreateDiscordAlertAction
         }
 
         $needsJumps = $type !== MapAlertType::JumpRange;
-        if ($needsJumps && ($jumps === null || $jumps < 1 || $jumps > 20)) {
-            return 'The jump count must be between 1 and 20.';
+        $minJumps = $type === MapAlertType::Killmail ? 0 : 1;
+        if ($needsJumps && ($jumps === null || $jumps < $minJumps || $jumps > 20)) {
+            return sprintf('The jump count must be between %d and 20.', $minJumps);
         }
+        $excludeHighsec = $type === MapAlertType::Killmail && $excludeHighsec;
 
         if ($type === MapAlertType::JumpRange && (! $shipType instanceof JumpShipType || $jdcLevel === null || $jdcLevel < 1 || $jdcLevel > 5)) {
             return 'Jump-range alerts need a ship class and a calibration level between 1 and 5.';
@@ -109,6 +112,7 @@ final readonly class CreateDiscordAlertAction
             ->where('jdc_level', $type === MapAlertType::JumpRange ? $jdcLevel : null)
             ->where('include_highsec', $type === MapAlertType::JumpRange && $includeHighsec)
             ->where('xl_only', $type === MapAlertType::JumpRange && $xlOnly)
+            ->where('exclude_highsec', $excludeHighsec)
             ->where('discord_channel_id', $isChannel ? $channelId : null)
             ->first();
         if ($duplicate instanceof MapAlert) {
@@ -120,7 +124,7 @@ final readonly class CreateDiscordAlertAction
             );
         }
 
-        DB::transaction(function () use ($account, $map, $type, $target, $origin, $jumps, $shipType, $jdcLevel, $includeHighsec, $xlOnly, $delivery, $mentionMode, $guildId, $channelId, $roleId, $isChannel): void {
+        DB::transaction(function () use ($account, $map, $type, $target, $origin, $jumps, $shipType, $jdcLevel, $includeHighsec, $xlOnly, $excludeHighsec, $delivery, $mentionMode, $guildId, $channelId, $roleId, $isChannel): void {
             $alert = MapAlert::query()->create([
                 'map_id' => $map->id,
                 'created_by_user_id' => $account->user_id,
@@ -139,6 +143,7 @@ final readonly class CreateDiscordAlertAction
                 'jdc_level' => $type === MapAlertType::JumpRange ? $jdcLevel : null,
                 'include_highsec' => $type === MapAlertType::JumpRange && $includeHighsec,
                 'xl_only' => $type === MapAlertType::JumpRange && $xlOnly,
+                'exclude_highsec' => $excludeHighsec,
                 'is_active' => true,
             ]);
             $this->lifecycle->created($alert, $account->user);
@@ -157,7 +162,12 @@ final readonly class CreateDiscordAlertAction
                 $map->name,
                 $xlOnly ? ' (only when every hole from home is XL)' : '',
             ),
-            MapAlertType::Killmail => sprintf('Alert created for kills within %d jumps of the **%s** chain.', $jumps, $map->name),
+            MapAlertType::Killmail => sprintf(
+                $jumps === 0 ? 'Alert created for kills inside the **%2$s** chain%3$s.' : 'Alert created for kills within %1$s of the **%2$s** chain%3$s.',
+                $this->jumpsText((int) $jumps),
+                $map->name,
+                $excludeHighsec ? ' (high-sec kills skipped)' : '',
+            ),
         };
     }
 

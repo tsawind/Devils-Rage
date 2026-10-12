@@ -442,3 +442,35 @@ function grantKillmailMapViewAccess(Map $map, User $user): void
         ->for($character, 'accessible')
         ->create();
 }
+
+it('skips high-sec kills when the alert says so', function () {
+    $highsec = makeSolarsystem(30009481, 0.7);
+    $lowsec = makeSolarsystem(30009482, 0.3);
+    $map = Map::factory()->create();
+    MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => $highsec]);
+    MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => $lowsec]);
+    killmailAlert($map, [], ['max_jumps' => 0, 'exclude_highsec' => true]);
+
+    runKillmailEval(makeKillmail($highsec)->id);
+    Http::assertNothingSent();
+
+    runKillmailEval(makeKillmail($lowsec)->id);
+    Http::assertSentCount(1);
+});
+
+it('fires only inside the chain at zero jumps', function () {
+    /** @var array<int|string, int[]> $raw */
+    $raw = json_decode(file_get_contents(resource_path('static/connections.json')), true);
+    $origin = (int) array_key_first($raw);
+    $neighbour = (int) $raw[$origin][0];
+    makeSolarsystem($origin, -0.2);
+    makeSolarsystem($neighbour, -0.2);
+    $map = mapWithSystem($origin);
+    killmailAlert($map, [], ['max_jumps' => 0]);
+
+    runKillmailEval(makeKillmail($neighbour)->id);
+    Http::assertNothingSent();
+
+    runKillmailEval(makeKillmail($origin)->id);
+    Http::assertSentCount(1);
+});

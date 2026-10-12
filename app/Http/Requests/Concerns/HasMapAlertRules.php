@@ -41,7 +41,9 @@ trait HasMapAlertRules
             'ship_type' => ['nullable', Rule::enum(JumpShipType::class), 'required_if:type,'.MapAlertType::JumpRange->value],
             'jdc_level' => ['nullable', 'integer', 'between:1,5', 'required_if:type,'.MapAlertType::JumpRange->value],
             'include_highsec' => ['boolean'],
-            'max_jumps' => ['nullable', 'integer', 'between:1,20', 'required_unless:type,'.MapAlertType::JumpRange->value],
+            'exclude_highsec' => ['boolean'],
+            // Kill alerts may use 0: only kills inside the chain's own systems.
+            'max_jumps' => ['nullable', 'integer', $this->input('type') === MapAlertType::Killmail->value ? 'between:0,20' : 'between:1,20', 'required_unless:type,'.MapAlertType::JumpRange->value],
             'filter_match' => ['nullable', Rule::enum(KillmailFilterMatch::class)],
             'filters' => ['nullable', 'array'],
             'filters.*.subject' => ['required', Rule::enum(KillmailFilterSubject::class)],
