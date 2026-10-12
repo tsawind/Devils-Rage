@@ -48,6 +48,8 @@ export type TCertaintyInput = {
     wayBack: TCertaintyWayBack | null;
     /** Connections from this system (not the way back) whose hole here was never pasted: where they lead. */
     unpastedLeadsTo?: string[];
+    /** Patch 37: the system's signatures were pasted (false: only holes the mapper typed itself). */
+    scanned?: boolean;
 };
 
 export type TCertaintyMark = { signatureId: number; staticName: string; setType: boolean };
@@ -116,6 +118,9 @@ export function decideStatic(input: TCertaintyInput): TCertaintyResult {
     }
     if (open.length === 0) return result;
 
+    // Patch 37: an unscanned system (only the hole you jumped in by, typed by the mapper) can't tell:
+    // its static may be another hole nobody has seen yet.
+    if (input.scanned === false) return result;
     // Patch 18b: every signature must be categorised; untyped wormholes now count as candidates
     // (a static always exists, so the only untyped hole left is it), instead of blocking the check.
     if (input.uncategorized !== 0) return result;

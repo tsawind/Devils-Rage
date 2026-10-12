@@ -90,6 +90,8 @@ export function certaintyInputFor(store: MapStore, system: TMapSolarsystem) {
 
     let wayBack: TCertaintyWayBack | null = null;
     const unpastedLeadsTo: string[] = [];
+    // Patch 37: hole sides the mapper wrote itself (typed after a jump, no signature id): not a scan.
+    let unscannedSides = 0;
     const parentId = store.bandLayout.value?.parentOf.get(system.id) ?? null;
     for (const connection of store.connections.values()) {
         const ends = [connection.from_map_solarsystem_id, connection.to_map_solarsystem_id];
@@ -103,6 +105,7 @@ export function certaintyInputFor(store: MapStore, system: TMapSolarsystem) {
             const farType = farSide?.wormhole?.name ?? null;
             const typeName = thisSide.wormhole?.name ?? (farType && !farType.toUpperCase().startsWith('K162') ? 'K162' : null);
             holes.push({ signatureId: thisSide.id, typeName, isStatic: Boolean(thisSide.is_static), linked: true, leadsTo });
+            if (!thisSide.signature_id) unscannedSides++;
         } else if (connection.type !== 'stargate' && otherId !== parentId && leadsTo) {
             unpastedLeadsTo.push(leadsTo);
         }
@@ -117,7 +120,10 @@ export function certaintyInputFor(store: MapStore, system: TMapSolarsystem) {
         }
     }
 
-    return { statics, holes, uncategorized: system.uncategorized_signatures_count ?? 0, wayBack, unpastedLeadsTo };
+    // Patch 37: someone pasted this system's signatures (anything with an id): until then, nothing is certain.
+    const scanned = Boolean(system.scanned_at) || (system.signatures_count ?? 0) > unscannedSides;
+
+    return { statics, holes, uncategorized: system.uncategorized_signatures_count ?? 0, wayBack, unpastedLeadsTo, scanned };
 }
 
 /** Mounted once with the map: runs the requested checks as the updates arrive. */
