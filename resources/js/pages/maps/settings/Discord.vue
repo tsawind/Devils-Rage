@@ -249,7 +249,7 @@ const canSubmitAlert = computed(
     () =>
         alertForm.map_webhook_id !== null &&
         (isKillmail.value || alertForm.target_solarsystem_id > 0) &&
-        (isJumpRange.value || (alertForm.max_jumps >= 1 && alertForm.max_jumps <= 20)) &&
+        (isJumpRange.value || (alertForm.max_jumps >= (isKillmail.value ? 0 : 1) && alertForm.max_jumps <= 20)) &&
         (!isKillmail.value || alertForm.filters.every((filter) => filter.ids.length > 0)),
 );
 

@@ -53,6 +53,12 @@ RUN if [ "$DR_BATCH2" = "1" ]; then \
             --no-scripts --no-dev --no-ansi --no-progress; \
     fi
 
+# structure-manager (batch 2): "@everyone" / "@here" in its role boxes really ping.
+COPY --chown=seat:seat patch-structure-manager-everyone.php /tmp/patch-structure-manager-everyone.php
+RUN F=vendor/mattfalahe/structure-manager/src/Services/WebhookDispatcher.php \
+ && if [ -f "$F" ]; then php /tmp/patch-structure-manager-everyone.php "$F" && php -l "$F"; fi \
+ && rm /tmp/patch-structure-manager-everyone.php
+
 # Replace one file, but only if the original is exactly the reviewed 3.1.2 version.
 COPY --chown=seat:seat ConnectorPolicyManagement.php /tmp/ConnectorPolicyManagement.php
 RUN F=vendor/warlof/seat-connector/src/Traits/ConnectorPolicyManagement.php \
