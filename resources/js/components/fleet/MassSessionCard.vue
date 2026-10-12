@@ -102,7 +102,7 @@ const pilots = computed<{ list: TMassPilot[]; noShip: string[] }>(() => {
 const preview = computed(() => {
     if (!target.value || !left.value || session.goal === 'watch') return null;
     const hole = target.value.hole;
-    return massPlan(session.goal, { nominal: hole.total, low: left.value[0], high: left.value[1], maxJump: hole.maxJump, status: hole.status }, pilots.value.list, session.hurry);
+    return massPlan(session.goal, { nominal: hole.total, low: left.value[0], high: left.value[1], maxJump: hole.maxJump, status: hole.status ?? 'fresh' }, pilots.value.list, session.hurry);
 });
 const showPreview = ref(false);
 const running = computed(() => session.plan?.steps ?? null);

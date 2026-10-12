@@ -69,12 +69,12 @@ final class MassSessions
         }
 
         $homeSolarsystemId = $connection->from_map_solarsystem_id === $session->home_map_solarsystem_id
-            ? $connection->fromMapSolarsystem?->solarsystem_id
-            : $connection->toMapSolarsystem?->solarsystem_id;
+            ? $connection->fromMapSolarsystem->solarsystem_id
+            : $connection->toMapSolarsystem->solarsystem_id;
         $direction = $homeSolarsystemId === $fromSolarsystemId ? 'out' : 'home';
 
         $plan = $session->plan ?? ['steps' => []];
-        $steps = $plan['steps'] ?? [];
+        $steps = $plan['steps'];
         foreach ($steps as $index => $step) {
             if (($step['done'] ?? false) || (int) ($step['character_id'] ?? 0) !== $characterId || ($step['direction'] ?? '') !== $direction) {
                 continue;

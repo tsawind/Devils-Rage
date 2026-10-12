@@ -146,7 +146,7 @@ final class MassSessionController extends Controller
         // The mark notes what was seen when a pilot made it; make sure it's noted either way.
         $observation = MassObservation::query()->where('map_connection_id', $connection->id)->where('id', '>', $before)->latest('id')->first()
             ?? MassObservation::note($connection->id, $validated['status'], Actor::name());
-        if (($validated['made_by_last_jump'] ?? false) && $observation instanceof MassObservation) {
+        if ($validated['made_by_last_jump'] ?? false) {
             $last = MapConnectionJump::query()->where('map_connection_id', $connection->id)->latest('id')->first();
             if ($last instanceof MapConnectionJump) {
                 $observation->forceFill([
@@ -194,7 +194,7 @@ final class MassSessionController extends Controller
         $profiles = ShipProfile::query()->whereIn('character_id', $ids)->orderByDesc('updated_at')->get()->groupBy('character_id');
         $typeIds = [];
         foreach ($ids as $id) {
-            $typeIds[$id] = $characters->get($id)?->characterStatus?->ship_type_id ?? $profiles->get($id)?->first()?->ship_type_id;
+            $typeIds[$id] = $characters->get($id)->characterStatus->ship_type_id ?? $profiles->get($id)?->first()?->ship_type_id;
         }
         $types = Type::query()->whereIn('id', array_filter($typeIds))->get(['id', 'name', 'mass'])->keyBy('id');
 
@@ -214,7 +214,7 @@ final class MassSessionController extends Controller
                     'expendable' => (bool) ($member['expendable'] ?? false),
                     'ship_type_id' => $typeId,
                     'ship' => $type?->name,
-                    'hull_mass' => (int) round((float) ($type?->mass ?? 0)),
+                    'hull_mass' => (int) round((float) ($type->mass ?? 0)),
                     'jump_mass' => $typeId === null ? 0 : Type::loggedJumpMass($typeId),
                 ];
             }, $crew->members),

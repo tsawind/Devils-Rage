@@ -14,7 +14,6 @@ use App\Models\Signature;
 use App\Models\Wormhole;
 use App\Support\Actor;
 use App\Support\Broadcasting\MapBroadcaster;
-use BackedEnum;
 use Illuminate\Support\Facades\DB;
 use Spatie\LaravelData\Optional;
 use Throwable;
@@ -72,7 +71,7 @@ final readonly class UpdateMapConnectionAction
 
             // Patch 37: what someone saw, with the mass logged so far (narrows the hole's real size).
             if ($actor !== null && ! $data->mass_status instanceof Optional && $data->mass_status !== null) {
-                $status = $data->mass_status instanceof BackedEnum ? (string) $data->mass_status->value : (string) $data->mass_status;
+                $status = (string) $data->mass_status->value;
                 MassObservation::note($mapConnection->id, $status, $actor);
             }
 
