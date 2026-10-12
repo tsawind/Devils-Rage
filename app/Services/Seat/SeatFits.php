@@ -79,7 +79,7 @@ final class SeatFits
             if ($addition <= 0) {
                 continue;
             }
-            if ($type instanceof Type && $type->group?->name === 'Propulsion Module') {
+            if ($type instanceof Type && $type->group->name === 'Propulsion Module') {
                 // Each prop mod is its own hot jump (one runs at a time).
                 $fit['props'][] = ['name' => $name, 'mass' => $addition];
                 $fit['prop_mass'] = max($fit['prop_mass'], $addition);
