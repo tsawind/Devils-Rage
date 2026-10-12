@@ -139,6 +139,22 @@ final class FleetController extends Controller
         return ['members' => $rows, 'wings' => $this->wings($boss, $fleetId, $esi), 'updated_at' => now()->toISOString()];
     }
 
+    /**
+     * @param  array<int, mixed>  $squads
+     * @return list<array{id: int, name: string}>
+     */
+    private function squads(array $squads): array
+    {
+        $list = [];
+        foreach ($squads as $squad) {
+            if ($squad instanceof FleetSquad) {
+                $list[] = ['id' => $squad->id, 'name' => $squad->name];
+            }
+        }
+
+        return $list;
+    }
+
     private function ownerOf(?Character $character, string $name): string
     {
         if ($character instanceof Character && filled($character->seat_main_name)) {
@@ -179,10 +195,7 @@ final class FleetController extends Controller
             $wings[] = [
                 'id' => $wing->id,
                 'name' => $wing->name,
-                'squads' => array_values(array_map(
-                    fn (FleetSquad $squad): array => ['id' => $squad->id, 'name' => $squad->name],
-                    array_filter((array) $wing->squads, fn (mixed $squad): bool => $squad instanceof FleetSquad),
-                )),
+                'squads' => $this->squads($wing->squads),
             ];
         }
 

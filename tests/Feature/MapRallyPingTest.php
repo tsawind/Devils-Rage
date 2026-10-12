@@ -198,6 +198,9 @@ it('patch 30: the Discord settings page shows the ping log', function () {
     MapRallyPing::factory()->for($map)->create(['title' => '⚑ Form up at Daisy']);
     actingAs(rallyPinger($map, Permission::Manager));
 
-    $this->get(route('maps.settings.discord.show', $map))
-        ->assertInertia(fn ($page) => $page->has('rallyPings', 1)->where('rallyPings.0.title', '⚑ Form up at Daisy'));
+    $response = $this->get(route('maps.settings.discord.show', $map))->assertOk();
+    $props = (array) ($response->viewData('page')['props'] ?? []);
+
+    expect(array_keys($props))->toContain('rallyPings')
+        ->and($props['rallyPings'][0]['title'] ?? null)->toBe('⚑ Form up at Daisy');
 });

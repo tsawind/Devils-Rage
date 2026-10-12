@@ -19,7 +19,7 @@ it('patch 36: deleting hides the placement (chain memory), removes its connectio
     $targetId = makeSolarsystem(30009602);
 
     $origin = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => $originId]);
-    $target = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => $targetId]);
+    $target = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => $targetId, 'pinned' => false]);
 
     $connection = MapConnection::factory()->create([
         'map_id' => $map->id,
