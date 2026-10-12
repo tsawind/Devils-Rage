@@ -96,7 +96,7 @@ it('lists empty and populated personal bot alerts', function () {
         'target_solarsystem_id' => $target->id,
     ]);
 
-    expect($action->handle($account))->toBe("`{$alert->id}` Home Chain: Jita within {$alert->max_jumps} jumps via DM");
+    expect($action->handle($account))->toBe("`{$alert->id}` System near chain: Jita within {$alert->max_jumps} jumps · DM · Home Chain");
 });
 
 it('lists only shared map alerts for members and includes private alerts for managers', function () {
@@ -133,7 +133,8 @@ it('creates a transactional DM alert and lifecycle event', function () {
     $response = app(CreateDiscordAlertAction::class)->handle($account, MapAlertType::Proximity, MapAlertDeliveryType::DiscordDm, $map->id, $target->id, 4, null, null, false, MapAlertMentionMode::None, null, null, null);
 
     $alert = MapAlert::query()->sole();
-    expect($response)->toBe('Alert created for **Dodixie** within 4 jumps of **Home Chain**.')
+    expect($response)->toStartWith('Alert created for **Dodixie** within 4 jumps of **Home Chain**.')
+        ->and($response)->not->toContain('right now')
         ->and($alert->delivery_type)->toBe(MapAlertDeliveryType::DiscordDm)
         ->and($alert->mention_mode)->toBe(MapAlertMentionMode::None)
         ->and($alert->events()->sole()->action)->toBe(MapAlertEventAction::Created);
@@ -166,17 +167,17 @@ it('rejects invalid alert creation inputs and unauthorized destinations', functi
     $action = app(CreateDiscordAlertAction::class);
 
     expect($action->handle($viewer, MapAlertType::Proximity, MapAlertDeliveryType::DiscordDm, 999999, $target->id, 2, null, null, false, MapAlertMentionMode::None, null, null, null))
-        ->toBe('Invalid map or destination.')
+        ->toStartWith('Pick the map from the list')
         ->and($action->handle($viewer, MapAlertType::Proximity, MapAlertDeliveryType::DiscordDm, $map->id, 999999, 2, null, null, false, MapAlertMentionMode::None, null, null, null))
-        ->toBe('That target system is unavailable.')
+        ->toStartWith('Pick the target system from the list')
         ->and($action->handle($viewer, MapAlertType::Proximity, MapAlertDeliveryType::DiscordDm, $map->id, $target->id, 0, null, null, false, MapAlertMentionMode::None, null, null, null))
         ->toBe('The jump count must be between 1 and 20.')
         ->and($action->handle($viewer, MapAlertType::Proximity, null, $map->id, $target->id, 21, null, null, false, MapAlertMentionMode::None, null, null, null))
-        ->toBe('Invalid map or destination.')
+        ->toStartWith('Pick where the alert goes')
         ->and($action->handle($viewer, MapAlertType::Proximity, MapAlertDeliveryType::Webhook, $map->id, $target->id, 2, null, null, false, MapAlertMentionMode::None, null, null, null))
-        ->toBe('Invalid map or destination.')
+        ->toStartWith('Pick where the alert goes')
         ->and($action->handle($viewer, MapAlertType::Proximity, MapAlertDeliveryType::DiscordDm, $map->id, $target->id, 2, null, null, false, null, null, null, null))
-        ->toBe('Invalid map or destination.')
+        ->toStartWith('Pick a mention from the list')
         ->and($action->handle($viewer, MapAlertType::Proximity, MapAlertDeliveryType::DiscordChannel, $map->id, $target->id, 2, null, null, false, MapAlertMentionMode::None, 'guild', 'channel', null))
         ->toBe('Only map managers can create channel alerts.')
         ->and($action->handle($manager, MapAlertType::Proximity, MapAlertDeliveryType::DiscordChannel, $map->id, $target->id, 2, null, null, false, MapAlertMentionMode::None, null, null, null))
@@ -207,7 +208,7 @@ it('lets a DM creator disable enable and remove their alert through policy and l
         ->and($alert->refresh()->is_active)->toBeFalse()
         ->and($enableAlert->handle($account, $alert->id))->toBe('Alert enabled.')
         ->and($alert->refresh()->is_active)->toBeTrue()
-        ->and($deleteAlert->handle($account, $alert->id))->toBe('Alert removed.')
+        ->and($deleteAlert->handle($account, $alert->id))->toStartWith('Removed: `')
         ->and(MapAlert::query()->find($alert->id))->toBeNull();
 });
 
@@ -226,10 +227,10 @@ it('requires a current manager for shared alerts and rejects former creators', f
     $deleteAlert = app(DeleteDiscordAlertAction::class);
 
     expect($disableAlert->handle($formerCreator, $alert->id))->toBe('That alert does not exist.')
-        ->and($deleteAlert->handle($formerCreator, $alert->id))->toBe('That alert does not exist.')
+        ->and($deleteAlert->handle($formerCreator, $alert->id))->toBe('That alert does not exist (pick one from the list).')
         ->and($disableAlert->handle($manager, $alert->id))->toBe('Alert disabled.')
         ->and($enableAlert->handle($manager, $alert->id))->toBe('Alert enabled.')
-        ->and($deleteAlert->handle($manager, $alert->id))->toBe('Alert removed.');
+        ->and($deleteAlert->handle($manager, $alert->id))->toStartWith('Removed: `');
 });
 
 it('does not let a former DM creator mutate an alert they cannot view', function () {
@@ -243,7 +244,7 @@ it('does not let a former DM creator mutate an alert they cannot view', function
 
     expect($disableAlert->handle($creator->load('user.characters'), $alert->id))->toBe('That alert does not exist.')
         ->and($enableAlert->handle($creator, $alert->id))->toBe('That alert does not exist.')
-        ->and($deleteAlert->handle($creator, $alert->id))->toBe('That alert does not exist.')
+        ->and($deleteAlert->handle($creator, $alert->id))->toBe('That alert does not exist (pick one from the list).')
         ->and($alert->refresh()->is_active)->toBeTrue();
 });
 
@@ -339,7 +340,55 @@ it('autocompletes a member creator own direct message alert', function () {
     $choices = app(AutocompleteDiscordAlertsAction::class)->handle($account, 'Member Target');
 
     expect($choices)->toHaveCount(1)
-        ->and($choices[0]['value'])->toBe((string) $alert->id);
+        ->and($choices[0]['value'])->toBe((string) $alert->id)
+        ->and($choices[0]['name'])->toBe("System near chain · Member Target ≤{$alert->max_jumps}j · DM · Member Chain · #{$alert->id}");
+});
+
+it('labels killmail alerts without a target and marks switched-off alerts', function () {
+    $map = Map::factory()->create(['name' => 'Kill Chain']);
+    $account = discordAccountWithMapAccess($map, Permission::Manager);
+    $alert = MapAlert::factory()->discordChannel()->create([
+        'map_id' => $map->id,
+        'created_by_user_id' => $account->user_id,
+        'type' => MapAlertType::Killmail,
+        'target_solarsystem_id' => null,
+        'max_jumps' => 1,
+        'is_active' => false,
+        'disabled_reason' => MapAlertDisabledReason::DeliveryFailed,
+    ]);
+
+    $choices = app(AutocompleteDiscordAlertsAction::class)->handle($account, '');
+
+    expect($choices)->toHaveCount(1)
+        ->and($choices[0]['name'])->toBe("Off: Delivery failed · Kills near chain · ≤1j · channel · Kill Chain · #{$alert->id}");
+});
+
+it('refuses a duplicate alert and points to the existing one', function () {
+    $map = Map::factory()->create();
+    $account = discordAccountWithMapAccess($map);
+    $target = discordAlertTarget(30009616, 'Twice');
+    $action = app(CreateDiscordAlertAction::class);
+
+    $action->handle($account, MapAlertType::Proximity, MapAlertDeliveryType::DiscordDm, $map->id, $target->id, 1, null, null, false, MapAlertMentionMode::None, null, null, null);
+    $first = MapAlert::query()->sole();
+
+    expect($action->handle($account, MapAlertType::Proximity, MapAlertDeliveryType::DiscordDm, $map->id, $target->id, 1, null, null, false, MapAlertMentionMode::None, null, null, null))
+        ->toBe("You already have this alert (#{$first->id}). Nothing added.")
+        ->and(MapAlert::query()->count())->toBe(1)
+        ->and($action->handle($account, MapAlertType::Proximity, MapAlertDeliveryType::DiscordDm, $map->id, $target->id, 2, null, null, false, MapAlertMentionMode::None, null, null, null))
+        ->toStartWith('Alert created')
+        ->and(MapAlert::query()->count())->toBe(2);
+});
+
+it('says when the target system is already on the map', function () {
+    $map = Map::factory()->create(['name' => 'Home Chain']);
+    $account = discordAccountWithMapAccess($map);
+    $target = discordAlertTarget(30009617, 'Already Here');
+    placeMapSolarsystem($map, $target->id);
+
+    $response = app(CreateDiscordAlertAction::class)->handle($account, MapAlertType::Proximity, MapAlertDeliveryType::DiscordDm, $map->id, $target->id, 1, null, null, false, MapAlertMentionMode::None, null, null, null);
+
+    expect($response)->toContain('**Already Here is already on the map right now.**');
 });
 
 it('creates a jump range alert delivered by direct message', function () {

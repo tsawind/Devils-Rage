@@ -9,10 +9,11 @@ use App\Models\DiscordAccount;
 use App\Models\MapAlert;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Str;
 
 final readonly class AutocompleteDiscordAlertsAction
 {
+    public function __construct(private DiscordAlertFormatter $formatter) {}
+
     /** @return array<int, array{name: string, value: string}> */
     public function handle(DiscordAccount $account, string $search): array
     {
@@ -24,7 +25,7 @@ final readonly class AutocompleteDiscordAlertsAction
                     assert($query instanceof MapAccessBuilder);
                     $query->notExpired()->whereIn('accessible_id', $account->user->getAccessibleIds());
                 }))
-            ->with(['map', 'targetSolarsystem:id,name'])
+            ->with(['map', 'targetSolarsystem:id,name', 'originSolarsystem:id,name'])
             ->when($search !== '', fn ($query) => $query->where(function ($query) use ($search): void {
                 $query->where('id', 'like', '%'.$search.'%')
                     ->orWhereHas('map', fn ($query) => $query->where('name', 'like', '%'.$search.'%'))
@@ -35,7 +36,7 @@ final readonly class AutocompleteDiscordAlertsAction
             ->filter(fn (MapAlert $alert): bool => Gate::forUser($account->user)->allows('update', $alert))
             ->take(25)
             ->map(fn (MapAlert $alert): array => [
-                'name' => Str::limit(sprintf('%s: %s on %s', $alert->id, $alert->targetSolarsystem->name, $alert->map->name), 100, ''),
+                'name' => $this->formatter->label($alert),
                 'value' => (string) $alert->id,
             ])
             ->values()

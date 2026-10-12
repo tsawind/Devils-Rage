@@ -13,6 +13,8 @@ use App\Models\Map;
 use App\Models\MapAlert;
 use App\Models\Solarsystem;
 use App\Services\MapAlerts\MapAlertLifecycle;
+use App\Services\Routing\MapProximityPathfinder;
+use App\Services\Routing\ProximityResult;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 
@@ -38,14 +40,20 @@ final readonly class CreateDiscordAlertAction
         bool $xlOnly = false,
     ): string {
         $map = Map::query()->find($mapId);
-        if ($map === null || ! in_array($delivery, [MapAlertDeliveryType::DiscordDm, MapAlertDeliveryType::DiscordChannel], true) || ! $mentionMode instanceof MapAlertMentionMode) {
-            return 'Invalid map or destination.';
+        if ($map === null) {
+            return 'Pick the map from the list (start typing its name, e.g. "Daisy", and click it).';
+        }
+        if (! in_array($delivery, [MapAlertDeliveryType::DiscordDm, MapAlertDeliveryType::DiscordChannel], true)) {
+            return 'Pick where the alert goes: `/alert dm …` or `/alert channel …`.';
+        }
+        if (! $mentionMode instanceof MapAlertMentionMode) {
+            return 'Pick a mention from the list (None, @here, @everyone or A role).';
         }
 
         $needsTarget = $type !== MapAlertType::Killmail;
         $target = $needsTarget && $solarsystemId !== null ? Solarsystem::query()->find($solarsystemId) : null;
         if ($needsTarget && $target === null) {
-            return 'That target system is unavailable.';
+            return 'Pick the target system from the list (start typing its name or J-code and click it).';
         }
 
         if ($originSolarsystemId !== null && $type !== MapAlertType::Proximity) {
@@ -54,7 +62,7 @@ final readonly class CreateDiscordAlertAction
 
         $origin = $originSolarsystemId === null ? null : Solarsystem::query()->find($originSolarsystemId);
         if ($originSolarsystemId !== null && ! $origin instanceof Solarsystem) {
-            return 'That starting point system is unavailable.';
+            return 'Pick the starting system from the list (start typing its name and click it).';
         }
 
         $needsJumps = $type !== MapAlertType::JumpRange;
@@ -88,6 +96,30 @@ final readonly class CreateDiscordAlertAction
 
         $includeHighsec = $includeHighsec && $shipType?->canEnterHighsec() === true;
 
+        // The same alert twice only means the same ping twice.
+        $duplicate = MapAlert::query()
+            ->where('map_id', $map->id)
+            ->where('created_by_user_id', $account->user_id)
+            ->where('delivery_type', $delivery)
+            ->where('type', $type)
+            ->where('target_solarsystem_id', $target?->id)
+            ->where('origin_solarsystem_id', $origin?->id)
+            ->where('max_jumps', $type === MapAlertType::JumpRange ? null : $jumps)
+            ->where('ship_type', $type === MapAlertType::JumpRange ? $shipType : null)
+            ->where('jdc_level', $type === MapAlertType::JumpRange ? $jdcLevel : null)
+            ->where('include_highsec', $type === MapAlertType::JumpRange && $includeHighsec)
+            ->where('xl_only', $type === MapAlertType::JumpRange && $xlOnly)
+            ->where('discord_channel_id', $isChannel ? $channelId : null)
+            ->first();
+        if ($duplicate instanceof MapAlert) {
+            return sprintf(
+                'You already have this alert (#%d%s). Nothing added.%s',
+                $duplicate->id,
+                $duplicate->is_active ? '' : ', switched off',
+                $duplicate->is_active ? '' : ' Turn it back on with `/alerts enable`.',
+            );
+        }
+
         DB::transaction(function () use ($account, $map, $type, $target, $origin, $jumps, $shipType, $jdcLevel, $includeHighsec, $xlOnly, $delivery, $mentionMode, $guildId, $channelId, $roleId, $isChannel): void {
             $alert = MapAlert::query()->create([
                 'map_id' => $map->id,
@@ -113,9 +145,11 @@ final readonly class CreateDiscordAlertAction
         });
 
         return match ($type) {
-            MapAlertType::Proximity => $origin instanceof Solarsystem
-                ? sprintf('Alert created for **%s** within %d jumps of **%s** through the **%s** chain.', $target->name, $jumps, $origin->name, $map->name)
-                : sprintf('Alert created for **%s** within %d jumps of **%s**.', $target->name, $jumps, $map->name),
+            MapAlertType::Proximity => ($origin instanceof Solarsystem
+                ? sprintf('Alert created for **%s** within %s of **%s** through the **%s** chain.', $target->name, $this->jumpsText((int) $jumps), $origin->name, $map->name)
+                : sprintf('Alert created for **%s** within %s of **%s**.', $target->name, $this->jumpsText((int) $jumps), $map->name))
+                .$this->inRangeNow($map, $target, $origin, (int) $jumps)
+                ."\nIt pings when a system is added to the map (or comes back) and is in range then.",
             MapAlertType::JumpRange => sprintf(
                 'Alert created for exits within %.1f ly of **%s** on **%s**%s.',
                 $shipType->maxRangeLy($jdcLevel),
@@ -125,5 +159,42 @@ final readonly class CreateDiscordAlertAction
             ),
             MapAlertType::Killmail => sprintf('Alert created for kills within %d jumps of the **%s** chain.', $jumps, $map->name),
         };
+    }
+
+    private function jumpsText(int $jumps): string
+    {
+        return $jumps === 1 ? '1 jump' : $jumps.' jumps';
+    }
+
+    /**
+     * Alerts only fire when the map changes, so say at once when the target is already in range.
+     */
+    private function inRangeNow(Map $map, Solarsystem $target, ?Solarsystem $origin, int $jumps): string
+    {
+        $origins = $origin instanceof Solarsystem
+            ? [$origin->id]
+            : $map->mapSolarsystems()->pluck('solarsystem_id')->map(fn (mixed $id): int => (int) $id)->all();
+        if ($origins === []) {
+            return '';
+        }
+
+        $result = app(MapProximityPathfinder::class)->nearest(
+            $origins,
+            $target->id,
+            $origin instanceof Solarsystem ? $map->wormholeEdges() : [],
+            $map->mapIgnoredSolarsystems()->pluck('solarsystem_id')->map(fn (mixed $id): int => (int) $id)->all(),
+            $jumps,
+        );
+        if (! $result instanceof ProximityResult) {
+            return '';
+        }
+
+        if ($result->jumps === 0) {
+            return sprintf("\n**%s is already on the map right now.**", $target->name);
+        }
+
+        $from = Solarsystem::query()->whereKey($result->matchedOriginSolarsystemId)->value('name');
+
+        return sprintf("\n**Already in range right now:** %s from %s.", $this->jumpsText($result->jumps), $from ?? 'the chain');
     }
 }

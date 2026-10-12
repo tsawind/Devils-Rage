@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Support\Undo;
 
+use App\Jobs\MapAlerts\EvaluateAssetWatchesJob;
+use App\Jobs\MapAlerts\EvaluateMapAlertsJob;
 use App\Models\Map;
 use App\Models\MapConnection;
 use App\Models\MapConnectionJump;
@@ -140,11 +142,15 @@ final readonly class MapUndoSnapshots
 
             /** @var array<int, int> $systemIds old id → id now */
             $systemIds = [];
+            $returned = [];
             foreach ($snapshot['systems'] as $row) {
                 // Patch 36: a cleared system is hidden, not gone: Undo shows it again.
                 $existing = MapSolarsystem::withHidden()->find($row['id'])
                     ?? MapSolarsystem::withHidden()->where('map_id', $map->id)->where('solarsystem_id', $row['solarsystem_id'])->first();
                 if ($existing instanceof MapSolarsystem && (int) $existing->map_id === (int) $map->id) {
+                    if ($existing->isHidden()) {
+                        $returned[] = (int) $existing->id;
+                    }
                     $row = [...$this->keepStampWhenNameTaken($existing, $row), 'hidden_at' => null];
                     // Still (or again) on the map: only reset what the change touched, never move it to another row.
                     $this->resetRow($existing, array_diff_key($row, ['id' => true]));
@@ -154,6 +160,7 @@ final readonly class MapUndoSnapshots
                 }
                 $this->insertRow(new MapSolarsystem, $row);
                 $systemIds[(int) $row['id']] = (int) $row['id'];
+                $returned[] = (int) $row['id'];
                 $counts['systems']++;
             }
             $systemId = fn (int $id): ?int => $systemIds[$id] ?? (MapSolarsystem::query()->where('map_id', $map->id)->whereKey($id)->exists() ? $id : null);
@@ -222,6 +229,12 @@ final readonly class MapUndoSnapshots
                     ->each(function (Signature $signature): void {
                         $signature->deleteQuietly();
                     });
+            }
+
+            // Systems that came back count as added: their map alerts are checked (after commit).
+            foreach (array_unique($returned) as $id) {
+                EvaluateMapAlertsJob::dispatch($id)->afterCommit();
+                EvaluateAssetWatchesJob::dispatch($id)->afterCommit();
             }
 
             return $counts;

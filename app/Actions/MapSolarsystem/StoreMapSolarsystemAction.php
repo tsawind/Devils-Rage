@@ -61,8 +61,11 @@ final readonly class StoreMapSolarsystemAction
             ]);
         }
 
-        EvaluateMapAlertsJob::dispatch($map_solarsystem->id)->afterCommit();
-        EvaluateAssetWatchesJob::dispatch($map_solarsystem->id)->afterCommit();
+        // The rest of a returning chain counts as added too (alerts never saw it come back otherwise).
+        foreach ([$map_solarsystem->id, ...$restored['systems']] as $returned_id) {
+            EvaluateMapAlertsJob::dispatch($returned_id)->afterCommit();
+            EvaluateAssetWatchesJob::dispatch($returned_id)->afterCommit();
+        }
 
         $this->connectToOrigin($map, $map_solarsystem, $data['connect_to_map_solarsystem_id'] ?? null);
 

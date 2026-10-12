@@ -12,17 +12,19 @@ final readonly class DeleteDiscordAlertAction
 {
     use ResolvesBotAlerts;
 
-    public function __construct(private MapAlertLifecycle $lifecycle) {}
+    public function __construct(private MapAlertLifecycle $lifecycle, private DiscordAlertFormatter $formatter) {}
 
     public function handle(DiscordAccount $account, int $alertId): string
     {
         $alert = $this->findAuthorizedBotAlert($account, $alertId, 'delete');
         if (! $alert instanceof \App\Models\MapAlert) {
-            return 'That alert does not exist.';
+            return 'That alert does not exist (pick one from the list).';
         }
 
+        $alert->loadMissing(['map:id,name', 'targetSolarsystem:id,name', 'originSolarsystem:id,name']);
+        $removed = $this->formatter->format($alert);
         $this->lifecycle->remove($alert, $account->user);
 
-        return 'Alert removed.';
+        return 'Removed: '.$removed;
     }
 }
