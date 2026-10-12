@@ -20,8 +20,12 @@ Route::group([
     Route::post('accounts/{account}/rename', [AccountsController::class, 'renameAccount'])->name('devilsrage.accounts.rename');
     Route::post('accounts/{account}/delete', [AccountsController::class, 'deleteAccount'])->name('devilsrage.accounts.delete');
     Route::post('accounts/{account}/characters', [AccountsController::class, 'addCharacter'])->name('devilsrage.accounts.characters.add');
-    Route::post('account-characters/{accountCharacter}', [AccountsController::class, 'updateCharacter'])->name('devilsrage.accounts.characters.update');
+    Route::post('account-characters/{accountCharacter}/groups', [AccountsController::class, 'setGroups'])->name('devilsrage.accounts.characters.groups');
+    Route::post('account-characters/{accountCharacter}/move', [AccountsController::class, 'moveCharacter'])->name('devilsrage.accounts.characters.move');
     Route::post('account-characters/{accountCharacter}/remove', [AccountsController::class, 'removeCharacter'])->name('devilsrage.accounts.characters.remove');
+
+    Route::post('launch-groups', [AccountsController::class, 'storeGroup'])->name('devilsrage.groups.store');
+    Route::post('launch-groups/{launchGroup}/delete', [AccountsController::class, 'deleteGroup'])->name('devilsrage.groups.delete');
 
     Route::get('layout', [AccountsController::class, 'layout'])->name('devilsrage.layout');
     Route::get('planner', [PlannerController::class, 'index'])->name('devilsrage.planner');

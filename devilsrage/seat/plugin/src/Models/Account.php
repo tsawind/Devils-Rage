@@ -22,6 +22,6 @@ class Account extends Model
 
     public function characters(): HasMany
     {
-        return $this->hasMany(AccountCharacter::class, 'account_id');
+        return $this->hasMany(AccountCharacter::class, 'account_id')->orderBy('position')->orderBy('id');
     }
 }

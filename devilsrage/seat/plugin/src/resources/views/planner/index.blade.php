@@ -38,8 +38,8 @@
         <label for="dr-group">Launch group</label>
         <select id="dr-group" name="group" class="form-control form-control-sm" onchange="this.form.submit()">
           <option value="">Everyone</option>
-          @foreach($groups as $key => $label)
-            <option value="{{ $key }}" @selected($group === $key)>{{ $label }}</option>
+          @foreach($groupNames as $name)
+            <option value="{{ $name }}" @selected($group === $name)>{{ $name }}</option>
           @endforeach
         </select>
         <noscript><button type="submit" class="btn btn-sm btn-primary">Show</button></noscript>
@@ -63,7 +63,7 @@
             <th>Pilot</th>
             <th>Account</th>
             <th>Character</th>
-            <th>Group</th>
+            <th>Groups</th>
             @foreach($fits as $fit)
               <th>{{ $fit->name }}<br><span class="text-muted small font-weight-normal">{{ $fit->ship->typeName }}</span></th>
             @endforeach
@@ -77,7 +77,13 @@
               <td>{{ $row['pilot'] }}</td>
               <td>{{ $row['account'] ?? '–' }}</td>
               <td>{{ $row['name'] }} <span class="dr-clash text-danger small"></span></td>
-              <td><span class="dr-pill dr-{{ $row['group'] ?? 'none' }}">{{ $groups[$row['group']] ?? '–' }}</span></td>
+              <td>
+                @forelse($row['groups'] as $item)
+                  <span class="dr-pill dr-{{ $item['class'] }}">{{ $item['name'] }}</span>
+                @empty
+                  –
+                @endforelse
+              </td>
               @foreach($fits as $fit)
                 @php($cell = $status[$fit->fitting_id][$characterId] ?? null)
                 @php($hasHull = in_array((int) $fit->ship_type_id, $hulls->get($characterId, []), true))

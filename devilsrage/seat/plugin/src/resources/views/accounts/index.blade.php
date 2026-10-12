@@ -35,21 +35,40 @@
           <ul class="list-group list-group-flush">
             @foreach($account->characters as $link)
               @php($character = $characters->get($link->character_id))
-              <li class="list-group-item d-flex align-items-center flex-wrap" style="gap: .5rem;">
-                <img src="https://images.evetech.net/characters/{{ $link->character_id }}/portrait?size=64" width="32" height="32" class="rounded" alt="">
-                <span class="mr-auto">{{ $character->name ?? 'Character '.$link->character_id }}</span>
-                <form method="post" action="{{ route('devilsrage.accounts.characters.update', $link) }}" class="d-inline">
+              @php($ticked = $link->launchGroups->pluck('id')->all())
+              <li class="list-group-item">
+                <div class="d-flex align-items-center" style="gap: .5rem;">
+                  <div class="btn-group-vertical btn-group-sm">
+                    <form method="post" action="{{ route('devilsrage.accounts.characters.move', $link) }}">
+                      @csrf
+                      <input type="hidden" name="direction" value="up">
+                      <button type="submit" class="btn btn-xs btn-outline-secondary py-0" title="Move up" @disabled($loop->first)><i class="fas fa-caret-up"></i></button>
+                    </form>
+                    <form method="post" action="{{ route('devilsrage.accounts.characters.move', $link) }}">
+                      @csrf
+                      <input type="hidden" name="direction" value="down">
+                      <button type="submit" class="btn btn-xs btn-outline-secondary py-0" title="Move down" @disabled($loop->last)><i class="fas fa-caret-down"></i></button>
+                    </form>
+                  </div>
+                  <img src="https://images.evetech.net/characters/{{ $link->character_id }}/portrait?size=64" width="32" height="32" class="rounded" alt="">
+                  <span class="mr-auto font-weight-bold">{{ $character->name ?? 'Character '.$link->character_id }}</span>
+                  <form method="post" action="{{ route('devilsrage.accounts.characters.remove', $link) }}" class="d-inline">
+                    @csrf
+                    <button type="submit" class="btn btn-xs btn-outline-secondary" title="Take out of this account"><i class="fas fa-times"></i></button>
+                  </form>
+                </div>
+                <form method="post" action="{{ route('devilsrage.accounts.characters.groups', $link) }}" class="d-flex flex-wrap mt-2 pl-4" style="gap: .25rem .75rem;">
                   @csrf
-                  <select name="launch_group" class="form-control form-control-sm" onchange="this.form.submit()" aria-label="Launch group">
-                    <option value="">No launch group</option>
-                    @foreach($groups as $key => $label)
-                      <option value="{{ $key }}" @selected($link->launch_group === $key)>{{ $label }}</option>
-                    @endforeach
-                  </select>
-                </form>
-                <form method="post" action="{{ route('devilsrage.accounts.characters.remove', $link) }}" class="d-inline">
-                  @csrf
-                  <button type="submit" class="btn btn-xs btn-outline-secondary" title="Take out of this account"><i class="fas fa-times"></i></button>
+                  @foreach($groups as $group)
+                    <div class="custom-control custom-checkbox">
+                      <input type="checkbox" class="custom-control-input" id="dr-g-{{ $link->id }}-{{ $group->id }}" name="groups[]" value="{{ $group->id }}"
+                             @checked(in_array($group->id, $ticked, true)) onchange="this.form.submit()">
+                      <label class="custom-control-label" for="dr-g-{{ $link->id }}-{{ $group->id }}">
+                        <span class="dr-pill dr-{{ $group->pillClass() }}">{{ $group->name }}</span>
+                      </label>
+                    </div>
+                  @endforeach
+                  <noscript><button type="submit" class="btn btn-xs btn-primary">Save</button></noscript>
                 </form>
               </li>
             @endforeach
@@ -113,20 +132,43 @@
   <div class="card">
     <div class="card-header"><h3 class="card-title">My launch groups</h3></div>
     <div class="card-body">
+      <p class="text-muted small">
+        Tick groups on each character above; a character can be in several.
+        <span class="dr-pill dr-main">Main</span> <span class="dr-pill dr-second">Second</span> <span class="dr-pill dr-third">Third</span>
+        hold one character per account (EVE logs in one character per account). Your own groups have no lock, but warn you when two characters of one account are in the same group.
+      </p>
       <div class="row">
-        @foreach($groups as $key => $label)
-          <div class="col-md-4">
-            <h5><span class="dr-pill dr-{{ $key }}">{{ $label }}</span></h5>
-            <ul class="list-unstyled mb-3">
-              @forelse($groupMembers[$key] as $member)
+        @foreach($groups as $group)
+          <div class="col-md-4 col-xl-3 mb-3">
+            <div class="d-flex align-items-center mb-1" style="gap: .4rem;">
+              <span class="dr-pill dr-{{ $group->pillClass() }}">{{ $group->name }}</span>
+              @if($group->locked)<i class="fas fa-lock text-muted small" title="One character per account"></i>@endif
+              @if($group->user_id !== null)
+                <form method="post" action="{{ route('devilsrage.groups.delete', $group) }}" class="ml-auto">
+                  @csrf
+                  <button type="submit" class="btn btn-xs btn-link text-danger p-0" title="Remove this launch group"><i class="fas fa-trash"></i></button>
+                </form>
+              @endif
+            </div>
+            <ul class="list-unstyled mb-0">
+              @forelse($members[$group->id]['members'] as $member)
                 <li>{{ $member['character'] }} <span class="text-muted small">· {{ $member['account'] }}</span></li>
               @empty
                 <li class="text-muted small">Nobody yet</li>
               @endforelse
             </ul>
+            @foreach($members[$group->id]['clashes'] as $nickname)
+              <div class="text-warning small"><i class="fas fa-exclamation-triangle"></i> Two characters of {{ $nickname }}: only one can be logged in.</div>
+            @endforeach
           </div>
         @endforeach
       </div>
+      <form method="post" action="{{ route('devilsrage.groups.store') }}" class="form-inline" style="gap: .5rem;">
+        @csrf
+        <label for="dr-group-name" class="sr-only">New launch group</label>
+        <input id="dr-group-name" type="text" name="name" maxlength="40" class="form-control form-control-sm" placeholder="New group, e.g. Siege, PvE crew" required>
+        <button type="submit" class="btn btn-sm btn-primary">Add launch group</button>
+      </form>
     </div>
   </div>
 

@@ -8,6 +8,7 @@ use CryptaTech\Seat\Fitting\Models\Doctrine;
 use DevilsRage\Seat\Fits\EsiFitConverter;
 use DevilsRage\Seat\Models\AccountCharacter;
 use DevilsRage\Seat\Models\AccountSetting;
+use DevilsRage\Seat\Models\LaunchGroup;
 use DevilsRage\Seat\Models\SkillPlan;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
@@ -33,7 +34,8 @@ class PlannerController extends Controller
         $plans = SkillPlan::query()->orderBy('name')->get(['id', 'name']);
         $doctrine = $doctrines->firstWhere('id', (int) $request->query('doctrine')) ?? $doctrines->first();
         $plan = $plans->firstWhere('id', (int) $request->query('plan'));
-        $group = array_key_exists((string) $request->query('group'), AccountCharacter::GROUPS) ? (string) $request->query('group') : null;
+        $groupNames = $this->groupNames();
+        $group = in_array((string) $request->query('group'), $groupNames, true) ? (string) $request->query('group') : null;
 
         $fits = $doctrine === null
             ? collect()
@@ -73,7 +75,7 @@ class PlannerController extends Controller
             'plans' => $plans,
             'plan' => $plan,
             'group' => $group,
-            'groups' => AccountCharacter::GROUPS,
+            'groupNames' => $groupNames,
             'fits' => $fits,
             'rows' => $rows,
             'status' => $status,
@@ -85,10 +87,30 @@ class PlannerController extends Controller
     }
 
     /**
+     * Filter choices: Main / Second / Third, then every group name pilots who share
+     * their layout made themselves (the same name from several pilots is one choice).
+     *
+     * @return list<string>
+     */
+    private function groupNames(): array
+    {
+        $shared = LaunchGroup::query()->whereNull('user_id')->orderBy('position')->pluck('name');
+        $own = LaunchGroup::query()
+            ->whereNotNull('user_id')
+            ->whereNotIn('user_id', AccountSetting::query()->where('share', false)->select('user_id'))
+            ->pluck('name')
+            ->unique(fn (string $name): string => mb_strtolower($name))
+            ->reject(fn (string $name): bool => $shared->contains(fn (string $builtIn): bool => strcasecmp($builtIn, $name) === 0))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $shared->merge($own)->values()->all();
+    }
+
+    /**
      * Corp characters with their pilot, account (when shared) and launch group.
      *
      * @param  list<int>  $characterIds
-     * @return array<int, array{name: string, pilot: string, user_id: int, account: ?string, account_key: string, group: ?string}>
+     * @return array<int, array{name: string, pilot: string, user_id: int, account: ?string, account_key: string, groups: list<array{name: string, class: string}>}>
      */
     private function rows(array $characterIds, ?string $group): array
     {
@@ -99,7 +121,7 @@ class PlannerController extends Controller
 
         $links = AccountCharacter::query()
             ->whereIn('character_id', $characterIds)
-            ->with('account')
+            ->with(['account', 'launchGroups'])
             ->get()
             ->keyBy('character_id');
 
@@ -108,7 +130,8 @@ class PlannerController extends Controller
             $userId = (int) ($owners[$characterId] ?? 0);
             $link = $private->has($userId) ? null : $links->get($characterId);
 
-            if ($group !== null && $link?->launch_group !== $group) {
+            $groups = $link?->launchGroups ?? collect();
+            if ($group !== null && ! $groups->contains(fn (LaunchGroup $item): bool => strcasecmp($item->name, $group) === 0)) {
                 continue;
             }
 
@@ -120,7 +143,7 @@ class PlannerController extends Controller
                 // Characters on one account can't fly at the same time; without a shared
                 // account each character stands alone.
                 'account_key' => $link instanceof AccountCharacter ? 'a'.$link->account_id : 'c'.$characterId,
-                'group' => $link?->launch_group,
+                'groups' => $groups->map(fn (LaunchGroup $item): array => ['name' => $item->name, 'class' => $item->pillClass()])->all(),
             ];
         }
 

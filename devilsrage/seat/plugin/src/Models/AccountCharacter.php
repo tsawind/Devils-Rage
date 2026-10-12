@@ -6,6 +6,7 @@ namespace DevilsRage\Seat\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Seat\Eveapi\Models\Character\CharacterInfo;
 
@@ -13,19 +14,16 @@ use Seat\Eveapi\Models\Character\CharacterInfo;
  * @property int $id
  * @property int $account_id
  * @property int $character_id
- * @property string|null $launch_group
+ * @property int $position
  */
 class AccountCharacter extends Model
 {
-    /** Launch group key => label. */
-    public const GROUPS = ['main' => 'Main', 'second' => 'Second', 'third' => 'Third'];
-
     protected $table = 'devilsrage_account_characters';
 
-    protected $fillable = ['account_id', 'character_id', 'launch_group'];
+    protected $fillable = ['account_id', 'character_id', 'position'];
 
     /** @var array<string, string> */
-    protected $casts = ['character_id' => 'integer', 'account_id' => 'integer'];
+    protected $casts = ['character_id' => 'integer', 'account_id' => 'integer', 'position' => 'integer'];
 
     public function account(): BelongsTo
     {
@@ -35,5 +33,13 @@ class AccountCharacter extends Model
     public function character(): HasOne
     {
         return $this->hasOne(CharacterInfo::class, 'character_id', 'character_id');
+    }
+
+    public function launchGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(LaunchGroup::class, LaunchGroup::PIVOT, 'account_character_id', 'launch_group_id')
+            ->orderByRaw('devilsrage_launch_groups.user_id is not null')
+            ->orderBy('devilsrage_launch_groups.position')
+            ->orderBy('devilsrage_launch_groups.name');
     }
 }

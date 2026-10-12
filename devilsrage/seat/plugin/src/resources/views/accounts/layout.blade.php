@@ -8,8 +8,8 @@
 
   <div class="card">
     <div class="card-body d-flex flex-wrap align-items-center" style="gap: .75rem;">
-      @foreach($groups as $key => $label)
-        <span class="dr-pill dr-{{ $key }}">{{ $label }}: {{ $groupCounts[$key] }}</span>
+      @foreach($groupCounts as $name => $count)
+        <span class="dr-pill dr-{{ ['Main' => 'main', 'Second' => 'second', 'Third' => 'third'][$name] ?? 'custom' }}">{{ $name }}: {{ $count }}</span>
       @endforeach
       <span class="text-muted small ml-auto">
         Shown: pilots who share their layout. {{ $privateCount }} kept it private.
@@ -35,9 +35,13 @@
               <span class="text-muted small">{{ $account->characters->count() }}/3</span>
               <ul class="list-unstyled mb-0 mt-1">
                 @forelse($account->characters as $link)
-                  <li class="d-flex align-items-center" style="gap: .4rem;">
-                    <span>{{ $link->character->name ?? $link->character_id }}</span>
-                    <span class="dr-pill dr-{{ $link->launch_group ?? 'none' }}">{{ $groups[$link->launch_group] ?? 'No group' }}</span>
+                  <li class="d-flex align-items-center flex-wrap" style="gap: .3rem;">
+                    <span class="mr-1">{{ $link->character->name ?? $link->character_id }}</span>
+                    @forelse($link->launchGroups as $group)
+                      <span class="dr-pill dr-{{ $group->pillClass() }}">{{ $group->name }}</span>
+                    @empty
+                      <span class="dr-pill dr-none">No group</span>
+                    @endforelse
                   </li>
                 @empty
                   <li class="text-muted small">No characters</li>
