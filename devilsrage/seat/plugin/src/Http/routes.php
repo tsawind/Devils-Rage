@@ -6,6 +6,7 @@ use DevilsRage\Seat\Http\Controllers\AccountsController;
 use DevilsRage\Seat\Http\Controllers\BotApiController;
 use DevilsRage\Seat\Http\Controllers\PlannerController;
 use DevilsRage\Seat\Http\Controllers\SkillPlansController;
+use DevilsRage\Seat\Http\Controllers\SpFarmController;
 use DevilsRage\Seat\Http\Middleware\BotApiKey;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +22,8 @@ Route::group([
     Route::post('accounts/{account}/delete', [AccountsController::class, 'deleteAccount'])->name('devilsrage.accounts.delete');
     Route::post('accounts/{account}/characters', [AccountsController::class, 'addCharacter'])->name('devilsrage.accounts.characters.add');
     Route::post('account-characters/{accountCharacter}/groups', [AccountsController::class, 'setGroups'])->name('devilsrage.accounts.characters.groups');
+    Route::post('account-characters/{accountCharacter}/corp-group', [AccountsController::class, 'setCorpGroup'])->name('devilsrage.accounts.characters.corpgroup');
+    Route::post('accounts/{account}/omega', [AccountsController::class, 'setOmega'])->name('devilsrage.accounts.omega');
     Route::post('account-characters/{accountCharacter}/move', [AccountsController::class, 'moveCharacter'])->name('devilsrage.accounts.characters.move');
     Route::post('account-characters/{accountCharacter}/remove', [AccountsController::class, 'removeCharacter'])->name('devilsrage.accounts.characters.remove');
 
@@ -29,6 +32,11 @@ Route::group([
 
     Route::get('layout', [AccountsController::class, 'layout'])->name('devilsrage.layout');
     Route::get('planner', [PlannerController::class, 'index'])->name('devilsrage.planner');
+
+    Route::get('sp-farm', [SpFarmController::class, 'index'])->name('devilsrage.spfarm.index');
+    Route::post('sp-farm', [SpFarmController::class, 'store'])->name('devilsrage.spfarm.store');
+    Route::post('sp-farm/settings', [SpFarmController::class, 'settings'])->name('devilsrage.spfarm.settings');
+    Route::post('sp-farm/{characterId}/delete', [SpFarmController::class, 'destroy'])->whereNumber('characterId')->name('devilsrage.spfarm.delete');
 
     Route::get('skill-plans', [SkillPlansController::class, 'index'])->name('devilsrage.skillplans.index');
     Route::post('skill-plans', [SkillPlansController::class, 'store'])->name('devilsrage.skillplans.store');

@@ -12,6 +12,7 @@ use DevilsRage\Seat\Models\LaunchGroup;
 use DevilsRage\Seat\Models\SkillPlan;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
+use DevilsRage\Seat\Services\OmegaStatus;
 use DevilsRage\Seat\Skills\SkillCheck;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -83,34 +84,25 @@ class PlannerController extends Controller
             'hulls' => $hulls,
             'closeSeconds' => SkillCheck::CLOSE_SECONDS,
             'skillNames' => $skills->names(array_keys($requiredIds)),
+            'alpha' => array_flip(app(OmegaStatus::class)->alphaCharacters(array_map('intval', $characterIds))),
         ]);
     }
 
     /**
-     * Filter choices: Main / Second / Third, then every group name pilots who share
-     * their layout made themselves (the same name from several pilots is one choice).
+     * Filter choices: Main / Second / Third. Pilots' own launch groups are private.
      *
      * @return list<string>
      */
     private function groupNames(): array
     {
-        $shared = LaunchGroup::query()->whereNull('user_id')->orderBy('position')->pluck('name');
-        $own = LaunchGroup::query()
-            ->whereNotNull('user_id')
-            ->whereNotIn('user_id', AccountSetting::query()->where('share', false)->select('user_id'))
-            ->pluck('name')
-            ->unique(fn (string $name): string => mb_strtolower($name))
-            ->reject(fn (string $name): bool => $shared->contains(fn (string $builtIn): bool => strcasecmp($builtIn, $name) === 0))
-            ->sort(SORT_NATURAL | SORT_FLAG_CASE);
-
-        return $shared->merge($own)->values()->all();
+        return LaunchGroup::query()->whereNull('user_id')->orderBy('position')->pluck('name')->all();
     }
 
     /**
      * Corp characters with their pilot, account (when shared) and launch group.
      *
      * @param  list<int>  $characterIds
-     * @return array<int, array{name: string, pilot: string, user_id: int, account: ?string, account_key: string, groups: list<array{name: string, class: string}>}>
+     * @return array<int, array{name: string, pilot: string, user_id: int, account: ?string, omega_ended: bool, account_key: string, groups: list<array{name: string, class: string}>}>
      */
     private function rows(array $characterIds, ?string $group): array
     {
@@ -121,7 +113,7 @@ class PlannerController extends Controller
 
         $links = AccountCharacter::query()
             ->whereIn('character_id', $characterIds)
-            ->with(['account', 'launchGroups'])
+            ->with(['account', 'launchGroups' => fn ($query) => $query->whereNull('devilsrage_launch_groups.user_id')])
             ->get()
             ->keyBy('character_id');
 
@@ -140,6 +132,7 @@ class PlannerController extends Controller
                 'pilot' => (string) ($users->get($userId)?->main_character?->name ?? $users->get($userId)?->name ?? 'Unknown'),
                 'user_id' => $userId,
                 'account' => $link?->account?->nickname,
+                'omega_ended' => $link?->account?->omega_until !== null && $link->account->omega_until->isPast() && ! $link->account->omega_until->isToday(),
                 // Characters on one account can't fly at the same time; without a shared
                 // account each character stands alone.
                 'account_key' => $link instanceof AccountCharacter ? 'a'.$link->account_id : 'c'.$characterId,

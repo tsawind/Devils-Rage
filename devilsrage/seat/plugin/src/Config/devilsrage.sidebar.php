@@ -19,6 +19,11 @@ return [
                 'route' => 'devilsrage.skillplans.index',
             ],
             [
+                'name' => 'SP farming',
+                'icon' => 'fas fa-seedling',
+                'route' => 'devilsrage.spfarm.index',
+            ],
+            [
                 'name' => 'Corp layout',
                 'icon' => 'fas fa-sitemap',
                 'route' => 'devilsrage.layout',

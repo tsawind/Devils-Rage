@@ -10,6 +10,7 @@ use DevilsRage\Seat\Models\AccountSetting;
 use DevilsRage\Seat\Models\LaunchGroup;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
+use DevilsRage\Seat\Services\OmegaStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -47,13 +48,16 @@ class AccountsController extends Controller
             ->get();
 
         $groups = LaunchGroup::forUser($user->id);
+        $omega = app(OmegaStatus::class);
         $assigned = $accounts->flatMap(fn (Account $account) => $account->characters->pluck('character_id'))->all();
 
         return view('devilsrage::accounts.index', [
             'accounts' => $accounts,
             'characters' => $characters,
-            'groups' => $groups,
+            'corpGroups' => $groups->where('locked', true)->values(),
+            'ownGroups' => $groups->where('locked', false)->values(),
             'members' => $this->members($accounts, $groups, $characters),
+            'omega' => $omega->forAccounts($accounts),
             'unassigned' => $characters->except($assigned)->values(),
             'share' => AccountSetting::sharesFor($user->id),
             'maxCharacters' => Account::MAX_CHARACTERS,
@@ -97,6 +101,28 @@ class AccountsController extends Controller
         return back()->with('success', 'Account renamed.');
     }
 
+    /**
+     * When Omega runs out on this account (empty = unknown / Alpha).
+     */
+    public function setOmega(Request $request, Account $account): RedirectResponse
+    {
+        $this->authorizeOwner($account);
+        $data = $request->validate([
+            'omega_until' => ['nullable', 'date', 'after:2003-01-01', 'before:+5 years'],
+        ], [
+            'omega_until.before' => 'That date is too far ahead; use the date Omega runs out.',
+        ]);
+
+        $account->update([
+            'omega_until' => $data['omega_until'] ?? null,
+            'omega_reminded' => null,
+        ]);
+
+        return back()->with('success', $account->omega_until === null
+            ? 'Omega date cleared for '.$account->nickname.'.'
+            : 'Omega for '.$account->nickname.' runs until '.$account->omega_until->format('Y-m-d').'. You get a Discord DM 7 days and 1 day before.');
+    }
+
     public function deleteAccount(Account $account): RedirectResponse
     {
         $this->authorizeOwner($account);
@@ -132,47 +158,63 @@ class AccountsController extends Controller
     }
 
     /**
-     * The launch group checkboxes of one character. Ticking a locked group (Main /
-     * Second / Third) takes it away from the other characters on that account.
+     * The corp launch group of one character: Main, Second, Third or none. Each
+     * account holds one character per corp group, so picking one takes it away from
+     * the other characters on that account.
+     */
+    public function setCorpGroup(Request $request, AccountCharacter $accountCharacter): RedirectResponse
+    {
+        $this->authorizeOwner($accountCharacter->account);
+
+        $corpGroups = LaunchGroup::query()->whereNull('user_id')->where('locked', true)->get()->keyBy('id');
+        $data = $request->validate([
+            'group' => ['nullable', 'integer', Rule::in($corpGroups->keys()->all())],
+        ]);
+        $group = isset($data['group']) ? $corpGroups->get((int) $data['group']) : null;
+
+        $moved = DB::transaction(function () use ($accountCharacter, $corpGroups, $group): int {
+            $accountCharacter->launchGroups()->detach($corpGroups->keys()->all());
+            if ($group === null) {
+                return 0;
+            }
+
+            $others = AccountCharacter::query()
+                ->where('account_id', $accountCharacter->account_id)
+                ->where('id', '!=', $accountCharacter->id)
+                ->pluck('id');
+            $moved = $group->characters()->detach($others->all());
+            $accountCharacter->launchGroups()->attach($group->id);
+
+            return $moved;
+        });
+
+        return back()->with('success', $moved > 0
+            ? 'Saved. The other character on that account was taken out of '.$group?->name.' (one per account).'
+            : 'Corp launch group saved.');
+    }
+
+    /**
+     * The pilot's own launch group checkboxes of one character (Main / Second / Third
+     * are set with setCorpGroup and are left alone here).
      */
     public function setGroups(Request $request, AccountCharacter $accountCharacter): RedirectResponse
     {
         $user = auth()->user();
         $this->authorizeOwner($accountCharacter->account);
 
-        $allowed = LaunchGroup::forUser($user->id)->keyBy('id');
+        $own = LaunchGroup::query()->where('user_id', $user->id)->pluck('id')->map(fn ($id): int => (int) $id);
         $data = $request->validate([
             'groups' => ['array'],
-            'groups.*' => ['integer', Rule::in($allowed->keys()->all())],
+            'groups.*' => ['integer', Rule::in($own->all())],
         ]);
         $chosen = collect($data['groups'] ?? [])->map(fn ($id): int => (int) $id)->unique()->values();
 
-        $movedFrom = DB::transaction(function () use ($accountCharacter, $allowed, $chosen): array {
-            $before = $accountCharacter->launchGroups()->pluck('devilsrage_launch_groups.id')->map(fn ($id): int => (int) $id);
-            $accountCharacter->launchGroups()->sync($chosen->all());
-
-            $movedFrom = [];
-            foreach ($chosen->diff($before) as $groupId) {
-                $group = $allowed->get($groupId);
-                if (! $group?->locked) {
-                    continue;
-                }
-
-                $others = AccountCharacter::query()
-                    ->where('account_id', $accountCharacter->account_id)
-                    ->where('id', '!=', $accountCharacter->id)
-                    ->pluck('id');
-                if ($group->characters()->detach($others->all()) > 0) {
-                    $movedFrom[] = $group->name;
-                }
-            }
-
-            return $movedFrom;
+        DB::transaction(function () use ($accountCharacter, $own, $chosen): void {
+            $accountCharacter->launchGroups()->detach($own->diff($chosen)->values()->all());
+            $accountCharacter->launchGroups()->syncWithoutDetaching($chosen->all());
         });
 
-        return back()->with('success', $movedFrom === []
-            ? 'Launch groups saved.'
-            : 'Launch groups saved. The other character on that account was taken out of '.implode(', ', $movedFrom).' (one per account).');
+        return back()->with('success', 'Launch groups saved.');
     }
 
     /**
@@ -261,7 +303,8 @@ class AccountsController extends Controller
         $private = AccountSetting::query()->where('share', false)->pluck('user_id')->all();
         $accounts = Account::query()
             ->whereNotIn('user_id', $private)
-            ->with(['characters.character', 'characters.launchGroups'])
+            // Pilots' own launch groups are private: the corp view only shows Main / Second / Third.
+            ->with(['characters.character', 'characters.launchGroups' => fn ($query) => $query->whereNull('devilsrage_launch_groups.user_id')])
             ->orderBy('nickname')
             ->get()
             ->groupBy('user_id');
@@ -274,16 +317,15 @@ class AccountsController extends Controller
 
         $groupCounts = $links
             ->flatMap(fn (AccountCharacter $link) => $link->launchGroups->pluck('name'))
-            ->countBy()
-            ->sortKeys();
-        $shared = LaunchGroup::query()->whereNull('user_id')->orderBy('position')->pluck('name');
-        $groupCounts = $shared->mapWithKeys(fn (string $name): array => [$name => $groupCounts[$name] ?? 0])
-            ->union($groupCounts->except($shared->all()));
+            ->countBy();
+        $groupCounts = LaunchGroup::query()->whereNull('user_id')->orderBy('position')->pluck('name')
+            ->mapWithKeys(fn (string $name): array => [$name => $groupCounts[$name] ?? 0]);
 
         return view('devilsrage::accounts.layout', [
             'accounts' => $accounts,
             'users' => $users,
             'groupCounts' => $groupCounts,
+            'omega' => app(OmegaStatus::class)->forAccounts($accounts->flatten()),
             'privateCount' => count($private),
             'ungroupedPilots' => $notGrouped->except([0])->count(),
         ]);

@@ -76,7 +76,10 @@
               <td><input type="checkbox" class="dr-pick" aria-label="Pick {{ $row['name'] }}"></td>
               <td>{{ $row['pilot'] }}</td>
               <td>{{ $row['account'] ?? '–' }}</td>
-              <td>{{ $row['name'] }} <span class="dr-clash text-danger small"></span></td>
+              <td>{{ $row['name'] }}
+                @if(isset($alpha[$characterId]))<span class="badge badge-warning" title="Training at Alpha speed right now">Alpha?</span>@endif
+                @if($row['omega_ended'])<span class="badge badge-danger" title="Omega end date has passed">Omega ended</span>@endif
+                <span class="dr-clash text-danger small"></span></td>
               <td>
                 @forelse($row['groups'] as $item)
                   <span class="dr-pill dr-{{ $item['class'] }}">{{ $item['name'] }}</span>

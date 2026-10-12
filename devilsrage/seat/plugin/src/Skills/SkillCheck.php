@@ -142,6 +142,29 @@ final class SkillCheck
     }
 
     /**
+     * Rank and training attributes of skills.
+     *
+     * @param  list<int>  $skillIds
+     * @return array<int, array{rank: float, primary: int, secondary: int}>
+     */
+    public function skillInfo(array $skillIds): array
+    {
+        $this->loadSkillInfo($skillIds);
+
+        return array_intersect_key($this->skillInfo, array_flip($skillIds));
+    }
+
+    /**
+     * Omega skill points per minute for a character's attributes (Alpha trains at half).
+     *
+     * @param  array{rank: float, primary: int, secondary: int}  $info
+     */
+    public function omegaRate(?CharacterAttribute $attribute, array $info): float
+    {
+        return $this->pointsPerMinute($attribute, $info);
+    }
+
+    /**
      * @param  list<int>  $skillIds
      */
     private function loadSkillInfo(array $skillIds): void

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace DevilsRage\Seat;
 
 use DevilsRage\Seat\Commands\ImportLibraryFits;
+use DevilsRage\Seat\Commands\RemindOmega;
 use DevilsRage\Seat\Seeders\ScheduleSeeder;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
@@ -27,7 +28,7 @@ class DevilsRageServiceProvider extends AbstractSeatPlugin
         Gate::define('devilsrage-leader', fn (User $user): bool => $this->app->make(Leadership::class)->isLeader($user));
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ImportLibraryFits::class]);
+            $this->commands([ImportLibraryFits::class, RemindOmega::class]);
         }
     }
 

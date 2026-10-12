@@ -12,7 +12,7 @@
         <span class="dr-pill dr-{{ ['Main' => 'main', 'Second' => 'second', 'Third' => 'third'][$name] ?? 'custom' }}">{{ $name }}: {{ $count }}</span>
       @endforeach
       <span class="text-muted small ml-auto">
-        Shown: pilots who share their layout. {{ $privateCount }} kept it private.
+        Shown: pilots who share their layout (corp groups only; pilots' own groups are private). {{ $privateCount }} kept it private.
         @if($ungroupedPilots > 0) {{ $ungroupedPilots }} corp pilot(s) haven't set up accounts yet. @endif
       </span>
     </div>
@@ -32,6 +32,7 @@
           @foreach($userAccounts as $account)
             <div class="col-md-4 mb-2">
               <strong>{{ $account->nickname }}</strong>
+              @include('devilsrage::partials.omega-badge', ['om' => $omega[$account->id] ?? null])
               <span class="text-muted small">{{ $account->characters->count() }}/3</span>
               <ul class="list-unstyled mb-0 mt-1">
                 @forelse($account->characters as $link)

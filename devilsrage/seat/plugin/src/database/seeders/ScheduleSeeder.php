@@ -15,6 +15,14 @@ class ScheduleSeeder extends AbstractScheduleSeeder
     {
         return [
             [
+                'command' => 'devilsrage:omega:remind',
+                'expression' => '7 17 * * *',
+                'allow_overlap' => false,
+                'allow_maintenance' => false,
+                'ping_before' => null,
+                'ping_after' => null,
+            ],
+            [
                 'command' => 'devilsrage:fits:import',
                 'expression' => '41 * * * *',
                 'allow_overlap' => false,

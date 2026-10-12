@@ -9,8 +9,9 @@
   <div class="card">
     <div class="card-body">
       <p class="mb-2">
-        Group your characters into the EVE accounts they live on (up to {{ $maxCharacters }} per account), then put them in
-        launch groups. EVE logs in one character per account at a time, so each launch group can hold one character per account.
+        Group your characters into the EVE accounts they live on (up to {{ $maxCharacters }} per account). Give each character its
+        <strong>corp launch group</strong> (Main, Second or Third; one character per account each), which is what the corp layout and FCs see.
+        Your own launch groups are only for you: make them below and tick them on your characters.
       </p>
       <p class="mb-0 text-muted">
         Give each account a <strong>nickname</strong>, not your real login name. The nickname is the only thing anyone else sees about the account.
@@ -23,7 +24,9 @@
       <div class="col-md-6 col-xl-4">
         <div class="card">
           <div class="card-header d-flex align-items-center">
+            @php($om = $omega[$account->id] ?? null)
             <h3 class="card-title mb-0 mr-auto"><i class="fas fa-user-astronaut"></i> {{ $account->nickname }}</h3>
+            @include('devilsrage::partials.omega-badge', ['om' => $om])
             <span class="text-muted small mr-2">{{ $account->characters->count() }} / {{ $maxCharacters }}</span>
             <form method="post" action="{{ route('devilsrage.accounts.delete', $account) }}" class="d-inline">
               @csrf
@@ -51,15 +54,30 @@
                     </form>
                   </div>
                   <img src="https://images.evetech.net/characters/{{ $link->character_id }}/portrait?size=64" width="32" height="32" class="rounded" alt="">
-                  <span class="mr-auto font-weight-bold">{{ $character->name ?? 'Character '.$link->character_id }}</span>
+                  <span class="mr-auto font-weight-bold">{{ $character->name ?? 'Character '.$link->character_id }}
+                    @if($om && in_array($link->character_id, $om['alpha_characters'], true))
+                      <span class="badge badge-warning" title="Training at Alpha speed right now">Alpha?</span>
+                    @endif
+                  </span>
+                  @php($corpPick = $link->launchGroups->firstWhere('locked', true))
+                  <form method="post" action="{{ route('devilsrage.accounts.characters.corpgroup', $link) }}" class="d-inline">
+                    @csrf
+                    <select name="group" class="form-control form-control-sm" onchange="this.form.submit()" aria-label="Corp launch group">
+                      <option value="">No corp group</option>
+                      @foreach($corpGroups as $group)
+                        <option value="{{ $group->id }}" @selected($corpPick && $corpPick->id === $group->id)>{{ $group->name }}</option>
+                      @endforeach
+                    </select>
+                  </form>
                   <form method="post" action="{{ route('devilsrage.accounts.characters.remove', $link) }}" class="d-inline">
                     @csrf
                     <button type="submit" class="btn btn-xs btn-outline-secondary" title="Take out of this account"><i class="fas fa-times"></i></button>
                   </form>
                 </div>
+                @if($ownGroups->isNotEmpty())
                 <form method="post" action="{{ route('devilsrage.accounts.characters.groups', $link) }}" class="d-flex flex-wrap mt-2 pl-4" style="gap: .25rem .75rem;">
                   @csrf
-                  @foreach($groups as $group)
+                  @foreach($ownGroups as $group)
                     <div class="custom-control custom-checkbox">
                       <input type="checkbox" class="custom-control-input" id="dr-g-{{ $link->id }}-{{ $group->id }}" name="groups[]" value="{{ $group->id }}"
                              @checked(in_array($group->id, $ticked, true)) onchange="this.form.submit()">
@@ -70,6 +88,7 @@
                   @endforeach
                   <noscript><button type="submit" class="btn btn-xs btn-primary">Save</button></noscript>
                 </form>
+                @endif
               </li>
             @endforeach
             @if($account->characters->count() < $maxCharacters)
@@ -90,7 +109,13 @@
               </li>
             @endif
           </ul>
-          <div class="card-footer">
+          <div class="card-footer d-flex flex-column" style="gap: .5rem;">
+            <form method="post" action="{{ route('devilsrage.accounts.omega', $account) }}" class="form-inline" style="gap: .5rem;">
+              @csrf
+              <label for="dr-omega-{{ $account->id }}" class="small mb-0">Omega until</label>
+              <input id="dr-omega-{{ $account->id }}" type="date" name="omega_until" value="{{ $account->omega_until?->format('Y-m-d') }}" class="form-control form-control-sm">
+              <button type="submit" class="btn btn-sm btn-outline-secondary">Save</button>
+            </form>
             <form method="post" action="{{ route('devilsrage.accounts.rename', $account) }}" class="form-inline" style="gap: .5rem;">
               @csrf
               <input type="text" name="nickname" value="{{ $account->nickname }}" maxlength="32" class="form-control form-control-sm" aria-label="Nickname">
@@ -130,43 +155,28 @@
   </div>
 
   <div class="card">
-    <div class="card-header"><h3 class="card-title">My launch groups</h3></div>
+    <div class="card-header"><h3 class="card-title">Launch groups</h3></div>
     <div class="card-body">
-      <p class="text-muted small">
-        Tick groups on each character above; a character can be in several.
-        <span class="dr-pill dr-main">Main</span> <span class="dr-pill dr-second">Second</span> <span class="dr-pill dr-third">Third</span>
-        hold one character per account (EVE logs in one character per account). Your own groups have no lock, but warn you when two characters of one account are in the same group.
-      </p>
+      <h5 class="mb-1">Corp groups <i class="fas fa-lock text-muted small" title="One character per account"></i></h5>
+      <p class="text-muted small mb-2">Main, Second and Third are what the corp sees. Each account holds one character per group, because EVE logs in one character per account.</p>
       <div class="row">
-        @foreach($groups as $group)
-          <div class="col-md-4 col-xl-3 mb-3">
-            <div class="d-flex align-items-center mb-1" style="gap: .4rem;">
-              <span class="dr-pill dr-{{ $group->pillClass() }}">{{ $group->name }}</span>
-              @if($group->locked)<i class="fas fa-lock text-muted small" title="One character per account"></i>@endif
-              @if($group->user_id !== null)
-                <form method="post" action="{{ route('devilsrage.groups.delete', $group) }}" class="ml-auto">
-                  @csrf
-                  <button type="submit" class="btn btn-xs btn-link text-danger p-0" title="Remove this launch group"><i class="fas fa-trash"></i></button>
-                </form>
-              @endif
-            </div>
-            <ul class="list-unstyled mb-0">
-              @forelse($members[$group->id]['members'] as $member)
-                <li>{{ $member['character'] }} <span class="text-muted small">· {{ $member['account'] }}</span></li>
-              @empty
-                <li class="text-muted small">Nobody yet</li>
-              @endforelse
-            </ul>
-            @foreach($members[$group->id]['clashes'] as $nickname)
-              <div class="text-warning small"><i class="fas fa-exclamation-triangle"></i> Two characters of {{ $nickname }}: only one can be logged in.</div>
-            @endforeach
-          </div>
+        @foreach($corpGroups as $group)
+          @include('devilsrage::partials.group-members', ['group' => $group, 'members' => $members[$group->id], 'deletable' => false])
         @endforeach
+      </div>
+      <h5 class="mb-1 mt-2">My own groups <i class="fas fa-user-secret text-muted small" title="Only you see these"></i></h5>
+      <p class="text-muted small mb-2">Only you see these, e.g. a 7-pilot DST launch with its own overview setup. A character can be in several. They warn you when two characters of one account share a group.</p>
+      <div class="row">
+        @forelse($ownGroups as $group)
+          @include('devilsrage::partials.group-members', ['group' => $group, 'members' => $members[$group->id], 'deletable' => true])
+        @empty
+          <div class="col-12 text-muted small mb-2">No groups of your own yet.</div>
+        @endforelse
       </div>
       <form method="post" action="{{ route('devilsrage.groups.store') }}" class="form-inline" style="gap: .5rem;">
         @csrf
         <label for="dr-group-name" class="sr-only">New launch group</label>
-        <input id="dr-group-name" type="text" name="name" maxlength="40" class="form-control form-control-sm" placeholder="New group, e.g. Siege, PvE crew" required>
+        <input id="dr-group-name" type="text" name="name" maxlength="40" class="form-control form-control-sm" placeholder="New group, e.g. Siege, DST launch" required>
         <button type="submit" class="btn btn-sm btn-primary">Add launch group</button>
       </form>
     </div>
@@ -184,7 +194,7 @@
       </form>
       <span class="text-muted">
         @if($share)
-          Admins and directors see your accounts (by nickname) and launch groups in the corp layout and the FC planner. Click to make it private.
+          Admins and directors see your accounts (by nickname), corp launch groups and Omega status in the corp layout and the FC planner. Your own groups stay private. Click to make it private.
         @else
           Only you see your accounts. FCs see your characters one by one, without the account grouping. Click to share.
         @endif

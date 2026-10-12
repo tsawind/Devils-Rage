@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $id
  * @property int $user_id
  * @property string $nickname
+ * @property \Illuminate\Support\Carbon|null $omega_until
+ * @property int|null $omega_reminded
  */
 class Account extends Model
 {
@@ -18,7 +20,10 @@ class Account extends Model
 
     protected $table = 'devilsrage_accounts';
 
-    protected $fillable = ['user_id', 'nickname'];
+    protected $fillable = ['user_id', 'nickname', 'omega_until', 'omega_reminded'];
+
+    /** @var array<string, string> */
+    protected $casts = ['omega_until' => 'date', 'omega_reminded' => 'integer'];
 
     public function characters(): HasMany
     {

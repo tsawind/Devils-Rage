@@ -28,7 +28,7 @@ RUN composer config repositories.devilsrage \
         recursivetree/seat-inventory:2.1.7 \
         cryptatech/seat-srp:5.0.7 \
         mattfalahe/seat-discord-pings:2.0.1 \
-        devilsrage/seat-devilsrage:1.2.0 \
+        devilsrage/seat-devilsrage:1.3.0 \
         --no-install --no-ansi \
  && composer update \
         cryptatech/seat-fitting recursivetree/seat-prices-core cryptatech/seat-prices-fuzzwork \
@@ -38,16 +38,18 @@ RUN composer config repositories.devilsrage \
 
 # Batch 2 plugins, only when DR_BATCH2=1 in ~/seat-docker/.env (watch memory first):
 #   seat-calendar (ops calendar, Discord events), structure-manager (fuel, structure
-#   alerts), seat-package-notifications (tells you when plugins are outdated).
+#   alerts), seat-package-notifications (tells you when plugins are outdated),
+#   manager-core (~2 min structure attack alerts and fuel prices for structure-manager).
 ARG DR_BATCH2=0
 RUN if [ "$DR_BATCH2" = "1" ]; then \
         composer require \
             hermesdj/seat-calendar:1.1.8 \
             mattfalahe/structure-manager:2.0.4 \
             recursivetree/seat-package-notifications:1.0.5 \
+            mattfalahe/manager-core:1.0.3 \
             --no-install --no-ansi \
      && composer update \
-            hermesdj/seat-calendar mattfalahe/structure-manager recursivetree/seat-package-notifications \
+            hermesdj/seat-calendar mattfalahe/structure-manager recursivetree/seat-package-notifications mattfalahe/manager-core \
             --no-scripts --no-dev --no-ansi --no-progress; \
     fi
 
