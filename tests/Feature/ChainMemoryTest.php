@@ -243,7 +243,9 @@ it('patch 37: a reconnect brings the whole old chain back, moved along, its pipe
         ->and($sig->fresh()->map_connection_id)->toBe($pipe->id)
         ->and(MapSolarsystem::query()->find($alpha->id)->memory_links)->toBeNull();
 
-    $pipe->update(['mass_status' => 'reduced']);
+    // A real mark (a different status than the factory's random one) un-fades it.
+    $current = $pipe->mass_status instanceof BackedEnum ? $pipe->mass_status->value : (string) $pipe->mass_status;
+    $pipe->update(['mass_status' => $current === 'reduced' ? 'critical' : 'reduced']);
 
     expect($pipe->fresh()->from_memory)->toBeFalse();
 });
