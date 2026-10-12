@@ -37,7 +37,8 @@ final class MapConnectionController extends Controller
         // Patch 21: saved first (with its signatures and logged jumps), so Undo can put it back.
         $token = MapUndoSnapshots::tokenFrom($request);
         if ($token !== null) {
-            $undo->capture($mapConnection->map, $user->id, $token, connectionIds: [$mapConnection->id]);
+            // Patch 37: with the systems the pipe cut off from home (they leave the map with it).
+            $undo->capture($mapConnection->map, $user->id, $token, systemIds: $action->systemsCutOffBy($mapConnection), connectionIds: [$mapConnection->id]);
         }
 
         $action->handle($mapConnection);

@@ -277,3 +277,32 @@ it('patch 37 cleanup: a hole marked EOL goes 5½ h after the first mark, a pipe 
         ->and(MapConnection::query()->find($alpha_a1->id))->toBeNull()
         ->and(MapConnection::query()->find($daisy_alpha->id))->toBeNull();
 });
+
+it('patch 37: deleting a rolled pipe takes the chain beyond it off the map (not into Side chains)', function () {
+    ['map' => $map, 'daisy' => $daisy, 'alpha' => $alpha, 'a1' => $a1, 'daisy_alpha' => $daisy_alpha] = chainMap();
+
+    app(App\Actions\MapConnections\DeleteMapConnectionAction::class)->handle($daisy_alpha);
+
+    expect(MapSolarsystem::query()->whereKey([$alpha->id, $a1->id])->count())->toBe(0)
+        ->and(MapSolarsystem::withHidden()->find($alpha->id)?->isHidden())->toBeTrue()
+        ->and(MapSolarsystem::query()->find($daisy->id))->not->toBeNull();
+});
+
+it('patch 37: deleting a pipe that still leaves another way home takes nothing off', function () {
+    ['map' => $map, 'daisy' => $daisy, 'alpha' => $alpha, 'a1' => $a1, 'alpha_a1' => $alpha_a1] = chainMap();
+    MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $daisy->id, 'to_map_solarsystem_id' => $a1->id]);
+
+    app(App\Actions\MapConnections\DeleteMapConnectionAction::class)->handle($alpha_a1);
+
+    expect(MapSolarsystem::query()->whereKey([$alpha->id, $a1->id])->count())->toBe(2);
+});
+
+it('patch 37: a pinned system cut off from home stays (Side chains)', function () {
+    ['map' => $map, 'alpha' => $alpha, 'a1' => $a1, 'daisy_alpha' => $daisy_alpha] = chainMap();
+    $a1->update(['pinned' => true]);
+
+    app(App\Actions\MapConnections\DeleteMapConnectionAction::class)->handle($daisy_alpha);
+
+    expect(MapSolarsystem::query()->find($a1->id))->not->toBeNull()
+        ->and(MapSolarsystem::query()->find($alpha->id))->toBeNull();
+});
