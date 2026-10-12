@@ -40,6 +40,20 @@ const { label } = usePilotNames();
 
 const STATUS: Record<string, string> = { fresh: 'Fresh', reduced: 'Reduced', critical: 'Crit' };
 
+/**
+ * Patch 37: more went through since the mark than a hole of that status can hold: by the log
+ * it should be gone ("0 ↔ 0" said nothing). If it's still open, a logged jump is wrong or
+ * happened before the mark.
+ */
+const goneByLog = computed(() => {
+    const estimate = summary.estimate;
+    if (!estimate || estimate.max > 0 || summary.loggedSinceMark <= 0) return null;
+    const share = summary.status === 'critical' ? 0.1 : summary.status === 'reduced' ? 0.5 : 1;
+    const holds = estimate.capacity * share;
+    const status = summary.status === 'critical' ? 'Crit' : summary.status === 'reduced' ? 'Reduced' : 'its mark';
+    return `Gone by the log: ${formatMass(summary.loggedSinceMark)} logged since ${status}, which holds at most ${formatMass(holds)}. Still open? A logged jump is wrong or came before the mark.`;
+});
+
 const bar = computed(() => (summary.estimate ? massBar({ estimate: summary.estimate, loggedSinceMark: summary.loggedSinceMark, status: summary.status, hints: summary.hints }) : null));
 const hint = computed(() => hintLine(summary.hints));
 const fromLine = computed(() => {
@@ -86,7 +100,8 @@ const barColor = computed(() => (bar.value?.tone === 'critical' ? 'bg-red-600' :
             </template>
             <template v-if="summary.estimate">
                 <dt class="text-muted-foreground">Mass left</dt>
-                <dd class="font-mono font-semibold">{{ formatMass(summary.estimate.min) }} ↔ {{ formatMass(summary.estimate.max) }} kg</dd>
+                <dd v-if="goneByLog" class="font-semibold text-red-400">{{ goneByLog }}</dd>
+                <dd v-else class="font-mono font-semibold">{{ formatMass(summary.estimate.min) }} ↔ {{ formatMass(summary.estimate.max) }} kg</dd>
             </template>
         </dl>
         <div v-if="bar && summary.estimate">
