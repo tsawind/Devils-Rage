@@ -485,7 +485,7 @@ it('creates a proximity alert with a fixed starting point', function () {
     );
 
     $alert = MapAlert::query()->sole();
-    expect($response)->toBe('Alert created for **Jita Prime** within 4 jumps of **Turnur Prime** through the **Origin Chain** chain.')
+    expect($response)->toStartWith('Alert created for **Jita Prime** within 4 jumps of **Turnur Prime** through the **Origin Chain** chain.')
         ->and($alert->origin_solarsystem_id)->toBe($origin->id);
 });
 

@@ -66,7 +66,8 @@ final readonly class DiscordAlertFormatter
 
     private function description(MapAlert $alert): string
     {
-        $target = $alert->targetSolarsystem?->name ?? '?';
+        // Kill alerts have no target system.
+        $target = $alert->target_solarsystem_id === null ? '?' : $alert->targetSolarsystem->name;
 
         return match ($alert->type) {
             MapAlertType::Killmail => ($alert->max_jumps === 0 ? 'kills inside the chain' : sprintf('kills within %s of the chain', $this->jumps($alert->max_jumps)))
@@ -86,7 +87,8 @@ final readonly class DiscordAlertFormatter
 
     private function shortDescription(MapAlert $alert): string
     {
-        $target = $alert->targetSolarsystem?->name ?? '?';
+        // Kill alerts have no target system.
+        $target = $alert->target_solarsystem_id === null ? '?' : $alert->targetSolarsystem->name;
 
         return match ($alert->type) {
             MapAlertType::Killmail => sprintf('≤%dj', $alert->max_jumps ?? 0),
