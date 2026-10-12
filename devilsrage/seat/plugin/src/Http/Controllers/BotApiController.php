@@ -6,6 +6,14 @@ namespace DevilsRage\Seat\Http\Controllers;
 
 use CryptaTech\Seat\Fitting\Models\Fitting;
 use DevilsRage\Seat\Fits\EsiFitConverter;
+use DevilsRage\Seat\Models\Account;
+use DevilsRage\Seat\Models\Setting;
+use DevilsRage\Seat\Services\ExtractionValue;
+use DevilsRage\Seat\Services\FarmOverview;
+use DevilsRage\Seat\Services\Holdings;
+use DevilsRage\Seat\Services\Leadership;
+use DevilsRage\Seat\Services\OmegaStatus;
+use DevilsRage\Seat\Services\StructureFuel;
 use DevilsRage\Seat\Services\AssetLocator;
 use DevilsRage\Seat\Skills\SkillCheck;
 use DevilsRage\Seat\Skills\SkillMath;
@@ -127,6 +135,108 @@ class BotApiController extends Controller
             'fit' => ['id' => (int) $fit->fitting_id, 'name' => (string) $fit->name, 'ship' => (string) $fit->ship->typeName],
             'characters' => $characters,
         ]);
+    }
+
+    /**
+     * Accounts with Omega / MCT state, PLEX (hangars + vault) and wallet ISK, for /omega and /plex.
+     */
+    public function accounts(string $discordId, OmegaStatus $omega, Holdings $holdings): JsonResponse
+    {
+        $user = $this->userFor($discordId);
+        if ($user === null) {
+            return $this->notLinked();
+        }
+
+        $characterIds = array_map('intval', $user->associatedCharacterIds());
+        $names = CharacterInfo::query()->whereIn('character_id', $characterIds)->pluck('name', 'character_id');
+        $accounts = Account::query()->where('user_id', $user->id)->with('characters')->orderBy('nickname')->get();
+        $status = $omega->forAccounts($accounts);
+        $held = $holdings->characters($characterIds);
+        $byAccount = $holdings->accounts($accounts, $held);
+        $date = fn ($value): ?string => $value?->format('Y-m-d');
+
+        $inAccounts = [];
+        $rows = [];
+        foreach ($accounts as $account) {
+            $om = $status[$account->id];
+            $ids = $account->characters->pluck('character_id')->map(fn ($id): int => (int) $id)->all();
+            $inAccounts = [...$inAccounts, ...$ids];
+            $rows[] = [
+                'nickname' => (string) $account->nickname,
+                'characters' => array_map(fn (int $id): string => (string) ($names[$id] ?? $id), $ids),
+                'omega' => ['state' => $om['state'], 'until' => $date($om['until']), 'days_left' => $om['days_left']],
+                'mct' => ['slots' => $om['mct_slots'], 'state' => $om['mct_state'], 'until' => $date($om['mct_until']), 'days_left' => $om['mct_days_left']],
+                'alpha' => array_map(fn (int $id): string => (string) ($names[$id] ?? $id), $om['alpha_characters']),
+                'plex' => [
+                    'hangar' => $byAccount[$account->id]['hangar'],
+                    'vault' => $byAccount[$account->id]['vault'],
+                    'vault_at' => $date($byAccount[$account->id]['vault_at']),
+                    'total' => $byAccount[$account->id]['plex'],
+                ],
+                'isk' => $byAccount[$account->id]['isk'],
+            ];
+        }
+
+        $loose = [];
+        foreach (array_diff($characterIds, $inAccounts) as $id) {
+            $loose[] = ['character' => (string) ($names[$id] ?? $id), 'plex' => $held[$id]['plex'] ?? 0, 'isk' => $held[$id]['isk'] ?? 0.0];
+        }
+
+        return response()->json([
+            'accounts' => $rows,
+            'loose' => $loose,
+            'omega_plex_month' => (float) Setting::read('farm_omega_plex_12', '3600') / 12,
+            'mct_plex_month' => (float) Setting::read('farm_mct_plex', '485'),
+        ]);
+    }
+
+    /**
+     * Skill points that could be extracted now without touching protected skills (/extract).
+     */
+    public function extract(string $discordId, FarmOverview $overview, ExtractionValue $value): JsonResponse
+    {
+        $user = $this->userFor($discordId);
+        if ($user === null) {
+            return $this->notLinked();
+        }
+
+        $characterIds = array_map('intval', $user->associatedCharacterIds());
+        $names = CharacterInfo::query()->whereIn('character_id', $characterIds)->pluck('name', 'character_id');
+        $perExtraction = $value->instantJita($characterIds);
+
+        $characters = [];
+        foreach ($overview->characters($characterIds, $perExtraction) as $id => $detail) {
+            if ($detail['extract']['count'] === 0) {
+                continue;
+            }
+            $characters[] = [
+                'character' => (string) ($names[$id] ?? $id),
+                'count' => $detail['extract']['count'],
+                'isk' => $detail['extract']['isk'],
+                'retrain_days' => $detail['extract']['retrain_days'],
+                'skills' => $detail['extract']['skills'],
+            ];
+        }
+        usort($characters, fn (array $a, array $b): int => $b['count'] <=> $a['count']);
+
+        return response()->json(['per_extraction' => $perExtraction, 'characters' => $characters]);
+    }
+
+    /**
+     * Corp structure fuel (/fuel). Leaders only.
+     */
+    public function fuel(string $discordId, Leadership $leadership, StructureFuel $fuel): JsonResponse
+    {
+        $user = $this->userFor($discordId);
+        if ($user === null) {
+            return $this->notLinked();
+        }
+
+        if (! $leadership->isLeader($user)) {
+            return response()->json(['error' => 'not_leader'], 403);
+        }
+
+        return response()->json(['structures' => $fuel->structures()]);
     }
 
     private function userFor(string $discordId): ?User

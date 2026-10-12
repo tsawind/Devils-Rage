@@ -10,6 +10,7 @@ use DevilsRage\Seat\Models\AccountSetting;
 use DevilsRage\Seat\Models\LaunchGroup;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
+use DevilsRage\Seat\Services\Holdings;
 use DevilsRage\Seat\Services\OmegaStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -50,6 +51,7 @@ class AccountsController extends Controller
         $groups = LaunchGroup::forUser($user->id);
         $omega = app(OmegaStatus::class);
         $assigned = $accounts->flatMap(fn (Account $account) => $account->characters->pluck('character_id'))->all();
+        $holdings = app(Holdings::class);
 
         return view('devilsrage::accounts.index', [
             'accounts' => $accounts,
@@ -58,6 +60,7 @@ class AccountsController extends Controller
             'ownGroups' => $groups->where('locked', false)->values(),
             'members' => $this->members($accounts, $groups, $characters),
             'omega' => $omega->forAccounts($accounts),
+            'holdings' => $holdings->accounts($accounts, $holdings->characters(array_map('intval', $assigned))),
             'unassigned' => $characters->except($assigned)->values(),
             'share' => AccountSetting::sharesFor($user->id),
             'maxCharacters' => Account::MAX_CHARACTERS,
@@ -114,12 +117,14 @@ class AccountsController extends Controller
             'mct_slots' => ['required', 'integer', 'between:0,2'],
             'mct_until' => ['nullable', 'date', 'after:2003-01-01', 'before:+5 years'],
             'mct_auto' => ['boolean'],
+            'plex_vault' => ['nullable', 'integer', 'between:0,100000000'],
         ], [
             'omega_until.before' => 'That date is too far ahead; use the date Omega runs out.',
             'mct_until.before' => 'That date is too far ahead; use the date MCT runs out.',
         ]);
 
         $omegaUntil = $data['omega_until'] ?? null;
+        $vault = isset($data['plex_vault']) ? (int) $data['plex_vault'] : null;
         $mctUntil = (int) $data['mct_slots'] > 0 ? ($data['mct_until'] ?? null) : null;
         $account->update([
             'omega_until' => $omegaUntil,
@@ -127,12 +132,14 @@ class AccountsController extends Controller
             'mct_slots' => (int) $data['mct_slots'],
             'mct_until' => $mctUntil,
             'mct_auto' => (int) $data['mct_slots'] > 0 && $request->boolean('mct_auto'),
+            'plex_vault' => $vault,
+            'plex_vault_at' => $vault === $account->plex_vault ? $account->plex_vault_at : now(),
             // A new date starts the reminders over.
             'omega_reminded' => $account->omega_until?->format('Y-m-d') === ($omegaUntil === null ? null : date('Y-m-d', strtotime($omegaUntil))) ? $account->omega_reminded : null,
             'mct_reminded' => $account->mct_until?->format('Y-m-d') === ($mctUntil === null ? null : date('Y-m-d', strtotime($mctUntil))) ? $account->mct_reminded : null,
         ]);
 
-        return back()->with('success', 'Omega / MCT saved for '.$account->nickname.'. Reminders go out by Discord DM 7 days and 1 day before an end date, unless it renews by itself.');
+        return back()->with('success', 'Omega / MCT / PLEX saved for '.$account->nickname.'. Reminders go out by Discord DM 7 days and 1 day before an end date, unless it renews by itself.');
     }
 
     public function deleteAccount(Account $account): RedirectResponse

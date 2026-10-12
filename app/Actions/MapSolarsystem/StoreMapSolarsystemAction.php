@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\MapSolarsystem;
 
 use App\Actions\MapConnections\CreateMapConnectionAction;
+use App\Jobs\MapAlerts\AnnounceChainExitJob;
 use App\Jobs\MapAlerts\EvaluateAssetWatchesJob;
 use App\Jobs\MapAlerts\EvaluateMapAlertsJob;
 use App\Models\Map;
@@ -65,6 +66,7 @@ final readonly class StoreMapSolarsystemAction
         foreach ([$map_solarsystem->id, ...$restored['systems']] as $returned_id) {
             EvaluateMapAlertsJob::dispatch($returned_id)->afterCommit();
             EvaluateAssetWatchesJob::dispatch($returned_id)->afterCommit();
+            AnnounceChainExitJob::dispatch($returned_id)->afterCommit();
         }
 
         $this->connectToOrigin($map, $map_solarsystem, $data['connect_to_map_solarsystem_id'] ?? null);

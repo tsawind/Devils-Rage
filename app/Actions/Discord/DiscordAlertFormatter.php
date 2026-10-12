@@ -24,7 +24,7 @@ final readonly class DiscordAlertFormatter
             $alert->id,
             $alert->is_active ? '' : '~~off~~ ('.($alert->disabled_reason?->label() ?? 'switched off').') ',
             $alert->type->label(),
-            $this->description($alert),
+            $this->rules($alert),
             $this->destination($alert, true),
             $alert->map->name,
             $creator,
@@ -64,7 +64,11 @@ final readonly class DiscordAlertFormatter
         return ($jumps ?? 0) === 1 ? '1 jump' : ($jumps ?? 0).' jumps';
     }
 
-    private function description(MapAlert $alert): string
+    /**
+     * What the alert watches for, e.g. "kills inside the chain, no high-sec". Needs the
+     * alert's target and origin systems loaded.
+     */
+    public function rules(MapAlert $alert): string
     {
         // Kill alerts have no target system.
         $target = $alert->target_solarsystem_id === null ? '?' : $alert->targetSolarsystem->name;

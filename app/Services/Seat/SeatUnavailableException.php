@@ -9,4 +9,4 @@ use RuntimeException;
 /**
  * SeAT could not be asked (not configured, down, or refused the key).
  */
-final class SeatUnavailableException extends RuntimeException {}
+class SeatUnavailableException extends RuntimeException {}

@@ -9,6 +9,7 @@ use App\Http\Controllers\BulkWaypointController;
 use App\Http\Controllers\ChainCleanupController;
 use App\Http\Controllers\ConnectionHoleTypeController;
 use App\Http\Controllers\DiscordAccountController;
+use App\Http\Controllers\DiscordChannelFeedController;
 use App\Http\Controllers\DocumentationController;
 use App\Http\Controllers\EveController;
 use App\Http\Controllers\EveScoutConnectionController;
@@ -194,6 +195,7 @@ Route::middleware('auth')->group(function () {
     Route::put('maps/{map}/rage-roll/targets', [MapRageRollController::class, 'targets'])->name('maps.rage-roll.targets');
     Route::post('maps/{map}/rage-roll/new-static', [MapRageRollController::class, 'newStatic'])->name('maps.rage-roll.new-static');
     Route::delete('maps/{map}/rage-roll', [MapRageRollController::class, 'destroy'])->name('maps.rage-roll.destroy');
+    Route::delete('discord-channel-feeds/{discord_channel_feed}', [DiscordChannelFeedController::class, 'destroy'])->name('discord-channel-feeds.destroy');
     Route::put('map-alerts/{map_alert}/state', [MapAlertStateController::class, 'update'])->name('map-alerts.state.update');
     Route::get('eve/ship-search', [EveSearchController::class, 'index'])->name('eve.ship-search');
     Route::get('maps/{map}/search', [MapSearchController::class, 'index'])->name('maps.search');

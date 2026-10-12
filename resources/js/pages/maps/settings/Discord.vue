@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DiscordChannelFeedController from '@/actions/App/Http/Controllers/DiscordChannelFeedController';
 import MapAlertController from '@/actions/App/Http/Controllers/MapAlertController';
 import MapAlertStateController from '@/actions/App/Http/Controllers/MapAlertStateController';
 import MapDiscordController from '@/actions/App/Http/Controllers/MapDiscordController';
@@ -30,6 +31,9 @@ import SettingsLayout from '@/layouts/SettingsLayout.vue';
 import { alertTriggerLabel } from '@/lib/mapAlerts';
 import { TMapSummary } from '@/pages/maps';
 import {
+    TBotCommand,
+    TDiscordAssetWatch,
+    TDiscordChannelFeed,
     TJumpShipType,
     TKillmailFilterMatch,
     TKillmailFilterRule,
@@ -47,14 +51,43 @@ import { computed, ref, type Component } from 'vue';
 /** Patch 30: one sent rally ping, for the ping log. */
 type TRallyPingLog = { id: number; kind: string; title: string; channel: string; mention: string | null; character_name: string | null; created_at: string };
 
-const { map, tab, botAlerts, alertEvents, discordInviteUrl, rallyPings = [] } = defineProps<{
+const {
+    map,
+    tab,
+    botAlerts,
+    alertEvents,
+    discordInviteUrl,
+    rallyPings = [],
+    feeds = [],
+    assetWatches = [],
+    commands = [],
+} = defineProps<{
     map: TMapSummary;
     tab: IntegrationTab;
     botAlerts: TMapAlert[];
     alertEvents: TMapAlertEvent[];
     discordInviteUrl: string | null;
     rallyPings?: TRallyPingLog[];
+    feeds?: TDiscordChannelFeed[];
+    assetWatches?: TDiscordAssetWatch[];
+    commands?: TBotCommand[];
 }>();
+
+// --- Bot overview ---
+
+const overview = computed(() => [
+    { label: 'Webhook alerts', on: alerts.value.filter((alert) => alert.is_active).length, off: alerts.value.filter((alert) => !alert.is_active).length },
+    { label: 'Bot alerts', on: botAlerts.filter((alert) => alert.is_active).length, off: botAlerts.filter((alert) => !alert.is_active).length },
+    { label: 'Channel feeds', on: feeds.length, off: 0 },
+    { label: 'Asset watches', on: assetWatches.length, off: 0 },
+]);
+const commandSections = computed(() => ['Map', 'SeAT'].map((section) => ({ section, commands: commands.filter((command) => command.section === section) })));
+
+function stopFeed(feed: TDiscordChannelFeed) {
+    askDelete('Stop this feed?', `The bot stops posting “${feed.label}” in channel ${feed.discord_channel_id}.`, () =>
+        router.delete(DiscordChannelFeedController.destroy(feed.id).url, { preserveScroll: true, only: ['feeds'] }),
+    );
+}
 
 const pingKindLabel: Record<string, string> = { form_up: 'Form up', moved: 'Rally moved', stand_down: 'Stand down' };
 function pingTime(value: string): string {
@@ -430,6 +463,7 @@ function confirmPendingDelete() {
                                             <span class="font-medium text-foreground">{{ alertTriggerLabel(alert, systemName) }}</span>
                                             <Badge v-if="!alert.is_active" variant="outline">Inactive</Badge>
                                         </div>
+                                        <p v-if="alert.rules_summary" class="text-xs text-foreground/80">Watches: {{ alert.rules_summary }}</p>
                                         <p class="text-xs text-muted-foreground">
                                             {{ triggerMeta(alert.type).label }}
                                             <template v-if="alert.type === 'jump_range'">
@@ -627,6 +661,18 @@ function confirmPendingDelete() {
                 </TabsContent>
 
                 <TabsContent value="bot" class="mt-0 space-y-6">
+                    <!-- At a glance -->
+                    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="discord-overview">
+                        <div v-for="item in overview" :key="item.label" class="rounded-lg border border-border/60 px-4 py-3">
+                            <p class="text-xs text-muted-foreground">{{ item.label }}</p>
+                            <p class="text-lg font-semibold">
+                                {{ item.on }} <span class="text-xs font-normal text-muted-foreground">on</span>
+                                <template v-if="item.off">
+                                    · {{ item.off }} <span class="text-xs font-normal text-amber-600">off</span></template
+                                >
+                            </p>
+                        </div>
+                    </div>
                     <Card class="gap-0 py-0">
                         <CardHeader class="flex flex-col items-start justify-between gap-4 border-b py-4 sm:flex-row sm:items-center">
                             <div class="space-y-1">
@@ -652,6 +698,7 @@ function confirmPendingDelete() {
                                                 alert.is_active ? 'Active' : 'Disabled'
                                             }}</Badge>
                                         </div>
+                                        <p v-if="alert.rules_summary" class="text-xs text-foreground/80">Watches: {{ alert.rules_summary }}</p>
                                         <p class="text-xs text-muted-foreground">
                                             {{ alert.creator_name ?? 'Unknown creator' }} · {{ alert.destination_summary }} ·
                                             {{ alert.mention_mode_label }}
@@ -682,6 +729,127 @@ function confirmPendingDelete() {
                                             Remove
                                         </Button>
                                     </div>
+                                </li>
+                            </ul>
+                        </CardContent>
+                    </Card>
+
+                    <!-- What the bot posts by itself -->
+                    <Card class="gap-0 py-0">
+                        <CardHeader class="flex flex-col items-start justify-between gap-4 border-b py-4 sm:flex-row sm:items-center">
+                            <div class="space-y-1">
+                                <CardTitle class="flex items-center gap-2 text-lg"><Megaphone class="size-5 text-indigo-400" />Channel feeds</CardTitle>
+                                <CardDescription
+                                    >Channels the bot posts into by itself. Start one in Discord with <code>/exits here</code> or
+                                    <code>/fuel daily</code>.</CardDescription
+                                >
+                            </div>
+                            <Badge variant="outline">{{ feeds.length }}</Badge>
+                        </CardHeader>
+                        <CardContent class="p-4">
+                            <p v-if="!feeds.length" class="text-sm text-muted-foreground">Nothing yet.</p>
+                            <ul v-else class="divide-y divide-border/60">
+                                <li v-for="feed in feeds" :key="feed.id" class="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start">
+                                    <div class="min-w-0 flex-1 space-y-1">
+                                        <p class="font-medium text-foreground">{{ feed.label }}</p>
+                                        <p class="text-xs text-foreground/80">{{ feed.description }}</p>
+                                        <p class="text-xs text-muted-foreground">
+                                            Channel {{ feed.discord_channel_id }} · set up by {{ feed.creator_name ?? 'unknown' }} · last post
+                                            {{ formatDate(feed.last_posted_at) }}
+                                        </p>
+                                    </div>
+                                    <Button v-if="feed.kind === 'chain_exits'" variant="ghost" size="sm" class="text-destructive" @click="stopFeed(feed)">
+                                        Stop
+                                    </Button>
+                                    <span v-else class="text-xs text-muted-foreground">Stop with <code>/fuel stop</code> in that channel</span>
+                                </li>
+                            </ul>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Asset watches -->
+                    <Card class="gap-0 py-0">
+                        <CardHeader class="flex flex-col items-start justify-between gap-4 border-b py-4 sm:flex-row sm:items-center">
+                            <div class="space-y-1">
+                                <CardTitle class="flex items-center gap-2 text-lg"><Rocket class="size-5 text-indigo-400" />Asset watches</CardTitle>
+                                <CardDescription
+                                    >Pilots who get a DM when a new exit lands near their stuff (<code>/assets watch</code>, assets from
+                                    SeAT).</CardDescription
+                                >
+                            </div>
+                            <Badge variant="outline">{{ assetWatches.length }}</Badge>
+                        </CardHeader>
+                        <CardContent class="p-4">
+                            <p v-if="!assetWatches.length" class="text-sm text-muted-foreground">Nobody watches this map yet.</p>
+                            <ul v-else class="divide-y divide-border/60">
+                                <li v-for="watch in assetWatches" :key="watch.id" class="py-2 text-sm first:pt-0 last:pb-0">
+                                    <span class="font-medium">{{ watch.creator_name ?? 'Unknown' }}</span>
+                                    <span class="text-xs text-muted-foreground">
+                                        · within {{ watch.max_jumps }} jumps · {{ watch.ships_only ? 'ships only' : 'all assets' }} · since
+                                        {{ formatDate(watch.created_at) }}</span
+                                    >
+                                </li>
+                            </ul>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Commands -->
+                    <Card class="gap-0 py-0">
+                        <CardHeader class="border-b py-4">
+                            <CardTitle class="flex items-center gap-2 text-lg"><Bot class="size-5 text-indigo-400" />Bot commands</CardTitle>
+                            <CardDescription
+                                >Everything the bot answers, read from the bot itself. Answers are only shown to whoever asks. In Discord:
+                                <code>/help</code>, or <code>/help command:</code> for one command.</CardDescription
+                            >
+                        </CardHeader>
+                        <CardContent class="space-y-4 p-4">
+                            <div v-for="group in commandSections" :key="group.section" class="space-y-2">
+                                <p class="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                                    {{ group.section === 'SeAT' ? 'From SeAT (link Discord in SeAT → Connector → Identities)' : 'Map (link once with /account link)' }}
+                                </p>
+                                <details v-for="command in group.commands" :key="command.name" class="rounded-md border border-border/50 px-3 py-2">
+                                    <summary class="cursor-pointer text-sm">
+                                        <code class="font-medium">/{{ command.name }}</code>
+                                        <span class="text-muted-foreground"> · {{ command.description }}</span>
+                                    </summary>
+                                    <p class="mt-2 text-xs text-muted-foreground">Needs: {{ command.needs }}</p>
+                                    <ul class="mt-2 space-y-2">
+                                        <li v-for="usage in command.usages" :key="usage.usage" class="text-sm">
+                                            <code>{{ usage.usage }}</code>
+                                            <span class="text-muted-foreground"> · {{ usage.description }}</span>
+                                            <ul v-if="usage.options.length" class="mt-1 ml-4 list-disc text-xs text-muted-foreground">
+                                                <li v-for="option in usage.options" :key="option.name">
+                                                    <code class="text-foreground">{{ option.name }}</code
+                                                    >{{ option.required ? '' : ' (optional)' }} · {{ option.description
+                                                    }}<template v-if="option.choices.length"> ({{ option.choices.join(', ') }})</template>
+                                                </li>
+                                            </ul>
+                                        </li>
+                                    </ul>
+                                </details>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <!-- Other pings -->
+                    <Card class="gap-0 py-0">
+                        <CardHeader class="border-b py-4">
+                            <CardTitle class="flex items-center gap-2 text-lg"><Bell class="size-5 text-indigo-400" />Pings from SeAT</CardTitle>
+                            <CardDescription>Not set up here, listed so everything that pings is in one place.</CardDescription>
+                        </CardHeader>
+                        <CardContent class="p-4">
+                            <ul class="space-y-1 text-sm">
+                                <li>
+                                    <span class="font-medium">Structure attacks and fuel</span>
+                                    <span class="text-muted-foreground"> · SeAT → Structure Manager → Settings (webhooks, role pings)</span>
+                                </li>
+                                <li>
+                                    <span class="font-medium">Omega / MCT reminders</span>
+                                    <span class="text-muted-foreground"> · Discord DM 7 days and 1 day before, from SeAT → Devil's Rage → My accounts</span>
+                                </li>
+                                <li>
+                                    <span class="font-medium">Discord roles and nicknames</span>
+                                    <span class="text-muted-foreground"> · SeAT → Connector (corp and title rules)</span>
                                 </li>
                             </ul>
                         </CardContent>

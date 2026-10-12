@@ -53,6 +53,9 @@ Route::group([
     Route::get('discord/{discordId}/jump-ships', [BotApiController::class, 'jumpShips']);
     Route::get('discord/{discordId}/assets', [BotApiController::class, 'assets']);
     Route::get('discord/{discordId}/can-fly/{fittingId}', [BotApiController::class, 'canFly'])->whereNumber('fittingId');
+    Route::get('discord/{discordId}/accounts', [BotApiController::class, 'accounts']);
+    Route::get('discord/{discordId}/extract', [BotApiController::class, 'extract']);
+    Route::get('discord/{discordId}/fuel', [BotApiController::class, 'fuel']);
     Route::get('fits', [BotApiController::class, 'fits']);
     Route::get('fits/{fittingId}', [BotApiController::class, 'fit'])->whereNumber('fittingId');
 });

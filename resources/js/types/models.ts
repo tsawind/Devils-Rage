@@ -385,6 +385,7 @@ export type TMapAlert = {
     mention_mode: 'none' | 'creator' | 'role' | 'everyone';
     mention_mode_label: string;
     type: TMapAlertType;
+    rules_summary?: string;
     target_solarsystem_id: number | null;
     target_solarsystem?: { id: number; name: string } | null;
     origin_solarsystem_id: number | null;
@@ -402,6 +403,35 @@ export type TMapAlert = {
     disabled_at: string | null;
     last_fired_at: string | null;
     created_at: string;
+};
+
+export type TDiscordChannelFeed = {
+    id: number;
+    kind: 'chain_exits' | 'fuel_daily';
+    label: string;
+    description: string;
+    discord_channel_id: string;
+    creator_name?: string | null;
+    last_posted_at: string | null;
+    created_at: string;
+};
+
+export type TDiscordAssetWatch = {
+    id: number;
+    creator_name?: string | null;
+    max_jumps: number;
+    ships_only: boolean;
+    created_at: string;
+};
+
+export type TBotCommandOption = { name: string; description: string; required: boolean; choices: string[] };
+
+export type TBotCommand = {
+    name: string;
+    description: string;
+    section: 'Map' | 'SeAT';
+    needs: string;
+    usages: { usage: string; description: string; options: TBotCommandOption[] }[];
 };
 
 export type TMapAlertEvent = {

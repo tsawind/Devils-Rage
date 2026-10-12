@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Actions\Discord\DiscordAlertFormatter;
 use App\Enums\MapAlertDeliveryType;
 use App\Models\MapAlert;
 use Illuminate\Http\Request;
@@ -41,6 +42,10 @@ final class MapAlertResource extends JsonResource
             'mention_mode' => $this->mention_mode->value,
             'mention_mode_label' => $this->mention_mode->label(),
             'type' => $this->type->value,
+            'rules_summary' => $this->when(
+                $this->resource->relationLoaded('targetSolarsystem') && $this->resource->relationLoaded('originSolarsystem'),
+                fn (): string => app(DiscordAlertFormatter::class)->rules($this->resource),
+            ),
             'target_solarsystem_id' => $this->target_solarsystem_id,
             'target_solarsystem' => $this->whenLoaded('targetSolarsystem', fn (): ?array => $this->targetSolarsystem ? [
                 'id' => $this->targetSolarsystem->id,

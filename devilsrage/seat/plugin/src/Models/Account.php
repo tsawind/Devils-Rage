@@ -18,6 +18,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property \Illuminate\Support\Carbon|null $mct_until
  * @property bool $mct_auto
  * @property int|null $mct_reminded
+ * @property int|null $plex_vault
+ * @property \Illuminate\Support\Carbon|null $plex_vault_at
  */
 class Account extends Model
 {
@@ -25,7 +27,7 @@ class Account extends Model
 
     protected $table = 'devilsrage_accounts';
 
-    protected $fillable = ['user_id', 'nickname', 'omega_until', 'omega_reminded', 'omega_auto', 'mct_slots', 'mct_until', 'mct_auto', 'mct_reminded'];
+    protected $fillable = ['user_id', 'nickname', 'omega_until', 'omega_reminded', 'omega_auto', 'mct_slots', 'mct_until', 'mct_auto', 'mct_reminded', 'plex_vault', 'plex_vault_at'];
 
     /** @var array<string, string> */
     protected $casts = [
@@ -36,6 +38,8 @@ class Account extends Model
         'mct_until' => 'date',
         'mct_auto' => 'boolean',
         'mct_reminded' => 'integer',
+        'plex_vault' => 'integer',
+        'plex_vault_at' => 'datetime',
     ];
 
     public function characters(): HasMany

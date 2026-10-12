@@ -27,6 +27,7 @@
             @php($om = $omega[$account->id] ?? null)
             <h3 class="card-title mb-0 mr-auto"><i class="fas fa-user-astronaut"></i> {{ $account->nickname }}</h3>
             @include('devilsrage::partials.omega-badge', ['om' => $om])
+            @include('devilsrage::partials.plex-badge', ['held' => $holdings[$account->id] ?? null])
             <span class="text-muted small mr-2">{{ $account->characters->count() }} / {{ $maxCharacters }}</span>
             <form method="post" action="{{ route('devilsrage.accounts.delete', $account) }}" class="d-inline">
               @csrf
@@ -133,7 +134,12 @@
                   <label class="custom-control-label" for="dr-mct-auto-{{ $account->id }}">auto</label>
                 </div>
               </div>
-              <button type="submit" class="btn btn-sm btn-outline-secondary">Save Omega / MCT</button>
+              <div class="form-inline mb-1" style="gap: .4rem;">
+                <label for="dr-vault-{{ $account->id }}" class="mb-0" style="width: 3.2rem;">PLEX</label>
+                <input id="dr-vault-{{ $account->id }}" type="number" min="0" step="1" name="plex_vault" value="{{ $account->plex_vault }}" class="form-control form-control-sm" style="width: 7rem;" placeholder="in vault" title="PLEX in the account's PLEX vault (EVE doesn't share it with SeAT)">
+                <span class="text-muted">in the vault · {{ number_format($holdings[$account->id]['hangar'] ?? 0) }} in hangars (from SeAT)</span>
+              </div>
+              <button type="submit" class="btn btn-sm btn-outline-secondary">Save Omega / MCT / PLEX</button>
             </form>
             <form method="post" action="{{ route('devilsrage.accounts.rename', $account) }}" class="form-inline" style="gap: .5rem;">
               @csrf

@@ -89,7 +89,7 @@ it('lists every command in /help', function () {
         ->reject(fn (string $name): bool => $name === 'help');
 
     foreach ($names as $name) {
-        expect(HelpCommand::TEXT)->toContain('`/'.$name);
+        expect(app(HelpCommand::class)->text(null))->toContain('`/'.$name);
     }
 });
 

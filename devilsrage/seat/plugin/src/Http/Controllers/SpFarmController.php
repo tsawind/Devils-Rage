@@ -9,6 +9,7 @@ use DevilsRage\Seat\Models\FarmCharacter;
 use DevilsRage\Seat\Models\Setting;
 use DevilsRage\Seat\Services\FarmOverview;
 use DevilsRage\Seat\Services\FarmSkills;
+use DevilsRage\Seat\Services\Holdings;
 use DevilsRage\Seat\Services\JitaPrices;
 use DevilsRage\Seat\Services\Leadership;
 use DevilsRage\Seat\Services\OmegaStatus;
@@ -66,7 +67,7 @@ class SpFarmController extends Controller
         'farm_citadel_broker' => ['Citadel broker fee % (owner fee + surcharge)', '1.0'],
     ];
 
-    public function index(Request $request, Leadership $leadership, OmegaStatus $omega, JitaPrices $jita, FarmSkills $farmSkills, FarmOverview $overview): View
+    public function index(Request $request, Leadership $leadership, OmegaStatus $omega, JitaPrices $jita, FarmSkills $farmSkills, FarmOverview $overview, Holdings $holdings): View
     {
         $user = auth()->user();
         $characterIds = array_map('intval', $user->associatedCharacterIds());
@@ -107,6 +108,7 @@ class SpFarmController extends Controller
         $accounts = Account::query()->where('user_id', $user->id)->with('characters')->orderBy('nickname')->get();
         $omegaStatus = $omega->forAccounts($accounts);
         $details = $overview->characters($characterIds, $matrix['jita']['instant']['profit']);
+        $held = $holdings->characters($characterIds);
         $inAccounts = $accounts->flatMap(fn (Account $account) => $account->characters->pluck('character_id'))->map(fn ($id): int => (int) $id)->all();
 
         // Farm characters.
@@ -143,6 +145,7 @@ class SpFarmController extends Controller
             'names' => $names,
             'accounts' => $accounts,
             'omega' => $omegaStatus,
+            'holdings' => $holdings->accounts($accounts, $held),
             'details' => $details,
             'loose' => $names->except($inAccounts),
             'rows' => $rows,
@@ -175,6 +178,10 @@ class SpFarmController extends Controller
                 'mctUsd' => (float) $settings['farm_usd_mct'],
                 'perExtraction' => $matrix,
                 'accounts' => max(1, $accounts->count()),
+                'have' => [
+                    'plex' => array_sum(array_column($held, 'plex')) + (int) $accounts->sum('plex_vault'),
+                    'isk' => array_sum(array_column($held, 'isk')),
+                ],
             ],
             'settings' => collect(self::SETTINGS)->map(fn (array $setting, string $key): array => [
                 'label' => $setting[0],

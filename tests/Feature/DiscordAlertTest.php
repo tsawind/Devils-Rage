@@ -37,7 +37,7 @@ it('registers the Discord command surface', function () {
 
         return $request->method() === 'PUT'
             && str_ends_with($request->url(), '/applications/application-id/guilds/guild-id/commands')
-            && collect($commands)->pluck('name')->all() === ['help', 'account', 'alert', 'alerts', 'route', 'caps', 'assets', 'fit', 'canfly']
+            && collect($commands)->pluck('name')->all() === ['help', 'account', 'alert', 'alerts', 'route', 'exits', 'caps', 'assets', 'fit', 'canfly', 'plex', 'omega', 'extract', 'fuel']
             && $dm['type'] === 2
             && $channel['type'] === 2
             && collect($dm['options'])->pluck('name')->all() === ['proximity', 'jump-range', 'killmail']

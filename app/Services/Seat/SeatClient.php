@@ -80,6 +80,38 @@ final class SeatClient
     }
 
     /**
+     * Accounts with Omega / MCT, PLEX (hangars + typed vault) and wallet ISK.
+     *
+     * @return array{accounts: list<array{nickname: string, characters: list<string>, omega: array{state: string, until: string|null, days_left: int|null}, mct: array{slots: int, state: string, until: string|null, days_left: int|null}, alpha: list<string>, plex: array{hangar: int, vault: int|null, vault_at: string|null, total: int}, isk: float}>, loose: list<array{character: string, plex: int, isk: float}>, omega_plex_month: float, mct_plex_month: float}|null
+     */
+    public function accounts(string $discordUserId): ?array
+    {
+        return $this->get('discord/'.$discordUserId.'/accounts');
+    }
+
+    /**
+     * @return array{per_extraction: float, characters: list<array{character: string, count: int, isk: float, retrain_days: float|null, skills: list<array{name: string, level: int, sp: int}>}>}|null
+     */
+    public function extractions(string $discordUserId): ?array
+    {
+        return $this->get('discord/'.$discordUserId.'/extract');
+    }
+
+    /**
+     * Corp structures and their fuel. SeAT only answers this for corp leaders.
+     *
+     * @return list<array{name: string, type: string, system_id: int, state: string, fuel_expires: string|null, hours_left: int|null}>|null
+     *
+     * @throws SeatForbiddenException
+     */
+    public function fuel(string $discordUserId): ?array
+    {
+        $json = $this->get('discord/'.$discordUserId.'/fuel');
+
+        return $json === null ? null : array_values($json['structures'] ?? []);
+    }
+
+    /**
      * @param  array<string, scalar>  $query
      * @return array<string, mixed>|null null on 404 (not linked / not found)
      */
@@ -97,6 +129,10 @@ final class SeatClient
 
         if ($response->notFound()) {
             return null;
+        }
+
+        if ($response->forbidden()) {
+            throw new SeatForbiddenException('Only corp leaders (CEO, directors) can see that in SeAT.');
         }
 
         if (! $response->successful()) {

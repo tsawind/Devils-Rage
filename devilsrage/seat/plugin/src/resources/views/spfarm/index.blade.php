@@ -95,9 +95,9 @@
             <th>Freighters</th><th>Training</th><th class="text-right">SP / h</th><th class="text-right">Quick ISK</th>
           </tr>
         </thead>
-        @php($groups = $accounts->map(fn ($account) => ['title' => $account->nickname, 'om' => $omega[$account->id] ?? null, 'ids' => $account->characters->pluck('character_id')->map(fn ($id) => (int) $id)->all()]))
+        @php($groups = $accounts->map(fn ($account) => ['title' => $account->nickname, 'om' => $omega[$account->id] ?? null, 'held' => $holdings[$account->id] ?? null, 'ids' => $account->characters->pluck('character_id')->map(fn ($id) => (int) $id)->all()]))
         @if($loose->isNotEmpty())
-          @php($groups->push(['title' => 'Not in an account yet', 'om' => null, 'ids' => $loose->keys()->map(fn ($id) => (int) $id)->all()]))
+          @php($groups->push(['title' => 'Not in an account yet', 'om' => null, 'held' => null, 'ids' => $loose->keys()->map(fn ($id) => (int) $id)->all()]))
         @endif
         @foreach($groups as $group)
           <tbody>
@@ -105,6 +105,8 @@
               <th colspan="10">
                 {{ $group['title'] }}
                 @include('devilsrage::partials.omega-badge', ['om' => $group['om']])
+                @include('devilsrage::partials.plex-badge', ['held' => $group['held']])
+                @if($group['held'] && $group['held']['isk'] > 0)<span class="badge badge-light">{!! $money($group['held']['isk']) !!} in wallets</span>@endif
               </th>
             </tr>
             @foreach($group['ids'] as $characterId)
@@ -301,6 +303,7 @@
       </div>
       <div class="row" id="calc-out" style="font-variant-numeric: tabular-nums;"></div>
       <div class="small text-muted mt-2">
+        "You hold" = PLEX in hangars (SeAT) + PLEX typed in for the vault on My accounts + ISK in your wallets.
         Training speed = primary + secondary ÷ 2 per minute, with implants on both. Costs use the PLEX prices leaders keep below and today's PLEX price;
         the cash column uses EVE Store prices. A month is 30 days.
       </div>
@@ -500,6 +503,8 @@
     var goalUsd = calc.omegaUsd[24] * accounts;
     var monthsToGoal = net > 0 ? goalIsk / net : null;
     var covered = cost > 0 ? income / cost : 0;
+    var haveIsk = calc.have.plex * calc.plex + calc.have.isk;
+    var haveMonths = cost > 0 ? haveIsk / cost : null;
 
     document.getElementById('calc-out').innerHTML =
       box('SP per character / month', (spMonth / 1e6).toFixed(2) + 'm (' + Math.round(spMinute * 60).toLocaleString() + '/h)') +
@@ -510,6 +515,8 @@
       box('Farming covers', Math.round(covered * 100) + '% of the bill', covered >= 1 ? 'text-success' : 'text-warning') +
       box('Same bill in cash', fmtUsd(cashMonth) + '/month') +
       box('24 months Omega for all', fmt(goalIsk) + ' <span class="small text-muted">or ' + fmtUsd(goalUsd) + ' cash</span>') +
+      box('You hold now', calc.have.plex.toLocaleString() + ' PLEX + ' + fmt(calc.have.isk) + ' <span class="small text-muted">= ' + fmt(haveIsk) + '</span>') +
+      box('That pays the bill for', haveMonths === null ? '–' : haveMonths.toFixed(1) + ' months', haveMonths !== null && haveMonths < 1 ? 'text-warning' : '') +
       box('Months of farming to fund it', monthsToGoal === null ? 'never at this setup' : monthsToGoal.toFixed(1), monthsToGoal === null ? 'text-danger' : '');
   }
 
