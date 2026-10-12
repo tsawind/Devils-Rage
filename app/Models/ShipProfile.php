@@ -20,6 +20,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $hot_mass
  * @property bool $higgs
  * @property int $plates
+ * @property int $entanglers
+ * @property list<array{slot: string, name: string}>|null $modules
+ * @property list<array{key: string, label: string, mode: string, mass: int}>|null $options
  * @property int $prop_mass
  * @property string $source
  * @property string|null $note
@@ -41,9 +44,18 @@ final class ShipProfile extends Model
         return $this->belongsTo(Type::class, 'ship_type_id');
     }
 
-    /** The mass a jump in this ship logs: hot or cold. */
+    /**
+     * The mass a jump in this ship logs: hot or cold. A logged jump must never weigh more than
+     * what really went through, so with several options (a HIC's entanglers, a carrier's two
+     * props) the lightest of that kind is logged.
+     */
     public function jumpMass(bool $hot): int
     {
+        $masses = array_column(array_filter($this->options ?? [], fn (array $option): bool => $option['mode'] === ($hot ? 'hot' : 'cold')), 'mass');
+        if ($masses !== []) {
+            return (int) min($masses);
+        }
+
         return $hot ? $this->hot_mass : $this->cold_mass;
     }
 
@@ -56,6 +68,9 @@ final class ShipProfile extends Model
             'hot_mass' => 'integer',
             'higgs' => 'boolean',
             'plates' => 'integer',
+            'entanglers' => 'integer',
+            'modules' => 'array',
+            'options' => 'array',
             'prop_mass' => 'integer',
             'fitted_at' => 'immutable_datetime',
             'created_at' => 'immutable_datetime',

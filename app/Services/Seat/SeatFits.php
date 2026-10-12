@@ -22,7 +22,7 @@ final class SeatFits
     private const int MAX_PAGES = 30;
 
     /**
-     * @return array{higgs: bool, plates: int, plate_mass: float, prop_mass: float}|null
+     * @return array{higgs: bool, plates: int, plate_mass: float, prop_mass: float, props: list<array{name: string, mass: float}>, entanglers: int, modules: list<array{slot: string, name: string}>}|null
      */
     public function fitFor(int $characterId, int $shipTypeId, ?int $shipItemId): ?array
     {
@@ -46,8 +46,9 @@ final class SeatFits
 
         $fitted = array_filter($assets, fn (array $asset): bool => $asset['location_id'] === $itemId
             && preg_match('/^(LoSlot|MedSlot|HiSlot|RigSlot)\d+$/', $asset['flag']) === 1);
+        $empty = ['higgs' => false, 'plates' => 0, 'plate_mass' => 0.0, 'prop_mass' => 0.0, 'props' => [], 'entanglers' => 0, 'modules' => []];
         if ($fitted === []) {
-            return ['higgs' => false, 'plates' => 0, 'plate_mass' => 0.0, 'prop_mass' => 0.0];
+            return $empty;
         }
 
         $typeIds = array_values(array_unique(array_column($fitted, 'type_id')));
@@ -58,15 +59,19 @@ final class SeatFits
             ->whereIn('type_id', $typeIds)
             ->pluck('value', 'type_id');
 
-        $higgs = false;
-        $plates = 0;
-        $plateMass = 0.0;
-        $propMass = 0.0;
+        $fit = $empty;
+        uasort($fitted, fn (array $a, array $b): int => strnatcmp($a['flag'], $b['flag']));
         foreach ($fitted as $asset) {
             $type = $types->get($asset['type_id']);
-            $name = $type instanceof Type ? (string) $type->name : '';
+            $name = $type instanceof Type ? (string) $type->name : sprintf('#%d', $asset['type_id']);
+            $fit['modules'][] = ['slot' => (string) preg_replace('/\d+$/', '', $asset['flag']), 'name' => $name];
             if (str_contains($name, 'Higgs Anchor')) {
-                $higgs = true;
+                $fit['higgs'] = true;
+
+                continue;
+            }
+            if (str_contains($name, 'Zero-Point Mass Entangler')) {
+                $fit['entanglers']++;
 
                 continue;
             }
@@ -74,16 +79,17 @@ final class SeatFits
             if ($addition <= 0) {
                 continue;
             }
-            if ($type?->group?->name === 'Propulsion Module') {
-                // One prop mod runs at a time: the heaviest.
-                $propMass = max($propMass, $addition);
+            if ($type instanceof Type && $type->group?->name === 'Propulsion Module') {
+                // Each prop mod is its own hot jump (one runs at a time).
+                $fit['props'][] = ['name' => $name, 'mass' => $addition];
+                $fit['prop_mass'] = max($fit['prop_mass'], $addition);
             } else {
-                $plates++;
-                $plateMass += $addition;
+                $fit['plates']++;
+                $fit['plate_mass'] += $addition;
             }
         }
 
-        return ['higgs' => $higgs, 'plates' => $plates, 'plate_mass' => $plateMass, 'prop_mass' => $propMass];
+        return $fit;
     }
 
     /**

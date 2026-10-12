@@ -11,6 +11,7 @@ use App\Models\ShipProfile;
 use App\Models\Type;
 use App\Services\Seat\SeatFits;
 use App\Support\Actor;
+use App\Support\PilotJumpSkills;
 use App\Support\ShipMass;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -55,6 +56,7 @@ final class ShipProfileController extends Controller
                 'hot_mass' => $validated['hot_mass'],
                 'note' => $validated['note'] ?? null,
                 'source' => 'manual',
+                'options' => null,
                 'updated_by_name' => Actor::name(),
             ],
         );
@@ -75,7 +77,7 @@ final class ShipProfileController extends Controller
     /**
      * Read the fits SeAT knows for these pilots' current hulls (an hour at most per pilot).
      */
-    public function refresh(Request $request, Map $map, SeatFits $seatFits, Esi $esi): JsonResponse
+    public function refresh(Request $request, Map $map, SeatFits $seatFits, Esi $esi, PilotJumpSkills $pilotJumpSkills): JsonResponse
     {
         Gate::authorize('view', $map);
         $validated = $request->validate([
@@ -97,19 +99,38 @@ final class ShipProfileController extends Controller
                 continue;
             }
 
-            Cache::remember(sprintf('ship-profile-read:%d:%d', $characterId, $shipTypeId), now()->addHour(), function () use ($characterId, $shipTypeId, $seatFits, $esi): bool {
+            Cache::remember(sprintf('ship-profile-read:v2:%d:%d', $characterId, $shipTypeId), now()->addHour(), function () use ($characterId, $shipTypeId, $seatFits, $esi, $pilotJumpSkills): bool {
                 $fit = $seatFits->fitFor($characterId, $shipTypeId, $this->shipItemId($characterId, $shipTypeId, $esi));
-                $masses = $fit === null ? ShipMass::bareHull($shipTypeId) : ShipMass::fromFit($shipTypeId, $fit['higgs'], $fit['plate_mass'], $fit['prop_mass']);
+                if ($fit === null) {
+                    $masses = ShipMass::bareHull($shipTypeId);
+                    ShipProfile::query()->updateOrCreate(
+                        ['character_id' => $characterId, 'ship_type_id' => $shipTypeId],
+                        ['cold_mass' => $masses['cold'], 'hot_mass' => $masses['hot'], 'higgs' => false, 'plates' => 0, 'entanglers' => 0, 'prop_mass' => 0, 'modules' => null, 'options' => null, 'source' => 'hull', 'fitted_at' => null],
+                    );
+
+                    return true;
+                }
+
+                // Plates weigh less with Armor Layering / Advanced Armor Layering (when the pilot shares skills).
+                $character = Character::query()->find($characterId);
+                $skills = $character instanceof Character ? $pilotJumpSkills->levels($character) : null;
+                $plateMass = ShipMass::plateMass($fit['plate_mass'], $skills['armor_layering'] ?? 0, $skills['advanced_armor_layering'] ?? 0);
+                $options = ShipMass::options($shipTypeId, $fit['higgs'], $plateMass, $fit['props'], $fit['entanglers']);
+                $cold = collect($options)->firstWhere('key', 'cold')['mass'] ?? 0;
+                $hot = collect($options)->where('mode', 'hot')->max('mass') ?? $cold;
                 ShipProfile::query()->updateOrCreate(
                     ['character_id' => $characterId, 'ship_type_id' => $shipTypeId],
                     [
-                        'cold_mass' => $masses['cold'],
-                        'hot_mass' => $masses['hot'],
-                        'higgs' => $fit['higgs'] ?? false,
-                        'plates' => $fit['plates'] ?? 0,
-                        'prop_mass' => (int) round($fit['prop_mass'] ?? 0),
-                        'source' => $fit === null ? 'hull' : 'seat',
-                        'fitted_at' => $fit === null ? null : now(),
+                        'cold_mass' => (int) $cold,
+                        'hot_mass' => (int) $hot,
+                        'higgs' => $fit['higgs'],
+                        'plates' => $fit['plates'],
+                        'entanglers' => $fit['entanglers'],
+                        'prop_mass' => (int) round($fit['prop_mass']),
+                        'modules' => $fit['modules'],
+                        'options' => $options,
+                        'source' => 'seat',
+                        'fitted_at' => now(),
                     ],
                 );
 
@@ -157,6 +178,9 @@ final class ShipProfileController extends Controller
                 'hot_mass' => $profile->hot_mass,
                 'higgs' => $profile->higgs,
                 'plates' => $profile->plates,
+                'entanglers' => $profile->entanglers,
+                'modules' => $profile->modules ?? [],
+                'options' => $profile->options ?? [],
                 'prop_mass' => $profile->prop_mass,
                 'source' => $profile->source,
                 'note' => $profile->note,

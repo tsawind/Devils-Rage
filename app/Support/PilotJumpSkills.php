@@ -29,6 +29,8 @@ final readonly class PilotJumpSkills
         'caldari' => 'Caldari Carrier',
         'gallente' => 'Gallente Carrier',
         'minmatar' => 'Minmatar Carrier',
+        'armor_layering' => 'Armor Layering',
+        'advanced_armor_layering' => 'Advanced Armor Layering',
     ];
 
     public function __construct(private Esi $esi) {}
