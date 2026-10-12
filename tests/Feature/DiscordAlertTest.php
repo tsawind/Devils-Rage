@@ -37,7 +37,7 @@ it('registers the Discord command surface', function () {
 
         return $request->method() === 'PUT'
             && str_ends_with($request->url(), '/applications/application-id/guilds/guild-id/commands')
-            && collect($commands)->pluck('name')->all() === ['help', 'account', 'alert', 'alerts', 'route', 'exits', 'caps', 'assets', 'fit', 'canfly', 'plex', 'omega', 'extract', 'fuel']
+            && collect($commands)->pluck('name')->all() === ['help', 'account', 'alert', 'alerts', 'route', 'exits', 'caps', 'assets', 'fit', 'canfly', 'plex', 'omega', 'extract', 'fuel', 'health']
             && $dm['type'] === 2
             && $channel['type'] === 2
             && collect($dm['options'])->pluck('name')->all() === ['proximity', 'jump-range', 'killmail']
@@ -104,7 +104,7 @@ it('registers a direct autocomplete interaction listener', function () {
     $routeCommand = Mockery::mock(RegisteredCommand::class);
 
     $discord = Mockery::mock(Discord::class);
-    foreach (['help', 'exits', 'caps', 'assets', 'fit', 'canfly', 'plex', 'omega', 'extract', 'fuel'] as $name) {
+    foreach (['help', 'exits', 'caps', 'assets', 'fit', 'canfly', 'plex', 'omega', 'extract', 'fuel', 'health'] as $name) {
         $discord->shouldReceive('listenCommand')->once()->with($name, Mockery::type('callable'))->andReturn(Mockery::mock(RegisteredCommand::class));
     }
     $discord->shouldReceive('listenCommand')->once()->with('account', Mockery::type('callable'))->andReturn($accountCommand);

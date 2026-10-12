@@ -11,7 +11,7 @@ namespace App\Services\Discord\Commands;
 final readonly class CommandCatalogue
 {
     /** Commands that answer from the Devil's Rage SeAT. */
-    private const array SEAT = ['caps', 'assets', 'fit', 'canfly', 'plex', 'omega', 'extract', 'fuel'];
+    private const array SEAT = ['caps', 'assets', 'fit', 'canfly', 'plex', 'omega', 'extract', 'fuel', 'health'];
 
     public function __construct(private CommandRegistry $registry) {}
 

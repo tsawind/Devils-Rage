@@ -6,181 +6,192 @@
 @section('full')
   @include('devilsrage::partials.flash')
 
+  <style>
+    .dr-accounts { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
+    .dr-acct { border: 1px solid rgba(120,120,120,.25); border-radius: 6px; }
+    .dr-acct-head { display: flex; align-items: center; gap: .35rem; padding: .35rem .6rem; border-bottom: 1px solid rgba(120,120,120,.2); font-size: .85rem; }
+    .dr-char { display: flex; align-items: center; gap: .35rem; padding: .25rem .6rem; font-size: .85rem; min-height: 32px; }
+    .dr-char + .dr-char { border-top: 1px dashed rgba(120,120,120,.15); }
+    .dr-char .dr-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 11rem; }
+    .dr-char select.form-control { height: 24px; padding: 0 .3rem; font-size: .75rem; width: auto; }
+    .dr-move button { line-height: .7; padding: 0 .2rem; font-size: .7rem; }
+    .dr-empty { color: #8a8a8a; font-style: italic; }
+    .dr-tog { cursor: pointer; margin: 0; }
+    .dr-tog input { display: none; }
+    .dr-tog .dr-pill { opacity: .35; }
+    .dr-tog input:checked + .dr-pill { opacity: 1; box-shadow: 0 0 0 1px currentColor inset; }
+    .dr-gear { border-top: 1px solid rgba(120,120,120,.2); font-size: .8rem; }
+    .dr-gear > summary { padding: .25rem .6rem; cursor: pointer; color: #6c757d; list-style: none; }
+    .dr-gear > summary::-webkit-details-marker { display: none; }
+    .dr-gear[open] > summary { color: inherit; }
+    .dr-gear .dr-gear-body { padding: .3rem .6rem .6rem; display: flex; flex-direction: column; gap: .35rem; }
+    .dr-gear .form-control { height: 26px; padding: 0 .3rem; font-size: .8rem; }
+    .dr-gear .dr-row { display: flex; align-items: center; flex-wrap: wrap; gap: .3rem; }
+    .dr-gear .dr-row > label:first-child { width: 2.8rem; margin: 0; font-weight: 600; }
+  </style>
+
   <div class="card">
-    <div class="card-body">
-      <p class="mb-2">
-        Group your characters into the EVE accounts they live on (up to {{ $maxCharacters }} per account). Give each character its
-        <strong>corp launch group</strong> (Main, Second or Third; one character per account each), which is what the corp layout and FCs see.
-        Your own launch groups are only for you: make them below and tick them on your characters.
-      </p>
-      <p class="mb-0 text-muted">
-        Give each account a <strong>nickname</strong>, not your real login name. The nickname is the only thing anyone else sees about the account.
-      </p>
+    <div class="card-body py-2 d-flex flex-wrap align-items-center" style="gap: .75rem;">
+      <form method="post" action="{{ route('devilsrage.accounts.store') }}" class="form-inline" style="gap: .4rem;">
+        @csrf
+        <label for="dr-nickname" class="mb-0 font-weight-bold">New account</label>
+        <input id="dr-nickname" type="text" name="nickname" value="{{ old('nickname') }}" maxlength="32" class="form-control form-control-sm" placeholder="nickname, e.g. 34" required>
+        <button type="submit" class="btn btn-sm btn-primary">Add</button>
+      </form>
+      @if($unassigned->isNotEmpty())
+        <span class="small"><strong>Not in an account:</strong> {{ $unassigned->pluck('name')->implode(', ') }}</span>
+      @endif
+      <span class="small text-muted ml-auto">
+        Up to {{ $maxCharacters }} characters per account. The corp group (Main / Second / Third) is what FCs see; the coloured pills are your own groups, only you see them.
+        Nicknames only, never your login name. ⚙ = Omega, MCT, PLEX, rename, remove.
+      </span>
     </div>
   </div>
 
-  <div class="row">
+  <div class="dr-accounts">
     @foreach($accounts as $account)
-      <div class="col-md-6 col-xl-4">
-        <div class="card">
-          <div class="card-header d-flex align-items-center">
-            @php($om = $omega[$account->id] ?? null)
-            <h3 class="card-title mb-0 mr-auto"><i class="fas fa-user-astronaut"></i> {{ $account->nickname }}</h3>
-            @include('devilsrage::partials.omega-badge', ['om' => $om])
-            @include('devilsrage::partials.plex-badge', ['held' => $holdings[$account->id] ?? null])
-            <span class="text-muted small mr-2">{{ $account->characters->count() }} / {{ $maxCharacters }}</span>
-            <form method="post" action="{{ route('devilsrage.accounts.delete', $account) }}" class="d-inline">
+      @php($om = $omega[$account->id] ?? null)
+      <div class="dr-acct">
+        <div class="dr-acct-head">
+          <i class="fas fa-user-astronaut text-muted"></i>
+          <strong class="mr-auto">{{ $account->nickname }}</strong>
+          @include('devilsrage::partials.omega-badge', ['om' => $om])
+          @include('devilsrage::partials.plex-badge', ['held' => $holdings[$account->id] ?? null])
+          <span class="text-muted small">{{ $account->characters->count() }}/{{ $maxCharacters }}</span>
+        </div>
+
+        @foreach($account->characters as $link)
+          @php($ticked = $link->launchGroups->pluck('id')->all())
+          @php($corpPick = $link->launchGroups->firstWhere('locked', true))
+          <div class="dr-char">
+            <span class="dr-move d-inline-flex flex-column">
+              <form method="post" action="{{ route('devilsrage.accounts.characters.move', $link) }}">@csrf<input type="hidden" name="direction" value="up"><button type="submit" class="btn btn-link text-muted" title="Move up" @disabled($loop->first)><i class="fas fa-caret-up"></i></button></form>
+              <form method="post" action="{{ route('devilsrage.accounts.characters.move', $link) }}">@csrf<input type="hidden" name="direction" value="down"><button type="submit" class="btn btn-link text-muted" title="Move down" @disabled($loop->last)><i class="fas fa-caret-down"></i></button></form>
+            </span>
+            <img src="https://images.evetech.net/characters/{{ $link->character_id }}/portrait?size=32" width="22" height="22" class="rounded" alt="">
+            <span class="dr-name" title="{{ $link->displayName() }}{{ $link->external ? ' · not on SeAT · '.($link->external_corporation ?? '?').($link->external_alliance ? ' / '.$link->external_alliance : '') : '' }}">{{ $link->displayName() }}</span>
+            @if($link->external)<span class="badge badge-light" title="Not on our SeAT: public data only, fits ticked by hand">🔗</span>@endif
+            @if($om && in_array($link->character_id, $om['alpha_characters'], true))<span class="badge badge-warning" title="Training at Alpha speed right now">α?</span>@endif
+            <form method="post" action="{{ route('devilsrage.accounts.characters.corpgroup', $link) }}" class="ml-auto">
               @csrf
-              <button type="submit" class="btn btn-xs btn-outline-danger" title="Remove this account (its characters stay in SeAT)">
-                <i class="fas fa-trash"></i>
-              </button>
+              <select name="group" class="form-control form-control-sm" onchange="this.form.submit()" aria-label="Corp launch group">
+                <option value="">—</option>
+                @foreach($corpGroups as $group)
+                  <option value="{{ $group->id }}" @selected($corpPick && $corpPick->id === $group->id)>{{ $group->name }}</option>
+                @endforeach
+              </select>
             </form>
-          </div>
-          <ul class="list-group list-group-flush">
-            @foreach($account->characters as $link)
-              @php($character = $characters->get($link->character_id))
-              @php($ticked = $link->launchGroups->pluck('id')->all())
-              <li class="list-group-item">
-                <div class="d-flex align-items-center" style="gap: .5rem;">
-                  <div class="btn-group-vertical btn-group-sm">
-                    <form method="post" action="{{ route('devilsrage.accounts.characters.move', $link) }}">
-                      @csrf
-                      <input type="hidden" name="direction" value="up">
-                      <button type="submit" class="btn btn-xs btn-outline-secondary py-0" title="Move up" @disabled($loop->first)><i class="fas fa-caret-up"></i></button>
-                    </form>
-                    <form method="post" action="{{ route('devilsrage.accounts.characters.move', $link) }}">
-                      @csrf
-                      <input type="hidden" name="direction" value="down">
-                      <button type="submit" class="btn btn-xs btn-outline-secondary py-0" title="Move down" @disabled($loop->last)><i class="fas fa-caret-down"></i></button>
-                    </form>
-                  </div>
-                  <img src="https://images.evetech.net/characters/{{ $link->character_id }}/portrait?size=64" width="32" height="32" class="rounded" alt="">
-                  <span class="mr-auto font-weight-bold">{{ $character->name ?? 'Character '.$link->character_id }}
-                    @if($om && in_array($link->character_id, $om['alpha_characters'], true))
-                      <span class="badge badge-warning" title="Training at Alpha speed right now">Alpha?</span>
-                    @endif
-                  </span>
-                  @php($corpPick = $link->launchGroups->firstWhere('locked', true))
-                  <form method="post" action="{{ route('devilsrage.accounts.characters.corpgroup', $link) }}" class="d-inline">
-                    @csrf
-                    <select name="group" class="form-control form-control-sm" onchange="this.form.submit()" aria-label="Corp launch group">
-                      <option value="">No corp group</option>
-                      @foreach($corpGroups as $group)
-                        <option value="{{ $group->id }}" @selected($corpPick && $corpPick->id === $group->id)>{{ $group->name }}</option>
-                      @endforeach
-                    </select>
-                  </form>
-                  <form method="post" action="{{ route('devilsrage.accounts.characters.remove', $link) }}" class="d-inline">
-                    @csrf
-                    <button type="submit" class="btn btn-xs btn-outline-secondary" title="Take out of this account"><i class="fas fa-times"></i></button>
-                  </form>
-                </div>
-                @if($ownGroups->isNotEmpty())
-                <form method="post" action="{{ route('devilsrage.accounts.characters.groups', $link) }}" class="d-flex flex-wrap mt-2 pl-4" style="gap: .25rem .75rem;">
-                  @csrf
-                  @foreach($ownGroups as $group)
-                    <div class="custom-control custom-checkbox">
-                      <input type="checkbox" class="custom-control-input" id="dr-g-{{ $link->id }}-{{ $group->id }}" name="groups[]" value="{{ $group->id }}"
-                             @checked(in_array($group->id, $ticked, true)) onchange="this.form.submit()">
-                      <label class="custom-control-label" for="dr-g-{{ $link->id }}-{{ $group->id }}">
-                        <span class="dr-pill dr-{{ $group->pillClass() }}">{{ $group->name }}</span>
-                      </label>
-                    </div>
-                  @endforeach
-                  <noscript><button type="submit" class="btn btn-xs btn-primary">Save</button></noscript>
-                </form>
-                @endif
-              </li>
-            @endforeach
-            @if($account->characters->count() < $maxCharacters)
-              <li class="list-group-item">
-                @if($unassigned->isEmpty())
-                  <span class="text-muted small">All your characters are in an account.</span>
-                @else
-                  <form method="post" action="{{ route('devilsrage.accounts.characters.add', $account) }}" class="form-inline" style="gap: .5rem;">
-                    @csrf
-                    <select name="character_id" class="form-control form-control-sm" aria-label="Character to add">
-                      @foreach($unassigned as $character)
-                        <option value="{{ $character->character_id }}">{{ $character->name }}</option>
-                      @endforeach
-                    </select>
-                    <button type="submit" class="btn btn-sm btn-primary">Add</button>
-                  </form>
-                @endif
-              </li>
+            @if($ownGroups->isNotEmpty())
+              <form method="post" action="{{ route('devilsrage.accounts.characters.groups', $link) }}" class="d-inline-flex flex-wrap" style="gap: .15rem;">
+                @csrf
+                @foreach($ownGroups as $group)
+                  <label class="dr-tog" title="{{ $group->name }}">
+                    <input type="checkbox" name="groups[]" value="{{ $group->id }}" @checked(in_array($group->id, $ticked, true)) onchange="this.form.submit()">
+                    <span class="dr-pill dr-{{ $group->pillClass() }}">{{ \Illuminate\Support\Str::limit($group->name, 10, '') }}</span>
+                  </label>
+                @endforeach
+              </form>
             @endif
-          </ul>
-          <div class="card-footer d-flex flex-column" style="gap: .5rem;">
-            <form method="post" action="{{ route('devilsrage.accounts.omega', $account) }}" class="small">
+          </div>
+        @endforeach
+
+        @for($slot = $account->characters->count(); $slot < $maxCharacters; $slot++)
+          <div class="dr-char dr-empty">
+            <i class="far fa-square"></i>
+            @if($slot === $account->characters->count() && $unassigned->isNotEmpty())
+              <form method="post" action="{{ route('devilsrage.accounts.characters.add', $account) }}" class="d-inline-flex" style="gap: .3rem;">
+                @csrf
+                <select name="character_id" class="form-control form-control-sm" aria-label="Character to add">
+                  <option value="">empty slot: add a character…</option>
+                  @foreach($unassigned as $character)
+                    <option value="{{ $character->character_id }}">{{ $character->name }}</option>
+                  @endforeach
+                </select>
+                <button type="submit" class="btn btn-xs btn-outline-primary">Add</button>
+              </form>
+            @else
+              empty slot
+            @endif
+          </div>
+        @endfor
+
+        <details class="dr-gear">
+          <summary><i class="fas fa-cog"></i> Omega, MCT, PLEX, edit</summary>
+          <div class="dr-gear-body">
+            <form method="post" action="{{ route('devilsrage.accounts.omega', $account) }}" class="d-flex flex-column" style="gap: .3rem;">
               @csrf
-              <div class="form-inline mb-1" style="gap: .4rem;">
-                <label for="dr-omega-{{ $account->id }}" class="mb-0" style="width: 3.2rem;">Omega</label>
-                <input id="dr-omega-{{ $account->id }}" type="date" name="omega_until" value="{{ $account->omega_until?->format('Y-m-d') }}" class="form-control form-control-sm" title="When Omega runs out">
-                <div class="custom-control custom-checkbox">
-                  <input type="checkbox" class="custom-control-input" id="dr-omega-auto-{{ $account->id }}" name="omega_auto" value="1" @checked($account->omega_auto)>
-                  <label class="custom-control-label" for="dr-omega-auto-{{ $account->id }}">auto-renew</label>
-                </div>
+              <div class="dr-row">
+                <label for="dr-omega-{{ $account->id }}">Omega</label>
+                <input id="dr-omega-{{ $account->id }}" type="date" name="omega_until" value="{{ $account->omega_until?->format('Y-m-d') }}" class="form-control" title="When Omega runs out">
+                <label class="mb-0"><input type="checkbox" name="omega_auto" value="1" @checked($account->omega_auto)> auto-renew</label>
               </div>
-              <div class="form-inline mb-1" style="gap: .4rem;">
-                <label for="dr-mct-{{ $account->id }}" class="mb-0" style="width: 3.2rem;">MCT</label>
-                <select id="dr-mct-{{ $account->id }}" name="mct_slots" class="form-control form-control-sm" title="Multiple Character Training slots">
+              <div class="dr-row">
+                <label for="dr-mct-{{ $account->id }}">MCT</label>
+                <select id="dr-mct-{{ $account->id }}" name="mct_slots" class="form-control" title="Multiple Character Training slots">
                   @foreach([0 => 'none', 1 => '1 slot', 2 => '2 slots'] as $slots => $label)
                     <option value="{{ $slots }}" @selected((int) $account->mct_slots === $slots)>{{ $label }}</option>
                   @endforeach
                 </select>
-                <input type="date" name="mct_until" value="{{ $account->mct_until?->format('Y-m-d') }}" class="form-control form-control-sm" aria-label="MCT until" title="When MCT runs out">
-                <div class="custom-control custom-checkbox">
-                  <input type="checkbox" class="custom-control-input" id="dr-mct-auto-{{ $account->id }}" name="mct_auto" value="1" @checked($account->mct_auto)>
-                  <label class="custom-control-label" for="dr-mct-auto-{{ $account->id }}">auto</label>
-                </div>
+                <input type="date" name="mct_until" value="{{ $account->mct_until?->format('Y-m-d') }}" class="form-control" aria-label="MCT until" title="When MCT runs out">
+                <label class="mb-0"><input type="checkbox" name="mct_auto" value="1" @checked($account->mct_auto)> auto</label>
               </div>
-              <div class="form-inline mb-1" style="gap: .4rem;">
-                <label for="dr-vault-{{ $account->id }}" class="mb-0" style="width: 3.2rem;">PLEX</label>
-                <input id="dr-vault-{{ $account->id }}" type="number" min="0" step="1" name="plex_vault" value="{{ $account->plex_vault }}" class="form-control form-control-sm" style="width: 7rem;" placeholder="in vault" title="PLEX in the account's PLEX vault (EVE doesn't share it with SeAT)">
-                <span class="text-muted">in the vault · {{ number_format($holdings[$account->id]['hangar'] ?? 0) }} in hangars (from SeAT)</span>
+              <div class="dr-row">
+                <label for="dr-vault-{{ $account->id }}">PLEX</label>
+                <input id="dr-vault-{{ $account->id }}" type="number" min="0" step="1" name="plex_vault" value="{{ $account->plex_vault }}" class="form-control" style="width: 6rem;" placeholder="in vault" title="PLEX in the account's PLEX vault (EVE doesn't share it with SeAT)">
+                <span class="text-muted">in vault · {{ number_format($holdings[$account->id]['hangar'] ?? 0) }} in hangars</span>
+                <button type="submit" class="btn btn-xs btn-primary ml-auto">Save</button>
               </div>
-              <button type="submit" class="btn btn-sm btn-outline-secondary">Save Omega / MCT / PLEX</button>
             </form>
-            <form method="post" action="{{ route('devilsrage.accounts.rename', $account) }}" class="form-inline" style="gap: .5rem;">
-              @csrf
-              <input type="text" name="nickname" value="{{ $account->nickname }}" maxlength="32" class="form-control form-control-sm" aria-label="Nickname">
-              <button type="submit" class="btn btn-sm btn-outline-secondary">Rename</button>
-            </form>
+
+            @if($account->characters->count() < $maxCharacters)
+              <form method="post" action="{{ route('devilsrage.accounts.characters.external', $account) }}" class="dr-row">
+                @csrf
+                <label for="dr-ext-{{ $account->id }}" title="A character that isn't on our SeAT">Other</label>
+                <input id="dr-ext-{{ $account->id }}" type="text" name="name" maxlength="37" class="form-control" style="width: 11rem;" placeholder="exact character name">
+                <button type="submit" class="btn btn-xs btn-outline-secondary" title="Adds a character that isn't on our SeAT (public data only)">Add not-on-SeAT</button>
+              </form>
+            @endif
+
+            @foreach($account->characters->where('external', true) as $link)
+              <form method="post" action="{{ route('devilsrage.accounts.characters.fits', $link) }}" class="dr-row">
+                @csrf
+                <label title="Corp fits {{ $link->displayName() }} can fly">Fits</label>
+                <span class="small">{{ $link->displayName() }} can fly:</span>
+                <select name="fits[]" multiple size="3" class="form-control" style="height: auto; min-width: 12rem;" aria-label="Corp fits {{ $link->displayName() }} can fly">
+                  @foreach($fittings as $fitId => $fitName)
+                    <option value="{{ $fitId }}" @selected(in_array($fitId, $externalFits[$link->id] ?? [], true))>{{ $fitName }}</option>
+                  @endforeach
+                </select>
+                <button type="submit" class="btn btn-xs btn-outline-secondary">Save fits</button>
+              </form>
+            @endforeach
+
+            <div class="dr-row">
+              <label>Edit</label>
+              <form method="post" action="{{ route('devilsrage.accounts.rename', $account) }}" class="d-inline-flex" style="gap: .3rem;">
+                @csrf
+                <input type="text" name="nickname" value="{{ $account->nickname }}" maxlength="32" class="form-control" style="width: 6rem;" aria-label="Nickname">
+                <button type="submit" class="btn btn-xs btn-outline-secondary">Rename</button>
+              </form>
+              @foreach($account->characters as $link)
+                <form method="post" action="{{ route('devilsrage.accounts.characters.remove', $link) }}">
+                  @csrf
+                  <button type="submit" class="btn btn-xs btn-outline-secondary" title="Take {{ $link->displayName() }} out of this account"><i class="fas fa-times"></i> {{ \Illuminate\Support\Str::limit($link->displayName(), 12) }}</button>
+                </form>
+              @endforeach
+              <form method="post" action="{{ route('devilsrage.accounts.delete', $account) }}" class="ml-auto" onsubmit="return confirm('Remove this account? Its characters stay in SeAT.');">
+                @csrf
+                <button type="submit" class="btn btn-xs btn-outline-danger" title="Remove this account (its characters stay in SeAT)"><i class="fas fa-trash"></i></button>
+              </form>
+            </div>
           </div>
-        </div>
+        </details>
       </div>
     @endforeach
-
-    <div class="col-md-6 col-xl-4">
-      <div class="card card-outline card-primary">
-        <div class="card-header"><h3 class="card-title">Add an account</h3></div>
-        <div class="card-body">
-          <form method="post" action="{{ route('devilsrage.accounts.store') }}">
-            @csrf
-            <div class="form-group">
-              <label for="dr-nickname">Nickname</label>
-              <input id="dr-nickname" type="text" name="nickname" value="{{ old('nickname') }}" maxlength="32" class="form-control" placeholder="e.g. Ember, Alt box 2" required>
-            </div>
-            <button type="submit" class="btn btn-primary">Add account</button>
-          </form>
-        </div>
-      </div>
-
-      @if($unassigned->isNotEmpty())
-        <div class="card">
-          <div class="card-header"><h3 class="card-title">Not in an account yet</h3></div>
-          <ul class="list-group list-group-flush">
-            @foreach($unassigned as $character)
-              <li class="list-group-item">{{ $character->name }}</li>
-            @endforeach
-          </ul>
-        </div>
-      @endif
-    </div>
   </div>
 
-  <div class="card">
-    <div class="card-header"><h3 class="card-title">Launch groups</h3></div>
+  <details class="card" @if($errors->has('name')) open @endif>
+    <summary class="card-header" style="cursor: pointer;"><h3 class="card-title">Launch groups: who is in each, and your own groups</h3></summary>
     <div class="card-body">
       <h5 class="mb-1">Corp groups <i class="fas fa-lock text-muted small" title="One character per account"></i></h5>
       <p class="text-muted small mb-2">Main, Second and Third are what the corp sees. Each account holds one character per group, because EVE logs in one character per account.</p>
@@ -205,7 +216,7 @@
         <button type="submit" class="btn btn-sm btn-primary">Add launch group</button>
       </form>
     </div>
-  </div>
+  </details>
 
   <div class="card">
     <div class="card-body d-flex align-items-center flex-wrap" style="gap: 1rem;">

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace DevilsRage\Seat\Http\Controllers;
 
+use CryptaTech\Seat\Fitting\Models\Fitting;
 use DevilsRage\Seat\Models\Account;
 use DevilsRage\Seat\Models\AccountCharacter;
 use DevilsRage\Seat\Models\AccountSetting;
@@ -12,6 +13,7 @@ use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
 use DevilsRage\Seat\Services\Holdings;
 use DevilsRage\Seat\Services\OmegaStatus;
+use DevilsRage\Seat\Services\PublicCharacter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -44,7 +46,7 @@ class AccountsController extends Controller
 
         $accounts = Account::query()
             ->where('user_id', $user->id)
-            ->with('characters.launchGroups')
+            ->with(['characters.launchGroups', 'characters.character'])
             ->orderBy('nickname')
             ->get();
 
@@ -64,6 +66,13 @@ class AccountsController extends Controller
             'unassigned' => $characters->except($assigned)->values(),
             'share' => AccountSetting::sharesFor($user->id),
             'maxCharacters' => Account::MAX_CHARACTERS,
+            'fittings' => Fitting::query()->with('ship')->orderBy('name')->get()
+                ->mapWithKeys(fn (Fitting $fit): array => [(int) $fit->fitting_id => $fit->name.' ('.($fit->ship->typeName ?? '?').')']),
+            'externalFits' => DB::table(AccountCharacter::EXTERNAL_FITS)
+                ->whereIn('account_character_id', $accounts->flatMap(fn (Account $account) => $account->characters->where('external', true)->pluck('id'))->all())
+                ->get()
+                ->groupBy('account_character_id')
+                ->map(fn ($rows) => $rows->pluck('fitting_id')->map(fn ($id): int => (int) $id)->all()),
         ]);
     }
 
@@ -174,6 +183,71 @@ class AccountsController extends Controller
         ]);
 
         return back()->with('success', 'Character added.');
+    }
+
+    /**
+     * A character that isn't registered on our SeAT (e.g. a dual-corp pilot's other
+     * group): public data only, its corp fits ticked by hand.
+     */
+    public function addExternal(Request $request, Account $account, PublicCharacter $lookup): RedirectResponse
+    {
+        $this->authorizeOwner($account);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'min:3', 'max:37'],
+        ]);
+
+        if ($account->characters()->count() >= Account::MAX_CHARACTERS) {
+            return back()->withErrors(['name' => 'An EVE account holds at most '.Account::MAX_CHARACTERS.' characters.']);
+        }
+
+        $found = $lookup->find($data['name']);
+        if ($found === null) {
+            return back()->withErrors(['name' => 'EVE knows no character called "'.$data['name'].'" (check the spelling, it must be exact).']);
+        }
+
+        if (RefreshToken::withTrashed()->where('character_id', $found['id'])->exists()) {
+            return back()->withErrors(['name' => $found['name'].' is registered on SeAT: add it from the character list instead (or log it in again if its token expired).']);
+        }
+
+        if (AccountCharacter::query()->where('character_id', $found['id'])->exists()) {
+            return back()->withErrors(['name' => $found['name'].' is already in an account.']);
+        }
+
+        $account->characters()->create([
+            'character_id' => $found['id'],
+            'position' => (int) $account->characters()->max('position') + 1,
+            'external' => true,
+            'external_name' => $found['name'],
+            'external_corporation' => $found['corporation'],
+            'external_alliance' => $found['alliance'],
+        ]);
+
+        return back()->with('success', $found['name'].' added (not on SeAT: tick the corp fits it can fly under ⚙).');
+    }
+
+    /**
+     * Corp fits an external character can fly, as the pilot says.
+     */
+    public function setExternalFits(Request $request, AccountCharacter $accountCharacter): RedirectResponse
+    {
+        $this->authorizeOwner($accountCharacter->account);
+        abort_unless($accountCharacter->external, 404);
+
+        $data = $request->validate([
+            'fits' => ['array'],
+            'fits.*' => ['integer'],
+        ]);
+        $fitIds = Fitting::query()->whereIn('fitting_id', $data['fits'] ?? [])->pluck('fitting_id');
+
+        DB::transaction(function () use ($accountCharacter, $fitIds): void {
+            DB::table(AccountCharacter::EXTERNAL_FITS)->where('account_character_id', $accountCharacter->id)->delete();
+            DB::table(AccountCharacter::EXTERNAL_FITS)->insert($fitIds->unique()->map(fn ($id): array => [
+                'account_character_id' => $accountCharacter->id,
+                'fitting_id' => (int) $id,
+            ])->values()->all());
+        });
+
+        return back()->with('success', 'Fits saved for '.$accountCharacter->displayName().'.');
     }
 
     /**
@@ -347,6 +421,8 @@ class AccountsController extends Controller
             'omega' => app(OmegaStatus::class)->forAccounts($accounts->flatten()),
             'privateCount' => count($private),
             'ungroupedPilots' => $notGrouped->except([0])->count(),
+            'inCorp' => array_flip($memberIds),
+            'withToken' => RefreshToken::query()->whereIn('character_id', $links->pluck('character_id')->all())->pluck('character_id')->flip()->all(),
         ]);
     }
 
@@ -375,7 +451,7 @@ class AccountsController extends Controller
                     }
 
                     $members[$group->id]['members'][] = [
-                        'character' => (string) ($characters->get($link->character_id)?->name ?? $link->character_id),
+                        'character' => $characters->get($link->character_id)?->name ?? $link->displayName(),
                         'account' => $account->nickname,
                     ];
                     $perGroup[$group->id] = ($perGroup[$group->id] ?? 0) + 1;

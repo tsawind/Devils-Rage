@@ -40,8 +40,8 @@ final readonly class ManageChannelFeedAction
             if ($map === null || Gate::forUser($account->user)->denies('view', $map)) {
                 return 'That map is unavailable.';
             }
-        } else {
-            $denied = $this->deniedFuel($account);
+        } elseif ($kind->needsLeader()) {
+            $denied = $this->deniedLeader($account);
             if ($denied !== null) {
                 return $denied;
             }
@@ -55,11 +55,17 @@ final readonly class ManageChannelFeedAction
         return match ($kind) {
             DiscordFeedKind::ChainExits => sprintf('Done: every new k-space exit on **%s** gets posted here. Stop with `/exits stop`.', $map->name),
             DiscordFeedKind::FuelDaily => 'Done: the structure fuel summary gets posted here every day at 16:00 EVE time. Stop with `/fuel stop`.',
+            DiscordFeedKind::FuelWeekly => 'Done: the structure fuel summary gets posted here every Friday at 02:00 EVE time. Stop with `/fuel stop`.',
+            DiscordFeedKind::Health => 'Done: problems with SeAT logins, failed jobs or the backup get posted here (checked daily, "all good" on Fridays). Stop with `/health stop`.',
         };
     }
 
-    public function stop(DiscordFeedKind $kind, ?int $mapId, ?string $channelId, bool $canManageChannels): string
+    /**
+     * @param  DiscordFeedKind|list<DiscordFeedKind>  $kinds
+     */
+    public function stop(DiscordFeedKind|array $kinds, ?int $mapId, ?string $channelId, bool $canManageChannels): string
     {
+        $kinds = is_array($kinds) ? $kinds : [$kinds];
         if ($channelId === null) {
             return self::NEEDS_CHANNEL;
         }
@@ -68,18 +74,23 @@ final readonly class ManageChannelFeedAction
             return self::NEEDS_MANAGE_CHANNELS;
         }
 
-        $deleted = DiscordChannelFeed::query()
-            ->where('kind', $kind)
+        $feeds = DiscordChannelFeed::query()
+            ->whereIn('kind', $kinds)
             ->where('discord_channel_id', $channelId)
             ->when($mapId !== null, fn ($query) => $query->where('map_id', $mapId))
-            ->delete();
+            ->get();
+        $labels = fn (iterable $items): string => collect($items)->map(fn (DiscordFeedKind $kind): string => $kind->label())->unique()->implode('", "');
 
-        return $deleted === 0
-            ? sprintf('Nothing was posting "%s" in this channel.', $kind->label())
-            : sprintf('Stopped "%s" in this channel.', $kind->label());
+        if ($feeds->isEmpty()) {
+            return sprintf('Nothing was posting "%s" in this channel.', $labels($kinds));
+        }
+
+        DiscordChannelFeed::query()->whereKey($feeds->modelKeys())->delete();
+
+        return sprintf('Stopped "%s" in this channel.', $labels($feeds->pluck('kind')));
     }
 
-    private function deniedFuel(DiscordAccount $account): ?string
+    private function deniedLeader(DiscordAccount $account): ?string
     {
         try {
             return $this->seat->fuel($account->discord_user_id) === null ? SeatMessages::NOT_LINKED : null;

@@ -15,6 +15,7 @@ use DevilsRage\Seat\Services\Leadership;
 use DevilsRage\Seat\Services\OmegaStatus;
 use DevilsRage\Seat\Skills\SkillCheck;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 use Seat\Eveapi\Models\Assets\CharacterAsset;
 use Seat\Eveapi\Models\Character\CharacterInfo;
@@ -42,8 +43,18 @@ class PlannerController extends Controller
             ? collect()
             : Doctrine::query()->with(['fittings.items', 'fittings.ship'])->find($doctrine->id)->fittings->sortBy('name')->values();
 
-        $rows = $this->rows($corporation->memberCharacterIds(), $group);
-        $characterIds = array_keys($rows);
+        // Corp members, plus every character pilots put in a shared account (alts outside
+        // the corp, expired SeAT logins and characters that aren't on SeAT at all).
+        $memberIds = $corporation->memberCharacterIds();
+        $private = AccountSetting::query()->where('share', false)->pluck('user_id')->all();
+        $accountIds = AccountCharacter::query()
+            ->whereHas('account', fn ($query) => $query->whereNotIn('user_id', $private))
+            ->pluck('character_id')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+        $rows = $this->rows(array_values(array_unique([...$memberIds, ...$accountIds])), $group, $memberIds);
+        // Only characters SeAT has skills for are compared.
+        $characterIds = array_keys(array_filter($rows, fn (array $row): bool => $row['flag'] === null || $row['flag'] === 'corp'));
 
         $status = [];
         $requiredIds = [];
@@ -99,16 +110,24 @@ class PlannerController extends Controller
     }
 
     /**
-     * Corp characters with their pilot, account (when shared) and launch group.
+     * Characters with their pilot, account (when shared), launch group and why SeAT may
+     * not know their skills: flag "external" (not on SeAT), "token" (login expired),
+     * "corp" (not in the corp right now) or null.
      *
      * @param  list<int>  $characterIds
-     * @return array<int, array{name: string, pilot: string, user_id: int, account: ?string, omega_ended: bool, account_key: string, groups: list<array{name: string, class: string}>}>
+     * @param  list<int>  $memberIds
+     * @return array<int, array{name: string, pilot: string, user_id: int, account: ?string, omega_ended: bool, account_key: string, groups: list<array{name: string, class: string}>, flag: ?string, fits: list<int>}>
      */
-    private function rows(array $characterIds, ?string $group): array
+    private function rows(array $characterIds, ?string $group, array $memberIds): array
     {
         $names = CharacterInfo::query()->whereIn('character_id', $characterIds)->pluck('name', 'character_id');
         $owners = RefreshToken::query()->whereIn('character_id', $characterIds)->pluck('user_id', 'character_id');
-        $users = User::query()->whereIn('id', $owners->unique()->values())->with('main_character')->get()->keyBy('id');
+        $members = array_flip($memberIds);
+        $accountOwners = AccountCharacter::query()->whereIn('character_id', $characterIds)->with('account')->get()
+            ->mapWithKeys(fn (AccountCharacter $link): array => [(int) $link->character_id => (int) $link->account?->user_id]);
+        $users = User::query()->whereIn('id', $owners->merge($accountOwners)->unique()->values())->with('main_character')->get()->keyBy('id');
+        $externalFits = DB::table(AccountCharacter::EXTERNAL_FITS)->get()->groupBy('account_character_id')
+            ->map(fn ($rows) => $rows->pluck('fitting_id')->map(fn ($id): int => (int) $id)->all());
         $private = AccountSetting::query()->where('share', false)->pluck('user_id')->flip();
 
         $links = AccountCharacter::query()
@@ -119,7 +138,7 @@ class PlannerController extends Controller
 
         $rows = [];
         foreach ($characterIds as $characterId) {
-            $userId = (int) ($owners[$characterId] ?? 0);
+            $userId = (int) ($owners[$characterId] ?? $accountOwners[$characterId] ?? 0);
             $link = $private->has($userId) ? null : $links->get($characterId);
 
             $groups = $link?->launchGroups ?? collect();
@@ -127,8 +146,16 @@ class PlannerController extends Controller
                 continue;
             }
 
+            $external = (bool) $links->get($characterId)?->external;
             $rows[$characterId] = [
-                'name' => (string) ($names[$characterId] ?? $characterId),
+                'flag' => match (true) {
+                    $external => 'external',
+                    ! isset($owners[$characterId]) => 'token',
+                    ! isset($members[$characterId]) => 'corp',
+                    default => null,
+                },
+                'fits' => $external ? ($externalFits[$links->get($characterId)->id] ?? []) : [],
+                'name' => (string) ($names[$characterId] ?? $links->get($characterId)?->displayName() ?? $characterId),
                 'pilot' => (string) ($users->get($userId)?->main_character?->name ?? $users->get($userId)?->name ?? 'Unknown'),
                 'user_id' => $userId,
                 'account' => $link?->account?->nickname,

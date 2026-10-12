@@ -9,6 +9,16 @@ return [
         'route_segment' => 'devilsrage',
         'entries' => [
             [
+                'name' => 'Home',
+                'icon' => 'fas fa-home',
+                'route' => 'devilsrage.home',
+            ],
+            [
+                'name' => 'My stuff',
+                'icon' => 'fas fa-box',
+                'route' => 'devilsrage.stuff',
+            ],
+            [
                 'name' => 'My accounts',
                 'icon' => 'fas fa-users',
                 'route' => 'devilsrage.accounts.index',
@@ -34,6 +44,11 @@ return [
                 'icon' => 'fas fa-chess',
                 'route' => 'devilsrage.planner',
                 'permission' => 'devilsrage-leader',
+            ],
+            [
+                'name' => 'Arrange menu',
+                'icon' => 'fas fa-bars',
+                'route' => 'devilsrage.menu',
             ],
         ],
     ],

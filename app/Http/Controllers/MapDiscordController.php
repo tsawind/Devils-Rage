@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
-use App\Enums\DiscordFeedKind;
 use App\Enums\MapAlertEventAction;
 use App\Http\Resources\DiscordAssetWatchResource;
 use App\Http\Resources\DiscordChannelFeedResource;
@@ -67,7 +66,7 @@ final class MapDiscordController extends Controller
                 ->get(['id', 'kind', 'title', 'channel', 'mention', 'character_name', 'created_at']),
             // The bot overview: what the bot does on its own, and every command it knows.
             'feeds' => fn () => DiscordChannelFeed::query()
-                ->where(fn ($query) => $query->where('map_id', $map->id)->orWhere('kind', DiscordFeedKind::FuelDaily))
+                ->where(fn ($query) => $query->where('map_id', $map->id)->orWhereNull('map_id'))
                 ->with('creator.characters')
                 ->latest()
                 ->get()

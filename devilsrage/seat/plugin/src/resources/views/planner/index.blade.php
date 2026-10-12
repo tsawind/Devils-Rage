@@ -79,6 +79,9 @@
               <td>{{ $row['name'] }}
                 @if(isset($alpha[$characterId]))<span class="badge badge-warning" title="Training at Alpha speed right now">Alpha?</span>@endif
                 @if($row['omega_ended'])<span class="badge badge-danger" title="Omega end date has passed">Omega ended</span>@endif
+                @if($row['flag'] === 'external')<span class="badge badge-light" title="Not on our SeAT: fits are what the pilot ticked">🔗 not on SeAT</span>@endif
+                @if($row['flag'] === 'token')<span class="badge badge-danger" title="SeAT has no working login for this character: skills unknown until it logs in again">token expired</span>@endif
+                @if($row['flag'] === 'corp')<span class="badge badge-secondary" title="Not in the corp right now">not in corp</span>@endif
                 <span class="dr-clash text-danger small"></span></td>
               <td>
                 @forelse($row['groups'] as $item)
@@ -91,7 +94,15 @@
                 @php($cell = $status[$fit->fitting_id][$characterId] ?? null)
                 @php($hasHull = in_array((int) $fit->ship_type_id, $hulls->get($characterId, []), true))
                 <td>
-                  @if($cell === null)
+                  @if($row['flag'] === 'external')
+                    @if(in_array((int) $fit->fitting_id, $row['fits'], true))
+                      <span class="dr-cell dr-ok" title="The pilot says so">Can fly ✋</span>
+                    @else
+                      <span class="text-muted">?</span>
+                    @endif
+                  @elseif($row['flag'] === 'token')
+                    <span class="text-muted" title="Log the character in again on SeAT">no data</span>
+                  @elseif($cell === null)
                     –
                   @elseif($cell['missing'] === [])
                     <span class="dr-cell dr-ok">Can fly</span>
@@ -121,6 +132,7 @@
     <div class="card-footer text-muted small">
       Training times use each character's current attributes (≈, no boosters). Pick characters for the fleet: other characters on the same account are greyed out,
       because EVE logs in one character per account. Pilots who keep their layout private show each character on its own.
+      Characters in a shared account are listed even when they're out of corp (grey), have an expired SeAT login (red: log in again) or aren't on SeAT (🔗: fits ticked by the pilot).
     </div>
   </div>
 @stop

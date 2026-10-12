@@ -740,8 +740,8 @@ function confirmPendingDelete() {
                             <div class="space-y-1">
                                 <CardTitle class="flex items-center gap-2 text-lg"><Megaphone class="size-5 text-indigo-400" />Channel feeds</CardTitle>
                                 <CardDescription
-                                    >Channels the bot posts into by itself. Start one in Discord with <code>/exits here</code> or
-                                    <code>/fuel daily</code>.</CardDescription
+                                    >Channels the bot posts into by itself. Start one in Discord with <code>/exits here</code>,
+                                    <code>/fuel daily</code>, <code>/fuel weekly</code> or <code>/health daily</code>.</CardDescription
                                 >
                             </div>
                             <Badge variant="outline">{{ feeds.length }}</Badge>
@@ -761,7 +761,9 @@ function confirmPendingDelete() {
                                     <Button v-if="feed.kind === 'chain_exits'" variant="ghost" size="sm" class="text-destructive" @click="stopFeed(feed)">
                                         Stop
                                     </Button>
-                                    <span v-else class="text-xs text-muted-foreground">Stop with <code>/fuel stop</code> in that channel</span>
+                                    <span v-else class="text-xs text-muted-foreground"
+                                        >Stop with <code>{{ feed.kind === 'health' ? '/health stop' : '/fuel stop' }}</code> in that channel</span
+                                    >
                                 </li>
                             </ul>
                         </CardContent>

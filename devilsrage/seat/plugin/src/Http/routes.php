@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use DevilsRage\Seat\Http\Controllers\AccountsController;
 use DevilsRage\Seat\Http\Controllers\BotApiController;
+use DevilsRage\Seat\Http\Controllers\HomeController;
 use DevilsRage\Seat\Http\Controllers\PlannerController;
 use DevilsRage\Seat\Http\Controllers\SkillPlansController;
 use DevilsRage\Seat\Http\Controllers\SpFarmController;
@@ -15,12 +16,18 @@ Route::group([
     'middleware' => ['web', 'auth', 'locale'],
     'prefix' => 'devilsrage',
 ], function (): void {
+    Route::get('home', [HomeController::class, 'home'])->name('devilsrage.home');
+    Route::get('stuff', [HomeController::class, 'stuff'])->name('devilsrage.stuff');
+    Route::get('menu', [HomeController::class, 'menu'])->name('devilsrage.menu');
+    Route::post('menu', [HomeController::class, 'saveMenu'])->name('devilsrage.menu.save');
     Route::get('accounts', [AccountsController::class, 'index'])->name('devilsrage.accounts.index');
     Route::post('accounts', [AccountsController::class, 'storeAccount'])->name('devilsrage.accounts.store');
     Route::post('accounts/share', [AccountsController::class, 'share'])->name('devilsrage.accounts.share');
     Route::post('accounts/{account}/rename', [AccountsController::class, 'renameAccount'])->name('devilsrage.accounts.rename');
     Route::post('accounts/{account}/delete', [AccountsController::class, 'deleteAccount'])->name('devilsrage.accounts.delete');
     Route::post('accounts/{account}/characters', [AccountsController::class, 'addCharacter'])->name('devilsrage.accounts.characters.add');
+    Route::post('accounts/{account}/external', [AccountsController::class, 'addExternal'])->name('devilsrage.accounts.characters.external');
+    Route::post('account-characters/{accountCharacter}/fits', [AccountsController::class, 'setExternalFits'])->name('devilsrage.accounts.characters.fits');
     Route::post('account-characters/{accountCharacter}/groups', [AccountsController::class, 'setGroups'])->name('devilsrage.accounts.characters.groups');
     Route::post('account-characters/{accountCharacter}/corp-group', [AccountsController::class, 'setCorpGroup'])->name('devilsrage.accounts.characters.corpgroup');
     Route::post('accounts/{account}/omega', [AccountsController::class, 'setOmega'])->name('devilsrage.accounts.omega');
@@ -56,6 +63,7 @@ Route::group([
     Route::get('discord/{discordId}/accounts', [BotApiController::class, 'accounts']);
     Route::get('discord/{discordId}/extract', [BotApiController::class, 'extract']);
     Route::get('discord/{discordId}/fuel', [BotApiController::class, 'fuel']);
+    Route::get('discord/{discordId}/health', [BotApiController::class, 'health']);
     Route::get('fits', [BotApiController::class, 'fits']);
     Route::get('fits/{fittingId}', [BotApiController::class, 'fit'])->whereNumber('fittingId');
 });

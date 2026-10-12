@@ -6,6 +6,7 @@ use App\Actions\Discord\ListChainExitsAction;
 use App\Actions\Discord\ManageChannelFeedAction;
 use App\Actions\Discord\SeatMessages;
 use App\Actions\Discord\ShowExtractionsAction;
+use App\Actions\Discord\ShowHealthAction;
 use App\Actions\Discord\ShowSeatAccountsAction;
 use App\Actions\Discord\ShowStructureFuelAction;
 use App\Enums\DiscordFeedKind;
@@ -26,6 +27,7 @@ use App\Services\Discord\Commands\CommandRegistry;
 use App\Services\Discord\Commands\HelpCommand;
 use App\Services\Discord\DiscordInteractionHandler;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -321,4 +323,98 @@ it('answers autocomplete for every command with an autocompleted option', functi
     expect(app(DiscordInteractionHandler::class)->autocompletedCommands())
         ->toContain('alert', 'alerts', 'route', 'caps', 'assets', 'exits')
         ->not->toContain('help', 'fuel', 'plex');
+});
+
+/**
+ * @return array<string, mixed>
+ */
+function overviewHealth(array $overrides = []): array
+{
+    return array_merge([
+        'leaders' => [
+            ['name' => 'Darkness Holder', 'role' => 'CEO', 'status' => 'ok'],
+            ['name' => '02Vicarious', 'role' => 'Director', 'status' => 'ok'],
+        ],
+        'expired' => [],
+        'expired_count' => 0,
+        'failed_jobs' => 3,
+    ], $overrides);
+}
+
+it('reports SeAT health as all good', function () {
+    Cache::forever(ShowHealthAction::BACKUP_KEY, now()->subHours(5)->toIso8601String());
+    Http::fake(['seat.test/devilsrage/api/discord/5151/health' => Http::response(overviewHealth())]);
+
+    $report = app(ShowHealthAction::class)->report('5151');
+
+    expect($report['problems'])->toBe(0)
+        ->and($report['text'])->toContain('SeAT health: all good')->toContain('2 leader logins working');
+});
+
+it('lists broken leader logins, expired characters and a missing backup', function () {
+    Cache::forget(ShowHealthAction::BACKUP_KEY);
+    Http::fake(['seat.test/devilsrage/api/discord/5151/health' => Http::response(overviewHealth([
+        'leaders' => [['name' => '02Vicarious', 'role' => 'Director', 'status' => 'expired']],
+        'expired' => ['Devil Coffin 2'],
+        'expired_count' => 1,
+        'failed_jobs' => 80,
+    ]))]);
+
+    $report = app(ShowHealthAction::class)->report('5151');
+
+    expect($report['problems'])->toBe(4)
+        ->and($report['text'])->toContain('**02Vicarious** (Director): SeAT login expired')
+        ->toContain('1 character in accounts needs to log in to SeAT again: Devil Coffin 2')
+        ->toContain('80 SeAT jobs failed')
+        ->toContain('No nightly backup has reported in yet');
+});
+
+it('records the nightly backup', function () {
+    Cache::forget(ShowHealthAction::BACKUP_KEY);
+
+    $this->artisan('devilsrage:backup-done')->assertSuccessful();
+
+    expect(Cache::get(ShowHealthAction::BACKUP_KEY))->toBeString();
+});
+
+it('posts health only when something is wrong, except with --always', function () {
+    $this->travelTo(now()->next('Monday'));
+    Cache::forever(ShowHealthAction::BACKUP_KEY, now()->toIso8601String());
+    $account = overviewAccount(Map::factory()->create());
+    DiscordChannelFeed::factory()->create(['kind' => DiscordFeedKind::Health, 'map_id' => null, 'created_by_user_id' => $account->user_id, 'discord_channel_id' => 'health-channel']);
+    Http::fake([
+        'seat.test/devilsrage/api/discord/5151/health' => Http::response(overviewHealth()),
+        'discord.com/api/v10/channels/health-channel/messages' => Http::response(['id' => 'message']),
+    ]);
+
+    $this->artisan('discord:post-health')->assertSuccessful();
+    Http::assertNotSent(fn (Request $request): bool => str_contains($request->url(), '/channels/'));
+
+    $this->artisan('discord:post-health', ['--always' => true])->assertSuccessful();
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/channels/health-channel/messages'));
+});
+
+it('posts the weekly fuel summary only into weekly channels', function () {
+    $account = overviewAccount(Map::factory()->create());
+    DiscordChannelFeed::factory()->fuel()->create(['created_by_user_id' => $account->user_id, 'discord_channel_id' => 'daily-channel']);
+    DiscordChannelFeed::factory()->create(['kind' => DiscordFeedKind::FuelWeekly, 'map_id' => null, 'created_by_user_id' => $account->user_id, 'discord_channel_id' => 'weekly-channel']);
+    Http::fake([
+        'seat.test/devilsrage/api/discord/5151/fuel' => Http::response(['structures' => []]),
+        'discord.com/api/v10/channels/*' => Http::response(['id' => 'message']),
+    ]);
+
+    $this->artisan('discord:post-fuel', ['--weekly' => true])->assertSuccessful();
+
+    Http::assertSent(fn (Request $request): bool => str_ends_with($request->url(), '/channels/weekly-channel/messages'));
+    Http::assertNotSent(fn (Request $request): bool => str_ends_with($request->url(), '/channels/daily-channel/messages'));
+});
+
+it('stops both fuel summaries with one /fuel stop', function () {
+    DiscordChannelFeed::factory()->fuel()->create(['discord_channel_id' => '333']);
+    DiscordChannelFeed::factory()->create(['kind' => DiscordFeedKind::FuelWeekly, 'map_id' => null, 'discord_channel_id' => '333']);
+
+    $reply = app(ManageChannelFeedAction::class)->stop([DiscordFeedKind::FuelDaily, DiscordFeedKind::FuelWeekly], null, '333', true);
+
+    expect($reply)->toBe('Stopped "Daily structure fuel", "Weekly structure fuel" in this channel.')
+        ->and(DiscordChannelFeed::query()->count())->toBe(0);
 });

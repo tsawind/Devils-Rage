@@ -407,7 +407,7 @@ export type TMapAlert = {
 
 export type TDiscordChannelFeed = {
     id: number;
-    kind: 'chain_exits' | 'fuel_daily';
+    kind: 'chain_exits' | 'fuel_daily' | 'fuel_weekly' | 'health';
     label: string;
     description: string;
     discord_channel_id: string;

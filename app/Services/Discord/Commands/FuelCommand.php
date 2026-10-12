@@ -24,8 +24,9 @@ final readonly class FuelCommand implements CommandDefinition
     {
         return SlashCommand::make('fuel', 'Corp structure fuel from SeAT (corp leaders)')->options(
             SubCommand::make('now', 'Every corp structure and how long its fuel lasts'),
-            SubCommand::make('daily', 'Post the fuel summary in this channel every day (Manage Channels)'),
-            SubCommand::make('stop', 'Stop the daily fuel summary in this channel (Manage Channels)'),
+            SubCommand::make('daily', 'Post the fuel summary here every day at 16:00 EVE (Manage Channels)'),
+            SubCommand::make('weekly', 'Post the fuel summary here every Friday 02:00 EVE (Manage Channels)'),
+            SubCommand::make('stop', 'Stop the fuel summaries in this channel (Manage Channels)'),
         );
     }
 
@@ -39,7 +40,8 @@ final readonly class FuelCommand implements CommandDefinition
         return match ($this->subcommand($interaction)->name) {
             'now' => $this->fuel->handle($account->discord_user_id),
             'daily' => $this->feeds->start($account, DiscordFeedKind::FuelDaily, null, $this->guildId($interaction), $this->channelId($interaction), $this->canManageChannels($interaction)),
-            'stop' => $this->feeds->stop(DiscordFeedKind::FuelDaily, null, $this->channelId($interaction), $this->canManageChannels($interaction)),
+            'weekly' => $this->feeds->start($account, DiscordFeedKind::FuelWeekly, null, $this->guildId($interaction), $this->channelId($interaction), $this->canManageChannels($interaction)),
+            'stop' => $this->feeds->stop([DiscordFeedKind::FuelDaily, DiscordFeedKind::FuelWeekly], null, $this->channelId($interaction), $this->canManageChannels($interaction)),
             default => 'That fuel command is unavailable.',
         };
     }

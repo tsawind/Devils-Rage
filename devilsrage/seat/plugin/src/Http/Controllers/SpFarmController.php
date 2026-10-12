@@ -8,6 +8,7 @@ use DevilsRage\Seat\Models\Account;
 use DevilsRage\Seat\Models\FarmCharacter;
 use DevilsRage\Seat\Models\Setting;
 use DevilsRage\Seat\Services\FarmOverview;
+use DevilsRage\Seat\Services\FarmPrices;
 use DevilsRage\Seat\Services\FarmSkills;
 use DevilsRage\Seat\Services\Holdings;
 use DevilsRage\Seat\Services\JitaPrices;
@@ -41,33 +42,15 @@ class SpFarmController extends Controller
 
     private const SKILL_BROKER = 'Broker Relations';
 
-    /** Omega lengths in months the calculator offers. */
-    public const OMEGA_MONTHS = [1, 3, 6, 12, 24];
-
     /**
-     * Setting key => [label, default]. PLEX costs aren't published by CCP in one place:
-     * leaders check the New Eden Store and correct them. USD = the EVE Store's
-     * real-money prices (July 2025).
+     * Setting key => [label, default]. The store price lists live in FarmPrices.
      */
     public const SETTINGS = [
-        'farm_omega_plex_1' => ['Omega 1 month (PLEX)', '500'],
-        'farm_omega_plex_3' => ['Omega 3 months (PLEX)', '1200'],
-        'farm_omega_plex_6' => ['Omega 6 months (PLEX)', '2100'],
-        'farm_omega_plex_12' => ['Omega 12 months (PLEX)', '3600'],
-        'farm_omega_plex_24' => ['Omega 24 months (PLEX)', '6600'],
-        'farm_mct_plex' => ['MCT 1 month, per slot (PLEX)', '485'],
-        'farm_usd_omega_1' => ['Omega 1 month ($)', '19.99'],
-        'farm_usd_omega_3' => ['Omega 3 months ($)', '47.98'],
-        'farm_usd_omega_6' => ['Omega 6 months ($)', '86.95'],
-        'farm_usd_omega_12' => ['Omega 12 months ($)', '149.90'],
-        'farm_usd_omega_24' => ['Omega 24 months ($)', '270.99'],
-        'farm_usd_mct' => ['MCT 1 month, per slot ($)', '10'],
-        'farm_usd_per_500_plex' => ['500 PLEX in the EVE Store ($)', '24.99'],
         'farm_price_plex' => ['PLEX price in ISK (empty = market average)', ''],
         'farm_citadel_broker' => ['Citadel broker fee % (owner fee + surcharge)', '1.0'],
     ];
 
-    public function index(Request $request, Leadership $leadership, OmegaStatus $omega, JitaPrices $jita, FarmSkills $farmSkills, FarmOverview $overview, Holdings $holdings): View
+    public function index(Request $request, Leadership $leadership, OmegaStatus $omega, JitaPrices $jita, FarmSkills $farmSkills, FarmOverview $overview, Holdings $holdings, FarmPrices $prices): View
     {
         $user = auth()->user();
         $characterIds = array_map('intval', $user->associatedCharacterIds());
@@ -101,8 +84,9 @@ class SpFarmController extends Controller
         $perExtraction = $matrix[$market][$mode]['profit'];
 
         $plex = $this->plexPrice($settings);
-        $omegaMonth = (float) $settings['farm_omega_plex_12'] / 12 * $plex;
-        $mctMonth = (float) $settings['farm_mct_plex'] * $plex;
+        // Per month at the cheapest bundle (24 months of Omega, 24 MCT certificates).
+        $omegaMonth = $prices->omegaPlexPerMonth(24) * $plex;
+        $mctMonth = $prices->mctPlexEach(24) * $plex;
 
         // Accounts at a glance (and characters that aren't in an account yet).
         $accounts = Account::query()->where('user_id', $user->id)->with('characters')->orderBy('nickname')->get();
@@ -171,18 +155,22 @@ class SpFarmController extends Controller
             'extractIsk' => $extractTotal * $matrix['jita']['instant']['profit'],
             'calculator' => [
                 'plex' => $plex,
-                'usdPerPlex' => (float) $settings['farm_usd_per_500_plex'] / 500,
-                'omegaPlex' => collect(self::OMEGA_MONTHS)->mapWithKeys(fn (int $months): array => [$months => (float) $settings['farm_omega_plex_'.$months]])->all(),
-                'omegaUsd' => collect(self::OMEGA_MONTHS)->mapWithKeys(fn (int $months): array => [$months => (float) $settings['farm_usd_omega_'.$months]])->all(),
-                'mctPlex' => (float) $settings['farm_mct_plex'],
-                'mctUsd' => (float) $settings['farm_usd_mct'],
+                'lists' => $prices->lists(),
                 'perExtraction' => $matrix,
-                'accounts' => max(1, $accounts->count()),
+                'accounts' => $accounts->count(),
+                'omegaAccounts' => collect($omegaStatus)->filter(fn (array $om): bool => in_array($om['state'], ['ok', 'soon', 'auto'], true))->count(),
+                'mctSlots' => (int) $accounts->sum('mct_slots'),
                 'have' => [
                     'plex' => array_sum(array_column($held, 'plex')) + (int) $accounts->sum('plex_vault'),
                     'isk' => array_sum(array_column($held, 'isk')),
                 ],
             ],
+            'priceLists' => collect(FarmPrices::LISTS)->map(fn (array $list, string $key): array => [
+                'label' => $list['label'],
+                'amount' => $list['amount'],
+                'unit' => $list['unit'],
+                'rows' => $prices->lists()[$key],
+            ])->all(),
             'settings' => collect(self::SETTINGS)->map(fn (array $setting, string $key): array => [
                 'label' => $setting[0],
                 'value' => $settings[$key],
@@ -230,20 +218,26 @@ class SpFarmController extends Controller
         return back()->with('success', 'Trading character saved.');
     }
 
-    public function settings(Request $request, Leadership $leadership): RedirectResponse
+    public function settings(Request $request, Leadership $leadership, FarmPrices $prices): RedirectResponse
     {
         abort_unless($leadership->isLeader(auth()->user()), 403);
 
-        $rules = [];
+        $rules = [
+            'prices' => ['array'],
+            'prices.*' => ['array', 'max:20'],
+            'prices.*.*' => ['array'],
+            'prices.*.*.*' => ['nullable', 'numeric', 'min:0', 'max:10000000'],
+        ];
         foreach (array_keys(self::SETTINGS) as $key) {
             $rules[$key] = ['nullable', 'numeric', 'min:0', 'max:1000000000000'];
         }
         $data = $request->validate($rules);
 
-        DB::transaction(function () use ($data): void {
+        DB::transaction(function () use ($data, $prices): void {
             foreach (array_keys(self::SETTINGS) as $key) {
                 Setting::write($key, isset($data[$key]) ? (string) $data[$key] : null);
             }
+            $prices->save($data['prices'] ?? []);
         });
 
         return back()->with('success', 'Farm numbers saved for everyone.');

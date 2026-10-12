@@ -13,14 +13,14 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Throwable;
 
-#[Signature('discord:post-fuel')]
-#[Description('Post the daily structure fuel summary into every channel set up with /fuel daily.')]
+#[Signature('discord:post-fuel {--weekly : The Friday post for channels set up with /fuel weekly}')]
+#[Description('Post the structure fuel summary into every channel set up with /fuel daily (or /fuel weekly).')]
 final class PostFuelSummaryCommand extends Command
 {
     public function handle(ShowStructureFuelAction $fuel, DiscordHttp $http): int
     {
         $feeds = DiscordChannelFeed::query()
-            ->where('kind', DiscordFeedKind::FuelDaily)
+            ->where('kind', $this->option('weekly') ? DiscordFeedKind::FuelWeekly : DiscordFeedKind::FuelDaily)
             ->with('creator.discordAccount')
             ->get();
 

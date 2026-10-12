@@ -113,6 +113,19 @@ final class SeatClient
     }
 
     /**
+     * CEO / director SeAT logins, expired character logins, failed jobs. Leaders only.
+     *
+     * @return array{leaders: list<array{name: string, role: string, status: string}>, expired: list<string>, expired_count: int, failed_jobs: int|null}|null
+     *
+     * @throws SeatForbiddenException
+     * @throws SeatUnavailableException
+     */
+    public function health(string $discordUserId): ?array
+    {
+        return $this->get('discord/'.$discordUserId.'/health');
+    }
+
+    /**
      * @param  array<string, scalar>  $query
      * @return array<string, mixed>|null null on 404 (not linked / not found)
      */

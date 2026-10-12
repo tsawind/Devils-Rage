@@ -32,7 +32,7 @@
         Large Skill Injector: buy {{ $isk($injector['buy']) }} / sell {{ $isk($injector['sell']) }} ({{ $injector['source'] }}) ·
         Skill Extractor: buy {{ $isk($extractor['buy']) }} / sell {{ $isk($extractor['sell']) }} ({{ $extractor['source'] }}) ·
         PLEX {{ number_format($plex) }} ISK ({{ $plexSource }}) ·
-        Omega {!! $money($omegaMonth) !!}/month (12-month price) · MCT {!! $money($mctMonth) !!}/month ·
+        Omega {!! $money($omegaMonth) !!}/month · MCT {!! $money($mctMonth) !!}/month (24-month and 24-certificate prices) ·
         deals: <a href="https://www.theoz.space/deals" target="_blank" rel="noopener">theoz.space/deals</a>
       </div>
 
@@ -253,45 +253,52 @@
 
   {{-- Calculator --}}
   <div class="card">
-    <div class="card-header"><h3 class="card-title">Calculator: what can farming pay for?</h3></div>
+    <div class="card-header"><h3 class="card-title">Calculator: what does Omega cost, and can farming pay for it?</h3></div>
     <div class="card-body" id="dr-calc">
       <div class="form-row small">
         <div class="form-group col-6 col-md-2">
-          <label for="calc-accounts">Accounts</label>
-          <select id="calc-accounts" class="form-control form-control-sm">
-            @for($i = 1; $i <= 12; $i++)<option value="{{ $i }}" @selected($i === $calculator['accounts'])>{{ $i }}</option>@endfor
-          </select>
+          <label for="calc-accounts">Accounts on Omega</label>
+          <input id="calc-accounts" type="number" min="1" max="200" value="{{ max(1, $calculator['omegaAccounts']) }}" class="form-control form-control-sm">
+          <span class="text-muted">{{ $calculator['omegaAccounts'] }} now, {{ $calculator['accounts'] }} accounts in total</span>
         </div>
         <div class="form-group col-6 col-md-2">
-          <label for="calc-chars">Farming per account</label>
+          <label for="calc-chars">Training per account</label>
           <select id="calc-chars" class="form-control form-control-sm">
             <option value="1">1 (Omega only)</option>
             <option value="2">2 (+1 MCT)</option>
             <option value="3">3 (+2 MCT)</option>
           </select>
         </div>
-        <div class="form-group col-6 col-md-2">
-          <label for="calc-omega">Omega bought as</label>
+        <div class="form-group col-6 col-md-1">
+          <label for="calc-omega">Months</label>
           <select id="calc-omega" class="form-control form-control-sm">
-            @foreach(array_keys($calculator['omegaPlex']) as $months)
-              <option value="{{ $months }}" @selected($months === 12)>{{ $months }} month{{ $months > 1 ? 's' : '' }}</option>
+            @foreach($calculator['lists']['omega_plex'] as $row)
+              <option value="{{ (int) $row[0] }}" @selected((int) $row[0] === 24)>{{ (int) $row[0] }}</option>
             @endforeach
           </select>
         </div>
         <div class="form-group col-6 col-md-2">
+          <label for="calc-pay">Pay with</label>
+          <select id="calc-pay" class="form-control form-control-sm">
+            <option value="mix" selected>Cheapest mix</option>
+            <option value="plex">PLEX for everything</option>
+            <option value="cash">Cash for everything</option>
+          </select>
+        </div>
+        <div class="form-group col-4 col-md-1">
           <label for="calc-implants">Implants</label>
           <select id="calc-implants" class="form-control form-control-sm">
             <option value="0">none</option><option value="3">+3</option><option value="4">+4</option><option value="5" selected>+5</option>
           </select>
         </div>
-        <div class="form-group col-6 col-md-2">
+        <div class="form-group col-4 col-md-2">
           <label for="calc-remap">Remapped</label>
           <select id="calc-remap" class="form-control form-control-sm">
             <option value="1" selected>yes (27 / 21)</option><option value="0">no (20 / 20)</option>
           </select>
         </div>
-        <div class="form-group col-6 col-md-2">
-          <label for="calc-sell">Selling</label>
+        <div class="form-group col-4 col-md-2">
+          <label for="calc-sell">Selling injectors</label>
           <select id="calc-sell" class="form-control form-control-sm">
             @foreach($matrix as $where => $modes)
               @foreach(array_keys($modes) as $how)
@@ -302,10 +309,15 @@
         </div>
       </div>
       <div class="row" id="calc-out" style="font-variant-numeric: tabular-nums;"></div>
+      <div style="overflow-x: auto;">
+        <table class="table table-sm table-bordered mb-1 small" style="font-variant-numeric: tabular-nums;">
+          <thead><tr><th>What</th><th class="text-right">Through PLEX</th><th class="text-right">Cash in the store</th><th>Bought as</th></tr></thead>
+          <tbody id="calc-breakdown"></tbody>
+        </table>
+      </div>
       <div class="small text-muted mt-2">
-        "You hold" = PLEX in hangars (SeAT) + PLEX typed in for the vault on My accounts + ISK in your wallets.
-        Training speed = primary + secondary ÷ 2 per minute, with implants on both. Costs use the PLEX prices leaders keep below and today's PLEX price;
-        the cash column uses EVE Store prices. A month is 30 days.
+        Prices come from the store lists below; PLEX bought with money uses the cheapest set of packs. "You hold" = PLEX in hangars (SeAT) + PLEX typed in for the vault
+        on My accounts + ISK in your wallets. Training speed = primary + secondary ÷ 2 per minute, with implants on both. A month is 30 days.
       </div>
     </div>
   </div>
@@ -426,10 +438,29 @@
 
   @if($canEditSettings)
     <div class="card card-outline card-secondary">
-      <div class="card-header"><h3 class="card-title">Farm numbers (leaders, for everyone)</h3></div>
+      <div class="card-header"><h3 class="card-title">Store prices and farm numbers (leaders, for everyone)</h3></div>
       <div class="card-body">
         <form method="post" action="{{ route('devilsrage.spfarm.settings') }}">
           @csrf
+          <div class="row">
+            @foreach($priceLists as $key => $list)
+              <div class="col-md-6 col-xl-3 mb-3">
+                <div class="font-weight-bold small">{{ $list['label'] }}</div>
+                <table class="table table-sm mb-0 small">
+                  <thead><tr><th>{{ $list['amount'] }}</th><th>{{ $list['unit'] }}</th><th class="text-muted">per one</th></tr></thead>
+                  <tbody>
+                    @foreach([...$list['rows'], [null, null], [null, null]] as $i => $row)
+                      <tr>
+                        <td><input type="number" step="any" min="0" name="prices[{{ $key }}][{{ $i }}][0]" value="{{ $row[0] === null ? '' : rtrim(rtrim(number_format($row[0], 2, '.', ''), '0'), '.') }}" class="form-control form-control-sm" aria-label="{{ $list['amount'] }}"></td>
+                        <td><input type="number" step="any" min="0" name="prices[{{ $key }}][{{ $i }}][1]" value="{{ $row[1] === null ? '' : rtrim(rtrim(number_format($row[1], 2, '.', ''), '0'), '.') }}" class="form-control form-control-sm" aria-label="{{ $list['unit'] }}"></td>
+                        <td class="text-muted align-middle">{{ $row[0] ? ($list['unit'] === '$' ? '$'.number_format($row[1] / $row[0], 4) : number_format($row[1] / $row[0], 1)) : '' }}</td>
+                      </tr>
+                    @endforeach
+                  </tbody>
+                </table>
+              </div>
+            @endforeach
+          </div>
           <div class="form-row">
             @foreach($settings as $key => $setting)
               <div class="form-group col-md-3">
@@ -439,7 +470,7 @@
             @endforeach
           </div>
           <button type="submit" class="btn btn-sm btn-primary">Save</button>
-          <span class="small text-muted ml-2">Check the Omega / MCT PLEX costs in the in-game New Eden Store; set a PLEX price to override the market average.</span>
+          <span class="small text-muted ml-2">These are the standard store prices. Change them during a sale; empty a row to remove it, use the blank rows to add one.</span>
         </form>
       </div>
     </div>
@@ -450,16 +481,46 @@
 <script>
 (function () {
   var calc = @json($calculator);
+  var lists = calc.lists;
   var currency = 'isk';
   try { currency = localStorage.getItem('dr-farm-currency') || 'isk'; } catch (e) {}
 
-  function usd(isk) { return calc.plex > 0 ? isk / calc.plex * calc.usdPerPlex : null; }
+  var bestRate = Math.min.apply(null, lists.plex_packs.map(function (r) { return r[1] / r[0]; }));
+  function usd(isk) { return calc.plex > 0 ? isk / calc.plex * bestRate : null; }
   function fmtIsk(v) {
     var a = Math.abs(v);
     return a >= 1e9 ? (v / 1e9).toFixed(2) + 'b' : Math.round(v / 1e6).toLocaleString() + 'm';
   }
   function fmtUsd(v) { return v === null ? '–' : (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
   function fmt(isk) { return currency === 'usd' ? fmtUsd(usd(isk)) : fmtIsk(isk); }
+  function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+
+  // Cheapest set of bundles that gives at least `need` (each bundle: [amount, price]).
+  function cheapest(bundles, need) {
+    if (need <= 0) { return {cost: 0, parts: {}}; }
+    var unit = bundles.reduce(function (g, r) { return gcd(g, Math.round(r[0])); }, 0) || 1;
+    var n = Math.ceil(need / unit);
+    var best = [0], pick = [-1];
+    for (var i = 1; i <= n; i++) {
+      best[i] = Infinity; pick[i] = -1;
+      for (var j = 0; j < bundles.length; j++) {
+        var c = bundles[j][1] + best[Math.max(0, i - Math.round(bundles[j][0]) / unit)];
+        if (c < best[i]) { best[i] = c; pick[i] = j; }
+      }
+    }
+    var parts = {}, k = n;
+    while (k > 0 && pick[k] >= 0) { var b = bundles[pick[k]]; parts[b[0]] = (parts[b[0]] || 0) + 1; k = Math.max(0, k - Math.round(b[0]) / unit); }
+    return {cost: best[n], parts: parts};
+  }
+  function partsText(parts, unit) {
+    return Object.keys(parts).sort(function (a, b) { return b - a; }).map(function (size) {
+      return parts[size] + '× ' + Number(size).toLocaleString() + (unit ? ' ' + unit : '');
+    }).join(' + ') || '–';
+  }
+  function exact(list, amount) {
+    for (var i = 0; i < list.length; i++) { if (Math.round(list[i][0]) === amount) { return list[i][1]; } }
+    return null;
+  }
 
   function paintMoney() {
     document.querySelectorAll('.dr-money').forEach(function (el) { el.textContent = fmt(parseFloat(el.dataset.isk)); });
@@ -477,47 +538,72 @@
   }
 
   function runCalc() {
-    var accounts = parseInt(val('calc-accounts'), 10);
+    var accounts = Math.max(1, parseInt(val('calc-accounts'), 10) || 1);
     var chars = parseInt(val('calc-chars'), 10);
-    var months = val('calc-omega');
+    var months = parseInt(val('calc-omega'), 10);
+    var pay = val('calc-pay');
     var implants = parseInt(val('calc-implants'), 10);
     var remap = val('calc-remap') === '1';
     var sell = val('calc-sell').split('|');
 
+    // Farming.
     var primary = (remap ? 27 : 20) + implants;
     var secondary = (remap ? 21 : 20) + implants;
     var spMinute = primary + secondary / 2;
     var spMonth = spMinute * 60 * 24 * 30;
     var injectors = spMonth / 500000 * chars * accounts;
-    var profitEach = calc.perExtraction[sell[0]][sell[1]].profit;
-    var income = injectors * profitEach;
+    var income = injectors * calc.perExtraction[sell[0]][sell[1]].profit;
 
-    var omegaPlexMonth = calc.omegaPlex[months] / months;
-    var mctSlots = (chars - 1) * accounts;
-    var costPlex = omegaPlexMonth * accounts + calc.mctPlex * mctSlots;
-    var cost = costPlex * calc.plex;
-    var net = income - cost;
-    var cashMonth = calc.omegaUsd[months] / months * accounts + calc.mctUsd * mctSlots;
+    // The bill for `months` months.
+    var omegaPlex = (exact(lists.omega_plex, months) || 0) * accounts;
+    var omegaUsd = (exact(lists.omega_usd, months) || 0) * accounts;
+    var certificates = (chars - 1) * accounts * months;
+    var mctPlex = cheapest(lists.mct_plex, certificates);
+    var mctUsd = cheapest(lists.mct_usd, certificates);
 
-    var goalIsk = calc.omegaPlex[24] * calc.plex * accounts;
-    var goalUsd = calc.omegaUsd[24] * accounts;
-    var monthsToGoal = net > 0 ? goalIsk / net : null;
-    var covered = cost > 0 ? income / cost : 0;
+    var omegaVia = pay === 'cash' ? 'cash' : (pay === 'plex' ? 'plex' : (omegaPlex * bestRate <= omegaUsd ? 'plex' : 'cash'));
+    var mctVia = certificates === 0 ? 'cash' : (pay === 'cash' ? 'cash' : (pay === 'plex' ? 'plex' : (mctPlex.cost * bestRate <= mctUsd.cost ? 'plex' : 'cash')));
+    var plexToBuy = (omegaVia === 'plex' ? omegaPlex : 0) + (mctVia === 'plex' ? mctPlex.cost : 0);
+    var packs = cheapest(lists.plex_packs, plexToBuy);
+    var cashTotal = packs.cost + (omegaVia === 'cash' ? omegaUsd : 0) + (mctVia === 'cash' ? mctUsd.cost : 0);
+
+    // Paying it all in-game with ISK (buying PLEX on the market).
+    var billPlex = omegaPlex + mctPlex.cost;
+    var billIskMonth = billPlex * calc.plex / months;
+    var net = income - billIskMonth;
+    var covered = billIskMonth > 0 ? income / billIskMonth : 0;
+
+    var goalPlex = (exact(lists.omega_plex, 24) || 0) * accounts;
+    var goalPacks = cheapest(lists.plex_packs, goalPlex);
+    var goalCash = (exact(lists.omega_usd, 24) || 0) * accounts;
+    var monthsToGoal = net > 0 ? goalPlex * calc.plex / net : null;
     var haveIsk = calc.have.plex * calc.plex + calc.have.isk;
-    var haveMonths = cost > 0 ? haveIsk / cost : null;
+    var haveMonths = billIskMonth > 0 ? haveIsk / billIskMonth : null;
 
     document.getElementById('calc-out').innerHTML =
-      box('SP per character / month', (spMonth / 1e6).toFixed(2) + 'm (' + Math.round(spMinute * 60).toLocaleString() + '/h)') +
-      box('Injectors / month', injectors.toFixed(1)) +
-      box('Farm income / month', fmt(income)) +
-      box('Omega + MCT / month (PLEX)', fmt(cost) + ' <span class="small text-muted">' + Math.round(costPlex) + ' PLEX</span>') +
-      box('Left / month', fmt(net), net >= 0 ? 'text-success' : 'text-danger') +
+      box('Real money for ' + months + ' months', fmtUsd(cashTotal) + ' <span class="small text-muted">' + fmtUsd(cashTotal / months) + '/month</span>') +
+      box('Or with ISK (PLEX from the market)', fmt(billPlex * calc.plex) + ' <span class="small text-muted">' + Math.round(billPlex).toLocaleString() + ' PLEX</span>') +
+      box('Farm income / month', fmt(income) + ' <span class="small text-muted">' + injectors.toFixed(1) + ' injectors</span>') +
       box('Farming covers', Math.round(covered * 100) + '% of the bill', covered >= 1 ? 'text-success' : 'text-warning') +
-      box('Same bill in cash', fmtUsd(cashMonth) + '/month') +
-      box('24 months Omega for all', fmt(goalIsk) + ' <span class="small text-muted">or ' + fmtUsd(goalUsd) + ' cash</span>') +
-      box('You hold now', calc.have.plex.toLocaleString() + ' PLEX + ' + fmt(calc.have.isk) + ' <span class="small text-muted">= ' + fmt(haveIsk) + '</span>') +
-      box('That pays the bill for', haveMonths === null ? '–' : haveMonths.toFixed(1) + ' months', haveMonths !== null && haveMonths < 1 ? 'text-warning' : '') +
-      box('Months of farming to fund it', monthsToGoal === null ? 'never at this setup' : monthsToGoal.toFixed(1), monthsToGoal === null ? 'text-danger' : '');
+      box('Left / month after the bill', fmt(net), net >= 0 ? 'text-success' : 'text-danger') +
+      box('24 months Omega for these accounts', fmtUsd(goalPacks.cost) + ' via PLEX <span class="small text-muted">or ' + fmtUsd(goalCash) + ' cash · ' + goalPlex.toLocaleString() + ' PLEX</span>') +
+      box('You hold now', calc.have.plex.toLocaleString() + ' PLEX + ' + fmt(calc.have.isk) + ' <span class="small text-muted">= ' + fmt(haveIsk) + ', ' + (haveMonths === null ? '–' : haveMonths.toFixed(1) + ' months of the bill') + '</span>') +
+      box('Months of farming to buy 24 months', monthsToGoal === null ? 'never at this setup' : monthsToGoal.toFixed(1), monthsToGoal === null ? 'text-danger' : '');
+
+    function row(what, plex, plexUsd, cash, via, how) {
+      return '<tr><td>' + what + '</td><td class="text-right' + (via === 'plex' ? ' font-weight-bold' : '') + '">' + plex + ' <span class="text-muted">≈ ' + fmtUsd(plexUsd) + '</span></td>' +
+        '<td class="text-right' + (via === 'cash' ? ' font-weight-bold' : '') + '">' + fmtUsd(cash) + '</td><td>' + how + '</td></tr>';
+    }
+    var rows = row('Omega: ' + accounts + ' × ' + months + ' months', omegaPlex.toLocaleString() + ' PLEX', omegaPlex * bestRate, omegaUsd, omegaVia,
+      omegaVia === 'plex' ? accounts + '× the ' + months + '-month package for PLEX' : accounts + '× the ' + months + '-month package in the EVE Store');
+    if (certificates > 0) {
+      rows += row('MCT: ' + certificates + ' certificates', Math.round(mctPlex.cost).toLocaleString() + ' PLEX', mctPlex.cost * bestRate, mctUsd.cost, mctVia,
+        partsText(mctVia === 'plex' ? mctPlex.parts : mctUsd.parts, 'pack'));
+    }
+    if (plexToBuy > 0) {
+      rows += '<tr class="table-active"><td>PLEX to buy</td><td class="text-right">' + Math.round(plexToBuy).toLocaleString() + ' PLEX</td><td class="text-right font-weight-bold">' + fmtUsd(packs.cost) + '</td><td>' + partsText(packs.parts, 'PLEX') + '</td></tr>';
+    }
+    document.getElementById('calc-breakdown').innerHTML = rows;
   }
 
   document.querySelectorAll('[data-currency]').forEach(function (b) {
@@ -527,7 +613,7 @@
       paintMoney();
     });
   });
-  document.querySelectorAll('#dr-calc select').forEach(function (s) { s.addEventListener('change', runCalc); });
+  document.querySelectorAll('#dr-calc select, #dr-calc input').forEach(function (s) { s.addEventListener('change', runCalc); s.addEventListener('input', runCalc); });
   paintMoney();
 })();
 </script>

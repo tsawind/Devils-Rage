@@ -21,6 +21,7 @@ final readonly class CommandRegistry
         private ExtractCommand $extract,
         private ExitsCommand $exits,
         private FuelCommand $fuel,
+        private HealthCommand $health,
     ) {}
 
     /** @return CommandDefinition[] */
@@ -29,7 +30,7 @@ final readonly class CommandRegistry
         return [
             $this->help, $this->account, $this->alert, $this->alerts, $this->route, $this->exits,
             $this->caps, $this->assets, $this->fit, $this->canFly,
-            $this->plex, $this->omega, $this->extract, $this->fuel,
+            $this->plex, $this->omega, $this->extract, $this->fuel, $this->health,
         ];
     }
 }

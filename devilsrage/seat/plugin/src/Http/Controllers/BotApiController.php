@@ -7,9 +7,10 @@ namespace DevilsRage\Seat\Http\Controllers;
 use CryptaTech\Seat\Fitting\Models\Fitting;
 use DevilsRage\Seat\Fits\EsiFitConverter;
 use DevilsRage\Seat\Models\Account;
-use DevilsRage\Seat\Models\Setting;
 use DevilsRage\Seat\Services\ExtractionValue;
 use DevilsRage\Seat\Services\FarmOverview;
+use DevilsRage\Seat\Services\FarmPrices;
+use DevilsRage\Seat\Services\Health;
 use DevilsRage\Seat\Services\Holdings;
 use DevilsRage\Seat\Services\Leadership;
 use DevilsRage\Seat\Services\OmegaStatus;
@@ -140,7 +141,7 @@ class BotApiController extends Controller
     /**
      * Accounts with Omega / MCT state, PLEX (hangars + vault) and wallet ISK, for /omega and /plex.
      */
-    public function accounts(string $discordId, OmegaStatus $omega, Holdings $holdings): JsonResponse
+    public function accounts(string $discordId, OmegaStatus $omega, Holdings $holdings, FarmPrices $prices): JsonResponse
     {
         $user = $this->userFor($discordId);
         if ($user === null) {
@@ -163,7 +164,7 @@ class BotApiController extends Controller
             $inAccounts = [...$inAccounts, ...$ids];
             $rows[] = [
                 'nickname' => (string) $account->nickname,
-                'characters' => array_map(fn (int $id): string => (string) ($names[$id] ?? $id), $ids),
+                'characters' => $account->characters->map(fn ($link): string => (string) ($names[(int) $link->character_id] ?? $link->displayName()))->values()->all(),
                 'omega' => ['state' => $om['state'], 'until' => $date($om['until']), 'days_left' => $om['days_left']],
                 'mct' => ['slots' => $om['mct_slots'], 'state' => $om['mct_state'], 'until' => $date($om['mct_until']), 'days_left' => $om['mct_days_left']],
                 'alpha' => array_map(fn (int $id): string => (string) ($names[$id] ?? $id), $om['alpha_characters']),
@@ -185,8 +186,8 @@ class BotApiController extends Controller
         return response()->json([
             'accounts' => $rows,
             'loose' => $loose,
-            'omega_plex_month' => (float) Setting::read('farm_omega_plex_12', '3600') / 12,
-            'mct_plex_month' => (float) Setting::read('farm_mct_plex', '485'),
+            'omega_plex_month' => $prices->omegaPlexPerMonth(24),
+            'mct_plex_month' => $prices->mctPlexEach(24),
         ]);
     }
 
@@ -237,6 +238,23 @@ class BotApiController extends Controller
         }
 
         return response()->json(['structures' => $fuel->structures()]);
+    }
+
+    /**
+     * Health of the SeAT logins and jobs (/health). Leaders only.
+     */
+    public function health(string $discordId, Leadership $leadership, Health $health): JsonResponse
+    {
+        $user = $this->userFor($discordId);
+        if ($user === null) {
+            return $this->notLinked();
+        }
+
+        if (! $leadership->isLeader($user)) {
+            return response()->json(['error' => 'not_leader'], 403);
+        }
+
+        return response()->json($health->report());
     }
 
     private function userFor(string $discordId): ?User

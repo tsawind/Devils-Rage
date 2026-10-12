@@ -6,6 +6,7 @@ use App\Console\Commands\Characters\GetOnlineCharacterLocationsCommand;
 use App\Console\Commands\Characters\GetOnlineCharactersCommand;
 use App\Console\Commands\CheckConnectionAgeCommand;
 use App\Console\Commands\Discord\PostFuelSummaryCommand;
+use App\Console\Commands\Discord\PostHealthCommand;
 use App\Console\Commands\GenerateStaticDataCommand;
 use App\Console\Commands\GetServerStatusCommand;
 use App\Console\Commands\Killmails\AnalyzeWormholeSystems;
@@ -41,5 +42,7 @@ Schedule::command(AnalyzeWormholeSystems::class)->runInBackground()->daily()->wi
 // Patch 37: viewer links that ran out are deleted.
 Schedule::call(fn () => MapShareLink::query()->whereNotNull('expires_at')->where('expires_at', '<=', now())->delete())->name('prune-share-links')->everyTenMinutes()->withoutOverlapping();
 Schedule::command(PostFuelSummaryCommand::class)->runInBackground()->dailyAt('16:00')->withoutOverlapping();
+Schedule::command(PostFuelSummaryCommand::class, ['--weekly'])->runInBackground()->weeklyOn(5, '02:00')->withoutOverlapping();
+Schedule::command(PostHealthCommand::class)->runInBackground()->dailyAt('15:00')->withoutOverlapping();
 Schedule::command(SyncSeatMainsCommand::class)->runInBackground()->hourly()->withoutOverlapping();
 Schedule::command(ResolveUnnamedOrganisationsCommand::class)->runInBackground()->hourly()->withoutOverlapping()->notDuringDowntime();

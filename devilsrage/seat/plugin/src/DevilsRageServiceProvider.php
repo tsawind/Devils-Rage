@@ -6,10 +6,13 @@ namespace DevilsRage\Seat;
 
 use DevilsRage\Seat\Commands\ImportLibraryFits;
 use DevilsRage\Seat\Commands\RemindOmega;
+use DevilsRage\Seat\Http\Composers\FolderedSidebar;
+use DevilsRage\Seat\Http\Middleware\StartPage;
 use DevilsRage\Seat\Seeders\ScheduleSeeder;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\View;
 use Seat\Services\AbstractSeatPlugin;
 use Seat\Web\Models\User;
 
@@ -26,6 +29,12 @@ class DevilsRageServiceProvider extends AbstractSeatPlugin
 
         // Menu entries "Corp layout" and "FC planner"; also checked again in the controllers.
         Gate::define('devilsrage-leader', fn (User $user): bool => $this->app->make(Leadership::class)->isLeader($user));
+
+        // The sidebar in folders, as each pilot arranged it (after SeAT's own composer).
+        $this->app->booted(function (): void {
+            View::composer('web::includes.sidebar', FolderedSidebar::class);
+        });
+        $this->app['router']->pushMiddlewareToGroup('web', StartPage::class);
 
         if ($this->app->runningInConsole()) {
             $this->commands([ImportLibraryFits::class, RemindOmega::class]);
