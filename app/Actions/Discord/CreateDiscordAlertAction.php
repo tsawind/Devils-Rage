@@ -35,6 +35,7 @@ final readonly class CreateDiscordAlertAction
         ?string $channelId,
         ?string $roleId,
         ?int $originSolarsystemId = null,
+        bool $xlOnly = false,
     ): string {
         $map = Map::query()->find($mapId);
         if ($map === null || ! in_array($delivery, [MapAlertDeliveryType::DiscordDm, MapAlertDeliveryType::DiscordChannel], true) || ! $mentionMode instanceof MapAlertMentionMode) {
@@ -85,7 +86,9 @@ final readonly class CreateDiscordAlertAction
             return 'Select a role only when the mention option is A role.';
         }
 
-        DB::transaction(function () use ($account, $map, $type, $target, $origin, $jumps, $shipType, $jdcLevel, $includeHighsec, $delivery, $mentionMode, $guildId, $channelId, $roleId, $isChannel): void {
+        $includeHighsec = $includeHighsec && $shipType?->canEnterHighsec() === true;
+
+        DB::transaction(function () use ($account, $map, $type, $target, $origin, $jumps, $shipType, $jdcLevel, $includeHighsec, $xlOnly, $delivery, $mentionMode, $guildId, $channelId, $roleId, $isChannel): void {
             $alert = MapAlert::query()->create([
                 'map_id' => $map->id,
                 'created_by_user_id' => $account->user_id,
@@ -103,6 +106,7 @@ final readonly class CreateDiscordAlertAction
                 'ship_type' => $type === MapAlertType::JumpRange ? $shipType : null,
                 'jdc_level' => $type === MapAlertType::JumpRange ? $jdcLevel : null,
                 'include_highsec' => $type === MapAlertType::JumpRange && $includeHighsec,
+                'xl_only' => $type === MapAlertType::JumpRange && $xlOnly,
                 'is_active' => true,
             ]);
             $this->lifecycle->created($alert, $account->user);
@@ -112,7 +116,13 @@ final readonly class CreateDiscordAlertAction
             MapAlertType::Proximity => $origin instanceof Solarsystem
                 ? sprintf('Alert created for **%s** within %d jumps of **%s** through the **%s** chain.', $target->name, $jumps, $origin->name, $map->name)
                 : sprintf('Alert created for **%s** within %d jumps of **%s**.', $target->name, $jumps, $map->name),
-            MapAlertType::JumpRange => sprintf('Alert created for exits within %.1f ly of **%s** on **%s**.', $shipType->maxRangeLy($jdcLevel), $target->name, $map->name),
+            MapAlertType::JumpRange => sprintf(
+                'Alert created for exits within %.1f ly of **%s** on **%s**%s.',
+                $shipType->maxRangeLy($jdcLevel),
+                $target->name,
+                $map->name,
+                $xlOnly ? ' (only when every hole from home is XL)' : '',
+            ),
             MapAlertType::Killmail => sprintf('Alert created for kills within %d jumps of the **%s** chain.', $jumps, $map->name),
         };
     }

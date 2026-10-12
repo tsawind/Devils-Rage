@@ -28,6 +28,9 @@ final readonly class JumpRangeAlertCommand implements AlertVariantDefinition
             $subCommand->options(...$this->mentionOptions());
         }
 
-        return $subCommand->options(Option::boolean('highsec')->description('Include high-sec exits'));
+        return $subCommand->options(
+            Option::boolean('xl')->description('Only when every hole from home to the exit is XL (capital-sized)'),
+            Option::boolean('highsec')->description('Include high-sec exits (Jump Freighter and Black Ops only)'),
+        );
     }
 }

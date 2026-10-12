@@ -349,16 +349,33 @@ it('creates a jump range alert delivered by direct message', function () {
 
     $response = app(CreateDiscordAlertAction::class)->handle(
         $account, MapAlertType::JumpRange, MapAlertDeliveryType::DiscordDm, $map->id, $target->id,
-        null, JumpShipType::Carrier, 4, true, MapAlertMentionMode::None, null, null, null,
+        null, JumpShipType::JumpFreighter, 4, true, MapAlertMentionMode::None, null, null, null,
     );
 
     $alert = MapAlert::query()->sole();
     expect($response)->toStartWith('Alert created for exits within')
         ->and($alert->type)->toBe(MapAlertType::JumpRange)
-        ->and($alert->ship_type)->toBe(JumpShipType::Carrier)
+        ->and($alert->ship_type)->toBe(JumpShipType::JumpFreighter)
         ->and($alert->jdc_level)->toBe(4)
         ->and($alert->include_highsec)->toBeTrue()
+        ->and($alert->xl_only)->toBeFalse()
         ->and($alert->max_jumps)->toBeNull();
+});
+
+it('drops high-sec for capitals and keeps the XL-only choice', function () {
+    $map = Map::factory()->create(['name' => 'Cap Chain']);
+    $account = discordAccountWithMapAccess($map);
+    $target = discordAlertTarget(30009680, 'Staging');
+
+    $response = app(CreateDiscordAlertAction::class)->handle(
+        $account, MapAlertType::JumpRange, MapAlertDeliveryType::DiscordDm, $map->id, $target->id,
+        null, JumpShipType::Carrier, 5, true, MapAlertMentionMode::None, null, null, null, null, true,
+    );
+
+    $alert = MapAlert::query()->sole();
+    expect($response)->toEndWith('(only when every hole from home is XL).')
+        ->and($alert->include_highsec)->toBeFalse()
+        ->and($alert->xl_only)->toBeTrue();
 });
 
 it('rejects a jump range alert without a ship class', function () {

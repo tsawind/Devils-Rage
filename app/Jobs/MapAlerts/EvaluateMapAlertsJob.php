@@ -20,6 +20,7 @@ use App\Services\Discord\ProximityAlertEmbed;
 use App\Services\JumpRange\JumpRangeCalculator;
 use App\Services\MapAlerts\BotAlertDeliverer;
 use App\Services\MapAlerts\MapAlertLifecycle;
+use App\Services\Routing\CapitalPath;
 use App\Services\Routing\MapProximityPathfinder;
 use App\Services\Routing\ProximityResult;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -73,6 +74,11 @@ final class EvaluateMapAlertsJob implements ShouldBeUnique, ShouldQueue
     /** @var array<int, array{0: int, 1: int}>|null */
     private ?array $chainEdges = null;
 
+    private CapitalPath $capitalPath;
+
+    /** @var array<int, true>|null systems reachable from home through XL holes (computed once per run) */
+    private ?array $xlReachable = null;
+
     public function __construct(public readonly int $map_solarsystem_id) {}
 
     public function uniqueId(): string
@@ -89,6 +95,7 @@ final class EvaluateMapAlertsJob implements ShouldBeUnique, ShouldQueue
         DiscordDelivery $webhookDelivery,
         BotAlertDeliverer $botDeliverer,
         MapAlertLifecycle $lifecycle,
+        CapitalPath $capitalPath,
     ): void {
         $this->pathfinder = $pathfinder;
         $this->proximityEmbed = $proximityEmbed;
@@ -98,6 +105,7 @@ final class EvaluateMapAlertsJob implements ShouldBeUnique, ShouldQueue
         $this->webhookDelivery = $webhookDelivery;
         $this->botDeliverer = $botDeliverer;
         $this->lifecycle = $lifecycle;
+        $this->capitalPath = $capitalPath;
 
         $placement = MapSolarsystem::query()->with('map')->find($this->map_solarsystem_id);
         if ($placement === null) {
@@ -233,7 +241,12 @@ final class EvaluateMapAlertsJob implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        if ($isHighsec && ! $alert->include_highsec) {
+        // Capitals can't enter high-sec at all; only JFs and Black Ops can gate in.
+        if ($isHighsec && (! $alert->include_highsec || ! $alert->ship_type->canEnterHighsec())) {
+            return;
+        }
+
+        if ($alert->xl_only && ! isset($this->xlReachable($placement)[$placement->solarsystem_id])) {
             return;
         }
 
@@ -252,6 +265,14 @@ final class EvaluateMapAlertsJob implements ShouldBeUnique, ShouldQueue
         }
 
         $this->deliver($alert, $placement, $this->jumpRangeEmbed->build($alert, $exit, $target, $distance));
+    }
+
+    /**
+     * @return array<int, true>
+     */
+    private function xlReachable(MapSolarsystem $placement): array
+    {
+        return $this->xlReachable ??= $this->capitalPath->reachableFromHome($placement->map) ?? [];
     }
 
     /**

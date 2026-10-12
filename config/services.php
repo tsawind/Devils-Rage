@@ -68,6 +68,12 @@ return [
         'client_secret' => env('EVE_CLIENT_SECRET'),
         'redirect' => env('EVE_CALLBACK', env('APP_URL').'/eve/callback'),
     ],
+    // The Devil's Rage SeAT plugin's bot API (devilsrage/seat/plugin): capitals, assets, fits.
+    // Same SeAT as above unless SEAT_BOT_URL says otherwise; the key matches DR_BOT_API_KEY in SeAT.
+    'seat_bot' => [
+        'url' => env('SEAT_BOT_URL', env('SEAT_URL')),
+        'key' => env('SEAT_BOT_KEY'),
+    ],
     'discord' => [
         'invite' => env('DISCORD_INVITE', ''),
         'application_id' => env('DISCORD_APPLICATION_ID'),

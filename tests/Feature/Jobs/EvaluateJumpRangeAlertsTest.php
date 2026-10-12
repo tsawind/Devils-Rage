@@ -102,11 +102,23 @@ it('fires for a high-sec exit when include_highsec is enabled', function () {
     $exit = makeSolarsystem(30009110, 0.9, 'eve', lightyears(2.0));
 
     $map = Map::factory()->create();
-    jumpRangeAlert($map, ['target_solarsystem_id' => $staging, 'include_highsec' => true]);
+    jumpRangeAlert($map, ['target_solarsystem_id' => $staging, 'include_highsec' => true, 'ship_type' => JumpShipType::JumpFreighter]);
 
     runJumpRangeEval($map, $exit);
 
     Http::assertSentCount(1);
+});
+
+it('never fires for a high-sec exit for a capital, even with include_highsec', function () {
+    $staging = makeSolarsystem(30009190, -0.3, 'eve');
+    $exit = makeSolarsystem(30009191, 0.9, 'eve', lightyears(2.0));
+
+    $map = Map::factory()->create();
+    jumpRangeAlert($map, ['target_solarsystem_id' => $staging, 'include_highsec' => true, 'ship_type' => JumpShipType::Carrier]);
+
+    runJumpRangeEval($map, $exit);
+
+    Http::assertNothingSent();
 });
 
 it('never fires for a wormhole-space system', function () {

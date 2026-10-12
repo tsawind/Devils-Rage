@@ -19,6 +19,15 @@ enum JumpShipType: string
     case Rorqual = 'rorqual';
     case BlackOps = 'black_ops';
 
+    /**
+     * Whether the ship may enter high-sec at all (through a gate from a neighbouring
+     * low-sec system). Dreads, carriers, FAXes, supers, titans and Rorquals may not.
+     */
+    public function canEnterHighsec(): bool
+    {
+        return in_array($this, [self::JumpFreighter, self::BlackOps], true);
+    }
+
     public function baseRangeLy(): float
     {
         return match ($this) {

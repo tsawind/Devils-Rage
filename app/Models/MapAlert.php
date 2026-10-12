@@ -45,6 +45,7 @@ use Illuminate\Support\Collection;
  * @property JumpShipType|null $ship_type
  * @property int|null $jdc_level
  * @property bool $include_highsec
+ * @property bool $xl_only
  * @property int|null $max_jumps
  * @property Collection<int, KillmailFilterRule> $filters
  * @property KillmailFilterMatch $filter_match
@@ -200,6 +201,7 @@ final class MapAlert extends Model
             'ship_type' => JumpShipType::class,
             'jdc_level' => 'integer',
             'include_highsec' => 'boolean',
+            'xl_only' => 'boolean',
             'max_jumps' => 'integer',
             'filters' => KillmailFiltersCast::class,
             'filter_match' => KillmailFilterMatch::class,

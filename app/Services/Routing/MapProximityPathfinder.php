@@ -103,6 +103,47 @@ final class MapProximityPathfinder
     }
 
     /**
+     * Gate and wormhole jumps from the nearest origin to every system within reach.
+     *
+     * @param  int[]  $originSolarsystemIds
+     * @param  array<int, array{0: int, 1: int}>  $wormholeEdges
+     * @param  int[]  $ignoredSolarsystemIds
+     * @return array<int, int> solar system ID => jumps (origins are 0)
+     */
+    public function withinJumps(array $originSolarsystemIds, array $wormholeEdges, array $ignoredSolarsystemIds, int $maxJumps): array
+    {
+        $adjacency = $this->buildAdjacency($wormholeEdges);
+        $excluded = array_diff_key(array_fill_keys($ignoredSolarsystemIds, true), array_fill_keys($originSolarsystemIds, true));
+
+        $distance = [];
+        $queue = [];
+        foreach ($originSolarsystemIds as $origin) {
+            if (! isset($distance[$origin])) {
+                $distance[$origin] = 0;
+                $queue[] = $origin;
+            }
+        }
+
+        $head = 0;
+        while ($head < count($queue)) {
+            $current = $queue[$head++];
+            if ($distance[$current] >= $maxJumps) {
+                continue;
+            }
+
+            foreach ($adjacency[$current] ?? [] as $neighbor) {
+                if (isset($distance[$neighbor]) || isset($excluded[$neighbor])) {
+                    continue;
+                }
+                $distance[$neighbor] = $distance[$current] + 1;
+                $queue[] = $neighbor;
+            }
+        }
+
+        return $distance;
+    }
+
+    /**
      * @param  array<int, array{0: int, 1: int}>  $wormholeEdges
      * @return array<int, int[]>
      */

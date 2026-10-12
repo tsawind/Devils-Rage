@@ -82,3 +82,13 @@ it('traverses real stargate connections', function () {
     expect($result)->not->toBeNull()
         ->and($result->jumps)->toBe(1);
 });
+
+it('counts jumps to every system within reach of the origins', function () {
+    $distances = pathfinder()->withinJumps([1], [[1, 2], [2, 3], [3, 4]], [3], 5);
+
+    expect($distances)->toBe([1 => 0, 2 => 1]);
+});
+
+it('stops counting at the jump limit', function () {
+    expect(pathfinder()->withinJumps([1], [[1, 2], [2, 3]], [], 1))->toBe([1 => 0, 2 => 1]);
+});

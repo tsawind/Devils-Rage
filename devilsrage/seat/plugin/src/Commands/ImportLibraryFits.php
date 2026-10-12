@@ -9,13 +9,12 @@ use CryptaTech\Seat\Fitting\Models\Fitting;
 use CryptaTech\Seat\Fitting\Models\FittingItem;
 use DevilsRage\Seat\Fits\EsiFitConverter;
 use DevilsRage\Seat\Models\FitImport;
+use DevilsRage\Seat\Services\Corporation;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Seat\Eveapi\Models\Character\CharacterAffiliation;
 use Seat\Eveapi\Models\Character\CharacterInfo;
-use Seat\Eveapi\Models\Corporation\CorporationInfo;
 use Seat\Eveapi\Models\Fittings\CharacterFitting;
 use Seat\Eveapi\Models\RefreshToken;
 
@@ -214,8 +213,8 @@ class ImportLibraryFits extends Command
     }
 
     /**
-     * DR_FIT_LIBRARY_CHARACTERS (names or IDs), or else the CEO of the corporation most
-     * SeAT pilots are in, when that CEO has logged into SeAT.
+     * DR_FIT_LIBRARY_CHARACTERS (names or IDs), or else the CEO of the main corporation
+     * (DR_CORPORATION_ID, or the one most SeAT pilots are in), when the CEO has logged into SeAT.
      *
      * @return list<int>
      */
@@ -242,14 +241,7 @@ class ImportLibraryFits extends Command
             return array_values(array_unique($ids));
         }
 
-        $mainCorporationId = CharacterAffiliation::query()
-            ->whereIn('character_id', RefreshToken::query()->select('character_id'))
-            ->selectRaw('corporation_id, count(*) as pilots')
-            ->groupBy('corporation_id')
-            ->orderByDesc('pilots')
-            ->value('corporation_id');
-
-        $ceoId = CorporationInfo::query()->where('corporation_id', $mainCorporationId)->value('ceo_id');
+        $ceoId = app(Corporation::class)->ceoId();
 
         if ($ceoId === null || ! RefreshToken::query()->where('character_id', $ceoId)->exists()) {
             return [];

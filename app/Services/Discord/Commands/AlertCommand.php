@@ -86,6 +86,7 @@ final readonly class AlertCommand implements CommandDefinition
             $interaction->channel_id === null ? null : (string) $interaction->channel_id,
             $roleId === null ? null : (string) $roleId,
             $from === null ? null : (int) $from,
+            (bool) $this->option($variant, 'xl'),
         );
     }
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Actions\MapAlerts\RecheckCapitalAlertsAction;
 use App\Builders\MapConnectionBuilder;
 use App\Enums\ConnectionType;
 use App\Enums\LifetimeStatus;
@@ -92,6 +93,12 @@ final class MapConnection extends Model
     protected static function booted(): void
     {
         self::saving(fn (MapConnection $connection) => LifeMarks::apply($connection));
+        // XL-only capital alerts: a hole turning XL can open the way to exits further out.
+        self::saved(function (MapConnection $connection): void {
+            if ($connection->ship_size === ShipSize::ExtraLarge && ($connection->wasRecentlyCreated || $connection->wasChanged('ship_size'))) {
+                resolve(RecheckCapitalAlertsAction::class)->handle($connection->map_id);
+            }
+        });
         // Patch 37: any change by hand (type, mass, life, checked…) proves a remembered pipe is real.
         self::saving(function (MapConnection $connection): void {
             $attributes = $connection->getAttributes();

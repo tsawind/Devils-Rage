@@ -11,11 +11,16 @@ final readonly class CommandRegistry
         private AlertCommand $alert,
         private AlertsCommand $alerts,
         private RouteCommand $route,
+        private HelpCommand $help,
+        private CapsCommand $caps,
+        private AssetsCommand $assets,
+        private FitCommand $fit,
+        private CanFlyCommand $canFly,
     ) {}
 
     /** @return CommandDefinition[] */
     public function all(): array
     {
-        return [$this->account, $this->alert, $this->alerts, $this->route];
+        return [$this->help, $this->account, $this->alert, $this->alerts, $this->route, $this->caps, $this->assets, $this->fit, $this->canFly];
     }
 }

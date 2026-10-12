@@ -44,7 +44,7 @@ final readonly class DiscordInteractionHandler
         }
 
         $discord->on(Event::INTERACTION_CREATE, function ($interaction) use ($discord): void {
-            if ($interaction instanceof ApplicationCommandAutocomplete && in_array($interaction->data->name, ['alert', 'alerts', 'route'], true)) {
+            if ($interaction instanceof ApplicationCommandAutocomplete && in_array($interaction->data->name, ['alert', 'alerts', 'route', 'caps', 'assets'], true)) {
                 $this->safeAutocomplete($discord, $interaction);
             }
         });

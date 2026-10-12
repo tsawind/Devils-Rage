@@ -1,15 +1,16 @@
 {
     "name": "devilsrage/seat-devilsrage",
-    "description": "The Devil's Rage additions to SeAT: corp fit library import (and later: accounts, launch groups, skill plans).",
+    "description": "The Devil's Rage additions to SeAT: corp fit library import, accounts and launch groups, skill plans, FC planner, and a read-only API for the Discord bot.",
     "type": "library",
     "license": "GPL-2.0-or-later",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "require": {
         "php": "^8.2",
         "eveseat/web": "^5.0",
         "eveseat/eveapi": "^5.0",
         "eveseat/services": "^5.0",
-        "cryptatech/seat-fitting": "^5.0.11"
+        "cryptatech/seat-fitting": "^5.0.11",
+        "warlof/seat-connector": "^3.1"
     },
     "autoload": {
         "psr-4": {
