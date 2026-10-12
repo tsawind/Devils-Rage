@@ -39,7 +39,7 @@ final class MapInfoResource extends JsonResource
             'bookmark_alias_scheme' => $this->bookmark_alias_scheme,
             'bookmark_ignored_alias' => $this->bookmark_ignored_alias,
             'map_user_setting' => $this->handleUserSetting(),
-            'owner' => $this->mapOwner->accessible->toResource(CharacterResource::class),
+            'owner' => $this->mapOwner?->accessible?->toResource(CharacterResource::class),
         ];
     }
 

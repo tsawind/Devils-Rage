@@ -76,6 +76,38 @@ jobs:
       - name: Lint Frontend
         run: npm run lint
 
+      # Patch 37: every ESLint problem left after --fix, packed into a few annotations.
+      - name: Report ESLint Errors
+        if: failure()
+        run: |
+          npx eslint . -f json -o eslint.json || true
+          python3 - <<'PY'
+          import json
+          try:
+              data = json.load(open('eslint.json'))
+          except Exception as error:
+              print(f'::error::No eslint.json ({error})')
+              raise SystemExit(0)
+          lines = []
+          for result in data:
+              short = result['filePath'].split('/Devils-Rage/', 1)[-1]
+              for message in result.get('messages', []):
+                  if message.get('severity', 0) >= 2:
+                      lines.append(f"{short}:{message.get('line')} {message.get('ruleId')}: {message.get('message')}")
+          print(f'::warning::{len(lines)} ESLint errors')
+          chunk, chunks = [], []
+          for line in lines:
+              if sum(len(item) + 1 for item in chunk) + len(line) > 3800:
+                  chunks.append(chunk)
+                  chunk = []
+              chunk.append(line)
+          if chunk:
+              chunks.append(chunk)
+          for index, part in enumerate(chunks[:9]):
+              text = '\n'.join(part).replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+              print(f'::error::ESLint {index + 1}/{len(chunks)}%0A{text}')
+          PY
+
       # - name: Commit Changes
       #   uses: stefanzweifel/git-auto-commit-action@v5
       #   with:
