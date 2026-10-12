@@ -292,7 +292,8 @@ whenever(Delete, () => {
             <WayBackPopup />
             <RageRollOverlay />
             <!-- Patch 37: JUMPING HOT / COLD, bottom right of the map -->
-            <div class="pointer-events-auto absolute right-5 bottom-5 z-10">
+            <!-- above the zoom / sound buttons, which sit in the corner -->
+            <div class="pointer-events-auto absolute right-5 bottom-16 z-10">
                 <JumpingHotToggle />
             </div>
         </template>

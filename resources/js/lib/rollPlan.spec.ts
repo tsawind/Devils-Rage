@@ -1,4 +1,4 @@
-import { planText, planWith, rollPlan, type TRollShip } from '@/lib/rollPlan';
+import { massText, planText, planWith, rollPlan, type TRollShip } from '@/lib/rollPlan';
 import { describe, expect, it } from 'vitest';
 
 const M = 1_000_000;
@@ -64,5 +64,41 @@ describe('patch 37: rolling planner', () => {
     it('leaves out ships too big for the hole', () => {
         const plan = planWith('crit', { ...fresh, maxJump: 62 * M }, [mega(1, 'A', 1)]);
         expect(plan.steps[0].kind).toBe('stuck');
+    });
+});
+
+describe('patch 37: mass options (props, entanglers)', () => {
+    const devoter: TRollShip = {
+        id: 9,
+        name: 'Darkness Holder',
+        ship: 'Devoter',
+        owner: 'A',
+        order: 1,
+        cold: 32.4 * M,
+        hot: 132.4 * M,
+        options: [
+            { label: 'HOT 500MN MWD', mode: 'hot', mass: 132.4 * M },
+            { label: 'COLD', mode: 'cold', mass: 32.4 * M },
+            { label: 'HOT 500MN MWD · 1 entangler', mode: 'hot', mass: 26.48 * M },
+            { label: 'COLD · 1 entangler', mode: 'cold', mass: 6.48 * M },
+            { label: 'COLD · 3 entanglers', mode: 'cold', mass: 1.07 * M },
+        ],
+    };
+
+    it('threads a nearly closed hole with the tiny masses', () => {
+        const tight = { total: 3_000 * M, low: 10 * M, high: 300 * M, maxJump: 2_000 * M, status: 'critical' as const };
+        const plan = planWith('roll', tight, [devoter]);
+        const first = plan.steps[0];
+        expect(first.kind).toBe('trip');
+        if (first.kind === 'trip') {
+            expect(first.out.mass).toBeLessThan(10 * M);
+            expect(first.out.label).toContain('entangler');
+        }
+    });
+
+    it('writes small masses with decimals', () => {
+        expect(massText(1.07 * M)).toBe('1.07m');
+        expect(massText(26.48 * M)).toBe('26.5m');
+        expect(massText(1_840 * M)).toBe('1,840m');
     });
 });

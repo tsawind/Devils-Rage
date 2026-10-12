@@ -1,6 +1,6 @@
 import FleetController from '@/actions/App/Http/Controllers/FleetController';
 import { jumpingHotNow } from '@/composables/useJumpingHot';
-import { shipMasses } from '@/composables/useShipProfiles';
+import { shipMasses, type TMassOption } from '@/composables/useShipProfiles';
 import { computed, onBeforeUnmount, ref } from 'vue';
 
 /**
@@ -85,11 +85,20 @@ async function refresh(mapSlug: string): Promise<void> {
     }
 }
 
+/**
+ * Patch 37: the group a member is in, as EVE lays it out: a squad (its id), a wing's
+ * commander (no squad: the wing id, negative) or the fleet commander (no wing: -1).
+ */
+export function squadKey(member: Pick<TFleetMember, 'wing_id' | 'squad_id'>): number {
+    if (member.squad_id > 0) return member.squad_id;
+    return member.wing_id > 0 ? -member.wing_id : -1;
+}
+
 export const fleetMembers = computed(() => (state.value.status === 'ok' ? state.value.members : []));
 
 /** Whether a member comes with us: your tick, else not for caps and yes for the rest; an unticked squad leaves them all out. */
 export function comesWithUs(member: TFleetMember): boolean {
-    if (prefs.value.squads[member.squad_id] === false) return false;
+    if (prefs.value.squads[squadKey(member)] === false) return false;
     return prefs.value.ticks[member.character_id] ?? !member.capital;
 }
 
@@ -126,8 +135,8 @@ export function setMine(characterIds: number[]): void {
 }
 
 const myMembers = computed(() => fleetMembers.value.filter((member) => mine.value.includes(member.character_id)));
-export const myWingIds = computed(() => [...new Set(myMembers.value.map((member) => member.wing_id))]);
-export const mySquadIds = computed(() => [...new Set(myMembers.value.map((member) => member.squad_id))]);
+export const myWingIds = computed(() => [...new Set(myMembers.value.map((member) => member.wing_id).filter((id) => id > 0))]);
+export const mySquadIds = computed(() => [...new Set(myMembers.value.map(squadKey))]);
 
 /** Whether a member is in the part of the fleet that counts (whole fleet, my wing, my squads, picked squads). */
 export function inScope(member: TFleetMember): boolean {
@@ -135,9 +144,9 @@ export function inScope(member: TFleetMember): boolean {
         case 'wing':
             return myWingIds.value.includes(member.wing_id);
         case 'squads':
-            return mySquadIds.value.includes(member.squad_id);
+            return mySquadIds.value.includes(squadKey(member));
         case 'pick':
-            return prefs.value.picked.includes(member.squad_id);
+            return prefs.value.picked.includes(squadKey(member));
         default:
             return true;
     }
@@ -163,13 +172,24 @@ export function moveInSquad(squadId: number, members: TFleetMember[], characterI
     savePrefs();
 }
 
+/** Patch 37: drop a member before another in the same squad (drag the name). */
+export function dropInSquad(squadId: number, members: TFleetMember[], draggedId: number, beforeId: number | null): void {
+    const ids = squadOrder(squadId, members)
+        .map((member) => member.character_id)
+        .filter((id) => id !== draggedId);
+    const at = beforeId === null ? ids.length : ids.indexOf(beforeId);
+    ids.splice(at === -1 ? ids.length : at, 0, draggedId);
+    prefs.value = { ...prefs.value, order: { ...prefs.value.order, [squadId]: ids } };
+    savePrefs();
+}
+
 /** One ship of the fleet with its masses and whether it counts. */
-export type TFleetShip = TFleetMember & { cold: number; hot: number; fromProfile: boolean; counts: boolean; position: number };
+export type TFleetShip = TFleetMember & { cold: number; hot: number; tiny: number; options: TMassOption[]; fromProfile: boolean; counts: boolean; position: number };
 
 export const fleetShips = computed<TFleetShip[]>(() => {
     const members = fleetMembers.value;
     const bySquad = new Map<number, TFleetMember[]>();
-    for (const member of members) bySquad.set(member.squad_id, [...(bySquad.get(member.squad_id) ?? []), member]);
+    for (const member of members) bySquad.set(squadKey(member), [...(bySquad.get(squadKey(member)) ?? []), member]);
     const positions = new Map<number, number>();
     for (const [squadId, list] of bySquad) squadOrder(squadId, list).forEach((member, index) => positions.set(member.character_id, index + 1));
     return members.map((member) => {
@@ -178,6 +198,8 @@ export const fleetShips = computed<TFleetShip[]>(() => {
             ...member,
             cold: masses.cold,
             hot: masses.hot,
+            tiny: masses.tiny,
+            options: masses.options,
             fromProfile: masses.profile !== null,
             counts: inScope(member) && comesWithUs(member),
             position: positions.get(member.character_id) ?? 99,

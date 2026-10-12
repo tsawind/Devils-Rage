@@ -250,7 +250,7 @@ const handleResizeEnd = () => {
         <!-- Grid Layout Container -->
         <GridLayout
             :ref="layout.gridLayoutRef"
-            :class="fullScreenBackgroundUrl ? 'map-fullscreen-bg map-bg-image' : undefined"
+            :class="['overflow-x-clip', fullScreenBackgroundUrl ? 'map-fullscreen-bg map-bg-image' : '']"
             :style="{ ...(layout.isEditMode.value ? { minHeight: '4000px' } : {}), ...fullScreenBackgroundStyle }"
             :layout="layout.currentLayoutItems.value"
             :col-num="layout.currentLayoutCols.value"

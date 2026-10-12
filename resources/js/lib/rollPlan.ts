@@ -28,7 +28,11 @@ export type TRollShip = {
     order: number;
     cold: number;
     hot: number;
+    /** Patch 37: every jump mass the ship can make (each prop, a HIC's entanglers); else cold and hot. */
+    options?: TRollOption[];
 };
+
+export type TRollOption = { label: string; mode: TJumpMode; mass: number };
 
 export type TRollHole = {
     total: number;
@@ -41,7 +45,7 @@ export type TRollHole = {
     status?: 'fresh' | 'reduced' | 'critical' | null;
 };
 
-export type TRollJump = { mode: TJumpMode; mass: number };
+export type TRollJump = { mode: TJumpMode; mass: number; label: string };
 
 export type TRollStep =
     | { kind: 'trip'; ship: TRollShip; out: TRollJump; back: TRollJump; left: [number, number]; mayCollapse: boolean }
@@ -56,27 +60,32 @@ const CRIT = 0.1;
 /** Never plan more than this many round trips before a check. */
 const MAX_TRIPS = 40;
 
-const MODES: [TJumpMode, TJumpMode][] = [
-    ['hot', 'hot'],
-    ['cold', 'hot'],
-    ['hot', 'cold'],
-    ['cold', 'cold'],
-];
+/** A ship's jump masses: its options, else cold and hot. */
+export function optionsOf(ship: TRollShip): TRollOption[] {
+    if (ship.options?.length) return ship.options;
+    return [
+        { label: 'HOT', mode: 'hot', mass: ship.hot },
+        { label: 'COLD', mode: 'cold', mass: ship.cold },
+    ];
+}
 
-function massOf(ship: TRollShip, mode: TJumpMode): number {
-    return mode === 'hot' ? ship.hot : ship.cold;
+/** Every out + home pair, heaviest first. */
+function pairsOf(ship: TRollShip, maxJump: number | null): [TRollOption, TRollOption][] {
+    const options = optionsOf(ship).filter((option) => maxJump === null || option.mass <= maxJump);
+    const pairs: [TRollOption, TRollOption][] = [];
+    for (const out of options) for (const back of options) pairs.push([out, back]);
+    return pairs.sort((a, b) => b[0].mass + b[1].mass - (a[0].mass + a[1].mass) || b[1].mass - a[1].mass);
 }
 
 /** Plan with these ships only (in this order). */
 export function planWith(goal: TRollGoal, hole: TRollHole, ships: readonly TRollShip[], crew = 'crew'): TRollPlan {
     const steps: TRollStep[] = [];
-    const fits = ships.filter((ship) => hole.maxJump === null || ship.hot <= hole.maxJump || ship.cold <= hole.maxJump);
+    const fits = ships.filter((ship) => optionsOf(ship).some((option) => hole.maxJump === null || option.mass <= hole.maxJump));
     const target = goal === 'reduced' ? hole.total * REDUCED : goal === 'crit' ? hole.total * CRIT : 0;
     let passed = 0;
     let next = 0;
     let trips = 0;
     const left = (): [number, number] => [Math.max(0, hole.low - passed), Math.max(0, hole.high - passed)];
-    const usable = (ship: TRollShip, mode: TJumpMode) => hole.maxJump === null || massOf(ship, mode) <= hole.maxJump;
 
     // Lines it hasn't been seen to cross yet (the ones a check can tell us about).
     const status = hole.status ?? 'fresh';
@@ -115,13 +124,12 @@ export function planWith(goal: TRollGoal, hole: TRollHole, ships: readonly TRoll
         }
 
         // The next ship (squad order, cycling) with the heaviest safe out + back.
-        let chosen: { ship: TRollShip; out: TJumpMode; back: TJumpMode; collapse: boolean } | null = null;
+        let chosen: { ship: TRollShip; out: TRollOption; back: TRollOption; collapse: boolean } | null = null;
         for (let offset = 0; offset < fits.length && !chosen; offset++) {
             const ship = fits[(next + offset) % fits.length];
-            for (const [out, back] of MODES) {
-                if (!usable(ship, out) || !usable(ship, back)) continue;
-                const outMass = massOf(ship, out);
-                const total = outMass + massOf(ship, back);
+            for (const [out, back] of pairsOf(ship, hole.maxJump)) {
+                const outMass = out.mass;
+                const total = outMass + back.mass;
                 // Rule 1: out never collapses it; home only collapses it when rolling.
                 if (outMass >= low) continue;
                 if (goal !== 'roll' && total >= low) continue;
@@ -144,8 +152,8 @@ export function planWith(goal: TRollGoal, hole: TRollHole, ships: readonly TRoll
             break;
         }
 
-        const out = { mode: chosen.out, mass: massOf(chosen.ship, chosen.out) };
-        const back = { mode: chosen.back, mass: massOf(chosen.ship, chosen.back) };
+        const out = { mode: chosen.out.mode, mass: chosen.out.mass, label: chosen.out.label };
+        const back = { mode: chosen.back.mode, mass: chosen.back.mass, label: chosen.back.label };
         passed += out.mass + back.mass;
         trips++;
         steps.push({ kind: 'trip', ship: chosen.ship, out, back, left: left(), mayCollapse: chosen.collapse });
@@ -193,9 +201,17 @@ export function planText(plan: TRollPlan, holeLabel: string): string {
     const head = `${plan.goal === 'crit' ? 'Make it crit' : plan.goal === 'reduced' ? 'Make it reduced' : 'Roll it'}: ${holeLabel} (${plan.crew})`;
     const lines = plan.steps.map((step, index) => {
         if (step.kind === 'trip') {
-            return `${index + 1}. ${step.ship.name} (${step.ship.ship}) out ${step.out.mode.toUpperCase()} ${Math.round(step.out.mass / 1e6)}m, home ${step.back.mode.toUpperCase()} ${Math.round(step.back.mass / 1e6)}m → ${rangeText(step.left)} left${step.mayCollapse ? ' (may collapse on the way home)' : ''}`;
+            return `${index + 1}. ${step.ship.name} (${step.ship.ship}) out ${step.out.label} ${massText(step.out.mass)}, home ${step.back.label} ${massText(step.back.mass)} → ${rangeText(step.left)} left${step.mayCollapse ? ' (may collapse on the way home)' : ''}`;
         }
         return `>> ${step.text}`;
     });
     return [head, ...lines].join('\n');
+}
+
+/** "1,840m", "26.5m", "1.07m": small masses keep their decimals (HIC threading). */
+export function massText(kg: number): string {
+    const m = kg / 1_000_000;
+    if (m < 10) return `${m.toFixed(2)}m`;
+    if (m < 100) return `${m.toFixed(1)}m`;
+    return `${Math.round(m).toLocaleString('en-US')}m`;
 }

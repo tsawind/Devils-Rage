@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { countedShips } from '@/composables/useFleet';
 import { rollHoleId, rollTarget, rollTargets } from '@/composables/useRollHole';
-import { planText, rangeText, rollPlan, type TRollGoal, type TRollPlan, type TRollShip } from '@/lib/rollPlan';
+import { massText, planText, rangeText, rollPlan, type TRollGoal, type TRollPlan, type TRollShip } from '@/lib/rollPlan';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
@@ -26,6 +26,7 @@ const crewShips = computed<TRollShip[]>(() =>
         order: ship.position,
         cold: ship.cold,
         hot: ship.hot,
+        options: ship.options,
     })),
 );
 
@@ -77,10 +78,10 @@ async function copy(): Promise<void> {
 </script>
 
 <template>
-    <div class="grid gap-2 text-xs">
+    <div class="grid min-w-0 gap-2 text-xs">
         <label class="flex flex-wrap items-center gap-2">
             <span class="text-muted-foreground">Hole</span>
-            <select v-model="rollHoleId" class="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 font-mono">
+            <select v-model="rollHoleId" class="w-full max-w-full min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 font-mono">
                 <option :value="null">Click a pipe on the map, or pick one</option>
                 <option v-for="option in targets" :key="option.id" :value="option.id">{{ option.label }}</option>
             </select>
@@ -106,8 +107,8 @@ async function copy(): Promise<void> {
             <template v-for="(step, index) in plan.plan.steps" :key="index">
                 <div v-if="step.kind === 'trip'" :class="progress[index] === 2 ? 'text-emerald-400' : ''">
                     {{ progress[index] === 2 ? '✓' : progress[index] === 1 ? '½' : `${index + 1}.` }} {{ step.ship.name }} ({{ step.ship.ship }}) out
-                    <span :class="step.out.mode === 'hot' ? 'text-red-300' : 'text-blue-300'">{{ step.out.mode.toUpperCase() }} {{ m(step.out.mass) }}</span> · home
-                    <span :class="step.back.mode === 'hot' ? 'text-red-300' : 'text-blue-300'">{{ step.back.mode.toUpperCase() }} {{ m(step.back.mass) }}</span>
+                    <span :class="step.out.mode === 'hot' ? 'text-red-300' : 'text-blue-300'">{{ step.out.label }} {{ massText(step.out.mass) }}</span> · home
+                    <span :class="step.back.mode === 'hot' ? 'text-red-300' : 'text-blue-300'">{{ step.back.label }} {{ massText(step.back.mass) }}</span>
                     <span class="text-muted-foreground"> → {{ rangeText(step.left) }} left</span>
                     <span v-if="step.mayCollapse" class="text-purple-300"> · may collapse on the way home</span>
                 </div>

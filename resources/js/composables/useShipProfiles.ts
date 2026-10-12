@@ -14,7 +14,12 @@ export type TShipProfile = {
     hot_mass: number;
     higgs: boolean;
     plates: number;
+    entanglers: number;
     prop_mass: number;
+    /** The fit SeAT saw (for the hover). */
+    modules: { slot: string; name: string }[];
+    /** Every jump mass it can make (each prop, entanglers), heaviest first. */
+    options: { key: string; label: string; mode: 'hot' | 'cold'; mass: number }[];
     source: 'seat' | 'manual' | 'hull';
     note: string | null;
     updated_by_name: string | null;
@@ -43,11 +48,39 @@ export function guessedProp(hullMass: number): number {
     return 500_000;
 }
 
-/** Cold / hot jump mass of a pilot's hull: its profile, else the bare hull (+ a typical prop hot). */
-export function shipMasses(characterId: number, shipTypeId: number, hullJumpMass: number, hullMass: number): { cold: number; hot: number; profile: TShipProfile | null } {
+export type TMassOption = { label: string; mode: 'hot' | 'cold'; mass: number };
+
+/**
+ * Cold / hot jump mass of a pilot's hull, every option it has (each prop, a HIC's entanglers)
+ * and the smallest ("tiny", for threading): its profile, else the bare hull (+ a typical prop hot).
+ */
+export function shipMasses(
+    characterId: number,
+    shipTypeId: number,
+    hullJumpMass: number,
+    hullMass: number,
+): { cold: number; hot: number; tiny: number; options: TMassOption[]; profile: TShipProfile | null } {
     const profile = profileFor(characterId, shipTypeId);
-    if (profile) return { cold: profile.cold_mass, hot: profile.hot_mass, profile };
-    return { cold: hullJumpMass, hot: hullJumpMass + guessedProp(hullMass), profile: null };
+    if (profile) {
+        const options: TMassOption[] = profile.options?.length
+            ? profile.options.map((option) => ({ label: option.label, mode: option.mode, mass: option.mass }))
+            : [
+                  { label: 'HOT', mode: 'hot', mass: profile.hot_mass },
+                  { label: 'COLD', mode: 'cold', mass: profile.cold_mass },
+              ];
+        return { cold: profile.cold_mass, hot: profile.hot_mass, tiny: Math.min(...options.map((option) => option.mass)), options, profile };
+    }
+    const hot = hullJumpMass + guessedProp(hullMass);
+    return {
+        cold: hullJumpMass,
+        hot,
+        tiny: hullJumpMass,
+        options: [
+            { label: 'HOT', mode: 'hot', mass: hot },
+            { label: 'COLD', mode: 'cold', mass: hullJumpMass },
+        ],
+        profile: null,
+    };
 }
 
 let lastAsked = '';

@@ -79,7 +79,7 @@ const updated = computed(() => {
                 </button>
                 <span v-if="state.status === 'ok'" class="ml-auto self-center text-[11px] text-muted-foreground">read with {{ state.boss }} (boss) · {{ updated }}</span>
             </div>
-            <div class="px-3 py-2">
+            <div class="min-w-0 overflow-x-hidden px-3 py-2">
                 <p v-if="state.status === 'loading' || state.status === 'idle'" class="text-xs text-muted-foreground">Reading the fleet…</p>
                 <p v-else-if="state.status !== 'ok' && tab !== 'roll'" class="text-xs text-muted-foreground">
                     {{ message }} <button type="button" class="ml-1 underline" @click="refresh()">Try again</button>
