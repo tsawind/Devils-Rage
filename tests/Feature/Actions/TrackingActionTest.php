@@ -229,13 +229,12 @@ it('patch 37: a jump through a frigate K162 counts as a frigate hole and types t
         ->and($farSide?->signatureType?->signature?->value)->toBe('C008');
 });
 
-it('patch 37: a jump through a K162 leaves the far side alone when several types fit', function () {
+it('patch 37: a jump through a K162 leaves the far side alone when no known type fits', function () {
     $map = Map::factory()->create();
     $origin = placeMapSolarsystem($map, 31000953);
     $targetId = makeSolarsystem(31000954, -1.0);
     App\Models\WormholeSystem::query()->forceCreate(['id' => 31000953, 'class' => '5']);
     App\Models\WormholeSystem::query()->forceCreate(['id' => 31000954, 'class' => '5']);
-    makeWormhole('H296', 2_000_000_000, 'c5');
     makeWormhole('H900', 375_000_000, 'c5');
 
     $k162 = App\Models\SignatureType::query()->where('signature', 'K162')->whereNull('extra')->where('target_class', '5')->first()

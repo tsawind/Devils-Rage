@@ -26,9 +26,10 @@ it('broadcasts the signature counts once when a signature is stored', function (
     Event::assertDispatched(SignaturesChangedEvent::class, function (SignaturesChangedEvent $event) use ($map, $system): bool {
         $payload = $event->broadcastWith();
 
+        // Patch 12+: the counts also carry the unjumped holes (and when it was scanned).
         return $event->map_id === $map->id
             && $payload['map_solarsystem_id'] === $system->id
-            && $payload['signature_counts'] === [
+            && array_intersect_key($payload['signature_counts'], array_flip(['signatures_count', 'wormhole_signatures_count', 'uncategorized_signatures_count'])) === [
                 'signatures_count' => 1,
                 'wormhole_signatures_count' => 0,
                 'uncategorized_signatures_count' => 1,

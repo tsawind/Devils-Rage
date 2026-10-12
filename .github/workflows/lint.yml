@@ -38,6 +38,38 @@ jobs:
       - name: Run PHPStan
         run: vendor/bin/phpstan analyse --no-progress --memory-limit=2G
 
+      # Patch 37: every PHPStan error, packed into a few annotations (readable through the API).
+      - name: Report PHPStan Errors
+        if: failure()
+        run: |
+          vendor/bin/phpstan analyse --no-progress --memory-limit=2G --error-format=json > phpstan.json || true
+          python3 - <<'PY'
+          import json
+          try:
+              data = json.load(open('phpstan.json'))
+          except Exception as error:
+              print(f'::error::No phpstan.json ({error})')
+              raise SystemExit(0)
+          lines = []
+          for path, info in data.get('files', {}).items():
+              short = path.split('/Devils-Rage/', 1)[-1]
+              for message in info.get('messages', []):
+                  lines.append(f"{short}:{message.get('line')} {message.get('message')}")
+          lines += [f'general: {error}' for error in data.get('errors', [])]
+          print(f'::warning::{len(lines)} PHPStan errors')
+          chunk, chunks = [], []
+          for line in lines:
+              if sum(len(item) + 1 for item in chunk) + len(line) > 3800:
+                  chunks.append(chunk)
+                  chunk = []
+              chunk.append(line)
+          if chunk:
+              chunks.append(chunk)
+          for index, part in enumerate(chunks[:9]):
+              text = '\n'.join(part).replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+              print(f'::error::PHPStan {index + 1}/{len(chunks)}%0A{text}')
+          PY
+
       - name: Format Frontend
         run: npm run format
 

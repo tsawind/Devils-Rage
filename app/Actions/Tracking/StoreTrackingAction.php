@@ -104,9 +104,13 @@ final readonly class StoreTrackingAction
             // Patch 37: a cleared system with no remembered chain beyond it is just a system again:
             // reached through a named hole it takes that hole's name, not its old one ("Alpha@1917").
             $old_chain = $was_hidden && $hidden_row->memory_links !== null && $hidden_row->memory_links !== [];
+            // Its holes' stamped names, noted before coming back (unhiding takes the stamps off).
+            $stamped_signature_ids = $was_hidden && ! $old_chain
+                ? Signature::query()->where('map_solarsystem_id', $hidden_row->id)->where('alias', 'like', '%@%')->pluck('id')->map(fn (mixed $id): int => (int) $id)->all()
+                : [];
             $target_map_solarsystem = $existing_map_solarsystem ?? $this->addSolarsystemToMap($origin, $to_solarsystem);
             if ($was_hidden && ! $old_chain && filled($data->alias)) {
-                ChainMemory::dropOldName($target_map_solarsystem);
+                ChainMemory::dropOldName($target_map_solarsystem, $stamped_signature_ids);
             }
             $restored_name = $was_hidden && $old_chain && filled($target_map_solarsystem->alias) ? (string) $target_map_solarsystem->alias : null;
 

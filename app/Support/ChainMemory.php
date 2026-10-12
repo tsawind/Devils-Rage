@@ -195,7 +195,10 @@ final class ChainMemory
      * name: the system's alias and its unjumped holes' names that came from it ("A0@1917",
      * "ALPHA1"). Names typed on holes that don't come from the old name stay.
      */
-    public static function dropOldName(MapSolarsystem $system): void
+    /**
+     * @param  list<int>  $stamped_signature_ids  its holes that carried the old stamp while it was hidden
+     */
+    public static function dropOldName(MapSolarsystem $system, array $stamped_signature_ids = []): void
     {
         $plain = mb_strtoupper((string) self::plainAlias($system->alias));
 
@@ -205,6 +208,7 @@ final class ChainMemory
             ->whereNotNull('alias')
             ->get()
             ->filter(fn (Signature $signature): bool => self::isStamped($signature->alias)
+                || in_array($signature->id, $stamped_signature_ids, true)
                 || ($plain !== '' && str_starts_with(mb_strtoupper((string) $signature->alias), $plain)))
             ->each(fn (Signature $signature) => $signature->update(['alias' => null]));
 

@@ -47,9 +47,11 @@ final class User extends Authenticatable
             // First, check session for active character
             $active_character_id = Session::get(self::SESSION_ACTIVE_CHARACTER_ID);
 
-            // If no session, use the preferred character from database
-            if (! $active_character_id && $this->preferred_character_id) {
-                $active_character_id = $this->preferred_character_id;
+            // If no session, use the preferred character from database (a freshly created
+            // user may not have the column loaded yet: treat it as none).
+            $preferred_character_id = $this->getAttributes()['preferred_character_id'] ?? null;
+            if (! $active_character_id && $preferred_character_id) {
+                $active_character_id = $preferred_character_id;
             }
 
             $character = $active_character_id
@@ -58,7 +60,7 @@ final class User extends Authenticatable
 
             // Preferred/session character no longer exists, clear it and fall back
             if (! $character) {
-                if ($this->preferred_character_id && $this->preferred_character_id === $active_character_id) {
+                if ($preferred_character_id && $preferred_character_id === $active_character_id) {
                     $this->update(['preferred_character_id' => null]);
                 }
 

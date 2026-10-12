@@ -106,7 +106,7 @@ it('lets a manager enable constant width', function () {
 });
 
 it('forbids a member from enabling constant width', function () {
-    $map = Map::factory()->create();
+    $map = Map::factory()->create(['constant_width_enabled' => false]);
 
     actingAs(layoutTestUser($map, Permission::Member))
         ->put("/maps/{$map->slug}/layout", ['constant_width_enabled' => true])
