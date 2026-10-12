@@ -103,6 +103,7 @@ final class SeatClient
      * @return list<array{name: string, type: string, system_id: int, state: string, fuel_expires: string|null, hours_left: int|null}>|null
      *
      * @throws SeatForbiddenException
+     * @throws SeatUnavailableException
      */
     public function fuel(string $discordUserId): ?array
     {

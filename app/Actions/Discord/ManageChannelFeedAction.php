@@ -53,7 +53,7 @@ final readonly class ManageChannelFeedAction
         );
 
         return match ($kind) {
-            DiscordFeedKind::ChainExits => sprintf('Done: every new k-space exit on **%s** gets posted here. Stop with `/exits stop`.', $map?->name),
+            DiscordFeedKind::ChainExits => sprintf('Done: every new k-space exit on **%s** gets posted here. Stop with `/exits stop`.', $map->name),
             DiscordFeedKind::FuelDaily => 'Done: the structure fuel summary gets posted here every day at 16:00 EVE time. Stop with `/fuel stop`.',
         };
     }

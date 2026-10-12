@@ -26,7 +26,7 @@ final class DiscordChannelFeedResource extends JsonResource
             'label' => $this->kind->label(),
             'description' => $this->kind->description(),
             'discord_channel_id' => $this->discord_channel_id,
-            'creator_name' => $this->whenLoaded('creator', fn (): ?string => $this->creator->alertDisplayName()),
+            'creator_name' => $this->whenLoaded('creator', fn (): string => $this->creator->alertDisplayName()),
             'last_posted_at' => $this->last_posted_at?->toIso8601String(),
             'created_at' => $this->created_at->toIso8601String(),
         ];

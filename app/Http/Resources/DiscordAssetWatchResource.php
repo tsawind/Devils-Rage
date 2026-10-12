@@ -22,7 +22,7 @@ final class DiscordAssetWatchResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'creator_name' => $this->whenLoaded('user', fn (): ?string => $this->user->alertDisplayName()),
+            'creator_name' => $this->whenLoaded('user', fn (): string => $this->user->alertDisplayName()),
             'max_jumps' => $this->max_jumps,
             'ships_only' => $this->ships_only,
             'created_at' => $this->created_at->toIso8601String(),
