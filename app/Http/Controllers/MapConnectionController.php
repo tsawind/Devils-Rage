@@ -33,15 +33,16 @@ final class MapConnectionController extends Controller
     public function destroy(Request $request, MapConnection $mapConnection, DeleteMapConnectionAction $action, MapUndoSnapshots $undo, #[CurrentUser] User $user): RedirectResponse
     {
         Gate::authorize('delete', $mapConnection);
+        $keepChain = $request->boolean('keep_chain');
 
         // Patch 21: saved first (with its signatures and logged jumps), so Undo can put it back.
         $token = MapUndoSnapshots::tokenFrom($request);
         if ($token !== null) {
             // Patch 37: with the systems the pipe cut off from home (they leave the map with it).
-            $undo->capture($mapConnection->map, $user->id, $token, systemIds: $action->systemsCutOffBy($mapConnection), connectionIds: [$mapConnection->id]);
+            $undo->capture($mapConnection->map, $user->id, $token, systemIds: $keepChain ? [] : $action->systemsCutOffBy($mapConnection), connectionIds: [$mapConnection->id]);
         }
 
-        $action->handle($mapConnection);
+        $action->handle($mapConnection, keepChain: $keepChain);
 
         return back()->notify(
             'Connection deleted!',

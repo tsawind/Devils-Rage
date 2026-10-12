@@ -82,15 +82,18 @@ final readonly class DeleteMapConnectionAction
     }
 
     /**
+     * Patch 37: $keepChain: "Disconnect (keep as side chain)": what the pipe linked to home
+     * stays on the map, in Side chains.
+     *
      * @throws Throwable
      */
-    public function handle(MapConnection $mapConnection, bool $remove_map_solarsystem = false): void
+    public function handle(MapConnection $mapConnection, bool $remove_map_solarsystem = false, bool $keepChain = false): void
     {
         $map = $mapConnection->map;
 
         $from_map_solarsystem = $mapConnection->fromMapSolarsystem;
         $to_map_solarsystem = $mapConnection->toMapSolarsystem;
-        $cut_off = $this->systemsCutOffBy($mapConnection);
+        $cut_off = $keepChain ? [] : $this->systemsCutOffBy($mapConnection);
 
         $mapConnection->delete();
 

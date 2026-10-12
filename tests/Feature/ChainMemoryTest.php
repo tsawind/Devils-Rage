@@ -288,6 +288,15 @@ it('patch 37: deleting a rolled pipe takes the chain beyond it off the map (not 
         ->and(MapSolarsystem::query()->find($daisy->id))->not->toBeNull();
 });
 
+it('patch 37: Disconnect (keep as side chain) leaves the chain beyond on the map', function () {
+    ['daisy' => $daisy, 'alpha' => $alpha, 'a1' => $a1, 'daisy_alpha' => $daisy_alpha] = chainMap();
+
+    app(App\Actions\MapConnections\DeleteMapConnectionAction::class)->handle($daisy_alpha, keepChain: true);
+
+    expect(MapConnection::query()->find($daisy_alpha->id))->toBeNull()
+        ->and(MapSolarsystem::query()->whereKey([$daisy->id, $alpha->id, $a1->id])->count())->toBe(3);
+});
+
 it('patch 37: deleting a pipe that still leaves another way home takes nothing off', function () {
     ['map' => $map, 'daisy' => $daisy, 'alpha' => $alpha, 'a1' => $a1, 'alpha_a1' => $alpha_a1] = chainMap();
     MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $daisy->id, 'to_map_solarsystem_id' => $a1->id]);

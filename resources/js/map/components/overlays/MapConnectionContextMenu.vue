@@ -25,7 +25,7 @@ import CopyConnectionNameMenu from '@/map/components/overlays/CopyConnectionName
 import { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { TConnectionType, TLifetimeStatus, TMassStatus, TShipSize } from '@/types/models';
 import { UTCDate } from '@date-fns/utc';
-import { Check, Clock, Heart, Plus, Scale, Ship, Trash2, TriangleAlert, Waypoints, Weight } from 'lucide-vue-next';
+import { Check, Clock, Heart, Plus, Scale, Ship, Trash2, TriangleAlert, Unlink, Waypoints, Weight } from 'lucide-vue-next';
 import type { AcceptableValue } from 'reka-ui';
 import { computed } from 'vue';
 
@@ -240,6 +240,11 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
         <ContextMenuSeparator />
         <CopyConnectionNameMenu :map_connection="map_connection" />
         <ContextMenuSeparator />
+        <!-- Patch 37: a rolled hole whose far side should stay on the map (Side chains) -->
+        <ContextMenuItem v-if="map_connection.type !== 'stargate'" @click="deleteMapConnection(map_connection, true)">
+            <Unlink class="size-4" />
+            Disconnect (keep as side chain)
+        </ContextMenuItem>
         <ContextMenuItem @click="handleRemoveFromMap" class="text-destructive focus:text-destructive">
             <Trash2 class="size-4" />
             Remove connection
