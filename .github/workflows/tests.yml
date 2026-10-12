@@ -76,7 +76,31 @@ jobs:
           php artisan generate:static-data
 
       - name: Run Backend Tests
-        run: php artisan test --testsuite=Unit,Feature
+        run: php artisan test --testsuite=Unit,Feature --log-junit junit.xml
+
+      # Patch 37: failures as annotations (readable through the API when the raw log isn't).
+      - name: Report Test Failures
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          try:
+              root = ET.parse('junit.xml').getroot()
+          except Exception as error:
+              print(f'::error::No junit.xml ({error})')
+              raise SystemExit(0)
+          failed = []
+          for case in root.iter('testcase'):
+              for kind in ('failure', 'error'):
+                  node = case.find(kind)
+                  if node is not None:
+                      text = (node.text or node.get('message') or '').strip()
+                      failed.append((case.get('file', ''), case.get('line', '1'), case.get('name', ''), text))
+          print(f'::warning::{len(failed)} failing tests: ' + ' | '.join(name for _, _, name, _ in failed)[:3500])
+          for file, line, name, text in failed[:9]:
+              message = (name + ': ' + text)[:1500].replace('%', '%25').replace('\r', '').replace('\n', '%0A')
+              print(f'::error file={file},line={line}::{message}')
+          PY
 
   frontend:
     runs-on: ubuntu-latest
