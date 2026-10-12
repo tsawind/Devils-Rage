@@ -308,6 +308,8 @@ export type TConnectionJump = {
     is_manual: boolean;
     /** Patch 37: logged while the pilot's JUMPING HOT switch was on. */
     is_hot?: boolean;
+    /** Patch 37: logged with the 🧵 thread switch on (entanglers). */
+    is_thread?: boolean;
     from_solarsystem_id: number;
     to_solarsystem_id: number;
     created_at: string;

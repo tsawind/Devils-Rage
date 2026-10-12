@@ -1,5 +1,5 @@
 import FleetController from '@/actions/App/Http/Controllers/FleetController';
-import { jumpingHotNow } from '@/composables/useJumpingHot';
+import { jumpingHotNow, jumpingThreadNow } from '@/composables/useJumpingHot';
 import { shipMasses, type TMassOption } from '@/composables/useShipProfiles';
 import { computed, onBeforeUnmount, ref } from 'vue';
 
@@ -215,7 +215,13 @@ export type TFleetForHold = { ships: number; mass: number; ofTotal: number; hull
 export const fleetForHold = computed<TFleetForHold | null>(() => {
     const ships = countedShips.value;
     if (ships.length === 0) return null;
-    const massOf = (ship: TFleetShip) => (jumpingHotNow.value ? ship.hot : ship.cold);
+    // Hot or cold by the switch; with 🧵 thread on, the lightest of that kind (entanglers on).
+    const massOf = (ship: TFleetShip) => {
+        const mode = jumpingHotNow.value ? 'hot' : 'cold';
+        if (!jumpingThreadNow.value) return mode === 'hot' ? ship.hot : ship.cold;
+        const masses = ship.options.filter((option) => option.mode === mode).map((option) => option.mass);
+        return masses.length ? Math.min(...masses) : mode === 'hot' ? ship.hot : ship.cold;
+    };
     return {
         ships: ships.length,
         mass: ships.reduce((sum, ship) => sum + massOf(ship), 0),

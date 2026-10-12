@@ -23,6 +23,7 @@ final readonly class MapSettingsFeature implements ProvidesInertiaProperties
         'route_use_wormholes' => true,
         'route_use_frigate_holes' => true,
         'jumping_hot' => false,
+        'jumping_thread' => false,
         'route_preference' => 'shorter',
         'security_penalty' => 50,
         'killmail_filter' => 'all',

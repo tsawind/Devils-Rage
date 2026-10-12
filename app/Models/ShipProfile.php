@@ -46,12 +46,14 @@ final class ShipProfile extends Model
 
     /**
      * The mass a jump in this ship logs: hot or cold. A logged jump must never weigh more than
-     * what really went through, so with several options (a HIC's entanglers, a carrier's two
-     * props) the lightest of that kind is logged.
+     * what really went through, so with several options (a carrier's two props) the lightest
+     * of that kind is logged; with the 🧵 thread switch on, entanglers count as on.
      */
-    public function jumpMass(bool $hot): int
+    public function jumpMass(bool $hot, bool $thread = false): int
     {
-        $masses = array_column(array_filter($this->options ?? [], fn (array $option): bool => $option['mode'] === ($hot ? 'hot' : 'cold')), 'mass');
+        // Patch 37: 🧵 thread on = entanglers on (the lightest); off = entanglers off.
+        $masses = array_column(array_filter($this->options ?? [], fn (array $option): bool => $option['mode'] === ($hot ? 'hot' : 'cold')
+            && ($thread || ! str_contains((string) $option['key'], '-e'))), 'mass');
         if ($masses !== []) {
             return (int) min($masses);
         }

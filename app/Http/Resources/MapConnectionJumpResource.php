@@ -33,6 +33,7 @@ final class MapConnectionJumpResource extends JsonResource
             'mass' => $this->mass,
             'is_manual' => $this->is_manual,
             'is_hot' => (bool) ($this->is_hot ?? false),
+            'is_thread' => (bool) ($this->is_thread ?? false),
             'from_solarsystem_id' => $this->from_solarsystem_id,
             'to_solarsystem_id' => $this->to_solarsystem_id,
             'created_at' => $this->created_at,

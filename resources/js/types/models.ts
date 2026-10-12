@@ -298,6 +298,8 @@ export type TMapUserSetting = {
     route_use_frigate_holes?: boolean;
     /** Patch 37: the JUMPING HOT switch (all of this person's characters). */
     jumping_hot?: boolean;
+    /** Patch 37: the 🧵 thread switch (entanglers on). */
+    jumping_thread?: boolean;
     route_preference: TRoutePreference;
     security_penalty: number;
     killmail_filter: 'all' | 'jspace' | 'kspace';

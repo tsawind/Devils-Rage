@@ -24,7 +24,7 @@ it('patch 37: props are named short', function () {
         ->and(ShipMass::propLabel('50000MN Microwarpdrive II'))->toBe('50000MN MWD');
 });
 
-it('patch 37: a profile logs the lightest mass of the kind (never more than really went through)', function () {
+it('patch 37: a profile logs hot or cold, entanglers only with the thread switch on', function () {
     $profile = new ShipProfile([
         'cold_mass' => 32_400_000,
         'hot_mass' => 132_400_000,
@@ -37,7 +37,9 @@ it('patch 37: a profile logs the lightest mass of the kind (never more than real
     ]);
     $plain = new ShipProfile(['cold_mass' => 203_000_000, 'hot_mass' => 303_000_000]);
 
-    expect($profile->jumpMass(false))->toBe(1_073_000)
-        ->and($profile->jumpMass(true))->toBe(26_480_000)
+    expect($profile->jumpMass(false))->toBe(32_400_000)
+        ->and($profile->jumpMass(true))->toBe(132_400_000)
+        ->and($profile->jumpMass(false, true))->toBe(1_073_000)
+        ->and($profile->jumpMass(true, true))->toBe(26_480_000)
         ->and($plain->jumpMass(true))->toBe(303_000_000);
 });

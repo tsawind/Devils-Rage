@@ -68,9 +68,11 @@ final readonly class RecordMapConnectionJumpAction
         $profile = $ship_type_id === null ? null : ShipProfile::query()->where('character_id', $character_id)->where('ship_type_id', $ship_type_id)->first();
 
         foreach ($maps as $map) {
-            $hot = $user_id !== null && (bool) MapUserSetting::query()->where('map_id', $map->id)->where('user_id', $user_id)->value('jumping_hot');
-            $mass = $profile instanceof ShipProfile ? $profile->jumpMass($hot) : Type::loggedJumpMass($ship_type_id);
-            $this->recordJumpOnMap($map, $character_id, $from_solarsystem_id, $to_solarsystem_id, $ship_type_id, $ship_name, $mass, $hot);
+            $setting = $user_id === null ? null : MapUserSetting::query()->where('map_id', $map->id)->where('user_id', $user_id)->first(['jumping_hot', 'jumping_thread']);
+            $hot = (bool) ($setting?->jumping_hot ?? false);
+            $thread = (bool) ($setting?->jumping_thread ?? false);
+            $mass = $profile instanceof ShipProfile ? $profile->jumpMass($hot, $thread) : Type::loggedJumpMass($ship_type_id);
+            $this->recordJumpOnMap($map, $character_id, $from_solarsystem_id, $to_solarsystem_id, $ship_type_id, $ship_name, $mass, $hot, $thread);
         }
     }
 
@@ -83,6 +85,7 @@ final readonly class RecordMapConnectionJumpAction
         ?string $ship_name,
         int $mass,
         bool $hot = false,
+        bool $thread = false,
     ): void {
         $connection = $this->findConnection($map->id, $from_solarsystem_id, $to_solarsystem_id);
 
@@ -104,6 +107,7 @@ final readonly class RecordMapConnectionJumpAction
             'ship_name' => $ship_name,
             'mass' => $mass,
             'is_hot' => $hot,
+            'is_thread' => $thread,
         ]);
 
         /* Pending row: the connection may have been created between our first
