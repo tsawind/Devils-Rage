@@ -11,6 +11,7 @@ import MapFloatingBar from '@/components/map/MapFloatingBar.vue';
 import MapIntroduction from '@/components/map/MapIntroduction.vue';
 import MapStatusBar from '@/components/map/MapStatusBar.vue';
 import ShipHistory from '@/components/ship-history/ShipHistory.vue';
+import FleetWindow from '@/components/fleet/FleetWindow.vue';
 import Signatures from '@/components/signatures/Signatures.vue';
 import SignaturesEmptyState from '@/components/signatures/SignaturesEmptyState.vue';
 import SolarsystemDetails from '@/components/solarsystem/SolarsystemDetails.vue';
@@ -116,7 +117,7 @@ const resolvedMapNavigation = computed<TResolvedMapNavigation | null>(() => {
 const unavailableCards = computed(() => {
     const cards: string[] = [];
     if (isViewer.value) {
-        cards.push('solarsystem', 'audits', 'ship-history');
+        cards.push('solarsystem', 'audits', 'ship-history', 'fleet');
     }
     if (!map_characters) {
         cards.push('characters');
@@ -308,6 +309,16 @@ const handleResizeEnd = () => {
                 v-bind="getLayoutItem('ship-history').value"
             >
                 <ShipHistory />
+            </GridItem>
+
+            <!-- Patch 37: the Fleet window (wings, squads, masses, rolling plans) -->
+            <GridItem
+                v-if="!isViewer && $page.props.auth?.user && !layout.isCardHidden('fleet')"
+                @resize="handleResizeStart"
+                @resized="handleResizeEnd"
+                v-bind="getLayoutItem('fleet').value"
+            >
+                <FleetWindow :map-slug="map.slug" />
             </GridItem>
 
             <!-- Map Characters Section -->

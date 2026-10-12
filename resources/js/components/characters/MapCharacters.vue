@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import Character from '@/components/characters/Character.vue';
-import FleetCard from '@/components/characters/FleetCard.vue';
 import MapPanel from '@/components/ui/map-panel/MapPanel.vue';
 import MapPanelContent from '@/components/ui/map-panel/MapPanelContent.vue';
 import MapPanelHeader from '@/components/ui/map-panel/MapPanelHeader.vue';
@@ -174,8 +173,6 @@ function linkOpened(iso: string | null): string {
                     <span v-if="!present.length && !recentLinks.length" class="text-muted-foreground">Nobody else right now.</span>
                 </div>
             </details>
-            <!-- Patch 37: the fleet you're in, with a comes-with-us tick per ship -->
-            <FleetCard v-if="map?.slug" :map-slug="map.slug" />
             <template v-if="sorted_characters?.length">
                 <div class="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto_minmax(0,1fr)_auto_minmax(0,1fr)] text-sm">
                     <div

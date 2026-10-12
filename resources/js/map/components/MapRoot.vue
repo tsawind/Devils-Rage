@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import JumpingHotToggle from '@/components/fleet/JumpingHotToggle.vue';
+import { rollHoleId } from '@/composables/useRollHole';
 import { useLayout } from '@/composables/useLayout';
 import { useMapUserSettings } from '@/composables/useMapUserSettings';
 import { usePath } from '@/composables/usePath';
@@ -184,6 +186,7 @@ const connectionPopoverPosition = ref<Vec2 | null>(null);
 
 function handleConnectionContextMenu(_event: MouseEvent, connection: TMapConnection): void {
     selectedConnectionId.value = connection.id;
+    rollHoleId.value = connection.id;
 }
 
 function handleConnectionClick(event: MouseEvent, connection: TMapConnection): void {
@@ -191,6 +194,8 @@ function handleConnectionClick(event: MouseEvent, connection: TMapConnection): v
     // Store the click in viewport coordinates.
     connectionPopoverPosition.value = { x: event.clientX, y: event.clientY };
     selectedConnectionId.value = connection.id;
+    // Patch 37: the Fleet window's "Mass a hole" follows the pipe you clicked.
+    rollHoleId.value = connection.id;
 }
 
 // A virtual anchor at the click point. Positioning the popover off a real element fails
@@ -286,6 +291,10 @@ whenever(Delete, () => {
             <MapOptions />
             <WayBackPopup />
             <RageRollOverlay />
+            <!-- Patch 37: JUMPING HOT / COLD, bottom right of the map -->
+            <div class="pointer-events-auto absolute right-5 bottom-5 z-10">
+                <JumpingHotToggle />
+            </div>
         </template>
     </MapViewport>
     <ConnectionPopover

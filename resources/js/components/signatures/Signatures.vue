@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import JumpingHotToggle from '@/components/fleet/JumpingHotToggle.vue';
 import { connectionFlag } from '@/lib/chainNumbering';
 import { autoCopy, clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
 import PasteIcon from '@/components/icons/PasteIcon.vue';
@@ -687,6 +688,8 @@ function createNewSignature() {
                         {{ map_user_settings.compact_signature_list ? 'Switch to comfortable signature list' : 'Switch to compact signature list' }}
                     </TooltipContent>
                 </Tooltip>
+                <!-- Patch 37: JUMPING HOT / COLD (next to rage scanning) -->
+                <JumpingHotToggle size="sm" />
                 <ToggleGroup v-model="activeCategoryFilters" type="multiple" size="sm" variant="outline">
                     <Tooltip v-for="option in categoryFilterOptions" :key="option.value">
                         <TooltipTrigger as-child>
