@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Actions\MapConnections;
 
 use App\Enums\ConnectionType;
+use App\Models\Character;
 use App\Models\Map;
 use App\Models\MapConnection;
 use App\Models\MapConnectionJump;
 use App\Models\MapSolarsystem;
+use App\Models\MapUserSetting;
+use App\Models\ShipProfile;
 use App\Models\Solarsystem;
 use App\Models\Type;
 use App\Utilities\StargatePairDetector;
@@ -60,10 +63,14 @@ final readonly class RecordMapConnectionJumpAction
         }
 
         // Patch 34: HICs / Odysseus log as if their Zero-Point Mass Entangler were on.
-        $mass = Type::loggedJumpMass($ship_type_id);
+        // Patch 37: a ship profile (its real fit) logs its cold or hot mass, by the pilot's JUMPING HOT switch.
+        $user_id = Character::query()->whereKey($character_id)->value('user_id');
+        $profile = $ship_type_id === null ? null : ShipProfile::query()->where('character_id', $character_id)->where('ship_type_id', $ship_type_id)->first();
 
         foreach ($maps as $map) {
-            $this->recordJumpOnMap($map, $character_id, $from_solarsystem_id, $to_solarsystem_id, $ship_type_id, $ship_name, $mass);
+            $hot = $user_id !== null && (bool) MapUserSetting::query()->where('map_id', $map->id)->where('user_id', $user_id)->value('jumping_hot');
+            $mass = $profile instanceof ShipProfile ? $profile->jumpMass($hot) : Type::loggedJumpMass($ship_type_id);
+            $this->recordJumpOnMap($map, $character_id, $from_solarsystem_id, $to_solarsystem_id, $ship_type_id, $ship_name, $mass, $hot);
         }
     }
 
@@ -75,6 +82,7 @@ final readonly class RecordMapConnectionJumpAction
         ?int $ship_type_id,
         ?string $ship_name,
         int $mass,
+        bool $hot = false,
     ): void {
         $connection = $this->findConnection($map->id, $from_solarsystem_id, $to_solarsystem_id);
 
@@ -95,6 +103,7 @@ final readonly class RecordMapConnectionJumpAction
             'ship_type_id' => $ship_type_id,
             'ship_name' => $ship_name,
             'mass' => $mass,
+            'is_hot' => $hot,
         ]);
 
         /* Pending row: the connection may have been created between our first

@@ -34,6 +34,7 @@ use App\Http\Controllers\MapIgnoredSolarsystemController;
 use App\Http\Controllers\MapImportController;
 use App\Http\Controllers\FleetController;
 use App\Http\Controllers\JumpInController;
+use App\Http\Controllers\ShipProfileController;
 use App\Http\Controllers\MapLayoutController;
 use App\Http\Controllers\MapPreferencesController;
 use App\Http\Controllers\MapRageRollController;
@@ -215,6 +216,10 @@ Route::middleware('auth')->group(function () {
     // Patch 37: the fleet you're in (read with the boss's token) and jump-in plans for the search.
     Route::get('maps/{map}/fleet', [FleetController::class, 'show'])->middleware('throttle:30,1')->name('maps.fleet.show');
     Route::get('maps/{map}/jump-in', [JumpInController::class, 'show'])->middleware('throttle:60,1')->name('maps.jump-in.show');
+    Route::get('maps/{map}/ship-profiles', [ShipProfileController::class, 'index'])->name('maps.ship-profiles.index');
+    Route::put('maps/{map}/ship-profiles', [ShipProfileController::class, 'update'])->name('maps.ship-profiles.update');
+    Route::delete('maps/{map}/ship-profiles', [ShipProfileController::class, 'destroy'])->name('maps.ship-profiles.destroy');
+    Route::post('maps/{map}/ship-profiles/refresh', [ShipProfileController::class, 'refresh'])->middleware('throttle:20,1')->name('maps.ship-profiles.refresh');
 
     Route::put('maps/{map}/bookmark-format', [MapBookmarkFormatController::class, 'update'])->name('maps.bookmark-format.update');
 });

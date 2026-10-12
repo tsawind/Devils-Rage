@@ -16,6 +16,8 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 use NicolasKion\Esi\DTO\FleetInfo;
 use NicolasKion\Esi\DTO\FleetMember;
+use NicolasKion\Esi\DTO\FleetSquad;
+use NicolasKion\Esi\DTO\FleetWing;
 use NicolasKion\Esi\DTO\Name;
 use NicolasKion\Esi\Enums\EsiScope;
 use NicolasKion\Esi\Esi;
@@ -104,6 +106,8 @@ final class FleetController extends Controller
         $types = Type::query()->with('group')->whereIn('id', array_unique(array_map(fn (FleetMember $member): int => $member->ship_type_id, $members)))->get()->keyBy('id');
         $systems = Solarsystem::query()->whereIn('id', array_unique(array_map(fn (FleetMember $member): int => $member->solar_system_id, $members)))->pluck('name', 'id');
         $names = $this->names(array_map(fn (FleetMember $member): int => $member->character_id, $members));
+        // Patch 37: one person = one crew: their SeAT main, else their mapper account, else themselves.
+        $known = Character::query()->whereIn('id', array_map(fn (FleetMember $member): int => $member->character_id, $members))->get(['id', 'user_id', 'seat_main_name'])->keyBy('id');
 
         $rows = [];
         foreach ($members as $member) {
@@ -121,10 +125,62 @@ final class FleetController extends Controller
                 'capital' => $mass >= self::CAPITAL_MASS,
                 'solarsystem_id' => $member->solar_system_id,
                 'solarsystem' => $systems[$member->solar_system_id] ?? null,
+                'wing_id' => $member->wing_id,
+                'squad_id' => $member->squad_id,
+                'role' => $member->role,
+                'owner' => $this->ownerOf($known->get($member->character_id), $names[$member->character_id] ?? (string) $member->character_id),
             ];
         }
 
-        return ['members' => $rows, 'updated_at' => now()->toISOString()];
+        return ['members' => $rows, 'wings' => $this->wings($boss, $fleetId, $esi), 'updated_at' => now()->toISOString()];
+    }
+
+    private function ownerOf(?Character $character, string $name): string
+    {
+        if ($character instanceof Character && filled($character->seat_main_name)) {
+            return (string) $character->seat_main_name;
+        }
+        if ($character instanceof Character && $character->user_id !== null) {
+            $first = Character::query()->where('user_id', $character->user_id)->orderBy('id')->value('name');
+
+            return is_string($first) ? $first : $name;
+        }
+
+        return $name;
+    }
+
+    /**
+     * Wing and squad names (read with the boss's token too).
+     *
+     * @return list<array{id: int, name: string, squads: list<array{id: int, name: string}>}>
+     */
+    private function wings(Character $boss, int $fleetId, Esi $esi): array
+    {
+        try {
+            $result = $esi->getFleetWings($boss, $fleetId);
+        } catch (Throwable) {
+            return [];
+        }
+        if ($result->failed() || ! is_array($result->data)) {
+            return [];
+        }
+
+        $wings = [];
+        foreach ($result->data as $wing) {
+            if (! $wing instanceof FleetWing) {
+                continue;
+            }
+            $wings[] = [
+                'id' => $wing->id,
+                'name' => $wing->name,
+                'squads' => array_values(array_map(
+                    fn (FleetSquad $squad): array => ['id' => $squad->id, 'name' => $squad->name],
+                    array_filter($wing->squads, fn (mixed $squad): bool => $squad instanceof FleetSquad),
+                )),
+            ];
+        }
+
+        return $wings;
     }
 
     /**

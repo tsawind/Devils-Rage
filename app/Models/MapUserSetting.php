@@ -26,6 +26,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $route_use_evescout
  * @property bool $route_use_wormholes
  * @property bool $route_use_frigate_holes
+ * @property bool $jumping_hot
  * @property string|MassStatus $route_allow_mass_status
  * @property string|RoutePreference $route_preference
  * @property int $security_penalty
@@ -110,6 +111,7 @@ final class MapUserSetting extends Model
             'route_use_evescout' => 'boolean',
             'route_use_wormholes' => 'boolean',
             'route_use_frigate_holes' => 'boolean',
+            'jumping_hot' => 'boolean',
             'introduction_confirmed_at' => 'immutable_datetime',
             'prompt_for_signature_enabled' => 'boolean',
             'preselect_signature_enabled' => 'boolean',

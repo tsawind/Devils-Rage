@@ -1,0 +1,166 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers;
+
+use App\Models\Character;
+use App\Models\EsiToken;
+use App\Models\Map;
+use App\Models\ShipProfile;
+use App\Models\Type;
+use App\Services\Seat\SeatFits;
+use App\Support\Actor;
+use App\Support\ShipMass;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Gate;
+use NicolasKion\Esi\DTO\Ship;
+use NicolasKion\Esi\Enums\EsiScope;
+use NicolasKion\Esi\Esi;
+use Throwable;
+
+/**
+ * Patch 37: ship profiles: each pilot's hull with its real cold / hot jump mass. Read from
+ * the fit SeAT knows (Higgs, plates, prop mod), or typed in (then SeAT never overwrites it
+ * until it's removed). Shared with the corp; used by the Fleet window, the rolling plans and
+ * the jump log.
+ */
+final class ShipProfileController extends Controller
+{
+    public function index(Request $request, Map $map): JsonResponse
+    {
+        Gate::authorize('view', $map);
+        $validated = $request->validate(['character_ids' => ['required', 'array', 'max:200'], 'character_ids.*' => ['integer']]);
+
+        return response()->json(['profiles' => $this->profiles(array_map(intval(...), $validated['character_ids']))]);
+    }
+
+    public function update(Request $request, Map $map): JsonResponse
+    {
+        Gate::authorize('update', $map);
+        $validated = $request->validate([
+            'character_id' => ['required', 'integer'],
+            'ship_type_id' => ['required', 'integer', 'exists:types,id'],
+            'cold_mass' => ['required', 'integer', 'min:0', 'max:3000000000000'],
+            'hot_mass' => ['required', 'integer', 'min:0', 'max:3000000000000', 'gte:cold_mass'],
+            'note' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        ShipProfile::query()->updateOrCreate(
+            ['character_id' => $validated['character_id'], 'ship_type_id' => $validated['ship_type_id']],
+            [
+                'cold_mass' => $validated['cold_mass'],
+                'hot_mass' => $validated['hot_mass'],
+                'note' => $validated['note'] ?? null,
+                'source' => 'manual',
+                'updated_by_name' => Actor::name(),
+            ],
+        );
+
+        return response()->json(['profiles' => $this->profiles([(int) $validated['character_id']])]);
+    }
+
+    public function destroy(Request $request, Map $map): JsonResponse
+    {
+        Gate::authorize('update', $map);
+        $validated = $request->validate(['character_id' => ['required', 'integer'], 'ship_type_id' => ['required', 'integer']]);
+
+        ShipProfile::query()->where('character_id', $validated['character_id'])->where('ship_type_id', $validated['ship_type_id'])->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Read the fits SeAT knows for these pilots' current hulls (an hour at most per pilot).
+     */
+    public function refresh(Request $request, Map $map, SeatFits $seatFits, Esi $esi): JsonResponse
+    {
+        Gate::authorize('view', $map);
+        $validated = $request->validate([
+            'members' => ['required', 'array', 'max:100'],
+            'members.*.character_id' => ['required', 'integer'],
+            'members.*.ship_type_id' => ['required', 'integer'],
+        ]);
+
+        $ids = [];
+        foreach ($validated['members'] as $member) {
+            $characterId = (int) $member['character_id'];
+            $shipTypeId = (int) $member['ship_type_id'];
+            $ids[] = $characterId;
+            $existing = ShipProfile::query()->where('character_id', $characterId)->where('ship_type_id', $shipTypeId)->first();
+            if ($existing instanceof ShipProfile && $existing->source === 'manual') {
+                continue;
+            }
+            if (! Type::query()->whereKey($shipTypeId)->exists()) {
+                continue;
+            }
+
+            Cache::remember(sprintf('ship-profile-read:%d:%d', $characterId, $shipTypeId), now()->addHour(), function () use ($characterId, $shipTypeId, $seatFits, $esi): bool {
+                $fit = $seatFits->fitFor($characterId, $shipTypeId, $this->shipItemId($characterId, $shipTypeId, $esi));
+                $masses = $fit === null ? ShipMass::bareHull($shipTypeId) : ShipMass::fromFit($shipTypeId, $fit['higgs'], $fit['plate_mass'], $fit['prop_mass']);
+                ShipProfile::query()->updateOrCreate(
+                    ['character_id' => $characterId, 'ship_type_id' => $shipTypeId],
+                    [
+                        'cold_mass' => $masses['cold'],
+                        'hot_mass' => $masses['hot'],
+                        'higgs' => $fit['higgs'] ?? false,
+                        'plates' => $fit['plates'] ?? 0,
+                        'prop_mass' => (int) round($fit['prop_mass'] ?? 0),
+                        'source' => $fit === null ? 'hull' : 'seat',
+                        'fitted_at' => $fit === null ? null : now(),
+                    ],
+                );
+
+                return true;
+            });
+        }
+
+        return response()->json(['profiles' => $this->profiles($ids)]);
+    }
+
+    /** The exact ship a character sits in, when it's in the mapper with the ship permission. */
+    private function shipItemId(int $characterId, int $shipTypeId, Esi $esi): ?int
+    {
+        $character = Character::query()->find($characterId);
+        if (! $character instanceof Character || ! $character->getEsiTokenWithScope(EsiScope::ReadShip) instanceof EsiToken) {
+            return null;
+        }
+        try {
+            $result = $esi->getShip($character);
+        } catch (Throwable) {
+            return null;
+        }
+
+        return $result->data instanceof Ship && $result->data->ship_type_id === $shipTypeId ? $result->data->ship_item_id : null;
+    }
+
+    /**
+     * @param  list<int>  $characterIds
+     * @return list<array<string, mixed>>
+     */
+    private function profiles(array $characterIds): array
+    {
+        return ShipProfile::query()
+            ->with('shipType:id,name')
+            ->whereIn('character_id', $characterIds)
+            ->get()
+            ->map(fn (ShipProfile $profile): array => [
+                'character_id' => $profile->character_id,
+                'ship_type_id' => $profile->ship_type_id,
+                'ship' => $profile->shipType?->name,
+                'cold_mass' => $profile->cold_mass,
+                'hot_mass' => $profile->hot_mass,
+                'higgs' => $profile->higgs,
+                'plates' => $profile->plates,
+                'prop_mass' => $profile->prop_mass,
+                'source' => $profile->source,
+                'note' => $profile->note,
+                'updated_by_name' => $profile->updated_by_name,
+                'fitted_at' => $profile->fitted_at?->toISOString(),
+            ])
+            ->values()
+            ->all();
+    }
+}

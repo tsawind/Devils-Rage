@@ -306,6 +306,8 @@ export type TConnectionJump = {
     ship_name: string | null;
     mass: number;
     is_manual: boolean;
+    /** Patch 37: logged while the pilot's JUMPING HOT switch was on. */
+    is_hot?: boolean;
     from_solarsystem_id: number;
     to_solarsystem_id: number;
     created_at: string;
