@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Models\MapConnection;
+use App\Support\MassSessions;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Throwable;
@@ -47,6 +48,8 @@ final class MapConnectionResource extends JsonResource
             'mass_status_from_log' => (bool) $this->mass_status_from_log,
             'should_have_rolled' => (bool) $this->should_have_rolled,
             'from_memory' => (bool) ($this->resource->getAttributes()['from_memory'] ?? false),
+            // Patch 37: "⚖ Tsawind is massing this" on the pill.
+            'mass_session' => MassSessions::forConnection((int) $this->map_id, (int) $this->id),
             'jumps_count' => $this->whenHas('jumps_count', fn (int|string|null $count): int => (int) $count, 0),
             'jumps' => $this->whenLoaded('jumps', fn () => $this->jumps->toResourceCollection(MapConnectionJumpResource::class)),
             'created_at' => $this->created_at,

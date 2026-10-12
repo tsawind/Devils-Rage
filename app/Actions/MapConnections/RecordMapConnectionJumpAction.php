@@ -13,6 +13,7 @@ use App\Models\MapSolarsystem;
 use App\Models\MapUserSetting;
 use App\Models\ShipProfile;
 use App\Models\Solarsystem;
+use App\Support\MassSessions;
 use App\Models\Type;
 use App\Utilities\StargatePairDetector;
 use Illuminate\Database\Eloquent\Builder;
@@ -95,6 +96,14 @@ final readonly class RecordMapConnectionJumpAction
 
         if (! $connection instanceof MapConnection && ! $this->originIsOnMap($map->id, $from_solarsystem_id)) {
             return;
+        }
+
+        // Patch 37: a running mass plan: this jump logs the plan's mass for this pilot's step.
+        if ($connection instanceof MapConnection) {
+            $planned = MassSessions::followPlan($connection, $character_id, $from_solarsystem_id);
+            if ($planned !== null && $planned > 0) {
+                $mass = $planned;
+            }
         }
 
         $jump = MapConnectionJump::query()->create([

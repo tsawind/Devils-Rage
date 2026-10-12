@@ -34,6 +34,8 @@ use App\Http\Controllers\MapIgnoredSolarsystemController;
 use App\Http\Controllers\MapImportController;
 use App\Http\Controllers\FleetController;
 use App\Http\Controllers\JumpInController;
+use App\Http\Controllers\MassSessionController;
+use App\Http\Controllers\RollingCrewController;
 use App\Http\Controllers\ShipProfileController;
 use App\Http\Controllers\MapLayoutController;
 use App\Http\Controllers\MapPreferencesController;
@@ -220,6 +222,17 @@ Route::middleware('auth')->group(function () {
     Route::put('maps/{map}/ship-profiles', [ShipProfileController::class, 'update'])->name('maps.ship-profiles.update');
     Route::delete('maps/{map}/ship-profiles', [ShipProfileController::class, 'destroy'])->name('maps.ship-profiles.destroy');
     Route::post('maps/{map}/ship-profiles/refresh', [ShipProfileController::class, 'refresh'])->middleware('throttle:20,1')->name('maps.ship-profiles.refresh');
+
+    // Patch 37: "⚖ Adding mass…" sessions, what people saw on holes, and rolling crews.
+    Route::get('maps/{map}/mass-sessions', [MassSessionController::class, 'index'])->name('maps.mass-sessions.index');
+    Route::post('maps/{map}/mass-sessions', [MassSessionController::class, 'store'])->name('maps.mass-sessions.store');
+    Route::patch('maps/{map}/mass-sessions/{massSession}', [MassSessionController::class, 'update'])->name('maps.mass-sessions.update');
+    Route::delete('maps/{map}/mass-sessions/{massSession}', [MassSessionController::class, 'destroy'])->name('maps.mass-sessions.destroy');
+    Route::post('maps/{map}/mass-sessions/{massSession}/observe', [MassSessionController::class, 'observe'])->name('maps.mass-sessions.observe');
+    Route::post('maps/{map}/rolling-crews', [RollingCrewController::class, 'store'])->name('maps.rolling-crews.store');
+    Route::put('maps/{map}/rolling-crews/{rollingCrew}', [RollingCrewController::class, 'update'])->name('maps.rolling-crews.update');
+    Route::delete('maps/{map}/rolling-crews/{rollingCrew}', [RollingCrewController::class, 'destroy'])->name('maps.rolling-crews.destroy');
+    Route::get('maps/{map}/rolling-crews/lookup', [RollingCrewController::class, 'lookup'])->name('maps.rolling-crews.lookup');
 
     Route::put('maps/{map}/bookmark-format', [MapBookmarkFormatController::class, 'update'])->name('maps.bookmark-format.update');
 });

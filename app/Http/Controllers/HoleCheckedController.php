@@ -24,6 +24,9 @@ final class HoleCheckedController extends Controller
         Gate::authorize('update', $mapConnection);
 
         $mapConnection->forceFill(['checked_at' => now(), 'checked_by_name' => Actor::name(), 'checked_note' => 'checked'])->save();
+        // Patch 37: "still this status at this mass" narrows the hole's real size too.
+        $status = $mapConnection->mass_status instanceof \BackedEnum ? (string) $mapConnection->mass_status->value : (string) ($mapConnection->mass_status ?? 'fresh');
+        \App\Models\MassObservation::note($mapConnection->id, $status, Actor::name());
 
         $this->mapBroadcaster->connectionsUpserted($mapConnection->map_id, MapConnection::query()
             ->whereKey($mapConnection->id)

@@ -9,10 +9,12 @@ use App\Enums\LifetimeStatus;
 use App\Enums\MassStatus;
 use App\Enums\ShipSize;
 use App\Models\MapConnection;
+use App\Models\MassObservation;
 use App\Models\Signature;
 use App\Models\Wormhole;
 use App\Support\Actor;
 use App\Support\Broadcasting\MapBroadcaster;
+use BackedEnum;
 use Illuminate\Support\Facades\DB;
 use Spatie\LaravelData\Optional;
 use Throwable;
@@ -67,6 +69,12 @@ final readonly class UpdateMapConnectionAction
             }
 
             $mapConnection->update($data_array);
+
+            // Patch 37: what someone saw, with the mass logged so far (narrows the hole's real size).
+            if ($actor !== null && ! $data->mass_status instanceof Optional && $data->mass_status !== null) {
+                $status = $data->mass_status instanceof BackedEnum ? (string) $data->mass_status->value : (string) $data->mass_status;
+                MassObservation::note($mapConnection->id, $status, $actor);
+            }
 
             $this->syncMassAndLifetime($mapConnection, $data);
 
