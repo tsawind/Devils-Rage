@@ -1,0 +1,27 @@
+{
+    "name": "devilsrage/seat-devilsrage",
+    "description": "The Devil's Rage additions to SeAT: corp fit library import (and later: accounts, launch groups, skill plans).",
+    "type": "library",
+    "license": "GPL-2.0-or-later",
+    "version": "1.0.0",
+    "require": {
+        "php": "^8.2",
+        "eveseat/web": "^5.0",
+        "eveseat/eveapi": "^5.0",
+        "eveseat/services": "^5.0",
+        "cryptatech/seat-fitting": "^5.0.11"
+    },
+    "autoload": {
+        "psr-4": {
+            "DevilsRage\\Seat\\": "src/",
+            "DevilsRage\\Seat\\Seeders\\": "src/database/seeders/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "DevilsRage\\Seat\\DevilsRageServiceProvider"
+            ]
+        }
+    }
+}

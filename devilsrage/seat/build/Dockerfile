@@ -15,6 +15,42 @@ RUN composer require warlof/seat-connector:3.1.2 warlof/seat-discord-connector:6
  && composer update warlof/seat-connector warlof/seat-discord-connector \
         --no-scripts --no-dev --no-ansi --no-progress
 
+# Batch 1 plugins (pinned) + our own plugin (fit library import):
+#   seat-fitting (fits, doctrines, "who can fly it"), prices-core + Fuzzwork prices,
+#   seat-inventory (doctrine stock), seat-srp, seat-discord-pings.
+COPY --chown=seat:seat plugin devilsrage-plugin
+RUN composer config repositories.devilsrage \
+        '{"type": "path", "url": "devilsrage-plugin", "options": {"symlink": false}}' \
+ && composer require \
+        cryptatech/seat-fitting:5.0.11 \
+        recursivetree/seat-prices-core:1.0.1 \
+        cryptatech/seat-prices-fuzzwork:1.0.1 \
+        recursivetree/seat-inventory:2.1.7 \
+        cryptatech/seat-srp:5.0.7 \
+        mattfalahe/seat-discord-pings:2.0.1 \
+        devilsrage/seat-devilsrage:1.0.0 \
+        --no-install --no-ansi \
+ && composer update \
+        cryptatech/seat-fitting recursivetree/seat-prices-core cryptatech/seat-prices-fuzzwork \
+        recursivetree/seat-inventory cryptatech/seat-srp mattfalahe/seat-discord-pings \
+        devilsrage/seat-devilsrage \
+        --no-scripts --no-dev --no-ansi --no-progress
+
+# Batch 2 plugins, only when DR_BATCH2=1 in ~/seat-docker/.env (watch memory first):
+#   seat-calendar (ops calendar, Discord events), structure-manager (fuel, structure
+#   alerts), seat-package-notifications (tells you when plugins are outdated).
+ARG DR_BATCH2=0
+RUN if [ "$DR_BATCH2" = "1" ]; then \
+        composer require \
+            hermesdj/seat-calendar:1.1.8 \
+            mattfalahe/structure-manager:2.0.4 \
+            recursivetree/seat-package-notifications:1.0.5 \
+            --no-install --no-ansi \
+     && composer update \
+            hermesdj/seat-calendar mattfalahe/structure-manager recursivetree/seat-package-notifications \
+            --no-scripts --no-dev --no-ansi --no-progress; \
+    fi
+
 # Replace one file, but only if the original is exactly the reviewed 3.1.2 version.
 COPY --chown=seat:seat ConnectorPolicyManagement.php /tmp/ConnectorPolicyManagement.php
 RUN F=vendor/warlof/seat-connector/src/Traits/ConnectorPolicyManagement.php \
