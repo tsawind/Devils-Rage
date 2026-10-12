@@ -64,7 +64,7 @@ final class SeatFits
         $propMass = 0.0;
         foreach ($fitted as $asset) {
             $type = $types->get($asset['type_id']);
-            $name = (string) ($type?->name ?? '');
+            $name = $type instanceof Type ? (string) $type->name : '';
             if (str_contains($name, 'Higgs Anchor')) {
                 $higgs = true;
 

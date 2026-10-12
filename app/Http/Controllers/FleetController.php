@@ -79,8 +79,10 @@ final class FleetController extends Controller
             } catch (Throwable) {
                 continue;
             }
-            if ($result->wasSuccessful() && $result->data instanceof FleetInfo) {
-                return $result->data;
+            /** @var mixed $data */
+            $data = $result->data;
+            if ($result->wasSuccessful() && $data instanceof FleetInfo) {
+                return $data;
             }
         }
 
@@ -97,12 +99,14 @@ final class FleetController extends Controller
         } catch (Throwable) {
             return null;
         }
-        if ($result->failed() || ! is_array($result->data)) {
+        /** @var mixed $data */
+        $data = $result->data;
+        if ($result->failed() || ! is_array($data)) {
             return null;
         }
 
         /** @var list<FleetMember> $members */
-        $members = array_values(array_filter($result->data, fn (mixed $member): bool => $member instanceof FleetMember));
+        $members = array_values(array_filter($data, fn (mixed $member): bool => $member instanceof FleetMember));
         $types = Type::query()->with('group')->whereIn('id', array_unique(array_map(fn (FleetMember $member): int => $member->ship_type_id, $members)))->get()->keyBy('id');
         $systems = Solarsystem::query()->whereIn('id', array_unique(array_map(fn (FleetMember $member): int => $member->solar_system_id, $members)))->pluck('name', 'id');
         $names = $this->names(array_map(fn (FleetMember $member): int => $member->character_id, $members));
@@ -112,7 +116,7 @@ final class FleetController extends Controller
         $rows = [];
         foreach ($members as $member) {
             $type = $types->get($member->ship_type_id);
-            $mass = (int) round((float) ($type?->mass ?? 0));
+            $mass = (int) round((float) ($type instanceof Type ? ($type->mass ?? 0) : 0));
             $rows[] = [
                 'character_id' => $member->character_id,
                 'name' => $names[$member->character_id] ?? sprintf('#%d', $member->character_id),
@@ -161,12 +165,14 @@ final class FleetController extends Controller
         } catch (Throwable) {
             return [];
         }
-        if ($result->failed() || ! is_array($result->data)) {
+        /** @var mixed $data */
+        $data = $result->data;
+        if ($result->failed() || ! is_array($data)) {
             return [];
         }
 
         $wings = [];
-        foreach ($result->data as $wing) {
+        foreach ($data as $wing) {
             if (! $wing instanceof FleetWing) {
                 continue;
             }
@@ -175,7 +181,7 @@ final class FleetController extends Controller
                 'name' => $wing->name,
                 'squads' => array_values(array_map(
                     fn (FleetSquad $squad): array => ['id' => $squad->id, 'name' => $squad->name],
-                    array_filter($wing->squads, fn (mixed $squad): bool => $squad instanceof FleetSquad),
+                    array_filter((array) $wing->squads, fn (mixed $squad): bool => $squad instanceof FleetSquad),
                 )),
             ];
         }
@@ -204,7 +210,9 @@ final class FleetController extends Controller
         if ($missing !== []) {
             try {
                 $result = app(Esi::class)->getNames(array_values($missing));
-                foreach (is_array($result->data) ? $result->data : [] as $name) {
+                /** @var mixed $data */
+                $data = $result->data;
+                foreach (is_array($data) ? $data : [] as $name) {
                     if ($name instanceof Name) {
                         $known[$name->id] = $name->name;
                         Cache::put(sprintf('character-name:%d', $name->id), $name->name, now()->addDay());

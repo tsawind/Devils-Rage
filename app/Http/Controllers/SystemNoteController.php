@@ -30,13 +30,13 @@ final class SystemNoteController extends Controller
         ]);
 
         $character = $user->active_character;
-        $who = $character?->seat_main_name ?? $character?->name ?? $user->name;
+        $who = $character instanceof \App\Models\Character ? ($character->seat_main_name ?? $character->name) : $user->name;
         $stamp = sprintf('**%s EVE · %s:**', now('UTC')->format('Y-m-d H:i'), $who);
         $text = mb_trim(str_replace("\r\n", "\n", (string) $validated['text']));
 
         DB::transaction(function () use ($mapSolarsystem, $stamp, $text, $action): void {
             $details = MapSolarsystemDetails::query()->whereKey($mapSolarsystem->map_solarsystem_details_id)->lockForUpdate()->first();
-            $existing = mb_rtrim((string) ($details?->notes ?? ''));
+            $existing = mb_rtrim($details instanceof MapSolarsystemDetails ? (string) $details->notes : '');
             $action->handle($mapSolarsystem, ['notes' => ($existing === '' ? '' : $existing."\n\n").$stamp.' '.$text]);
         });
 

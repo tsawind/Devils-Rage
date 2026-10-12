@@ -144,7 +144,8 @@ it('keeps the system someone else put back, instead of adding it twice', functio
     $token = (string) Str::uuid();
 
     actingAs($user)->delete(route('map-solarsystems.destroy', $alpha), ['undo_token' => $token])->assertRedirect();
-    $again = placeMapSolarsystem($map, 30004102, 700, 100);
+    // Patch 36: putting it back on the map brings the hidden placement back (no second row).
+    $again = app(App\Actions\MapSolarsystem\StoreMapSolarsystemAction::class)->handle($map, ['solarsystem_id' => 30004102, 'position_x' => 700, 'position_y' => 100]);
 
     actingAs($user)->post(route('map-undo.store', $token))->assertRedirect();
 

@@ -69,10 +69,10 @@ final class MapUserSettingResource extends JsonResource
         $disk = Storage::disk('public');
         $own = is_string($this->background_image_path) && $this->background_image_path !== '' ? $disk->url($this->background_image_path) : null;
         $ownMode = $this->background_image_mode instanceof MapBackgroundMode ? $this->background_image_mode->value : ($this->background_image_mode ?? MapBackgroundMode::Grid->value);
-        $map = $this->map_id !== null ? Map::query()->find($this->map_id, ['id', 'background_image_path', 'background_image_mode']) : null;
+        $map = Map::query()->find($this->map_id, ['id', 'background_image_path', 'background_image_mode']);
         $mapPath = $map?->background_image_path;
         $mapUrl = is_string($mapPath) && $mapPath !== '' ? $disk->url($mapPath) : null;
-        $mapMode = $map?->background_image_mode ?? MapBackgroundMode::Viewport->value;
+        $mapMode = $map instanceof Map ? ($map->background_image_mode ?? MapBackgroundMode::Viewport->value) : MapBackgroundMode::Viewport->value;
         $choice = in_array($this->background_choice, ['map', 'none', 'own'], true) ? $this->background_choice : ($own !== null ? 'own' : 'map');
 
         return [

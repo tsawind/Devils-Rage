@@ -13,7 +13,7 @@ use App\Models\User;
 
 use function Pest\Laravel\actingAs;
 
-it('hard-deletes the placement and cascades its connections and signatures, but keeps the details', function () {
+it('patch 36: deleting hides the placement (chain memory), removes its connections, keeps its signatures and details', function () {
     $map = Map::factory()->create();
     $originId = makeSolarsystem(30009601);
     $targetId = makeSolarsystem(30009602);
@@ -38,12 +38,13 @@ it('hard-deletes the placement and cascades its connections and signatures, but 
     app(DeleteMapSolarsystemAction::class)->handle($target);
 
     expect(MapSolarsystem::find($target->id))->toBeNull()
+        ->and(MapSolarsystem::withHidden()->find($target->id)?->isHidden())->toBeTrue()
         ->and(MapConnection::find($connection->id))->toBeNull()
-        ->and(Signature::find($signature->id))->toBeNull()
+        ->and(Signature::find($signature->id))->not->toBeNull()
         ->and(MapSolarsystemDetails::find($detailsId))->not->toBeNull();
 });
 
-it('reuses surviving details and creates a fresh placement when a removed system is re-added', function () {
+it('patch 36: a removed system comes back as the same placement with its details', function () {
     $map = Map::factory()->create();
     $solarsystemId = makeSolarsystem(30009603);
 
@@ -65,7 +66,7 @@ it('reuses surviving details and creates a fresh placement when a removed system
         'position_y' => 200,
     ]);
 
-    expect($readded->id)->not->toBe($placement->id)
+    expect($readded->id)->toBe($placement->id)
         ->and($readded->map_solarsystem_details_id)->toBe($detailsId)
         ->and(MapSolarsystemDetails::find($detailsId)->occupier_alias)->toBe('Some Corp');
 });

@@ -133,7 +133,10 @@ final class ShipProfileController extends Controller
             return null;
         }
 
-        return $result->data instanceof Ship && $result->data->ship_type_id === $shipTypeId ? $result->data->ship_item_id : null;
+        /** @var mixed $data */
+        $data = $result->data;
+
+        return $data instanceof Ship && $data->ship_type_id === $shipTypeId ? $data->ship_item_id : null;
     }
 
     /**

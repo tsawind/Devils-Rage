@@ -45,7 +45,7 @@ final readonly class FillFarSideK162Action
                 continue;
             }
 
-            $class = $this->classOf($typed->mapSolarsystem?->solarsystem);
+            $class = $this->classOf($typed->mapSolarsystem->solarsystem);
             if (! $class instanceof SolarsystemClass) {
                 continue;
             }
@@ -67,9 +67,7 @@ final readonly class FillFarSideK162Action
                     'raw_type_name' => null,
                 ]);
 
-                if ($other->mapSolarsystem !== null) {
-                    $this->mapBroadcaster->signaturesChanged($other->mapSolarsystem);
-                }
+                $this->mapBroadcaster->signaturesChanged($other->mapSolarsystem);
             }
         }
     }
@@ -88,7 +86,7 @@ final readonly class FillFarSideK162Action
             return null;
         }
 
-        return $solarsystem->wormholeSystem?->class ?? SolarsystemClass::fromSecurity((float) $solarsystem->security);
+        return $solarsystem->wormholeSystem instanceof \App\Models\WormholeSystem ? $solarsystem->wormholeSystem->class : SolarsystemClass::fromSecurity((float) $solarsystem->security);
     }
 
     private function k162Leading(SolarsystemClass $class): ?SignatureType

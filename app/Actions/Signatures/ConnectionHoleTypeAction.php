@@ -217,7 +217,7 @@ final readonly class ConnectionHoleTypeAction
     private static function isK162(SignatureType $type): bool
     {
         $signature = $type->signature;
-        $name = $signature instanceof BackedEnum ? (string) $signature->value : (string) ($signature ?? $type->name);
+        $name = $signature instanceof BackedEnum ? (string) $signature->value : $type->name;
 
         return str_starts_with(mb_strtoupper($name), 'K162');
     }

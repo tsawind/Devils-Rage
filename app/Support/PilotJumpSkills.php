@@ -49,13 +49,17 @@ final readonly class PilotJumpSkills
             } catch (Throwable) {
                 return null;
             }
-            if ($result->failed() || ! $result->data instanceof CharacterSkills) {
+            /** @var mixed $data */
+            $data = $result->data;
+            if ($result->failed() || ! $data instanceof CharacterSkills) {
                 return null;
             }
 
             $ids = self::skillIds();
             $byId = [];
-            foreach ($result->data->skills as $skill) {
+            /** @var array<int, mixed> $skills */
+            $skills = $data->skills;
+            foreach ($skills as $skill) {
                 if ($skill instanceof Skill) {
                     $byId[$skill->skill_id] = $skill->active_skill_level;
                 }

@@ -81,8 +81,8 @@ final class MapPresenceController extends Controller
             $character = $user->active_character;
 
             return [
-                'name' => $character?->name ?? (string) $user->name,
-                'main' => $character?->seat_main_name,
+                'name' => $character instanceof \App\Models\Character ? (string) $character->name : (string) $user->name,
+                'main' => $character instanceof \App\Models\Character ? $character->seat_main_name : null,
                 'permission' => $permission->value,
                 'kind' => 'pilot',
             ];

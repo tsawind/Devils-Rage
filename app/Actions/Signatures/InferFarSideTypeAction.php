@@ -49,8 +49,8 @@ final readonly class InferFarSideTypeAction
 
         $farId = $connection->from_map_solarsystem_id === $near->map_solarsystem_id ? $connection->to_map_solarsystem_id : $connection->from_map_solarsystem_id;
         $farSystem = $connection->from_map_solarsystem_id === $near->map_solarsystem_id ? $connection->toMapSolarsystem : $connection->fromMapSolarsystem;
-        $nearClass = self::classOf($near->mapSolarsystem?->solarsystem);
-        $farClass = self::classOf($farSystem?->solarsystem);
+        $nearClass = self::classOf($near->mapSolarsystem->solarsystem);
+        $farClass = self::classOf($farSystem->solarsystem);
         if (! $nearClass instanceof SolarsystemClass || ! $farClass instanceof SolarsystemClass) {
             return;
         }
@@ -94,6 +94,6 @@ final readonly class InferFarSideTypeAction
             return null;
         }
 
-        return $solarsystem->wormholeSystem?->class ?? SolarsystemClass::fromSecurity((float) $solarsystem->security);
+        return $solarsystem->wormholeSystem instanceof \App\Models\WormholeSystem ? $solarsystem->wormholeSystem->class : SolarsystemClass::fromSecurity((float) $solarsystem->security);
     }
 }
