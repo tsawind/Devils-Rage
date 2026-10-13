@@ -3,6 +3,7 @@
 #   bash ~/wormholesystems-containers/wormhole-systems/devilsrage/mapper/deploy.sh
 # Pulls the code, clears old Docker images and build cache (the disk filled up once),
 # stops if there still isn't room, then builds, starts and migrates.
+# SeAT is stopped during the build (RAM) and started again afterwards, even if the build fails.
 set -euo pipefail
 
 STACK="$HOME/wormholesystems-containers"
@@ -25,6 +26,13 @@ if [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; then
     exit 1
 fi
 
+SEAT="$HOME/seat-docker"
+if [ -d "$SEAT" ]; then
+    echo "== Stopping SeAT for the build"
+    (cd "$SEAT" && docker compose stop >/dev/null)
+    trap 'echo "== Starting SeAT"; (cd "$SEAT" && docker compose up -d >/dev/null)' EXIT
+fi
+
 cd "$STACK"
 echo "== Building"
 "${C[@]}" build app
@@ -32,6 +40,7 @@ echo "== Starting"
 "${C[@]}" up -d
 echo "== Migrating"
 "${C[@]}" exec -T app php artisan migrate --force
+"${C[@]}" exec -T scheduler php artisan schedule:clear-cache
 
 docker image prune -f >/dev/null
 echo "== Done. Free disk: $(free_gb) GB"
