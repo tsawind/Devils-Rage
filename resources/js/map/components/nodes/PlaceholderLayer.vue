@@ -340,27 +340,30 @@ const chips = computed(() => {
                     />
                 </template>
                 <!-- Patch 37: click anywhere on the dotted pipe for its details, not just the pill -->
+                <!-- Patch 37: right-click the dotted pipe or its pill: the dotted system's menu -->
                 <path
                     :d="item.path"
                     fill="none"
                     stroke="transparent"
                     stroke-width="18"
+                    :data-placeholder-id="item.signatureId > 0 ? item.signatureId : undefined"
                     class="pointer-events-auto cursor-pointer"
                     @click.stop="(event) => openDetails(event, item.nodeId)"
                     @pointerdown.stop
                 />
                 <!-- Patch 21: every dotted pipe's pill (Static, type, size, mass, EOL); click for details -->
-                <EdgeBadges
-                    v-if="item.pill && item.pill.parts.length"
-                    :indicators="item.pill.parts"
-                    :center="item.pill.center"
-                    :dot="item.pill.dot"
-                    :scale="store.scale.value"
-                    clickable
-                    title="Click for details"
-                    @open="(event) => openDetails(event, item.nodeId)"
-                    @copy="() => copyBookmark(item)"
-                />
+                <g v-if="item.pill && item.pill.parts.length" :data-placeholder-id="item.signatureId > 0 ? item.signatureId : undefined">
+                    <EdgeBadges
+                        :indicators="item.pill.parts"
+                        :center="item.pill.center"
+                        :dot="item.pill.dot"
+                        :scale="store.scale.value"
+                        clickable
+                        title="Click for details"
+                        @open="(event) => openDetails(event, item.nodeId)"
+                        @copy="() => copyBookmark(item)"
+                    />
+                </g>
             </template>
         </svg>
         <Link

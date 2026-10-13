@@ -526,6 +526,7 @@ function getDashArray(): string | undefined {
             :clickable="Boolean(connection)"
             :title="pipeTitle"
             @open="(event) => emit('connectionClick', event)"
+            @menu="(event) => emit('connectionContextMenu', event)"
             @copy="() => store && connection && copyForwardBookmark(store, connection)"
         />
         <!-- Original style draws solid endpoints; the orthogonal style meets the node edge instead. -->

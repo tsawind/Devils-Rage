@@ -23,7 +23,8 @@ type Props = {
 
 const { indicators, center, dot = false, clickable = false, title, scale = 1 } = defineProps<Props>();
 
-const emit = defineEmits<{ (e: 'open', event: MouseEvent): void; (e: 'copy', event: MouseEvent): void }>();
+/** Patch 37: 'menu': right-click on the pill opens the same menu as its pipe (the event goes on to the map's menu). */
+const emit = defineEmits<{ (e: 'open', event: MouseEvent): void; (e: 'copy', event: MouseEvent): void; (e: 'menu', event: MouseEvent): void }>();
 
 /** Patch 37: a click on the green type chip (or a copyable Static) copies the forward bookmark instead of opening the details. */
 function onPartClick(event: MouseEvent, indicator: EdgeIndicator): void {
@@ -43,7 +44,7 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
 </script>
 
 <template>
-    <g v-if="indicators.length && dot" :class="clickable ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'" @click.stop="(event) => emit('open', event)" @pointerdown.stop>
+    <g v-if="indicators.length && dot" :class="clickable ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'" @click.stop="(event) => emit('open', event)" @contextmenu="(event) => emit('menu', event)" @pointerdown.stop>
         <title v-if="title">{{ title }}</title>
         <circle :cx="center.x" :cy="center.y" :r="6 * scale" :fill="dotColor" class="stroke-white dark:stroke-neutral-900" stroke-width="1.5" />
     </g>
@@ -55,6 +56,7 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
         :height="size.height * scale"
         :class="clickable ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'"
         @click.stop="(event) => emit('open', event)"
+        @contextmenu="(event) => emit('menu', event)"
         @pointerdown.stop
     >
         <!-- Patch 21: stacked: size + arrow (and icons), type, Static, EOL -->

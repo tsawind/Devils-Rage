@@ -93,6 +93,16 @@ describe('patch 21: Static and EOL inside the pill', () => {
         await wrapper.find('foreignObject').trigger('click');
         expect(wrapper.emitted('connectionClick')).toHaveLength(1);
     });
+
+    it('patch 37: right-clicking the pill opens the pipe menu', async () => {
+        const wrapper = mount(Edge, { props: { geometry, connection: connection(), scale: 1 } });
+        await wrapper.find('foreignObject').trigger('contextmenu');
+        expect(wrapper.emitted('connectionContextMenu')).toHaveLength(1);
+    });
+
+    it('patch 37: a pipe being massed shows ⚖ and who on its pill', () => {
+        expect(badgeText({ mass_session: { id: 3, by: 'Tsawind Gallente', goal: 'roll' } })).toContain('⚖ Tsawind');
+    });
 });
 
 describe('patch 23: hub-lane pills point up or down', () => {
