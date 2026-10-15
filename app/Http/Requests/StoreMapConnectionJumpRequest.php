@@ -36,7 +36,8 @@ final class StoreMapConnectionJumpRequest extends FormRequest
             'map_connection_id' => ['required', 'integer', 'exists:map_connections,id'],
             'direction' => ['required', Rule::in(['outbound', 'inbound'])],
             'ship_type_id' => ['nullable', 'integer', 'exists:types,id'],
-            'mass' => ['required_without:ship_type_id', 'nullable', 'integer', 'min:0', 'max:100000000000'],
+            // Patch 37: negative takes mass off (a jump logged twice, a wrong guess).
+            'mass' => ['required_without:ship_type_id', 'nullable', 'integer', 'min:-100000000000', 'max:100000000000'],
         ];
     }
 

@@ -92,6 +92,31 @@ it('patch 37: ✓ Checked in game stamps a jumped and an unjumped hole', functio
         ->and($signature->fresh()->checked_by_name)->toBe('WickedWrench');
 });
 
+it('patch 37: ✓ Checked in game restarts the mass math like marking the status again', function () {
+    $map = Map::factory()->create();
+    $connection = holeConnection($map);
+    $connection->forceFill(['mass_status_updated_at' => now()->subHour(), 'mass_status_from_log' => true])->save();
+    actingAs(holeMember($map));
+
+    post(route('map-connections.checked', $connection))->assertRedirect();
+
+    $fresh = $connection->fresh();
+    expect($fresh->mass_status_updated_at->greaterThan(now()->subMinute()))->toBeTrue()
+        ->and($fresh->mass_status_from_log)->toBeFalse()
+        ->and($fresh->mass_status_set_by_name)->toBe('WickedWrench');
+});
+
+it('patch 37: Add mass takes a negative amount off the log', function () {
+    $map = Map::factory()->create();
+    $connection = holeConnection($map);
+    actingAs(holeMember($map));
+
+    post(route('map-connection-jumps.store'), ['map_connection_id' => $connection->id, 'direction' => 'outbound', 'mass' => 300_000_000])->assertRedirect();
+    post(route('map-connection-jumps.store'), ['map_connection_id' => $connection->id, 'direction' => 'outbound', 'mass' => -132_400_000])->assertRedirect();
+
+    expect((int) App\Models\MapConnectionJump::query()->where('map_connection_id', $connection->id)->sum('mass'))->toBe(167_600_000);
+});
+
 it('patch 37: stores each character\'s main from SeAT', function () {
     config(['services.seat.url' => 'https://seat.test', 'services.seat.token' => 'secret']);
     Cache::flush();

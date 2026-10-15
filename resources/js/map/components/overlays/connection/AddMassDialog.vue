@@ -24,8 +24,9 @@ const open = computed({
 
 const kg = computed(() => parseMillionKg(value.value));
 const preview = computed(() => {
-    if (value.value.trim() === '') return 'Type the mass in million kg, e.g. 1200';
-    return kg.value === null ? 'Enter a number of million kg (up to 100,000)' : `= ${describeKg(kg.value)} · Enter to add`;
+    if (value.value.trim() === '') return 'Type the mass in million kg, e.g. 1200 (or -132.4 to take it off)';
+    if (kg.value === null) return 'Enter a number of million kg (up to ±100,000)';
+    return kg.value < 0 ? `= takes off ${describeKg(-kg.value)} · Enter to remove` : `= ${describeKg(kg.value)} · Enter to add`;
 });
 
 watch(open, (isOpen) => {
@@ -45,7 +46,7 @@ function submit(): void {
         target.connectionId,
         { direction: 'outbound', mass },
         {
-            onSuccess: () => toast.success(`Added ${describeKg(mass)}`, { description: target.label }),
+            onSuccess: () => toast.success(mass < 0 ? `Took off ${describeKg(-mass)}` : `Added ${describeKg(mass)}`, { description: target.label }),
             onError: (errors) => toast.error(Object.values(errors)[0] ?? 'Could not add the mass.'),
         },
     );
@@ -62,7 +63,7 @@ function submit(): void {
                 </DialogHeader>
                 <div class="grid gap-1.5 px-6 py-4">
                     <div class="flex items-center gap-2">
-                        <Input ref="input_ref" v-model="value" inputmode="decimal" placeholder="1200" class="w-32 font-mono" aria-label="Mass in million kg" />
+                        <Input ref="input_ref" v-model="value" inputmode="text" placeholder="1200" class="w-32 font-mono" aria-label="Mass in million kg" />
                         <span class="text-sm text-muted-foreground">million kg</span>
                     </div>
                     <p class="text-xs" :class="kg === null && value.trim() !== '' ? 'text-destructive' : 'text-muted-foreground'">{{ preview }}</p>

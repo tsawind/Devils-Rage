@@ -32,7 +32,7 @@ final class UpdateMapConnectionJumpRequest extends FormRequest
         return [
             'direction' => ['sometimes', Rule::in(['outbound', 'inbound'])],
             'ship_type_id' => ['nullable', 'sometimes', 'integer', 'exists:types,id'],
-            'mass' => ['sometimes', 'integer', 'min:0', 'max:100000000000'],
+            'mass' => ['sometimes', 'integer', 'min:-100000000000', 'max:100000000000'],
         ];
     }
 }
