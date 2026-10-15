@@ -121,7 +121,7 @@ it('patch 37: the jump log lists every jump with its HOT / SEMI / COLD / thread 
     $map = Map::factory()->create();
     $connection = holeConnection($map);
     $character = App\Models\Character::factory()->create();
-    $ship = App\Models\Type::query()->create(['id' => 23757, 'name' => 'Archon', 'group_id' => 547, 'mass' => 1_340_000_000])->id;
+    $ship = App\Models\Type::query()->create(['id' => 23757, 'name' => 'Archon', 'group_id' => 27, 'mass' => 1_340_000_000])->id;
     App\Models\ShipProfile::query()->create([
         'character_id' => $character->id, 'ship_type_id' => $ship, 'cold_mass' => 1_340_000_000, 'hot_mass' => 1_840_000_000,
         'higgs' => false, 'plates' => 0, 'entanglers' => 0, 'prop_mass' => 500_000_000, 'source' => 'manual',
