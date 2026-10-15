@@ -1,5 +1,6 @@
 import { isWormholeClass } from '@/const/solarsystemClasses';
 import { displayAlias, orderStatics, planSignatureAliases, staticIndexOf, staticSlotAlias, staticSlotAliasAt, suggestAlias, type TAliasScheme } from '@/lib/alias';
+import { connectionFlag } from '@/lib/chainNumbering';
 import { chainAliases } from '@/lib/combat';
 import { signatureTypeById } from '@/const/signatures';
 import { isK162Frigate, k162RangeLabel } from '@/lib/k162';
@@ -140,6 +141,9 @@ export function buildPlaceholders(
             // Patch 20: a grouped K162 shows its range where the "?" was ("C4/5").
             const type = hole.signature_type_id ? (signatureTypeById.get(hole.signature_type_id) ?? null) : null;
             const destination = k162RangeLabel(type) ?? holeDestination(hole.target_class);
+            // Patch 37: s / w / k on the dotted box too (as on its bookmark).
+            const typeName = hole.wormhole ?? type?.name ?? null;
+            const marker = (typeName ?? '').toUpperCase().startsWith('K162') ? 'k' : connectionFlag({ is_static: hole.is_static, is_wandering: hole.is_wandering, wormholeName: typeName });
             result.push({
                 nodeId: placeholderNodeId(hole.id),
                 signatureId: hole.id,
@@ -147,9 +151,9 @@ export function buildPlaceholders(
                 color: system.combat_color ?? null,
                 alias,
                 label: alias ? displayAlias(alias, formats.bookmark_alias_scheme) : limbo ? '' : '—',
-                detail: `${(hole.signature_id ?? '???').slice(0, 3)} · ${destination}${hole.is_static ? 's' : ''}`,
+                detail: `${(hole.signature_id ?? '???').slice(0, 3)} · ${destination}${marker}`,
                 sigCode: hole.signature_id ? hole.signature_id.slice(0, 3) : null,
-                destination: `${destination}${hole.is_static ? 's' : ''}`,
+                destination: `${destination}${marker}`,
                 targetClass: hole.target_class ?? null,
                 // Patch 20: a K162 frigate is always frigate-thin.
                 shipSize: isK162Frigate(type) ? 'frigate' : (hole.ship_size ?? null),

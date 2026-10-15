@@ -27,6 +27,42 @@ export function connectionFlag(flags: TChainFlags): TConnectionFlag {
     return '';
 }
 
+/** A system's static hole types, when known. */
+export function staticNames(system: { solarsystem?: object | null }): string[] | null {
+    const statics = (system.solarsystem as { statics?: { name: string }[] | null } | null | undefined)?.statics;
+    return statics?.length ? statics.map((hole) => hole.name) : null;
+}
+
+/**
+ * Patch 37: how a hole spawned, when we know: "s" (marked static), "w" (marked wandering,
+ * or a real type that isn't one of its system's statics), else "".
+ */
+export function spawnFlag(hole: TChainFlags & { staticNames?: readonly string[] | null }): 's' | 'w' | '' {
+    const name = (hole.wormholeName ?? '').trim().toUpperCase();
+    if (!name || name.startsWith('K162')) return '';
+    if (hole.is_static) return 's';
+    if (hole.is_wandering) return 'w';
+    const statics = (hole.staticNames ?? []).map((staticName) => staticName.trim().toUpperCase());
+    return statics.length && !statics.includes(name) ? 'w' : '';
+}
+
+/**
+ * Patch 37: the marker for a way back ("*"): the hole was jumped from the far side, so it
+ * spawned there (its "s" / "w" when known) unless this side holds its real type. "k" when all
+ * we know is that this side is a K162.
+ */
+export function returnFlag(
+    near: TChainFlags & { staticNames?: readonly string[] | null },
+    far: TChainFlags & { staticNames?: readonly string[] | null },
+): TConnectionFlag {
+    const nearName = (near.wormholeName ?? '').trim().toUpperCase();
+    if (nearName && !nearName.startsWith('K162')) return spawnFlag(near) || '';
+    const farFlag = spawnFlag(far);
+    if (farFlag) return farFlag;
+    const farName = (far.wormholeName ?? '').trim().toUpperCase();
+    return (farName && !farName.startsWith('K162')) || nearName.startsWith('K162') ? 'k' : '';
+}
+
 /**
  * The Static / Wandering flags to set automatically when a hole's type changes.
  * Setting the type to one of the system's static types ticks Static while no

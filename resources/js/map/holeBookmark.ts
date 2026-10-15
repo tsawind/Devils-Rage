@@ -1,6 +1,6 @@
 import { aliasesBelow, suggestAlias } from '@/lib/alias';
 import { buildSignatureBookmark, formatBookmarkName, isFrigateOnly, visibleBookmarkName } from '@/lib/bookmark';
-import { connectionFlag } from '@/lib/chainNumbering';
+import { returnFlag, staticNames } from '@/lib/chainNumbering';
 import { chainAliases } from '@/lib/combat';
 import { getTypeById } from '@/const/signatures';
 import { shipSizeFromJumpMass } from '@/lib/shipSize';
@@ -235,7 +235,7 @@ export function wayBackBookmark(store: MapStore, system: TMapSolarsystem, parent
             massStatus: connection?.mass_status ?? null,
             lifetime: connection?.lifetime_status ?? 'healthy',
             // Patch 20: the way back's own marker (k / s / w) once its type is known, and "frig".
-            classSuffix: wayBackSuffix(signature, connection, system.id),
+            classSuffix: wayBackSuffix(signature, connection, system.id, staticNames(parent), staticNames(system)),
             frigate: isFrigateOnly({ wormholeName: signature?.wormhole?.name, shipSize: connection?.ship_size ?? null }),
         },
         meta,
@@ -248,17 +248,23 @@ export function wayBackBookmark(store: MapStore, system: TMapSolarsystem, parent
 }
 
 /**
- * Patch 20: the marker of the hole on this side of the way back: from its own
- * type (k, or s / w when marked), or "k" when the far side holds a real type.
+ * Patch 20 / 37: the marker of the way back: s / w for how the hole spawned (on the far side
+ * when we came through it from there), "k" when all we know is that this side is a K162.
  */
 function wayBackSuffix(
     signature: { is_static?: boolean | null; is_wandering?: boolean | null; wormhole?: { name?: string | null } | null } | null,
-    connection: { signatures?: { map_solarsystem_id: number; wormhole?: { name?: string | null } | null }[] | null } | undefined,
+    connection: { signatures?: { map_solarsystem_id: number; is_static?: boolean | null; is_wandering?: boolean | null; wormhole?: { name?: string | null } | null }[] | null } | undefined,
     systemId: number,
+    farStatics: readonly string[] | null,
+    nearStatics: readonly string[] | null,
 ): string | null {
-    if (signature?.wormhole?.name) return connectionFlag({ is_static: signature.is_static, is_wandering: signature.is_wandering, wormholeName: signature.wormhole.name }) || null;
-    const far = (connection?.signatures ?? []).find((candidate) => candidate.map_solarsystem_id !== systemId)?.wormhole?.name ?? '';
-    return far && !far.toUpperCase().startsWith('K162') ? 'k' : null;
+    const far = (connection?.signatures ?? []).find((candidate) => candidate.map_solarsystem_id !== systemId) ?? null;
+    return (
+        returnFlag(
+            { is_static: signature?.is_static, is_wandering: signature?.is_wandering, wormholeName: signature?.wormhole?.name, staticNames: nearStatics },
+            { is_static: far?.is_static, is_wandering: far?.is_wandering, wormholeName: far?.wormhole?.name, staticNames: farStatics },
+        ) || null
+    );
 }
 
 /**

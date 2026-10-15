@@ -1,4 +1,4 @@
-import { autoFlagsForType, connectionFlag, validateManualAlias } from '@/lib/chainNumbering';
+import { autoFlagsForType, connectionFlag, returnFlag, spawnFlag, staticNames, validateManualAlias } from '@/lib/chainNumbering';
 import { describe, expect, it } from 'vitest';
 
 describe('connectionFlag', () => {
@@ -34,5 +34,32 @@ describe('validateManualAlias', () => {
         expect(validateManualAlias('14', used)).toEqual({ ok: true, alias: '14' });
         expect(validateManualAlias('12', used)).toEqual({ ok: false, error: 'Number 12 is already used by UAZ-576.' });
         expect(validateManualAlias(null, used).ok).toBe(false);
+    });
+});
+
+describe('patch 37: s / w / k on way backs', () => {
+    it('a way back through a marked wandering is w, a static s', () => {
+        expect(returnFlag({ wormholeName: null }, { wormholeName: 'N770', is_wandering: true })).toBe('w');
+        expect(returnFlag({ wormholeName: 'K162' }, { wormholeName: 'U210', is_static: true })).toBe('s');
+    });
+
+    it('a real type that is not one of its system statics is a wandering', () => {
+        expect(returnFlag({}, { wormholeName: 'N770', staticNames: ['H296'] })).toBe('w');
+        expect(spawnFlag({ wormholeName: 'H296', staticNames: ['H296'] })).toBe('');
+    });
+
+    it('k when all we know is the K162 side (or the far side type without its statics)', () => {
+        expect(returnFlag({ wormholeName: 'K162' }, {})).toBe('k');
+        expect(returnFlag({}, { wormholeName: 'N770' })).toBe('k');
+        expect(returnFlag({}, {})).toBe('');
+    });
+
+    it('this side holds the real type: it spawned here', () => {
+        expect(returnFlag({ wormholeName: 'V753', is_static: true }, { wormholeName: 'K162' })).toBe('s');
+    });
+
+    it('reads a system statics', () => {
+        expect(staticNames({ solarsystem: { statics: [{ name: 'H296' }] } })).toEqual(['H296']);
+        expect(staticNames({ solarsystem: { statics: [] } })).toBeNull();
     });
 });

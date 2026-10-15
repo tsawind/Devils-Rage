@@ -1,3 +1,4 @@
+import { returnFlag, staticNames } from '@/lib/chainNumbering';
 import { recordJump } from '@/composables/signatures/recentJump';
 import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
 import { useMapIgnoredSystems } from '@/composables/useMapIgnoredSystems';
@@ -555,7 +556,17 @@ export function useTracking() {
                 // The signature on this side of the hole isn't known yet.
                 signatureId: null,
                 // Patch 20: when the hole jumped is known not to be a K162, this side is its K162.
-                classSuffix: signature?.wormhole?.name && !signature.wormhole.name.toUpperCase().startsWith('K162') ? 'k' : null,
+                // Patch 37: s / w when it's known how it spawned there (marked, or not one of its statics).
+                classSuffix:
+                    returnFlag(
+                        {},
+                        {
+                            is_static: signature?.is_static,
+                            is_wandering: signature?.is_wandering,
+                            wormholeName: signature?.wormhole?.name,
+                            staticNames: origin_map_system.value ? staticNames(origin_map_system.value) : null,
+                        },
+                    ) || null,
                 frigate: isFrigateOnly({ wormholeName: signature?.wormhole?.name, shipSize: signature?.ship_size, typeExtra: signature?.signature_type?.extra }),
                 shipSize: signature?.ship_size ?? null,
                 massStatus: signature?.mass_status ?? null,
