@@ -1,4 +1,4 @@
-import { buildSignatureBookmark, formatBookmarkName, isReturnBookmark, TBookmarkFormats, visibleBookmarkName } from '@/lib/bookmark';
+import { buildSignatureBookmark, classFromLeadsTo, formatBookmarkName, isReturnBookmark, TBookmarkFormats, visibleBookmarkName } from '@/lib/bookmark';
 import { describe, expect, it } from 'vitest';
 
 const NUMERIC_FORMATS: TBookmarkFormats = {};
@@ -686,5 +686,24 @@ describe('patch 9: Daisy callsigns and static 0', () => {
             plannedAlias: '1',
         });
         expect(name).toBe(' 1 ABC C3');
+    });
+});
+
+describe('patch 37: a static whose type is not set yet', () => {
+    it('takes its class from the system static ("A0 XUY C6s", not "A0 XUY s")', () => {
+        const name = buildSignatureBookmark({
+            signature: { ...baseSignature(), signature_id: 'XUY-123', is_static: true, is_wandering: false, wormhole: null, signature_type: null },
+            currentSystem: { alias: 'A', class: '3', statics: [{ name: 'V911', leads_to: 'c5' }] },
+            aliases: [],
+            formats: { ...NUMERIC_FORMATS, bookmark_format_wormhole: '{alias} {sig} {class}' },
+            plannedAlias: 'A0',
+        });
+        expect(name).toBe('A0 XUY C5s');
+    });
+
+    it('reads where statics lead', () => {
+        expect(classFromLeadsTo('c6')).toBe('6');
+        expect(classFromLeadsTo('ls')).toBe('l');
+        expect(classFromLeadsTo('???')).toBeNull();
     });
 });

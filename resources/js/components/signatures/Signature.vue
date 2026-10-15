@@ -386,6 +386,7 @@ function staticBookmarkName(alias: string): string {
         currentSystem: {
             alias: selected_map_solarsystem.alias,
             class: selected_map_solarsystem.solarsystem.class,
+            statics: selected_map_solarsystem.solarsystem.statics,
             combatHome: is_combat_home.value,
             combatColor: map_system.value?.combat_color ?? null,
         },
@@ -683,6 +684,7 @@ const rename_ask_changes = computed(() => {
             currentSystem: {
                 alias: selected_map_solarsystem.alias,
                 class: selected_map_solarsystem.solarsystem.class,
+                statics: selected_map_solarsystem.solarsystem.statics,
                 combatHome: is_combat_home.value,
                 combatColor: map_system.value?.combat_color ?? null,
             },
@@ -845,6 +847,7 @@ const bookmark_name = computed(() =>
         currentSystem: {
             alias: selected_map_solarsystem.alias,
             class: selected_map_solarsystem.solarsystem.class,
+            statics: selected_map_solarsystem.solarsystem.statics,
             combatHome: is_combat_home.value,
             combatColor: map_system.value?.combat_color ?? null,
         },
@@ -880,6 +883,7 @@ function renameBookmarks(name: string): { thisSide: string; wayBack: string | nu
         currentSystem: {
             alias: selected_map_solarsystem.alias,
             class: selected_map_solarsystem.solarsystem.class,
+            statics: selected_map_solarsystem.solarsystem.statics,
             combatHome: is_combat_home.value,
             combatColor: map_system.value?.combat_color ?? null,
         },

@@ -17,6 +17,11 @@ import type { TSignature } from '@/types/models';
  * number it has or would take (its own, the planned one, or in a combat
  * chain the next free one).
  */
+/** Patch 37: a map system's statics (name and where they lead). */
+function staticsOf(system: TMapSolarsystem): { name: string; leads_to?: string | null }[] | null {
+    return (system.solarsystem as { statics?: { name: string; leads_to?: string | null }[] | null }).statics ?? null;
+}
+
 export function pendingHole(store: MapStore, systemId: number, signatureId: number): { system: TMapSolarsystem; hole: TPendingHole } | null {
     const system = store.systems.get(systemId);
     const hole = system?.pending_holes?.find((candidate) => candidate.id === signatureId);
@@ -48,6 +53,7 @@ export function pendingHoleBookmark(store: MapStore, system: TMapSolarsystem, ho
         currentSystem: {
             alias: system.alias,
             class: system.solarsystem.class,
+            statics: staticsOf(system),
             combatHome: Boolean(system.combat_home),
             combatColor: system.combat_color ?? null,
         },
@@ -150,6 +156,7 @@ export function renameChanges(
                 currentSystem: {
                     alias: system.alias,
                     class: system.solarsystem.class,
+                    statics: staticsOf(system),
                     combatHome: Boolean(system.combat_home),
                     combatColor: system.combat_color ?? null,
                 },
@@ -209,7 +216,7 @@ export function linkedForwardBookmark(store: MapStore, system: TMapSolarsystem, 
             is_static: Boolean(signature?.is_static),
             is_wandering: Boolean(signature?.is_wandering),
         },
-        currentSystem: { alias: system.alias, class: system.solarsystem.class, combatHome: Boolean(system.combat_home), combatColor: system.combat_color ?? null },
+        currentSystem: { alias: system.alias, class: system.solarsystem.class, statics: staticsOf(system), combatHome: Boolean(system.combat_home), combatColor: system.combat_color ?? null },
         connectionTarget: { ...target, alias, combat_color: null, combat_home: false },
         aliases: chainAliases([...store.systems.values()], system),
         formats: meta,

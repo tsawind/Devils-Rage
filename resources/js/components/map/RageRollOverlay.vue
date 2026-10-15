@@ -5,7 +5,11 @@ import usePermission from '@/composables/usePermission';
 import { lastPaste, useRageRoll } from '@/composables/useRageRoll';
 import { useRageRollWatcher } from '@/composables/useRageRollWatcher';
 import { useShowMap } from '@/composables/useShowMap';
+import { autoCopy, clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
 import { displayAlias } from '@/lib/alias';
+import { buildSignatureBookmark, visibleBookmarkName } from '@/lib/bookmark';
+import { chainAliases } from '@/lib/combat';
+import { signatureToast } from '@/lib/signatureToast';
 import { newStaticQuestion } from '@/lib/rageRoll';
 import { useMapStore } from '@/map/store/mapStore';
 import type { TSignature } from '@/types/models';
@@ -57,8 +61,42 @@ function staticName(signature: TSignature): string {
 
 function answer(candidate: TSignature): void {
     if (oldPick.value === null) return;
+    const old = question.value?.olds.find((signature) => signature.id === oldPick.value) ?? null;
     newStatic(oldPick.value, candidate.id);
     question.value = null;
+    copyNewStatic(candidate, old);
+}
+
+/** Patch 37: the new static takes the old one's name: copy its bookmark ("  Alpha XUY C6s"). */
+function copyNewStatic(candidate: TSignature, old: TSignature | null): void {
+    const system = rollingSystem.value;
+    if (!system || !old?.alias) return;
+    const name = buildSignatureBookmark({
+        signature: {
+            ...candidate,
+            is_static: true,
+            is_wandering: false,
+            wormhole: candidate.wormhole ?? old.wormhole,
+            signature_type: candidate.wormhole ? candidate.signature_type : (old.signature_type ?? candidate.signature_type),
+        },
+        currentSystem: {
+            alias: system.alias,
+            class: system.solarsystem.class,
+            statics: (system.solarsystem as { statics?: { name: string; leads_to?: string | null }[] | null }).statics ?? null,
+            combatHome: Boolean(system.combat_home),
+            combatColor: system.combat_color ?? null,
+        },
+        aliases: chainAliases([...store.systems.values()], system),
+        formats: page.props.map,
+        plannedAlias: old.alias,
+    });
+    if (!name) return;
+    if (clipboardAllowed()) {
+        void autoCopy(name);
+        signatureToast.success(`New ${staticName(old)}: copied ${visibleBookmarkName(name)}`);
+    } else {
+        signatureToast.success(`New ${staticName(old)}: bookmark it as ${visibleBookmarkName(name)}`, { action: copyButton(name), duration: 20_000 });
+    }
 }
 </script>
 

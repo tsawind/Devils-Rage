@@ -345,6 +345,32 @@ export function formatBookmarkName(
  * `target_class` is "known" when the signature has been identified to a real
  * destination class; `null`/`unknown` (K162, unset type) leaves it unknown.
  */
+/** "c6" → "6", "hs" → "h", "ls" → "l", "ns" → "n". */
+export function classFromLeadsTo(leadsTo: string | null | undefined): TStringedSolarsystemClass | null {
+    const code = (leadsTo ?? '').trim().toLowerCase();
+    const wormhole = /^c(\d+)$/.exec(code);
+    if (wormhole) return wormhole[1] as TStringedSolarsystemClass;
+    const kspace: Record<string, string> = { hs: 'h', ls: 'l', ns: 'n' };
+    return (kspace[code] as TStringedSolarsystemClass | undefined) ?? null;
+}
+
+/**
+ * Patch 37: a hole marked static (or typed as one of the system's statics) without its own
+ * class yet leads where that static leads (a single static, or all statics to one class).
+ */
+function staticTargetClass(
+    signature: { is_static?: boolean | null; wormhole?: { name?: string | null } | null },
+    statics: readonly { name: string; leads_to?: string | null }[] | null | undefined,
+): TStringedSolarsystemClass | null {
+    if (!statics?.length) return null;
+    const name = (signature.wormhole?.name ?? '').trim().toUpperCase();
+    const typed = statics.find((hole) => hole.name.trim().toUpperCase() === name);
+    if (typed) return classFromLeadsTo(typed.leads_to);
+    if (!signature.is_static) return null;
+    const classes = [...new Set(statics.map((hole) => classFromLeadsTo(hole.leads_to)))];
+    return classes.length === 1 ? classes[0] : null;
+}
+
 function knownTargetClass(targetClass: string | null | undefined): TStringedSolarsystemClass | null {
     if (!targetClass || targetClass === 'unknown') return null;
     return targetClass as TStringedSolarsystemClass;
@@ -387,7 +413,14 @@ export function buildSignatureBookmark(params: {
         is_static?: boolean | null;
         is_wandering?: boolean | null;
     };
-    currentSystem: { alias?: string | null; class?: TStringedSolarsystemClass | null; combatHome?: boolean; combatColor?: string | null };
+    currentSystem: {
+        alias?: string | null;
+        class?: TStringedSolarsystemClass | null;
+        combatHome?: boolean;
+        combatColor?: string | null;
+        /** Patch 37: the system's statics, for the class of a static whose type isn't set yet. */
+        statics?: readonly { name: string; leads_to?: string | null }[] | null;
+    };
     connectionTarget?: BookmarkSystem | null;
     aliases: string[];
     formats: TBookmarkFormats & { bookmark_alias_scheme?: TAliasScheme };
@@ -440,7 +473,7 @@ export function buildSignatureBookmark(params: {
         );
     }
 
-    const knownClass = knownTargetClass(signature.signature_type?.target_class);
+    const knownClass = knownTargetClass(signature.signature_type?.target_class) ?? staticTargetClass(signature, currentSystem.statics);
     const isTargetWormhole = !knownClass || isWormholeClass(knownClass);
 
     const useCallsigns = formats.bookmark_alias_scheme !== 'alphabetical';
