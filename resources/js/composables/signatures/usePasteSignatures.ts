@@ -11,6 +11,9 @@ import { useEcho } from '@laravel/echo-vue';
 import { useEventListener } from '@vueuse/core';
 import { computed, type MaybeRefOrGetter, ref, toValue, watch } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
+import { copyHeldWayBack, heldWayBack } from '@/composables/signatures/wayBack';
+import { displayAlias } from '@/lib/alias';
+import { tryUseMapStore } from '@/map/store/mapStore';
 
 export function usePasteSignatures(
     map_solarsystem: MaybeRefOrGetter<TSelectedMapSolarsystem | null>,
@@ -19,6 +22,7 @@ export function usePasteSignatures(
 ) {
     const is_using_input = useIsUsingInput();
     const character = useActiveMapCharacter();
+    const store = tryUseMapStore();
 
     const pending_signatures = ref<TRawSignature[] | null>(null);
     const show_system_mismatch_warning = ref(false);
@@ -158,6 +162,17 @@ export function usePasteSignatures(
     function processSignatures(signatures: TRawSignature[], skipWarning = false) {
         const system = toValue(map_solarsystem);
         if (!system) return;
+
+        // Patch 37: right after an alt's jump, its paste goes into the alt's system (no warning:
+        // the alt is there), the main's system stays in view, and the way back is copied.
+        const alt = heldWayBack.value?.alt ?? null;
+        const altSystem = alt && store ? [...store.systems.values()].find((candidate) => candidate.solarsystem_id === alt.solarsystemId) : null;
+        if (alt && altSystem && altSystem.id !== system.id) {
+            const name = displayAlias(altSystem.alias) || altSystem.solarsystem.name;
+            pasteSignatures(altSystem.id, signatures, () => toast.success(`Pasted ${signatures.length} signature${signatures.length === 1 ? '' : 's'} into ${name}`, { description: `${alt.characterName}'s scan` }));
+            void copyHeldWayBack();
+            return;
+        }
 
         // Check if character's current location matches the target system
         if (!skipWarning && character.value?.status?.solarsystem_id && character.value.status.solarsystem_id !== system.solarsystem_id) {

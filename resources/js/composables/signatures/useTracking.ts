@@ -584,7 +584,9 @@ export function useTracking() {
         if (!name) return;
 
         // Patch 14: EVE has focus right after a jump, so the mapper may have to hold it (see wayBack).
-        offerWayBack(name);
+        // Patch 37: an alt's jump: its paste goes into its system, the way back is copied with it.
+        const jump = current_jump.value;
+        offerWayBack(name, 'way back', jump && !jump.byMain ? { characterName: jump.name ?? 'Your alt', solarsystemId: jump.to } : null);
     }
 
     return {

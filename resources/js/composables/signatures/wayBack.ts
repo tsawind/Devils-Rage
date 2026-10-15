@@ -11,7 +11,13 @@ import { clipboardAllowed, copyButton } from '@/composables/useClipboardSetting'
  * one); in combat mode a small chip in the signatures header holds it, so the
  * scanner never has to touch the mapper.
  */
-export type THeldWayBack = { name: string; label: string; at: number };
+export type THeldWayBack = {
+    name: string;
+    label: string;
+    at: number;
+    /** Patch 37: an alt jumped (the main's system stays in view): who, and the system they're in now. */
+    alt?: { characterName: string; solarsystemId: number } | null;
+};
 
 export const heldWayBack = ref<THeldWayBack | null>(null);
 
@@ -25,19 +31,20 @@ async function write(name: string): Promise<boolean> {
 }
 
 /** Copy the way back now if the mapper has focus, else hold it until a click or paste. */
-export async function offerWayBack(name: string, label = 'way back'): Promise<void> {
+export async function offerWayBack(name: string, label = 'way back', alt: THeldWayBack['alt'] = null): Promise<void> {
     // Patch 19: Clipboard off: the way back is only shown, with a Copy button (nothing is held).
     if (!clipboardAllowed()) {
         heldWayBack.value = null;
         toast.info(`Your ${label}`, { description: visibleBookmarkName(name), action: copyButton(name), duration: 30_000 });
         return;
     }
-    if (typeof document !== 'undefined' && document.hasFocus() && (await write(name))) {
+    // Patch 37: an alt's way back is held until its signatures are pasted (they go into the alt's system).
+    if (!alt && typeof document !== 'undefined' && document.hasFocus() && (await write(name))) {
         heldWayBack.value = null;
         toast.success('Copied your way back', { description: visibleBookmarkName(name) });
         return;
     }
-    heldWayBack.value = { name, label, at: Date.now() };
+    heldWayBack.value = { name, label, at: Date.now(), alt };
 }
 
 /** Copy the held way back (on a click or paste). Returns true when it was copied. */
