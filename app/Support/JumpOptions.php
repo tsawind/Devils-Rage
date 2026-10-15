@@ -56,8 +56,15 @@ final class JumpOptions
         // Props of one size add the same mass (50000MN MWD = 10000MN AB, 500MN = 100MN, 50MN = 10MN,
         // 5MN = 1MN): one button per mass, the biggest HOT, the others SEMI ("SEMI 500/100MN").
         $byMass = [];
+        $coldMass = $profile->cold_mass;
         foreach ($list as $option) {
-            if ($option['mode'] !== 'hot' || str_contains($option['key'], '-e')) {
+            if ($option['key'] === 'cold') {
+                $coldMass = (int) $option['mass'];
+            }
+        }
+        foreach ($list as $option) {
+            // No prop (a dread): hot is the same as cold, one button.
+            if ($option['mode'] !== 'hot' || str_contains($option['key'], '-e') || (int) $option['mass'] === $coldMass) {
                 continue;
             }
             $mass = (int) $option['mass'];

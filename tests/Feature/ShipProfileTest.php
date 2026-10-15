@@ -94,3 +94,12 @@ it('patch 37: a capital typed in with hot, semi and cold (plates off noted)', fu
         ->and($profile->note)->toBe('plates off')
         ->and($profile->source)->toBe('manual');
 });
+
+it('patch 37: a ship with no prop gets one button in the jump log, not HOT and COLD at the same mass', function () {
+    $dread = new ShipProfile(['cold_mass' => 1_260_000_000, 'hot_mass' => 1_260_000_000, 'options' => [
+        ['key' => 'hot0', 'label' => 'HOT', 'mode' => 'hot', 'mass' => 1_260_000_000],
+        ['key' => 'cold', 'label' => 'COLD', 'mode' => 'cold', 'mass' => 1_260_000_000],
+    ]]);
+
+    expect(array_column(App\Support\JumpOptions::fromProfile($dread), 'kind'))->toBe(['cold']);
+});
