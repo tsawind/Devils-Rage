@@ -22,6 +22,7 @@ type TPlaceholderHole = {
     signature_id: string | null;
     alias: string | null;
     is_static: boolean;
+    is_wandering?: boolean;
     target_class: TStringedSolarsystemClass | null;
     wormhole: string | null;
     /** Patch 20: the exact type (grouped K162s, K162 frigate). */
