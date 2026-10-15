@@ -6,6 +6,7 @@ namespace App\Http\Requests;
 
 use App\Models\MapConnectionJump;
 use App\Models\User;
+use App\Support\JumpOptions;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Container\Attributes\RouteParameter;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -33,6 +34,8 @@ final class UpdateMapConnectionJumpRequest extends FormRequest
             'direction' => ['sometimes', Rule::in(['outbound', 'inbound'])],
             'ship_type_id' => ['nullable', 'sometimes', 'integer', 'exists:types,id'],
             'mass' => ['sometimes', 'integer', 'min:-100000000000', 'max:100000000000'],
+            // Patch 37: the jump log's HOT / SEMI / COLD / 🧵 buttons.
+            'kind' => ['sometimes', Rule::in(JumpOptions::KINDS)],
         ];
     }
 }

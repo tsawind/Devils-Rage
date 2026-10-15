@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { PopoverContent } from '@/components/ui/popover';
 import { TMapConnection, TMapSolarsystem } from '@/pages/maps';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import usePermission from '@/composables/usePermission';
 import { useMinuteNow } from '@/composables/useMinuteNow';
 import { uncheckedFor } from '@/lib/holeChecked';
@@ -16,6 +16,7 @@ import { isK162Frigate } from '@/lib/k162';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import ConnectionStatus from './connection/ConnectionStatus.vue';
 import HoleSummary, { type THoleSummary } from './connection/HoleSummary.vue';
+import JumpLog from './connection/JumpLog.vue';
 import MassTracking from './connection/MassTracking.vue';
 import SignatureSection from './connection/SignatureSection.vue';
 import WormholeProperties from './connection/WormholeProperties.vue';
@@ -113,6 +114,9 @@ const summary = computed((): THoleSummary | null => {
     };
 });
 
+/** Patch 37: the jump log under the mass bar (click the bar). */
+const showJumpLog = ref(false);
+
 function copyBookmark(): void {
     if (store) copyForwardBookmark(store, connection);
 }
@@ -125,7 +129,8 @@ function copyBookmark(): void {
     -->
     <PopoverContent class="max-h-(--reka-popover-content-available-height) w-80 overflow-y-auto">
         <div class="space-y-3">
-            <HoleSummary v-if="summary" :summary="summary" :now="now" @checked="markConnectionChecked(connection.id)" @copy="copyBookmark" />
+            <HoleSummary v-if="summary" :summary="summary" :now="now" @checked="markConnectionChecked(connection.id)" @copy="copyBookmark" @jumps="showJumpLog = !showJumpLog" />
+            <JumpLog v-if="showJumpLog && summary" :connection="connection" />
             <SignatureSection v-if="outSignature" :signature="outSignature" title="Out Sig" />
             <SignatureSection v-if="inSignature" :signature="inSignature" title="In Sig" />
             <div v-if="!outSignature && !inSignature" class="space-y-1">

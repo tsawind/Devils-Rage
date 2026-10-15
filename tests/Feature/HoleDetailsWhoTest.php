@@ -117,6 +117,43 @@ it('patch 37: Add mass takes a negative amount off the log', function () {
     expect((int) App\Models\MapConnectionJump::query()->where('map_connection_id', $connection->id)->sum('mass'))->toBe(167_600_000);
 });
 
+it('patch 37: the jump log lists every jump with its HOT / SEMI / COLD / thread masses and keeps who changed one', function () {
+    $map = Map::factory()->create();
+    $connection = holeConnection($map);
+    $character = App\Models\Character::factory()->create();
+    $ship = App\Models\Type::query()->create(['id' => 23757, 'name' => 'Archon', 'group_id' => 547, 'mass' => 1_340_000_000])->id;
+    App\Models\ShipProfile::query()->create([
+        'character_id' => $character->id, 'ship_type_id' => $ship, 'cold_mass' => 1_340_000_000, 'hot_mass' => 1_840_000_000,
+        'higgs' => false, 'plates' => 0, 'entanglers' => 0, 'prop_mass' => 500_000_000, 'source' => 'manual',
+        'options' => [
+            ['key' => 'hot0', 'label' => 'HOT 50000MN MWD', 'mode' => 'hot', 'mass' => 1_840_000_000],
+            ['key' => 'hot1', 'label' => 'HOT 500MN MWD', 'mode' => 'hot', 'mass' => 1_390_000_000],
+            ['key' => 'cold', 'label' => 'COLD', 'mode' => 'cold', 'mass' => 1_340_000_000],
+        ],
+    ]);
+    $jump = App\Models\MapConnectionJump::query()->create([
+        'map_id' => $map->id, 'map_connection_id' => $connection->id, 'character_id' => $character->id, 'ship_type_id' => $ship,
+        'from_solarsystem_id' => $connection->fromMapSolarsystem->solarsystem_id, 'to_solarsystem_id' => $connection->toMapSolarsystem->solarsystem_id,
+        'mass' => 1_340_000_000,
+    ]);
+    actingAs(holeMember($map));
+
+    Pest\Laravel\getJson(route('map-connections.jumps.index', $connection))
+        ->assertOk()
+        ->assertJsonPath('jumps.0.outbound', true)
+        ->assertJsonPath('jumps.0.options.0.kind', 'hot')
+        ->assertJsonPath('jumps.0.options.1.kind', 'semi')
+        ->assertJsonPath('jumps.0.options.1.label', 'SEMI 500MN MWD')
+        ->assertJsonPath('jumps.0.options.2.kind', 'cold');
+
+    Pest\Laravel\put(route('map-connection-jumps.update', $jump), ['mass' => 1_390_000_000, 'kind' => 'semi'])->assertRedirect();
+
+    $fresh = $jump->fresh();
+    expect($fresh->mass)->toBe(1_390_000_000)
+        ->and((bool) $fresh->getAttribute('is_hot'))->toBeTrue()
+        ->and($fresh->getAttribute('edited_by_name'))->toBe('WickedWrench');
+});
+
 it('patch 37: stores each character\'s main from SeAT', function () {
     config(['services.seat.url' => 'https://seat.test', 'services.seat.token' => 'secret']);
     Cache::flush();

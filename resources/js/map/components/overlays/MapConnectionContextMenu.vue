@@ -223,7 +223,7 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
                 </p>
             </ContextMenuSubContent>
         </ContextMenuSub>
-        <ContextMenuItem v-if="map_connection.type !== 'stargate'" @select="handleAddMass">
+        <ContextMenuItem v-if="map_connection.type !== 'stargate'" title="Mass in million kg. A minus takes it off (e.g. -132.4)." @select="handleAddMass">
             <Plus class="size-4" />
             Add mass…
         </ContextMenuItem>

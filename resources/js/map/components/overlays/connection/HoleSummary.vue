@@ -34,7 +34,7 @@ export type THoleSummary = {
 };
 
 const { summary, now } = defineProps<{ summary: THoleSummary; now: number }>();
-const emit = defineEmits<{ checked: []; copy: [] }>();
+const emit = defineEmits<{ checked: []; copy: []; jumps: [] }>();
 
 const { label } = usePilotNames();
 
@@ -105,7 +105,12 @@ const barColor = computed(() => (bar.value?.tone === 'critical' ? 'bg-red-600' :
             </template>
         </dl>
         <div v-if="bar && summary.estimate">
-            <div class="relative h-3.5 overflow-hidden rounded bg-neutral-200 dark:bg-neutral-800" aria-hidden="true">
+            <!-- Patch 37: click the bar for the whole jump log -->
+            <div
+                class="relative h-3.5 cursor-pointer overflow-hidden rounded bg-neutral-200 hover:ring-1 hover:ring-amber-400 dark:bg-neutral-800"
+                title="Click for the jump log"
+                @click="emit('jumps')"
+            >
                 <div class="absolute inset-y-0" :class="barColor" :style="{ left: `${bar.left}%`, width: `${bar.width}%` }" />
                 <div class="absolute inset-y-0 bg-stone-400 dark:bg-stone-600" :style="{ left: `${bar.loggedLeft}%`, width: `${bar.loggedWidth}%` }" />
                 <div class="absolute inset-y-0 left-[10%] border-l-[1.5px] border-dashed border-red-400" />

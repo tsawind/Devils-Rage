@@ -4,11 +4,13 @@ import { router } from '@inertiajs/vue3';
 import { TMapConnectionJumpDirection } from './createMapConnectionJump';
 
 export function updateMapConnectionJump(
-    jump: TConnectionJump,
+    jump: Pick<TConnectionJump, 'id'>,
     data: {
         direction?: TMapConnectionJumpDirection;
         ship_type_id?: number | null;
         mass?: number;
+        /** Patch 37: the jump log's HOT / SEMI / COLD / 🧵 buttons. */
+        kind?: 'hot' | 'semi' | 'cold' | 'thread';
     },
     options: { onSuccess?: () => void; onError?: (errors: Record<string, string>) => void } = {},
 ): void {

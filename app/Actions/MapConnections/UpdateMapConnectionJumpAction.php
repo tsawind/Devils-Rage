@@ -6,12 +6,13 @@ namespace App\Actions\MapConnections;
 
 use App\Models\MapConnectionJump;
 use App\Models\Type;
+use App\Support\Actor;
 
 /**
  * Applies a manual correction to a logged jump (tracked or manual) and pushes
  * the refreshed mass summary to the map.
  *
- * @phpstan-type JumpCorrectionData array{direction?: string, ship_type_id?: int|null, mass?: int}
+ * @phpstan-type JumpCorrectionData array{direction?: string, ship_type_id?: int|null, mass?: int, kind?: string}
  */
 final readonly class UpdateMapConnectionJumpAction
 {
@@ -46,6 +47,13 @@ final readonly class UpdateMapConnectionJumpAction
             // Patch 34: HICs / Odysseus log as if their Zero-Point Mass Entangler were on.
             $attributes['mass'] = Type::loggedJumpMass($data['ship_type_id']);
         }
+
+        // Patch 37: a HOT / SEMI / COLD / 🧵 button says how it went through; who changed it shows as ✎.
+        if (array_key_exists('kind', $data)) {
+            $attributes['is_hot'] = in_array($data['kind'], ['hot', 'semi'], true);
+            $attributes['is_thread'] = $data['kind'] === 'thread';
+        }
+        $attributes['edited_by_name'] = Actor::name();
 
         $jump->update($attributes);
 
