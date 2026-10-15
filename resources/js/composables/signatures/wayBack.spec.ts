@@ -7,7 +7,7 @@ vi.mock('@/lib/signatureToast', () => ({ signatureToast: { success: vi.fn(), inf
 describe('patch 37: an alt jumped', () => {
     it('holds the way back with who jumped and where, even when the mapper has focus', async () => {
         vi.spyOn(document, 'hasFocus').mockReturnValue(true);
-        Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true });
 
         await offerWayBack('  * A2 C5', 'way back', { characterName: 'Tsawind', solarsystemId: 31000123 });
 
@@ -17,7 +17,7 @@ describe('patch 37: an alt jumped', () => {
 
     it("copies the main's own way back straight away when the mapper has focus", async () => {
         vi.spyOn(document, 'hasFocus').mockReturnValue(true);
-        Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true });
 
         await offerWayBack('  * A2 C5');
 
