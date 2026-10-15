@@ -19,6 +19,9 @@ const store = tryUseMapStore();
 const targets = computed(() => (store ? rollTargets(store) : []));
 const target = computed(() => (store && rollHoleId.value !== null ? rollTarget(store, rollHoleId.value) : null));
 
+/** Rage roll: no stopping to check; the carrier goes out as heavy as is safe, comes home hot, the rest add mass (may be rolled out). */
+const hurry = ref(false);
+
 const crew = computed<TMassPilot[]>(() => {
     const connection = target.value?.connection;
     const homeId = store && connection ? homeSideOf(store, connection) : null;
@@ -36,7 +39,8 @@ const crew = computed<TMassPilot[]>(() => {
             name: ship.name,
             ship: ship.ship ?? '?',
             options: ship.options,
-            expendable: false,
+            // Hurry (rage roll): everything but the capitals may gamble.
+            expendable: hurry.value && !ship.capital,
             lastOut: ago(ship.character_id, true),
             lastHome: ago(ship.character_id, false),
             canSwap: false,
@@ -57,6 +61,7 @@ function make(goal: TMassGoal): void {
             goal,
             { nominal: hole.total, low: hole.low, high: hole.high, maxJump: hole.maxJump, status: hole.status ?? 'fresh', watched: current.watched, logged: current.logged },
             crew.value,
+            hurry.value,
         ),
     };
 }
@@ -98,6 +103,9 @@ async function copy(): Promise<void> {
                 <button v-for="option in GOALS" :key="option.goal" type="button" class="rounded border px-2 py-1 font-semibold" :class="option.tone" @click="make(option.goal)">
                     {{ option.label }}
                 </button>
+                <label class="flex items-center gap-1 self-center" title="Rage roll: no checks; the carrier goes out as heavy as is safe and comes home hot, the others add a little more mass (they may be rolled out)">
+                    <input v-model="hurry" type="checkbox" /> Hurry
+                </label>
                 <span class="self-center text-muted-foreground">{{ crew.length }} ships (ticked + capitals in scope)</span>
             </div>
         </template>

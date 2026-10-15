@@ -174,6 +174,19 @@ describe('patch 37: plans start to finish with the big ships', () => {
         }
     });
 
+    it('hurry on an unknown hole: carrier out as heavy as is safe, home hot, then a little more mass, no checks', () => {
+        const carrier = { ...archon, options: [...archon.options, { label: 'HOT 500MN', mode: 'hot' as const, mass: 1_390 * M }] };
+        const unknown = { nominal: 3_300 * M, low: 1_462 * M, high: 3_607 * M, maxJump: 2_000 * M, status: 'fresh' as const };
+        const crewInHurry = [vargur(2, 'Liam'), vargur(3, 'Delta'), carrier].map((pilot) => ({ ...pilot, expendable: pilot.ship !== 'Archon' }));
+        const plan = massPlan('roll', unknown, crewInHurry, true);
+        const jumps = plan.steps.filter((step) => step.kind === 'jump');
+        expect(jumps[0]?.kind === 'jump' && [jumps[0].ship, jumps[0].direction, jumps[0].option.mass]).toEqual(['Archon', 'out', 1_390 * M]);
+        expect(jumps[1]?.kind === 'jump' && [jumps[1].ship, jumps[1].direction, jumps[1].option.mass]).toEqual(['Archon', 'home', 1_840 * M]);
+        expect(jumps.slice(2).every((step) => step.kind === 'jump' && step.ship === 'Vargur')).toBe(true);
+        expect(plan.steps.some((step) => step.kind === 'check')).toBe(false);
+        expect(plan.steps.at(-1)?.kind).toBe('done');
+    });
+
     it('suggests a ship to bring when the crew is slow', () => {
         const plan = massPlan('roll', watched, [vargur(2, 'Liam')]);
         expect(plan.tips.some((tip) => tip.startsWith('Bringing'))).toBe(true);

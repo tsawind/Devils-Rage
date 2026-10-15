@@ -9,8 +9,9 @@
  *
  * Rules (keeping everyone home):
  * 1. A jump out never risks collapsing the hole behind the pilot: it stays under the smallest
- *    case, with room for everyone outside to come home (unless "hurry" and the pilot is
- *    expendable: GAMBLE).
+ *    case, with room for everyone outside to come home. Hurry (rage roll): no checks; the
+ *    big ship goes out as heavy as is safe, comes home hot, and expendable ships add mass
+ *    (GAMBLE: they may be rolled out) until it is gone in every case.
  * 2. Only the last pilot coming home may collapse it, and only when rolling.
  * 3. Make it reduced / crit: it never goes further than asked. Big ships bring it close to the
  *    line (without crossing it in any case), then one jump at a time with the lightest decent
@@ -291,7 +292,8 @@ function validLeg(state: TState, ship: TShip, pilot: TPilotState, direction: 'ou
             return null;
         }
         if (low > option.mass + reserve(state, null)) return { ship, pilot, direction, option, gamble: false };
-        if (state.hurry && pilot.pilot.expendable && world.r[0] > option.mass) return { ship, pilot, direction, option, gamble: true };
+        // Hurry (rage roll): expendable ships may go out while the hole may still be there.
+        if (state.hurry && pilot.pilot.expendable && maxR(world) > option.mass) return { ship, pilot, direction, option, gamble: true };
         return null;
     }
     const lastOut = state.ships.filter((other) => other.out).length === 1;
@@ -329,7 +331,8 @@ function apply(state: TState, leg: TLeg, record: boolean): void {
         });
     }
     state.t += JUMP_SECONDS;
-    if (state.world.r[0] <= 0) state.gone = true;
+    // Hurry: no checks, so it's gone only when it is in every case ("add a little more mass").
+    if (state.hurry ? state.world.r.every((r) => r <= 0) : state.world.r[0] <= 0) state.gone = true;
 }
 
 function goalReached(state: TState): boolean {
@@ -341,6 +344,8 @@ function goalReached(state: TState): boolean {
 
 /** CHECK HOLE STATUS when a line runs across the cases and nothing was checked since the last jump. */
 function maybeCheck(state: TState, record: boolean): void {
+    // Hurry (rage roll): no stopping to look.
+    if (state.hurry && collapseAllowed(state.goal)) return;
     if (state.checkedSinceLeg || state.gone || state.legs === 0) return;
     const lines = [0.5, 0.1].filter((share) => lineState(state.world, share) === 'across');
     if (!lines.length) return;
@@ -379,7 +384,8 @@ function candidates(state: TState): TLeg[] {
     if (!options.length) {
         const bigWaiting = state.pilots.some((pilot) => Math.max(pilot.freeOut, pilot.freeHome) > state.t && state.ships.some((ship) => !ship.small && ship.owner.id === pilot.pilot.id));
         if (bigWaiting) return [];
-        options = legs(state, true);
+        // Small ships never gamble: they'd only add a sliver.
+        options = legs(state, true).filter((leg) => !leg.gamble);
     }
     if (state.goal === 'closer' && state.closerShip !== null) {
         const others = options.filter((leg) => leg.ship.key !== state.closerShip);
@@ -465,6 +471,8 @@ function rollout(start: TState): number {
         const leg = policy(state);
         if (!leg) {
             if (waits++ < 6 && waitForPilot(state, false)) continue;
+            // Hurry: nothing more can go, and it's gone in the middle case: probably done.
+            if (state.hurry && collapseAllowed(state.goal) && state.world.r[0] <= 0 && !state.ships.some((ship) => ship.out)) return state.legs + 3;
             return Infinity;
         }
         waits = 0;
@@ -582,6 +590,11 @@ function run(goal: TMassGoal, hole: TMassHole, crew: readonly TMassPilot[], hurr
         const leg = choose(state);
         if (!leg) {
             if (waits++ < 12 && waitForPilot(state, true)) continue;
+            if (state.hurry && collapseAllowed(goal) && state.world.r[0] <= 0 && !state.ships.some((ship) => ship.out)) {
+                while (state.steps.at(-1)?.kind === 'wait') state.steps.pop();
+                state.steps.push({ kind: 'done', at: state.t, text: `Probably gone (at most ${massText(Math.max(0, maxR(state.world)))} could be left): look, and if it's still there, one more light jump out and a heavy one home.` });
+                break;
+            }
             state.stuck = true;
             state.steps.push({
                 kind: 'stuck',
@@ -602,7 +615,9 @@ function run(goal: TMassGoal, hole: TMassHole, crew: readonly TMassPilot[], hurr
                 text: state.ships.some((ship) => ship.out)
                     ? 'It may close here with someone outside!'
                     : sure
-                      ? 'Gone for sure. Everyone is home.'
+                      ? state.steps.some((step) => step.kind === 'check')
+                        ? 'Gone (if the checks showed what they should). Everyone is home.'
+                        : 'Gone for sure. Everyone is home.'
                       : 'It should close with this jump (everyone is home). If it is still there, mark it and plan again.',
             });
             break;
