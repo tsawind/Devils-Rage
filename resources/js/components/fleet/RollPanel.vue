@@ -22,17 +22,27 @@ const target = computed(() => (store && rollHoleId.value !== null ? rollTarget(s
 /** Rage roll: no stopping to check; the carrier goes out as heavy as is safe, comes home hot, the rest add mass (may be rolled out). */
 const hurry = ref(false);
 
+/** Where the hole's two ends are: ships in the far end start outside; ships elsewhere count as coming from the home side. */
+const ends = computed(() => {
+    const connection = target.value?.connection;
+    if (!store || !connection) return null;
+    const homeId = homeSideOf(store, connection);
+    const farId = homeId === connection.from_map_solarsystem_id ? connection.to_map_solarsystem_id : connection.from_map_solarsystem_id;
+    return { home: store.systems.get(homeId)?.solarsystem_id ?? null, far: store.systems.get(farId)?.solarsystem_id ?? null };
+});
+
+const usable = computed(() => fleetShips.value.filter((ship) => ship.counts || (ship.capital && inScope(ship))));
+const elsewhere = computed(() => (ends.value ? usable.value.filter((ship) => ship.solarsystem_id !== ends.value!.home && ship.solarsystem_id !== ends.value!.far) : []));
+
 const crew = computed<TMassPilot[]>(() => {
     const connection = target.value?.connection;
-    const homeId = store && connection ? homeSideOf(store, connection) : null;
-    const homeSolarsystem = homeId !== null ? (store?.systems.get(homeId)?.solarsystem_id ?? null) : null;
+    const homeSolarsystem = ends.value?.home ?? null;
     const now = Date.now();
     const ago = (characterId: number, out: boolean) => {
         const jump = (connection?.jumps ?? []).find((row) => row.character_id === characterId && (row.from_solarsystem_id === homeSolarsystem) === out);
         return jump ? Math.max(0, (now - Date.parse(jump.created_at)) / 1000) : null;
     };
-    return fleetShips.value
-        .filter((ship) => ship.counts || (ship.capital && inScope(ship)))
+    return [...usable.value]
         .sort((a, b) => a.position - b.position)
         .map((ship) => ({
             id: ship.character_id,
@@ -45,6 +55,7 @@ const crew = computed<TMassPilot[]>(() => {
             lastHome: ago(ship.character_id, false),
             canSwap: false,
             hull: ship.mass,
+            startsOut: ends.value !== null && ship.solarsystem_id === ends.value.far,
         }));
 });
 
@@ -106,7 +117,11 @@ async function copy(): Promise<void> {
                 <label class="flex items-center gap-1 self-center" title="Rage roll: no checks; the carrier goes out as heavy as is safe and comes home hot, the others add a little more mass (they may be rolled out)">
                     <input v-model="hurry" type="checkbox" /> Hurry
                 </label>
-                <span class="self-center text-muted-foreground">{{ crew.length }} ships (ticked + capitals in scope)</span>
+                <span class="self-center text-muted-foreground"
+                    >{{ crew.length }} ships at the two ends ({{ crew.filter((pilot) => pilot.startsOut).length }} on the far side)<template v-if="elsewhere.length">
+                        · {{ elsewhere.length }} not at either end (counted on the home side)</template
+                    ></span
+                >
             </div>
         </template>
         <p v-else class="text-muted-foreground">Pick a wormhole pipe with a known (or guessed) size.</p>

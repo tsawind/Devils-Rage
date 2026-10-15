@@ -30,6 +30,12 @@ onBeforeUnmount(() => window.clearInterval(timer));
 
 const target = computed(() => (store ? rollTarget(store, session.map_connection_id) : null));
 const homeSolarsystemId = computed(() => (session.home_map_solarsystem_id !== null ? (store?.systems.get(session.home_map_solarsystem_id)?.solarsystem_id ?? null) : null));
+const farSolarsystemId = computed(() => {
+    const connection = target.value?.connection;
+    if (!connection || session.home_map_solarsystem_id === null) return null;
+    const farId = connection.from_map_solarsystem_id === session.home_map_solarsystem_id ? connection.to_map_solarsystem_id : connection.from_map_solarsystem_id;
+    return store?.systems.get(farId)?.solarsystem_id ?? null;
+});
 const homeName = computed(() => {
     const system = session.home_map_solarsystem_id !== null ? store?.systems.get(session.home_map_solarsystem_id) : null;
     return system ? displayAlias(system.alias) || system.solarsystem.name : null;
@@ -95,6 +101,8 @@ const pilots = computed<{ list: TMassPilot[]; noShip: string[] }>(() => {
                 lastHome: ago('home'),
                 canSwap: crew.can_swap,
                 hull: inFleet?.mass ?? member.hull_mass ?? undefined,
+                // In fleet and sitting on the far side: comes home in the plan.
+                startsOut: Boolean(inFleet && farSolarsystemId.value !== null && inFleet.solarsystem_id === farSolarsystemId.value),
             });
         }
     }

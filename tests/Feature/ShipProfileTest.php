@@ -69,3 +69,28 @@ it('patch 37: props of one size are one option (50000MN MWD and 10000MN AB add t
     expect(array_column($options, 'label'))->toBe(['HOT 50000MN MWD / 10000MN AB', 'HOT 500MN MWD', 'COLD'])
         ->and(array_column($options, 'mass'))->toBe([1_840_000_000, 1_390_000_000, 1_340_000_000]);
 });
+
+it('patch 37: a capital typed in with hot, semi and cold (plates off noted)', function () {
+    App\Models\Category::query()->firstOrCreate(['id' => 6], ['name' => 'Ship']);
+    App\Models\Group::query()->firstOrCreate(['id' => 547], ['name' => 'Carrier', 'category_id' => 6]);
+    App\Models\Type::query()->create(['id' => 23757, 'name' => 'Archon', 'group_id' => 547, 'mass' => 1_340_000_000]);
+    $map = App\Models\Map::factory()->create();
+    $user = App\Models\User::factory()
+        ->has(App\Models\Character::factory()->has(App\Models\MapAccess::factory(['permission' => App\Enums\Permission::Member])->for($map)))
+        ->create();
+
+    Pest\Laravel\actingAs($user)->putJson(route('maps.ship-profiles.update', $map), [
+        'character_id' => 77,
+        'ship_type_id' => 23757,
+        'cold_mass' => 1_200_000_000,
+        'semi_mass' => 1_250_000_000,
+        'hot_mass' => 1_700_000_000,
+        'plates_off' => true,
+    ])->assertOk();
+
+    $profile = ShipProfile::query()->where('character_id', 77)->firstOrFail();
+    expect(array_column($profile->options ?? [], 'label'))->toBe(['HOT', 'SEMI', 'COLD'])
+        ->and($profile->jumpMass(true))->toBe(1_700_000_000)
+        ->and($profile->note)->toBe('plates off')
+        ->and($profile->source)->toBe('manual');
+});

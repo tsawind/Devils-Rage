@@ -24,6 +24,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property list<array{slot: string, name: string}>|null $modules
  * @property list<array{key: string, label: string, mode: string, mass: int}>|null $options
  * @property int $prop_mass
+ * @property int $plate_mass
  * @property string $source
  * @property string|null $note
  * @property string|null $updated_by_name

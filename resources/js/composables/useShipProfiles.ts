@@ -16,6 +16,8 @@ export type TShipProfile = {
     plates: number;
     entanglers: number;
     prop_mass: number;
+    /** Patch 37: the plates' mass in the SeAT fit (for "Plates off"). */
+    plate_mass?: number;
     /** The fit SeAT saw (for the hover). */
     modules: { slot: string; name: string }[];
     /** Every jump mass it can make (each prop, entanglers), heaviest first. */
@@ -95,7 +97,15 @@ export function useShipProfiles(mapSlug: string) {
         store(body?.profiles);
     }
 
-    async function save(profile: { character_id: number; ship_type_id: number; cold_mass: number; hot_mass: number; note: string | null }): Promise<boolean> {
+    async function save(profile: {
+        character_id: number;
+        ship_type_id: number;
+        cold_mass: number;
+        hot_mass: number;
+        semi_mass?: number | null;
+        plates_off?: boolean;
+        note: string | null;
+    }): Promise<boolean> {
         const body = await jsonFetch<{ profiles: TShipProfile[] }>(ShipProfileController.update(mapSlug).url, 'PUT', profile);
         store(body?.profiles);
         return body !== null;

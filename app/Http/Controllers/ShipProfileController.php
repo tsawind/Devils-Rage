@@ -46,17 +46,31 @@ final class ShipProfileController extends Controller
             'ship_type_id' => ['required', 'integer', 'exists:types,id'],
             'cold_mass' => ['required', 'integer', 'min:0', 'max:3000000000000'],
             'hot_mass' => ['required', 'integer', 'min:0', 'max:3000000000000', 'gte:cold_mass'],
+            // Patch 37: a capital's smaller prop (SEMI, e.g. a carrier's 500MN), and its plates taken off.
+            'semi_mass' => ['nullable', 'integer', 'gte:cold_mass', 'lte:hot_mass'],
+            'plates_off' => ['sometimes', 'boolean'],
             'note' => ['nullable', 'string', 'max:120'],
         ]);
+
+        $semi = isset($validated['semi_mass']) && $validated['semi_mass'] > $validated['cold_mass'] && $validated['semi_mass'] < $validated['hot_mass'] ? (int) $validated['semi_mass'] : null;
+        $options = array_values(array_filter([
+            $validated['hot_mass'] > $validated['cold_mass'] ? ['key' => 'hot0', 'label' => 'HOT', 'mode' => 'hot', 'mass' => (int) $validated['hot_mass']] : null,
+            $semi !== null ? ['key' => 'hot1', 'label' => 'SEMI', 'mode' => 'hot', 'mass' => $semi] : null,
+            ['key' => 'cold', 'label' => 'COLD', 'mode' => 'cold', 'mass' => (int) $validated['cold_mass']],
+        ]));
+        $note = $validated['note'] ?? null;
+        if (($validated['plates_off'] ?? false) && ! str_contains((string) $note, 'plates off')) {
+            $note = trim('plates off '.($note ?? ''));
+        }
 
         ShipProfile::query()->updateOrCreate(
             ['character_id' => $validated['character_id'], 'ship_type_id' => $validated['ship_type_id']],
             [
                 'cold_mass' => $validated['cold_mass'],
                 'hot_mass' => $validated['hot_mass'],
-                'note' => $validated['note'] ?? null,
+                'note' => $note,
                 'source' => 'manual',
-                'options' => null,
+                'options' => $options,
                 'updated_by_name' => Actor::name(),
             ],
         );
@@ -127,6 +141,7 @@ final class ShipProfileController extends Controller
                         'plates' => $fit['plates'],
                         'entanglers' => $fit['entanglers'],
                         'prop_mass' => (int) round($fit['prop_mass']),
+                        'plate_mass' => (int) round($plateMass),
                         'modules' => $fit['modules'],
                         'options' => $options,
                         'source' => 'seat',
@@ -182,6 +197,7 @@ final class ShipProfileController extends Controller
                 'modules' => $profile->modules ?? [],
                 'options' => $profile->options ?? [],
                 'prop_mass' => $profile->prop_mass,
+                'plate_mass' => (int) $profile->getAttribute('plate_mass'),
                 'source' => $profile->source,
                 'note' => $profile->note,
                 'updated_by_name' => $profile->updated_by_name,

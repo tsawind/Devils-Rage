@@ -187,6 +187,19 @@ describe('patch 37: plans start to finish with the big ships', () => {
         expect(plan.steps.at(-1)?.kind).toBe('done');
     });
 
+    it('ships already on the far side come home, the heaviest last to close it (a Naglfar sitting in Alpha)', () => {
+        const nag: TMassPilot = { ...archon, id: 20, name: 'MyThai', ship: 'Naglfar', hull: 1_260 * M, options: [{ label: 'COLD', mode: 'cold', mass: 1_260 * M }], startsOut: true };
+        const broadsword: TMassPilot = { ...vargur(21, 'Tsawind'), ship: 'Broadsword', hull: 12 * M, options: [{ label: 'HOT', mode: 'hot', mass: 8 * M }, { label: 'COLD', mode: 'cold', mass: 3 * M }], startsOut: true };
+        const pacifier: TMassPilot = { ...small(22, 'Luigi', 'Pacifier'), startsOut: true };
+        const hole = { nominal: 3_300 * M, low: 444 * M, high: 555 * M, maxJump: 2_000 * M, status: 'reduced' as const, watched: true, logged: 2_526 * M };
+        const plan = massPlan('roll', hole, [nag, broadsword, pacifier, vargur(5, 'Delta')]);
+        const jumps = plan.steps.filter((step) => step.kind === 'jump');
+        expect(jumps.every((step) => step.kind === 'jump' && step.direction === 'home')).toBe(true);
+        expect(jumps.at(-1)?.kind === 'jump' && jumps.at(-1)?.ship).toBe('Naglfar');
+        expect(jumps.length).toBe(3);
+        expect(plan.steps.at(-1)?.kind).toBe('done');
+    });
+
     it('suggests a ship to bring when the crew is slow', () => {
         const plan = massPlan('roll', watched, [vargur(2, 'Liam')]);
         expect(plan.tips.some((tip) => tip.startsWith('Bringing'))).toBe(true);

@@ -42,6 +42,8 @@ export type TMassPilot = {
     canSwap: boolean;
     /** The hull's own mass: smaller than a cruiser only when nothing bigger can go. */
     hull?: number;
+    /** Already on the far side (in fleet, sitting there): comes home in the plan. */
+    startsOut?: boolean;
 };
 
 export type TMassObservation = { status: 'fresh' | 'reduced' | 'critical'; logged: number; flip: number | null };
@@ -119,7 +121,8 @@ function initWorld(hole: TMassHole): TWorld {
     if (hole.watched && hole.logged !== undefined) {
         for (const s of sizes) {
             const r = s - hole.logged;
-            if (r <= 0) continue;
+            // Inside the estimate too (it knows the marks since).
+            if (r <= 0 || r < hole.low - M || r > hole.high + M) continue;
             const fits = (hole.observations ?? []).every((seen) => {
                 const at = s - seen.logged;
                 if (band(at, s) !== seen.status) return false;
@@ -251,7 +254,8 @@ function legs(state: TState, allowSmall: boolean): TLeg[] {
     const low = minR(world);
     const seen = new Set<string>();
     for (const ship of state.ships) {
-        if (ship.small && !allowSmall) continue;
+        // Small ships still come home when they're outside.
+        if (ship.small && !allowSmall && !ship.out) continue;
         const pilots = ship.out
             ? state.pilots.filter((pilot) => pilot.pilot.id === ship.pilotId)
             : state.pilots.filter((pilot) => !pilot.out && (pilot.pilot.id === ship.owner.id || (pilot.pilot.canSwap && ship.owner.canSwap && pilot.inShip === null)));
@@ -435,9 +439,19 @@ function policy(state: TState): TLeg | null {
         return home.length ? pickLightest(home) : null;
     }
     if (state.goal === 'crit') return pickHeaviest(options);
-    // Rolling: a jump home that closes it in every case, else the heaviest that may go.
+    // Rolling: a jump home that closes it in every case; else, with ships outside, the others
+    // come home first (lightest first) and the heaviest outside comes home last; else the
+    // heaviest that may go.
     const closing = options.filter((leg) => leg.direction === 'home' && state.world.r.every((r) => r - leg.option.mass <= 0));
     if (closing.length) return pickLightest(closing);
+    const outside = state.ships.filter((ship) => ship.out);
+    if (outside.length) {
+        const biggest = outside.reduce((best, ship) => (heaviest(ship.options) > heaviest(best.options) ? ship : best));
+        const others = options.filter((leg) => leg.direction === 'home' && leg.ship !== biggest);
+        if (others.length) return pickLightest(others);
+        const last = options.filter((leg) => leg.direction === 'home');
+        if (last.length) return pickHeaviest(last);
+    }
     return pickHeaviest(options);
 }
 
@@ -534,8 +548,8 @@ function run(goal: TMassGoal, hole: TMassHole, crew: readonly TMassPilot[], hurr
             owner: pilot,
             options: pilot.options.filter(fits),
             small: (pilot.hull ?? Math.max(0, ...pilot.options.map((option) => option.mass))) < CRUISER_HULL,
-            out: false,
-            pilotId: null,
+            out: Boolean(pilot.startsOut),
+            pilotId: pilot.startsOut ? pilot.id : null,
         }))
         .filter((ship) => ship.options.length > 0);
     if (!ships.length) return { goal, steps: [{ kind: 'stuck', at: 0, text: 'No one in the crew fits through this hole.' }], jumps: 0, tips: [] };
@@ -548,8 +562,8 @@ function run(goal: TMassGoal, hole: TMassHole, crew: readonly TMassPilot[], hurr
         ships,
         pilots: crew.map((pilot) => ({
             pilot,
-            out: false,
-            inShip: null,
+            out: Boolean(pilot.startsOut),
+            inShip: pilot.startsOut ? (ships.find((ship) => ship.owner.id === pilot.id)?.key ?? null) : null,
             freeOut: pilot.lastOut === null ? 0 : Math.max(0, POLARIZATION_SECONDS - pilot.lastOut),
             freeHome: pilot.lastHome === null ? 0 : Math.max(0, POLARIZATION_SECONDS - pilot.lastHome),
         })),
@@ -600,7 +614,10 @@ function run(goal: TMassGoal, hole: TMassHole, crew: readonly TMassPilot[], hurr
                 kind: 'stuck',
                 at: state.t,
                 text: state.ships.some((ship) => ship.out)
-                    ? 'Nobody can come home without risking a collapse with someone still out: check the hole and plan again.'
+                    ? `${state.ships
+                          .filter((ship) => ship.out && (lightest(ship.options) >= minR(state.world) || state.ships.every((other) => !other.out || lightest(other.options) < minR(state.world))))
+                          .map((ship) => `${ship.owner.name} (${ship.owner.ship}, ${massText(lightest(ship.options))})`)
+                          .join(', ')} can't come home without risking a collapse${goal === 'crit' || goal === 'reduced' ? ': roll it instead, or check the hole and plan again' : ' with someone still out: check the hole and plan again'}.`
                     : 'Nobody can go out without risking the hole collapsing behind them. Check the hole and mark it, or bring a lighter ship (a HIC).',
             });
             break;
@@ -658,7 +675,7 @@ const SUGGESTIONS: { name: string; ship: string; hull: number; options: TMassOpt
 
 function withTips(plan: TMassPlan, goal: TMassGoal, hole: TMassHole, crew: readonly TMassPilot[], hurry: boolean): TMassPlan {
     const tips: string[] = [];
-    const small = crew.filter((pilot) => (pilot.hull ?? Math.max(0, ...pilot.options.map((option) => option.mass))) < CRUISER_HULL);
+    const small = crew.filter((pilot) => !pilot.startsOut && (pilot.hull ?? Math.max(0, ...pilot.options.map((option) => option.mass))) < CRUISER_HULL);
     if (small.length && !plan.steps.some((step) => step.kind === 'jump' && small.some((pilot) => pilot.name === step.shipOwner))) {
         tips.push(`Left out (smaller than a cruiser): ${small.map((pilot) => pilot.name).join(', ')}.`);
     }
