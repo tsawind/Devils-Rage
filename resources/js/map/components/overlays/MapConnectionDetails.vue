@@ -9,7 +9,7 @@ import { lastLook, lifeLine } from '@/lib/holeSummary';
 import { estimateMass, formatMass, massHints } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { lifetimeRange, wormholeLifetimeHours } from '@/lib/wormholeLifetime';
-import { markConnectionChecked } from '@/map/actions/holeChecked';
+import { markConnectionChecked, setConnectionWatched } from '@/map/actions/holeChecked';
 import { copyForwardBookmark, forwardSides } from '@/map/holeBookmark';
 import { couldBeNames, guessHole, holeCandidates } from '@/map/holeGuess';
 import { isK162Frigate } from '@/lib/k162';
@@ -70,7 +70,7 @@ const summary = computed((): THoleSummary | null => {
     const guessTotal = type ? null : (guessHole({ endClasses: classes })?.total ?? null);
     const total = type?.total_mass ?? guessTotal;
     const since = connection.jumps_mass_since_status ?? connection.jumps_mass_sum ?? 0;
-    const estimate = total ? estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, status: connection.mass_status }) : null;
+    const estimate = total ? estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, watched: Boolean(connection.mass_watched_at), status: connection.mass_status }) : null;
     const hints = massHints({ estimate, totalMass: total, status: connection.mass_status, jumpedSinceStatus: since });
     const signatures = connection.signatures ?? [];
     const first = [...signatures].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))[0] ?? null;
@@ -130,6 +130,11 @@ function copyBookmark(): void {
     <PopoverContent class="max-h-(--reka-popover-content-available-height) w-80 overflow-y-auto">
         <div class="space-y-3">
             <HoleSummary v-if="summary" :summary="summary" :now="now" @checked="markConnectionChecked(connection.id)" @copy="copyBookmark" @jumps="showJumpLog = !showJumpLog" />
+            <!-- Patch 37: 👁 watched: every jump logged, the range is the size minus the log -->
+            <div v-if="summary && connection.mass_watched_at" class="flex items-center gap-2 rounded-md bg-sky-950/50 px-2 py-1 text-xs text-sky-200">
+                👁 Watched since {{ new Date(connection.mass_watched_at).toISOString().slice(11, 16) }} EVE by {{ connection.mass_watched_by_name ?? 'someone' }} · every jump logged
+                <button v-if="summary.canCheck" type="button" class="ml-auto underline" @click="setConnectionWatched(connection.id, false)">Stop</button>
+            </div>
             <JumpLog v-if="showJumpLog && summary" :connection="connection" />
             <SignatureSection v-if="outSignature" :signature="outSignature" title="Out Sig" />
             <SignatureSection v-if="inSignature" :signature="inSignature" title="In Sig" />

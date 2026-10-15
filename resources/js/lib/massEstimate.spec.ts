@@ -133,3 +133,18 @@ describe('patch 37: a mark restarts the math', () => {
         expect(massHints({ estimate, totalMass: H296, status: 'critical', jumpedSinceStatus: 0 })).toEqual({ shouldBe: null, mayBe: null });
     });
 });
+
+describe('patch 37: a watched hole (every jump logged)', () => {
+    it('a fresh 3.3b hole watched from new has 2,970 ↔ 3,630 left, minus the log', () => {
+        const fresh = estimateMass({ totalMass: 3_300_000_000, jumped: 0, jumpedSinceStatus: 0, status: 'fresh', watched: true })!;
+        expect(fresh.min).toBeCloseTo(2_970_000_000);
+        expect(fresh.max).toBeCloseTo(3_630_000_000);
+        const after = estimateMass({ totalMass: 3_300_000_000, jumped: 1_340_000_000, jumpedSinceStatus: 1_340_000_000, status: 'fresh', watched: true })!;
+        expect(after.min).toBeCloseTo(1_630_000_000);
+        expect(after.max).toBeCloseTo(2_290_000_000);
+    });
+
+    it('not watched: the bottom stays at the band', () => {
+        expect(estimateMass({ totalMass: 3_300_000_000, jumped: 0, jumpedSinceStatus: 0, status: 'fresh' })!.min).toBeCloseTo(1_485_000_000);
+    });
+});

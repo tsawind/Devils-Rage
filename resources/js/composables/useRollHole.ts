@@ -10,7 +10,16 @@ import { ref } from 'vue';
 /** Patch 37: the hole "Mass a hole" works on: the pipe you clicked last (or picked in the window). */
 export const rollHoleId = ref<number | null>(null);
 
-export type TRollTarget = { id: number; label: string; typeName: string | null; hole: TRollHole; connection: TMapConnection };
+export type TRollTarget = {
+    id: number;
+    label: string;
+    typeName: string | null;
+    hole: TRollHole;
+    connection: TMapConnection;
+    /** Patch 37: 👁 watched from new (every jump logged) and what the log holds. */
+    watched: boolean;
+    logged: number;
+};
 
 /** What the planner needs to know about a pipe: its size, what may be left, its marked status. */
 export function rollTarget(store: MapStore, connectionId: number): TRollTarget | null {
@@ -23,7 +32,7 @@ export function rollTarget(store: MapStore, connectionId: number): TRollTarget |
     const typed = (connection.signatures ?? []).find((signature) => signature.wormhole && !signature.wormhole.name.toUpperCase().startsWith('K162'))?.wormhole ?? null;
     const total = typed?.total_mass ?? wormholeMass(typed?.name)?.total ?? guessHole({ endClasses: [from.solarsystem.class, to.solarsystem.class] })?.total ?? null;
     if (!total) return null;
-    const estimate = estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, status: connection.mass_status });
+    const estimate = estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, watched: Boolean(connection.mass_watched_at), status: connection.mass_status });
     if (!estimate) return null;
     const maxJump = typed?.maximum_jump_mass ?? wormholeMass(typed?.name)?.maxJump ?? null;
     const status = connection.mass_status === 'critical' || connection.mass_status === 'reduced' ? connection.mass_status : 'fresh';
@@ -33,6 +42,8 @@ export function rollTarget(store: MapStore, connectionId: number): TRollTarget |
         typeName: typed?.name ?? null,
         hole: { total, low: estimate.min, high: estimate.max, maxJump, status },
         connection,
+        watched: Boolean(connection.mass_watched_at),
+        logged: connection.jumps_mass_sum ?? 0,
     };
 }
 

@@ -158,6 +158,21 @@ it('patch 37: the jump log lists every jump with its HOT / SEMI / COLD / thread 
         ->and($fresh->getAttribute('edited_by_name'))->toBe('WickedWrench');
 });
 
+it('patch 37: anyone turns 👁 Watching on and off, with who turned it on', function () {
+    $map = Map::factory()->create();
+    $connection = holeConnection($map);
+    actingAs(holeMember($map));
+
+    post(route('map-connections.watched', $connection), ['on' => true])->assertRedirect();
+    expect($connection->fresh()->mass_watched_at)->not->toBeNull()
+        ->and($connection->fresh()->mass_watched_by_name)->toBe('WickedWrench');
+
+    actingAs(holeMember($map, 'Someone Else'));
+    post(route('map-connections.watched', $connection), ['on' => false])->assertRedirect();
+    expect($connection->fresh()->mass_watched_at)->toBeNull()
+        ->and($connection->fresh()->mass_watched_by_name)->toBeNull();
+});
+
 it('patch 37: stores each character\'s main from SeAT', function () {
     config(['services.seat.url' => 'https://seat.test', 'services.seat.token' => 'secret']);
     Cache::flush();

@@ -184,6 +184,9 @@ const indicators = computed<EdgeIndicator[]>(() => {
         items.push({ type: 'clock', fill: 'var(--color-purple-500)', stroke: 'var(--color-purple-600)', faint: true });
     }
 
+    // Patch 37: 👁 watched from new (every jump logged).
+    if (connection?.mass_watched_at) items.push({ type: 'eol', label: '👁', fill: 'var(--color-sky-700)', stroke: 'var(--color-sky-800)' });
+
     // Patch 37: someone is "⚖ Adding mass…" on this hole.
     if (connection?.mass_session) {
         const by = (connection.mass_session.by ?? '').split(' ')[0].slice(0, 9);
@@ -262,7 +265,7 @@ const estimate = computed(() => {
     const total = holeType.value?.total_mass ?? guessedMass.value;
     if (!total) return null;
     // Patch 33: every logged jump is mass gone; the ones since the status was set also count against its band.
-    return estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, status: massStatus.value });
+    return estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, watched: Boolean(connection.mass_watched_at), status: massStatus.value });
 });
 
 /** Patch 37: should be Crit / Reduced by now (amber-red pipe), or may have crossed a line (amber "?"). */

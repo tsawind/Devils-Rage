@@ -49,6 +49,9 @@ final class MapConnectionResource extends JsonResource
             'should_have_rolled' => (bool) $this->should_have_rolled,
             'from_memory' => (bool) ($this->resource->getAttributes()['from_memory'] ?? false),
             // Patch 37: "⚖ Tsawind is massing this" on the pill.
+            // Patch 37: 👁 every jump through it is logged.
+            'mass_watched_at' => $this->mass_watched_at?->toISOString(),
+            'mass_watched_by_name' => $this->mass_watched_by_name,
             'mass_session' => MassSessions::forConnection((int) $this->map_id, (int) $this->id),
             'jumps_count' => $this->whenHas('jumps_count', fn (int|string|null $count): int => (int) $count, 0),
             'jumps' => $this->whenLoaded('jumps', fn () => $this->jumps->toResourceCollection(MapConnectionJumpResource::class)),

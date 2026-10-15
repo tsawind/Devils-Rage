@@ -101,3 +101,81 @@ describe('patch 37: mass plans', () => {
         expect(text).toContain('OUT');
     });
 });
+
+describe('patch 37: plans start to finish with the big ships', () => {
+    const vargur = (id: number, name: string): TMassPilot => ({
+        id,
+        name,
+        ship: 'Vargur',
+        hull: 120 * M,
+        options: [
+            { label: 'HOT 500MN', mode: 'hot', mass: 170 * M },
+            { label: 'COLD', mode: 'cold', mass: 120 * M },
+        ],
+        expendable: false,
+        lastOut: null,
+        lastHome: null,
+        canSwap: false,
+    });
+    const small = (id: number, name: string, ship: string): TMassPilot => ({
+        id,
+        name,
+        ship,
+        hull: 1.3 * M,
+        options: [
+            { label: 'HOT 1MN AB', mode: 'hot', mass: 1.9 * M },
+            { label: 'COLD', mode: 'cold', mass: 1.4 * M },
+        ],
+        expendable: false,
+        lastOut: null,
+        lastHome: null,
+        canSwap: false,
+    });
+    const archon: TMassPilot = {
+        id: 9,
+        name: 'TheWrecker',
+        ship: 'Archon',
+        hull: 1_123 * M,
+        options: [
+            { label: 'HOT 50000/10000MN', mode: 'hot', mass: 1_840 * M },
+            { label: 'COLD', mode: 'cold', mass: 1_340 * M },
+        ],
+        expendable: false,
+        lastOut: null,
+        lastHome: null,
+        canSwap: false,
+    };
+    const fleet = [small(1, 'Luigi', 'Pacifier'), vargur(2, 'Liam'), vargur(3, 'Delta'), small(4, 'Nocnitsa', 'Bifrost'), vargur(5, 'Wrecker'), vargur(6, 'William'), archon];
+    const watched = { nominal: 3_300 * M, low: 2_970 * M, high: 3_630 * M, maxJump: 2_000 * M, status: 'fresh' as const, watched: true, logged: 0 };
+
+    it('rolls a watched fresh 3.3b hole with the Archon alone, everyone home', () => {
+        const plan = massPlan('roll', watched, fleet);
+        const jumps = plan.steps.filter((step) => step.kind === 'jump');
+        expect(jumps.length).toBe(2);
+        expect(jumps.every((step) => step.kind === 'jump' && step.ship === 'Archon')).toBe(true);
+        expect(plan.steps.at(-1)?.kind).toBe('done');
+        expect(plan.tips.join(' ')).toContain('smaller than a cruiser');
+    });
+
+    it('makes it crit through the half-mass check, never with ships smaller than a cruiser', () => {
+        const plan = massPlan('crit', watched, fleet);
+        const checks = plan.steps.filter((step) => step.kind === 'check');
+        expect(checks.some((step) => step.kind === 'check' && step.outcome === 'reduced')).toBe(true);
+        expect(checks.at(-1)?.kind === 'check' && checks.at(-1)?.outcome).toBe('critical');
+        expect(plan.steps.some((step) => step.kind === 'jump' && ['Pacifier', 'Bifrost'].includes(step.ship))).toBe(false);
+        expect(plan.steps.at(-1)?.kind).toBe('done');
+        expect(plan.jumps).toBeLessThanOrEqual(8);
+    });
+
+    it('never collapses the hole while making it crit or reduced', () => {
+        for (const goal of ['crit', 'reduced'] as const) {
+            const plan = massPlan(goal, watched, fleet);
+            expect(plan.steps.some((step) => step.kind === 'jump' && step.mayCollapse)).toBe(false);
+        }
+    });
+
+    it('suggests a ship to bring when the crew is slow', () => {
+        const plan = massPlan('roll', watched, [vargur(2, 'Liam')]);
+        expect(plan.tips.some((tip) => tip.startsWith('Bringing'))).toBe(true);
+    });
+});

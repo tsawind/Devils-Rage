@@ -295,6 +295,9 @@ export type TMapConnection = {
     jumps?: TConnectionJump[];
     /** Patch 37: someone is "⚖ Adding mass…" on this hole (everyone on the map sees it). */
     mass_session?: { id: number; by: string | null; goal: string } | null;
+    /** Patch 37: 👁 watched from new: every jump through it is logged. */
+    mass_watched_at?: string | null;
+    mass_watched_by_name?: string | null;
     created_at: string;
     updated_at: string;
 };

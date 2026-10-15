@@ -5,7 +5,8 @@ import { rollTarget } from '@/composables/useRollHole';
 import { displayAlias } from '@/lib/alias';
 import { shipMasses } from '@/composables/useShipProfiles';
 import useUser from '@/composables/useUser';
-import { clock, massPlan, massPlanText, type TMassGoal, type TMassPilot } from '@/lib/massPlan';
+import MassPlanSteps from '@/components/fleet/MassPlanSteps.vue';
+import { massPlan, massPlanText, type TMassGoal, type TMassPilot } from '@/lib/massPlan';
 import { massText, rangeText } from '@/lib/rollPlan';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import { computed, onBeforeUnmount, ref } from 'vue';
@@ -93,6 +94,7 @@ const pilots = computed<{ list: TMassPilot[]; noShip: string[] }>(() => {
                 lastOut: ago('out'),
                 lastHome: ago('home'),
                 canSwap: crew.can_swap,
+                hull: inFleet?.mass ?? member.hull_mass ?? undefined,
             });
         }
     }
@@ -102,7 +104,23 @@ const pilots = computed<{ list: TMassPilot[]; noShip: string[] }>(() => {
 const preview = computed(() => {
     if (!target.value || !left.value || session.goal === 'watch') return null;
     const hole = target.value.hole;
-    return massPlan(session.goal, { nominal: hole.total, low: left.value[0], high: left.value[1], maxJump: hole.maxJump, status: hole.status ?? 'fresh' }, pilots.value.list, session.hurry);
+    // Patch 37: watched (👁 on the pipe, or "only our jumps"): left = size − the log, narrowed by what people saw.
+    const watched = target.value.watched || session.only_our_jumps;
+    return massPlan(
+        session.goal,
+        {
+            nominal: hole.total,
+            low: left.value[0],
+            high: left.value[1],
+            maxJump: hole.maxJump,
+            status: hole.status ?? 'fresh',
+            watched,
+            logged: massState.value.logged[session.map_connection_id] ?? target.value.logged,
+            observations: observations.value.map((row) => ({ status: row.status, logged: row.logged_mass, flip: row.flip_mass })),
+        },
+        pilots.value.list,
+        session.hurry,
+    );
 });
 const showPreview = ref(false);
 const running = computed(() => session.plan?.steps ?? null);
@@ -268,24 +286,7 @@ const statusClass = (status: string) => (status === 'critical' ? 'text-red-400' 
         </div>
 
         <div v-else-if="preview" class="grid gap-0.5 rounded-md border border-border bg-black/30 p-2 font-mono text-[11.5px] leading-relaxed">
-            <template v-for="(step, index) in preview.steps" :key="index">
-                <div v-if="step.kind === 'jump'" :class="step.gamble ? 'text-red-300' : ''">
-                    <span class="text-muted-foreground">+{{ clock(step.at) }}</span> {{ step.pilot }}<span v-if="step.pilot !== step.shipOwner" class="text-sky-300">
-                        in {{ step.shipOwner }}'s</span
-                    >
-                    <span class="text-muted-foreground"> {{ step.ship }}</span>
-                    {{ step.direction === 'out' ? 'OUT' : 'HOME' }}
-                    <span :class="step.option.mode === 'hot' ? 'text-red-300' : 'text-blue-300'">{{ step.option.label }} {{ massText(step.option.mass) }}</span>
-                    <span class="text-muted-foreground"> → {{ rangeText(step.left) }}</span>
-                    <span v-if="step.closer" class="text-sky-300"> · closer</span>
-                    <span v-if="step.gamble" class="font-sans font-semibold"> · GAMBLE: may be left outside</span>
-                    <span v-else-if="step.mayCollapse" class="text-purple-300"> · may close it</span>
-                </div>
-                <div v-else-if="step.kind === 'check'" class="rounded border border-dashed border-purple-500 px-2 py-1 font-sans font-semibold text-purple-300">◆ {{ step.text }}</div>
-                <div v-else-if="step.kind === 'done'" class="font-sans text-emerald-400">✓ {{ step.text }}</div>
-                <div v-else-if="step.kind === 'wait'" class="font-sans text-sky-300">⏳ {{ step.text }}</div>
-                <div v-else class="font-sans text-amber-400">{{ step.text }}</div>
-            </template>
+            <MassPlanSteps :plan="preview" />
             <div class="flex flex-wrap gap-1.5 pt-1 font-sans">
                 <button
                     v-if="preview.steps.some((step) => step.kind === 'jump')"

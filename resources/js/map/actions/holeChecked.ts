@@ -25,3 +25,14 @@ export function markSignatureChecked(signatureId: number): void {
         onError: () => toast.error('Could not mark it as checked.'),
     });
 }
+
+/** Patch 37: 👁 Watching on / off: every jump through this hole is logged. */
+export function setConnectionWatched(connectionId: number, on: boolean): void {
+    router.post(HoleCheckedController.watch(connectionId).url, { on }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['map'],
+        onSuccess: () => toast.success(on ? 'Watching: every jump through it is logged' : 'Stopped watching: back to the normal mass math'),
+        onError: () => toast.error('Could not change watching.'),
+    });
+}

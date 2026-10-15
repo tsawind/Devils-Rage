@@ -39,6 +39,8 @@ export function estimateMass(params: {
     /** Patch 33: the logged jumps since the mass status was last set (all of them when unknown). */
     jumpedSinceStatus?: number | null;
     status: string | null | undefined;
+    /** Patch 37: 👁 watched from new, every jump logged: what's left is the size minus the log. */
+    watched?: boolean;
 }): TMassEstimate | null {
     const total = params.totalMass ?? 0;
     if (!(total > 0)) return null;
@@ -56,7 +58,8 @@ export function estimateMass(params: {
     // also comes off the band's bottom (it surely went through). Not every jump gets logged,
     // so the bottom can still be lower than shown.
     const max = Math.max(0, Math.min(high - jumped, high * bandHigh - since));
-    const min = Math.min(low * bandLow - since, max);
+    // Patch 37: watched, nothing went through unlogged: at least the smallest size minus the log.
+    const min = Math.min(Math.max(low * bandLow - since, params.watched ? low - jumped : -Infinity), max);
     return { capacity: high, min: Math.max(0, min), max };
 }
 

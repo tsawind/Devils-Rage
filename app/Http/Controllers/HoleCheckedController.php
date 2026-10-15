@@ -9,6 +9,7 @@ use App\Models\Signature;
 use App\Support\Actor;
 use App\Support\Broadcasting\MapBroadcaster;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -36,6 +37,29 @@ final class HoleCheckedController extends Controller
         // Patch 37: "still this status at this mass" narrows the hole's real size too.
         $status = $mapConnection->mass_status instanceof \BackedEnum ? (string) $mapConnection->mass_status->value : (string) ($mapConnection->mass_status ?? 'fresh');
         \App\Models\MassObservation::note($mapConnection->id, $status, Actor::name());
+
+        $this->mapBroadcaster->connectionsUpserted($mapConnection->map_id, MapConnection::query()
+            ->whereKey($mapConnection->id)
+            ->with('signatures.signatureType', 'signatures.wormhole')
+            ->withJumpSummary()
+            ->get());
+
+        return back();
+    }
+
+    /**
+     * Patch 37: 👁 Watching on / off: every jump through this hole is logged (anyone may turn it
+     * off; the mass math goes back to the status bands).
+     */
+    public function watch(Request $request, MapConnection $mapConnection): RedirectResponse
+    {
+        Gate::authorize('update', $mapConnection);
+        $on = $request->boolean('on');
+
+        $mapConnection->forceFill([
+            'mass_watched_at' => $on ? now() : null,
+            'mass_watched_by_name' => $on ? Actor::name() : null,
+        ])->save();
 
         $this->mapBroadcaster->connectionsUpserted($mapConnection->map_id, MapConnection::query()
             ->whereKey($mapConnection->id)

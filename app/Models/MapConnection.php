@@ -38,6 +38,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property LifetimeStatus $lifetime
  * @property DateTimeImmutable|string|null $lifetime_updated_at
  * @property CarbonImmutable|null $mass_status_updated_at
+ * @property CarbonImmutable|null $mass_watched_at
+ * @property string|null $mass_watched_by_name
  * @property CarbonImmutable|null $checked_at
  * @property CarbonImmutable|null $eol_since Patch 37: first marked End of life
  * @property CarbonImmutable|null $critical_since Patch 37: first marked Critical
@@ -78,6 +80,7 @@ final class MapConnection extends Model
         'lifetime' => LifetimeStatus::class,
         'lifetime_updated_at' => 'immutable_datetime',
         'mass_status_updated_at' => 'immutable_datetime',
+        'mass_watched_at' => 'immutable_datetime',
         'checked_at' => 'immutable_datetime',
         'eol_since' => 'immutable_datetime',
         'critical_since' => 'immutable_datetime',
