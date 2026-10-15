@@ -42,6 +42,17 @@ it('patch 37: a profile logs hot or cold, entanglers only with the thread switch
         ->and($profile->jumpMass(false, true))->toBe(1_073_000)
         ->and($profile->jumpMass(true, true))->toBe(26_480_000)
         ->and($plain->jumpMass(true))->toBe(303_000_000);
+
+    $carrier = new ShipProfile([
+        'cold_mass' => 1_340_000_000,
+        'hot_mass' => 1_840_000_000,
+        'options' => [
+            ['key' => 'hot0', 'label' => 'HOT 50000MN MWD', 'mode' => 'hot', 'mass' => 1_840_000_000],
+            ['key' => 'hot1', 'label' => 'HOT 500MN MWD', 'mode' => 'hot', 'mass' => 1_390_000_000],
+            ['key' => 'cold', 'label' => 'COLD', 'mode' => 'cold', 'mass' => 1_340_000_000],
+        ],
+    ]);
+    expect($carrier->jumpMass(true))->toBe(1_840_000_000);
 });
 
 it('patch 37: props of one size are one option (50000MN MWD and 10000MN AB add the same mass)', function () {
