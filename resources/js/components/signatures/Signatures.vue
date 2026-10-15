@@ -19,6 +19,7 @@ import MapPanelHeader from '@/components/ui/map-panel/MapPanelHeader.vue';
 import MapPanelHeaderActionButton from '@/components/ui/map-panel/MapPanelHeaderActionButton.vue';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { greenTotal, isk } from '@/lib/greenSites';
 import { useCombat } from '@/composables/combat/useCombat';
 import { recentJump } from '@/composables/signatures/recentJump';
 import { armHole } from '@/composables/signatures/armHole';
@@ -617,6 +618,9 @@ const filteredSignatures = computed(() =>
 
 const hiddenSignaturesCount = computed(() => signatures.value.length - filteredSignatures.value.length);
 
+/** Patch 37: what the system's C5 / C6 combat anomalies are worth, recon / dread (million ISK). */
+const greenSites = computed(() => greenTotal(signatures.value.map((signature) => signature.signature_type?.name ?? signature.raw_type_name)));
+
 const { sortPreferences, sorted, updateSortPreferences } = useSortableSignatures(filteredSignatures);
 
 const connected_connections = computed(() => {
@@ -664,6 +668,16 @@ function createNewSignature() {
             Signatures
             <span v-if="filteredSignatures.length" class="ml-1 text-amber-400">{{ filteredSignatures.length }}</span>
             <span v-if="hiddenSignaturesCount > 0" class="ml-1 text-muted-foreground/70">{{ hiddenSignaturesCount }} hidden</span>
+            <Tooltip v-if="greenSites">
+                <TooltipTrigger as-child>
+                    <span class="ml-2 cursor-help font-mono text-green-400 normal-case">{{ isk(greenSites.recon) }} / {{ isk(greenSites.dread) }}m</span>
+                </TooltipTrigger>
+                <TooltipContent class="font-mono text-xs">
+                    <div class="mb-1 font-sans font-semibold">Combat sites: recon / dread (million ISK)</div>
+                    <div v-for="line in greenSites.lines" :key="line.name">{{ line.count }} {{ line.name }} = {{ isk(line.recon) }}/{{ isk(line.dread) }}</div>
+                    <div class="mt-1 font-sans text-muted-foreground">Recon: site + drifter recon 100. Dread: site + avengers (C5 3, C6 4 × 50) + drifter 300.</div>
+                </TooltipContent>
+            </Tooltip>
             <button
                 v-if="heldWayBack && is_combat"
                 type="button"
