@@ -54,12 +54,19 @@ final class ShipMass
         $cold = ($hull + $plateMass) * $factor;
 
         $base = [['key' => 'cold', 'label' => 'COLD', 'mode' => 'cold', 'mass' => $cold]];
-        foreach ($props as $index => $prop) {
+        // Patch 37: props of one size add the same mass (50000MN MWD = 10000MN AB): one option each.
+        $bySize = [];
+        foreach ($props as $prop) {
+            $bySize[(string) round($prop['mass'])][] = self::propLabel($prop['name']);
+        }
+        $index = 0;
+        foreach ($bySize as $mass => $labels) {
+            $labels = array_values(array_unique($labels));
             $base[] = [
-                'key' => sprintf('hot%d', $index),
-                'label' => sprintf('HOT %s', self::propLabel($prop['name'])),
+                'key' => sprintf('hot%d', $index++),
+                'label' => sprintf('HOT %s', implode(' / ', $labels)),
                 'mode' => 'hot',
-                'mass' => $cold + $prop['mass'] * $factor,
+                'mass' => $cold + (float) $mass * $factor,
             ];
         }
 

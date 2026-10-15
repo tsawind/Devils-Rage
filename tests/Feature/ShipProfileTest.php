@@ -43,3 +43,18 @@ it('patch 37: a profile logs hot or cold, entanglers only with the thread switch
         ->and($profile->jumpMass(true, true))->toBe(26_480_000)
         ->and($plain->jumpMass(true))->toBe(303_000_000);
 });
+
+it('patch 37: props of one size are one option (50000MN MWD and 10000MN AB add the same mass)', function () {
+    App\Models\Category::query()->firstOrCreate(['id' => 6], ['name' => 'Ship']);
+    App\Models\Group::query()->firstOrCreate(['id' => 547], ['name' => 'Carrier', 'category_id' => 6]);
+    App\Models\Type::query()->create(['id' => 23757, 'name' => 'Archon', 'group_id' => 547, 'mass' => 1_340_000_000]);
+
+    $options = ShipMass::options(23757, false, 0.0, [
+        ['name' => '50000MN Microwarpdrive II', 'mass' => 500_000_000],
+        ['name' => '10000MN Monopropellant Enduring Afterburner', 'mass' => 500_000_000],
+        ['name' => '500MN Microwarpdrive II', 'mass' => 50_000_000],
+    ], 0);
+
+    expect(array_column($options, 'label'))->toBe(['HOT 50000MN MWD / 10000MN AB', 'HOT 500MN MWD', 'COLD'])
+        ->and(array_column($options, 'mass'))->toBe([1_840_000_000, 1_390_000_000, 1_340_000_000]);
+});

@@ -129,7 +129,8 @@ it('patch 37: the jump log lists every jump with its HOT / SEMI / COLD / thread 
         'higgs' => false, 'plates' => 0, 'entanglers' => 0, 'prop_mass' => 500_000_000, 'source' => 'manual',
         'options' => [
             ['key' => 'hot0', 'label' => 'HOT 50000MN MWD', 'mode' => 'hot', 'mass' => 1_840_000_000],
-            ['key' => 'hot1', 'label' => 'HOT 500MN MWD', 'mode' => 'hot', 'mass' => 1_390_000_000],
+            ['key' => 'hot1', 'label' => 'HOT 10000MN AB', 'mode' => 'hot', 'mass' => 1_840_000_000],
+            ['key' => 'hot2', 'label' => 'HOT 500MN MWD', 'mode' => 'hot', 'mass' => 1_390_000_000],
             ['key' => 'cold', 'label' => 'COLD', 'mode' => 'cold', 'mass' => 1_340_000_000],
         ],
     ]);
@@ -143,9 +144,10 @@ it('patch 37: the jump log lists every jump with its HOT / SEMI / COLD / thread 
     Pest\Laravel\getJson(route('map-connections.jumps.index', $connection))
         ->assertOk()
         ->assertJsonPath('jumps.0.outbound', true)
-        ->assertJsonPath('jumps.0.options.0.kind', 'hot')
+        ->assertJsonCount(3, 'jumps.0.options')
+        ->assertJsonPath('jumps.0.options.0.label', 'HOT 50000/10000MN')
         ->assertJsonPath('jumps.0.options.1.kind', 'semi')
-        ->assertJsonPath('jumps.0.options.1.label', 'SEMI 500MN MWD')
+        ->assertJsonPath('jumps.0.options.1.label', 'SEMI 500MN')
         ->assertJsonPath('jumps.0.options.2.kind', 'cold');
 
     Pest\Laravel\put(route('map-connection-jumps.update', $jump), ['mass' => 1_390_000_000, 'kind' => 'semi'])->assertRedirect();

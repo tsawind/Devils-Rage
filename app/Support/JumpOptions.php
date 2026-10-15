@@ -11,7 +11,7 @@ use Illuminate\Support\Collection;
 
 /**
  * Patch 37: the masses a logged jump could have had, for the jump log's buttons: HOT (the
- * biggest prop), SEMI (a smaller prop, e.g. a carrier on a 500MN), COLD, and 🧵 threaded
+ * biggest prop size), SEMI (a smaller prop size, e.g. a carrier on a 500MN), COLD, and 🧵 threaded
  * (entanglers on, cold). From the pilot's ship profile, else the bare hull with a typical
  * prop for its size.
  */
@@ -53,12 +53,27 @@ final class JumpOptions
             ['key' => 'hot0', 'label' => 'HOT', 'mode' => 'hot', 'mass' => $profile->hot_mass],
             ['key' => 'cold', 'label' => 'COLD', 'mode' => 'cold', 'mass' => $profile->cold_mass],
         ];
-        $hot = array_values(array_filter($list, fn (array $option): bool => $option['mode'] === 'hot' && ! str_contains($option['key'], '-e')));
-        usort($hot, fn (array $a, array $b): int => $b['mass'] <=> $a['mass']);
+        // Props of one size add the same mass (50000MN MWD = 10000MN AB, 500MN = 100MN, 50MN = 10MN,
+        // 5MN = 1MN): one button per mass, the biggest HOT, the others SEMI ("SEMI 500/100MN").
+        $byMass = [];
+        foreach ($list as $option) {
+            if ($option['mode'] !== 'hot' || str_contains($option['key'], '-e')) {
+                continue;
+            }
+            $mass = (int) $option['mass'];
+            preg_match('/(\d+)MN/', $option['label'], $size);
+            $byMass[$mass][] = $size[1] ?? null;
+        }
+        krsort($byMass);
 
         $options = [];
-        foreach ($hot as $index => $option) {
-            $options[] = ['kind' => $index === 0 ? 'hot' : 'semi', 'label' => $index === 0 ? $option['label'] : str_replace('HOT', 'SEMI', $option['label']), 'mass' => (int) $option['mass']];
+        $first = true;
+        foreach ($byMass as $mass => $sizes) {
+            $sizes = array_values(array_unique(array_filter($sizes)));
+            rsort($sizes, SORT_NUMERIC);
+            $kind = $first ? 'hot' : 'semi';
+            $options[] = ['kind' => $kind, 'label' => strtoupper($kind).($sizes === [] ? '' : ' '.implode('/', $sizes).'MN'), 'mass' => (int) $mass];
+            $first = false;
         }
         foreach ($list as $option) {
             if ($option['mode'] === 'cold') {
