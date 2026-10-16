@@ -184,7 +184,15 @@ const selectedConnection = computed(() => {
 const connectionPopoverOpen = ref(false);
 const connectionPopoverPosition = ref<Vec2 | null>(null);
 
+/**
+ * Patch 37: set by a right-click on a pipe (or its pill) just before the map's own handler
+ * runs for the same click. Any other right-click drops the pipe a left-click picked earlier,
+ * so a system or dotted box gets its own menu the first time.
+ */
+let connectionRightClicked = false;
+
 function handleConnectionContextMenu(_event: MouseEvent, connection: TMapConnection): void {
+    connectionRightClicked = true;
     selectedConnectionId.value = connection.id;
     rollHoleId.value = connection.id;
 }
@@ -217,6 +225,8 @@ const contextMenuBasePoint = ref<Vec2 | null>(null);
 const contextMenuPlaceholderId = ref<number | null>(null);
 
 function handleSurfaceContextMenu(payload: { nodeId: number | null; basePoint: Vec2; placeholderSignatureId: number | null }): void {
+    if (!connectionRightClicked) selectedConnectionId.value = null;
+    connectionRightClicked = false;
     contextMenuNodeId.value = payload.nodeId;
     contextMenuBasePoint.value = payload.basePoint;
     contextMenuPlaceholderId.value = payload.placeholderSignatureId;
