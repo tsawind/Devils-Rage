@@ -16,7 +16,7 @@ import { edgePathAndCenter } from '@/map/core/geometry/paths';
 import type { EdgeGeometry } from '@/map/core/types';
 import type { TMapConnection } from '@/pages/maps';
 import type { TShipSize } from '@/types/models';
-import { computed, onBeforeUnmount, watch } from 'vue';
+import { computed, inject, onBeforeUnmount, watch } from 'vue';
 
 type Props = {
     geometry: EdgeGeometry;
@@ -387,6 +387,9 @@ function getDashArray(): string | undefined {
     if (lifetime.value === 'eol' || lifetime.value === 'critical' || lifetime.value === 'imminent') return '2,6';
     return undefined;
 }
+
+/** Patch 37: the map's pill layer (above every pipe); not there in tests or the drag ghost. */
+const pillLayer = inject('edgePillLayer', false);
 </script>
 
 <template>
@@ -521,17 +524,22 @@ function getDashArray(): string | undefined {
         </path>
         <!-- Patch 37: drawn after the wide click path, so clicks on the pill (and its copy chip) reach it -->
         <!-- Connection status indicators -->
-        <EdgeBadges
-            :indicators="indicators"
-            :center="pill.center"
-            :dot="pill.dot"
-            :scale="scale"
-            :clickable="Boolean(connection)"
-            :title="pipeTitle"
-            @open="(event) => emit('connectionClick', event)"
-            @menu="(event) => emit('connectionContextMenu', event)"
-            @copy="() => store && connection && copyForwardBookmark(store, connection)"
-        />
+        <!-- Patch 37: pills sit on their own layer above every pipe (a later pipe never covers one) -->
+        <Teleport defer to="#edge-pill-layer" :disabled="!pillLayer">
+            <g class="text-stone-600 dark:text-neutral-700" :opacity="fromMemory ? 0.4 : undefined">
+                <EdgeBadges
+                    :indicators="indicators"
+                    :center="pill.center"
+                    :dot="pill.dot"
+                    :scale="scale"
+                    :clickable="Boolean(connection)"
+                    :title="pipeTitle"
+                    @open="(event) => emit('connectionClick', event)"
+                    @menu="(event) => emit('connectionContextMenu', event)"
+                    @copy="() => store && connection && copyForwardBookmark(store, connection)"
+                />
+            </g>
+        </Teleport>
         <!-- Original style draws solid endpoints; the orthogonal style meets the node edge instead. -->
         <template v-if="!isOrthogonal">
             <circle :cx="scaledFrom.x" :cy="scaledFrom.y" r="4" fill="currentColor" />

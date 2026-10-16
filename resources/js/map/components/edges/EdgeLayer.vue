@@ -7,7 +7,7 @@ import { useTreeGeometries } from '@/map/store/treeGeometries';
 import { useMapStore } from '@/map/store/mapStore';
 import type { TMapConnection } from '@/pages/maps';
 import { useElementSize } from '@vueuse/core';
-import { computed, useTemplateRef } from 'vue';
+import { computed, provide, useTemplateRef } from 'vue';
 
 /**
  * Pending "new connection" ghost edge: the gesture layer (a later phase) feeds the
@@ -47,6 +47,9 @@ const pendingGeometry = computed<EdgeGeometry | null>(() => {
     return { id: -1, kind: 'curve', from: pendingFrom, to: pendingTo };
 });
 
+// Patch 37: every pill goes on one layer drawn after all the pipes.
+provide('edgePillLayer', true);
+
 // Patch 17: no halo pass over a background image (it would show as a solid band).
 const { backgroundImageUrl } = useMapBackground();
 </script>
@@ -67,6 +70,7 @@ const { backgroundImageUrl } = useMapBackground();
                 @connection-context-menu="(event, connection) => emit('connectionContextMenu', event, connection)"
             />
             <Edge v-if="pendingGeometry" :geometry="pendingGeometry" :scale="store.scale.value" />
+            <g id="edge-pill-layer" />
         </svg>
     </div>
 </template>
