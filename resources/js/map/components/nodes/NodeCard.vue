@@ -313,9 +313,9 @@ function handleSubmit() {
                 <button
                     type="button"
                     class="shrink-0 rounded-[3px] px-1 font-mono text-[11px] leading-[13px] font-bold"
-                    :class="wayBack.code ? 'bg-green-800 text-green-100 hover:bg-green-700' : 'border border-dashed border-green-700/70 text-green-600/70'"
-                    :title="wayBack.code ? `Way back ${wayBack.code}: click to copy its bookmark` : 'Way back not pasted yet'"
-                    @click.prevent.stop="wayBack.code && emit('copyWayBack')"
+                    :class="wayBack.code ? 'bg-green-800 text-green-100 hover:bg-green-700' : 'border border-dashed border-green-700/70 text-green-600/70 hover:bg-green-900/40'"
+                    :title="wayBack.code ? `Way back ${wayBack.code}: click to copy its bookmark` : 'Way back not pasted yet: click to copy its bookmark without the ID'"
+                    @click.prevent.stop="emit('copyWayBack')"
                 >
                     *{{ wayBack.code ?? '???' }}
                 </button>
