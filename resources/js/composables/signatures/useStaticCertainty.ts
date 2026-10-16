@@ -107,7 +107,10 @@ export function certaintyInputFor(store: MapStore, system: TMapSolarsystem) {
             holes.push({ signatureId: thisSide.id, typeName, isStatic: Boolean(thisSide.is_static), linked: true, leadsTo });
             if (!thisSide.signature_id) unscannedSides++;
         } else if (connection.type !== 'stargate' && otherId !== parentId && leadsTo) {
-            unpastedLeadsTo.push(leadsTo);
+            // Patch 37: the far side has a real type (Z1's K329): it opened there, this side is its
+            // K162, so it can't be this system's static.
+            const farType = farSide?.wormhole?.name ?? null;
+            if (!farType || farType.toUpperCase().startsWith('K162')) unpastedLeadsTo.push(leadsTo);
         }
         if (parentId !== null && otherId === parentId && connection.type !== 'stargate') {
             const parent = store.systems.get(parentId);
