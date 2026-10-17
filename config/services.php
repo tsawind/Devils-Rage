@@ -43,6 +43,9 @@ return [
         // Devil's Rage: 100 days (threat analysis looks back 90); 2 years filled the VPS disk.
         'max_age_days' => env('ZKILLBOARD_MAX_AGE_DAYS', 100),
 
+        // Devil's Rage: known-space kills (about 16k a day) are kept a week; only wormhole kills feed threat analysis.
+        'kspace_max_age_days' => (int) env('ZKILLBOARD_KSPACE_MAX_AGE_DAYS', 7),
+
         // Base URL for the R2Z2 ephemeral killmail stream.
         'r2z2_base_url' => env('ZKILLBOARD_R2Z2_BASE_URL', 'https://r2z2.zkillboard.com'),
 
