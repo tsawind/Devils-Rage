@@ -122,7 +122,8 @@ it('prefills the alias editor with an alias assigned after the page loaded', fun
         ->assertSeeIn('.bg-grid', 'TRACKED');
 
     // The editor must open prefilled with the alias, not the mount-time snapshot.
-    $page->script('document.querySelector(\'[data-solarsystem-id="30000142"]\').dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))');
+    // Patch 39: double-click renames; Alt+double-click opens this alias / occupier editor.
+    $page->script('document.querySelector(\'[data-solarsystem-id="30000142"]\').dispatchEvent(new MouseEvent("dblclick", { bubbles: true, altKey: true }))');
 
     $page->assertValue('input[placeholder="Alias"]', 'TRACKED');
 });
@@ -135,7 +136,7 @@ it('round-trips alias and occupier through the alias editor', function () {
     $page = visit(route('maps.show', $map))
         ->assertSeeIn('.bg-grid', 'Jita');
 
-    $page->script('document.querySelector(\'[data-solarsystem-id="30000142"]\').dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))');
+    $page->script('document.querySelector(\'[data-solarsystem-id="30000142"]\').dispatchEvent(new MouseEvent("dblclick", { bubbles: true, altKey: true }))');
 
     $page->fill('input[placeholder="Alias"]', 'HOME')
         ->fill('input[placeholder="Occupier Alias"]', 'Lazerhawks')
@@ -151,7 +152,7 @@ it('round-trips alias and occupier through the alias editor', function () {
     // Wait for the reload to render (the success handler also closes the
     // popover — reopening before that would race it), then reopen.
     $page->assertSeeIn('.bg-grid', 'HOME');
-    $page->script('document.querySelector(\'[data-solarsystem-id="30000142"]\').dispatchEvent(new MouseEvent("dblclick", { bubbles: true }))');
+    $page->script('document.querySelector(\'[data-solarsystem-id="30000142"]\').dispatchEvent(new MouseEvent("dblclick", { bubbles: true, altKey: true }))');
 
     $page->assertValue('input[placeholder="Alias"]', 'HOME')
         ->assertValue('input[placeholder="Occupier Alias"]', 'Lazerhawks');
