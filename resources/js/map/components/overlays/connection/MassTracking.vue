@@ -29,7 +29,7 @@ const props = defineProps<{
 }>();
 
 // Patch 37: the jump log names the human behind the alt (SeAT main) on hover.
-const { label: pilotName } = usePilotNames();
+const { label: pilotName, detail: pilotDetail } = usePilotNames();
 
 const now = useNowUTC();
 
@@ -322,7 +322,7 @@ function submitForm() {
                                         class="size-4 shrink-0 rounded-full"
                                     />
                                     <!-- Patch 37: hover for the human behind the alt (SeAT main) -->
-                                    <span class="max-w-20 truncate text-[11px] text-muted-foreground" :title="pilotName(jump.character_name)">{{ jump.character_name }}</span>
+                                    <span class="max-w-20 truncate text-[11px] text-muted-foreground" :title="pilotDetail(jump.character_name)">{{ pilotName(jump.character_name) }}</span>
                                 </div>
                                 <div v-else class="flex items-center gap-1 text-[11px] text-muted-foreground italic">
                                     <PencilLine class="size-3 shrink-0" />

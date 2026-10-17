@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePilotNames } from '@/composables/usePilotNames';
 import { Button } from '@/components/ui/button';
 import InputError from '@/components/ui/error/InputError.vue';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,9 @@ import { formatElapsed, parseTargets } from '@/lib/rageRoll';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import { useNow } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
+
+// Patch 39: the person behind a name (hover: main and character).
+const { label: pilotName, detail: pilotDetail } = usePilotNames();
 
 /**
  * Patch 35: the RAGE ROLL chip in the map bar, for everyone while a roll is on:
@@ -80,7 +84,7 @@ function saveTargets(): void {
                 <div>
                     <p class="font-display font-bold tracking-wider text-red-400 uppercase">⚡ Rage roll · {{ name }}</p>
                     <p class="text-xs text-muted-foreground">
-                        Started by {{ rageRoll.started_by ?? 'someone' }} · {{ elapsed }} ago<span v-if="rageRoll.scanning"> · Rage Scanning session (Rage speed for everyone)</span>
+                        Started by <span :title="pilotDetail(rageRoll.started_by)">{{ pilotName(rageRoll.started_by) }}</span> · {{ elapsed }} ago<span v-if="rageRoll.scanning"> · Rage Scanning session (Rage speed for everyone)</span>
                     </p>
                     <p v-if="statics" class="mt-1 font-mono text-xs">{{ statics }}</p>
                 </div>

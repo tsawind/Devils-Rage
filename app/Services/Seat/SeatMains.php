@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services\Seat;
 
 use App\Models\Character;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -110,6 +112,84 @@ final class SeatMains
 
         Cache::forever(self::SYNCED_KEY, now()->getTimestamp());
 
+        $this->syncPeople();
+
         return count($mainOf);
+    }
+
+    /**
+     * Patch 39: character name => the person's name (SeAT's "Name you go by", else the
+     * main's name; a guest's own name in the mapper).
+     *
+     * @return array<string, string>
+     */
+    public static function people(): array
+    {
+        /** @var array<string, string> $people */
+        $people = Character::query()
+            ->whereNotNull('seat_person_name')
+            ->pluck('seat_person_name', 'name')
+            ->all();
+
+        /** @var Collection<int, User> $guests */
+        $guests = User::query()
+            ->whereNotNull('display_name')
+            ->with('characters:id,name,user_id')
+            ->get(['id', 'display_name']);
+        foreach ($guests as $guest) {
+            foreach ($guest->characters as $character) {
+                $people[$character->name] ??= (string) $guest->display_name;
+            }
+        }
+
+        return $people;
+    }
+
+    /**
+     * Whether a name is already someone's (case-insensitive): a SeAT person or another guest.
+     */
+    public static function nameTaken(string $name, ?int $exceptUserId = null): bool
+    {
+        $lower = mb_strtolower(mb_trim($name));
+
+        return Character::query()->whereRaw('lower(seat_person_name) = ?', [$lower])
+            ->when($exceptUserId !== null, fn ($query) => $query->where(fn ($inner) => $inner->whereNull('user_id')->orWhere('user_id', '!=', $exceptUserId)))
+            ->exists()
+            || User::query()->whereRaw('lower(display_name) = ?', [$lower])
+                ->when($exceptUserId !== null, fn ($query) => $query->whereKeyNot($exceptUserId))
+                ->exists();
+    }
+
+    /**
+     * Patch 39: each character's person name from the SeAT plugin's bot API. Nothing
+     * changes when the plugin can't be reached (or isn't connected).
+     */
+    private function syncPeople(): void
+    {
+        $client = app(SeatClient::class);
+        if (! $client->configured()) {
+            return;
+        }
+
+        try {
+            $people = $client->people();
+        } catch (SeatUnavailableException|SeatForbiddenException) {
+            return;
+        }
+
+        $seen = [];
+        foreach ($people as $person) {
+            $ids = array_map(intval(...), $person['character_ids']);
+            if ($ids === [] || ! is_string($person['name']) || $person['name'] === '') {
+                continue;
+            }
+            Character::query()->whereKey($ids)->update(['seat_person_name' => mb_substr($person['name'], 0, 32)]);
+            array_push($seen, ...$ids);
+        }
+
+        Character::query()
+            ->whereNotNull('seat_person_name')
+            ->when($seen !== [], fn ($query) => $query->whereKeyNot($seen))
+            ->update(['seat_person_name' => null]);
     }
 }

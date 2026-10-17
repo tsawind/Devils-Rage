@@ -14,6 +14,7 @@ use DevilsRage\Seat\Services\Health;
 use DevilsRage\Seat\Services\Holdings;
 use DevilsRage\Seat\Services\Leadership;
 use DevilsRage\Seat\Services\OmegaStatus;
+use DevilsRage\Seat\Services\PersonName;
 use DevilsRage\Seat\Services\StructureFuel;
 use DevilsRage\Seat\Services\AssetLocator;
 use DevilsRage\Seat\Skills\SkillCheck;
@@ -31,6 +32,27 @@ use Warlof\Seat\Connector\Models\User as ConnectorUser;
  */
 class BotApiController extends Controller
 {
+    /**
+     * Patch 39: every person on SeAT with the name they go by, their main, and their
+     * characters (for the mapper's hourly sync: it shows the person for everything they do).
+     */
+    public function people(): JsonResponse
+    {
+        $people = User::query()
+            ->with('main_character')
+            ->get()
+            ->map(fn (User $user): array => [
+                'user_id' => $user->id,
+                'name' => PersonName::of($user),
+                'main' => PersonName::mainName($user),
+                'character_ids' => array_values(array_map('intval', $user->associatedCharacterIds())),
+            ])
+            ->filter(fn (array $person): bool => $person['character_ids'] !== [])
+            ->values();
+
+        return response()->json(['people' => $people]);
+    }
+
     public function jumpShips(string $discordId, AssetLocator $assets): JsonResponse
     {
         $user = $this->userFor($discordId);

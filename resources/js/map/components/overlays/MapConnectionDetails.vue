@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePilotNames } from '@/composables/usePilotNames';
 import { PopoverContent } from '@/components/ui/popover';
 import { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { computed, ref } from 'vue';
@@ -20,6 +21,9 @@ import JumpLog from './connection/JumpLog.vue';
 import MassTracking from './connection/MassTracking.vue';
 import SignatureSection from './connection/SignatureSection.vue';
 import WormholeProperties from './connection/WormholeProperties.vue';
+
+// Patch 39: the person behind a name (hover: main and character).
+const { label: pilotName, detail: pilotDetail } = usePilotNames();
 
 const { connection } = defineProps<{
     connection: TMapConnection & {
@@ -140,7 +144,7 @@ function copyBookmark(): void {
             <!-- Patch 39: fresh / watching: only our logged jumps since the mark count -->
             <div v-if="summary && connection.mass_watched_at" class="flex items-center gap-2 rounded-md bg-emerald-950/50 px-2 py-1 text-xs text-emerald-200">
                 <span :title="'Jumps logged before the mark stay in the log but no longer count'">
-                    Fresh · ours only since {{ new Date(connection.mass_watched_at).toISOString().slice(11, 16) }} EVE · {{ connection.mass_watched_by_name ?? 'someone' }}
+                    Fresh · ours only since {{ new Date(connection.mass_watched_at).toISOString().slice(11, 16) }} EVE · <span :title="pilotDetail(connection.mass_watched_by_name)">{{ pilotName(connection.mass_watched_by_name) }}</span>
                 </span>
                 <template v-if="summary.canCheck">
                     <button type="button" class="ml-auto underline" @click="setWatchOpen(connection.id, !connection.mass_watch_open)">

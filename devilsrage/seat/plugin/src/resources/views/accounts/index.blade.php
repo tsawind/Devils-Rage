@@ -218,6 +218,33 @@
     </div>
   </details>
 
+  {{-- Patch 39: the name you go by on the mapper and Discord --}}
+  <div class="card">
+    <div class="card-body">
+      <form method="post" action="{{ route('devilsrage.accounts.name') }}" class="d-flex align-items-end flex-wrap" style="gap: 1rem;">
+        @csrf
+        <div>
+          <label for="dr-person-name" class="mb-1">Name you go by</label>
+          <input id="dr-person-name" type="text" name="person_name" maxlength="24" class="form-control @error('person_name') is-invalid @enderror"
+                 value="{{ old('person_name', $personSetting?->person_name) }}" placeholder="{{ $mainName }}"
+                 title="What people call you on comms. The mapper shows it for everything you do. Empty = your main's name.">
+          @error('person_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+        </div>
+        <div>
+          <label for="dr-discord-style" class="mb-1">Discord shows me as</label>
+          @php($style = old('discord_style', $personSetting?->discord_style ?? 'main'))
+          <select id="dr-discord-style" name="discord_style" class="form-control" title="Your Discord nickname (updated within the hour, cut to 32 characters)">
+            <option value="main" @selected($style === 'main')>[TICKER] {{ $mainName }}</option>
+            <option value="name" @selected($style === 'name')>[TICKER] Name</option>
+            <option value="both" @selected($style === 'both')>[TICKER] Name ({{ $mainName }})</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary">Save</button>
+        <span class="text-muted small">Unique in the corp. The mapper shows it next to your characters.</span>
+      </form>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-body d-flex align-items-center flex-wrap" style="gap: 1rem;">
       <form method="post" action="{{ route('devilsrage.accounts.share') }}" class="d-inline">

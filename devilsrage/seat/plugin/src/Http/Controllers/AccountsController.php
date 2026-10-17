@@ -13,6 +13,7 @@ use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
 use DevilsRage\Seat\Services\Holdings;
 use DevilsRage\Seat\Services\OmegaStatus;
+use DevilsRage\Seat\Services\PersonName;
 use DevilsRage\Seat\Services\PublicCharacter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -65,6 +66,8 @@ class AccountsController extends Controller
             'holdings' => $holdings->accounts($accounts, $holdings->characters(array_map('intval', $assigned))),
             'unassigned' => $characters->except($assigned)->values(),
             'share' => AccountSetting::sharesFor($user->id),
+            'personSetting' => AccountSetting::query()->find($user->id),
+            'mainName' => PersonName::mainName($user),
             'maxCharacters' => Account::MAX_CHARACTERS,
             'fittings' => Fitting::query()->with('ship')->orderBy('name')->get()
                 ->mapWithKeys(fn (Fitting $fit): array => [(int) $fit->fitting_id => $fit->name.' ('.($fit->ship->typeName ?? '?').')']),
@@ -387,6 +390,31 @@ class AccountsController extends Controller
         return back()->with('success', $share
             ? 'Admins and directors can now see your account layout.'
             : 'Your account layout is now private.');
+    }
+
+    /**
+     * Patch 39: the name you go by on the mapper and Discord, and how Discord shows you.
+     */
+    public function saveName(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'person_name' => ['nullable', 'string', 'max:'.PersonName::MAX],
+            'discord_style' => ['required', 'in:'.implode(',', PersonName::STYLES)],
+        ]);
+        $name = trim((string) ($validated['person_name'] ?? ''));
+        $problem = PersonName::problem($name, (int) auth()->id());
+        if ($problem !== null) {
+            return back()->withErrors(['person_name' => $problem])->withInput();
+        }
+
+        AccountSetting::query()->updateOrCreate(['user_id' => auth()->id()], [
+            'person_name' => $name === '' ? null : $name,
+            'discord_style' => $validated['discord_style'],
+        ]);
+
+        return back()->with('success', $name === ''
+            ? 'You go by your main\'s name. Discord updates within the hour.'
+            : "You go by {$name} on the mapper. Discord updates within the hour.");
     }
 
     public function layout(Leadership $leadership, Corporation $corporation): View

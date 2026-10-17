@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePilotNames } from '@/composables/usePilotNames';
 import MapConnectionJumpController from '@/actions/App/Http/Controllers/MapConnectionJumpController';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import usePermission from '@/composables/usePermission';
@@ -10,6 +11,9 @@ import { updateMapConnectionJump } from '@/map/actions/updateMapConnectionJump';
 import type { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { watchClass, watchJumpMass } from '@/lib/fleetRules';
 import { computed, onMounted, ref, watch } from 'vue';
+
+// Patch 39: the person behind a name (hover: main and character).
+const { label: pilotName, detail: pilotDetail } = usePilotNames();
 
 /**
  * Patch 37: the whole jump log of a pipe (click the mass bar). Each tracked jump has the
@@ -138,13 +142,13 @@ const chipClass = (kind: TKind, on: boolean) =>
             <span v-else :class="jump.outbound ? 'text-sky-400' : 'text-purple-400'">{{ jump.outbound ? '→' : '←' }}</span>
             <div class="min-w-0">
                 <div class="truncate">
-                    <template v-if="jump.character_name">{{ jump.character_name }}</template>
+                    <span v-if="jump.character_name" :title="pilotDetail(jump.character_name)">{{ pilotName(jump.character_name) }}</span>
                     <span v-else-if="jump.side" class="font-medium" :title="jump.side === 'hostile' ? 'Hostile, added from the watch banner' : 'Friendly not on the mapper, added from the watch banner'">
                         {{ jump.side === 'hostile' ? 'Hostile' : 'Friendly' }} · {{ watchClass(jump.ship_class)?.label ?? 'typed' }}
                     </span>
                     <i v-else class="text-muted-foreground">manual</i>
                     <span v-if="jump.ship_type_name" class="text-muted-foreground"> · {{ jump.ship_type_name }}</span>
-                    <span v-if="jump.edited_by_name" class="text-amber-400" :title="`Changed by hand by ${jump.edited_by_name}`"> ✎ {{ jump.edited_by_name }}</span>
+                    <span v-if="jump.edited_by_name" class="text-amber-400" :title="`Changed by hand by ${jump.edited_by_name}`"> ✎ {{ pilotName(jump.edited_by_name) }}</span>
                 </div>
                 <div v-if="jump.options.length && !jump.is_manual" class="mt-0.5 flex flex-wrap gap-0.5">
                     <button

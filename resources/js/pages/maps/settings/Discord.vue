@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePilotNames } from '@/composables/usePilotNames';
 import DiscordChannelFeedController from '@/actions/App/Http/Controllers/DiscordChannelFeedController';
 import MapAlertController from '@/actions/App/Http/Controllers/MapAlertController';
 import MapAlertStateController from '@/actions/App/Http/Controllers/MapAlertStateController';
@@ -47,6 +48,9 @@ import { TStaticSolarsystem } from '@/types/static-data';
 import { router, useForm } from '@inertiajs/vue3';
 import { AtSign, Bell, Bot, ExternalLink, Megaphone, Pencil, Rocket, Route, ShieldCheck, Swords, Trash2, Webhook } from 'lucide-vue-next';
 import { computed, ref, type Component } from 'vue';
+
+// Patch 39: the person behind a name (hover: main and character).
+const { label: pilotName } = usePilotNames();
 
 /** Patch 30: one sent rally ping, for the ping log. */
 type TRallyPingLog = { id: number; kind: string; title: string; channel: string; mention: string | null; character_name: string | null; created_at: string };
@@ -653,7 +657,7 @@ function confirmPendingDelete() {
                                     <Badge variant="outline" class="shrink-0">{{ pingKindLabel[ping.kind] ?? ping.kind }}</Badge>
                                     <span class="min-w-0 flex-1 truncate">{{ ping.title }}</span>
                                     <span class="text-xs text-muted-foreground">#{{ ping.channel }}<template v-if="ping.mention"> · {{ ping.mention }}</template></span>
-                                    <span class="text-xs font-medium">{{ ping.character_name ?? 'Unknown' }}</span>
+                                    <span class="text-xs font-medium">{{ ping.character_name ? pilotName(ping.character_name) : 'Unknown' }}</span>
                                 </li>
                             </ul>
                         </CardContent>

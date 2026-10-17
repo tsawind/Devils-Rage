@@ -17,6 +17,7 @@ import { toast } from 'vue-sonner';
 type TShareLink = {
     id: number;
     kind: 'map' | 'route';
+    access?: 'viewer' | 'member';
     label: string | null;
     url: string;
     created_by_name: string | null;
@@ -36,6 +37,8 @@ const { label: pilotName } = usePilotNames();
 const links = computed(() => ((page.props as unknown as { share_links?: TShareLink[] }).share_links ?? []) as TShareLink[]);
 const hours = ref(12);
 const permanent = ref(false);
+// Patch 39: Viewer (read only) or Full access (member rights: map, scan, arm, watch; no map settings). Managers only.
+const access = ref<'viewer' | 'member'>('viewer');
 const linkLabel = ref('');
 const busy = ref(false);
 const MAX_HOURS = 168;
@@ -56,7 +59,12 @@ function create(): void {
     const before = new Set(links.value.map((link) => link.id));
     router.post(
         MapShareLinkController.store(mapSlug).url,
-        { hours: Math.min(Math.max(Math.round(hours.value), 1), MAX_HOURS), permanent: permanent.value, label: linkLabel.value || null },
+        {
+            hours: Math.min(Math.max(Math.round(hours.value), 1), MAX_HOURS),
+            permanent: permanent.value,
+            label: linkLabel.value || null,
+            access: canManage.value ? access.value : 'viewer',
+        },
         {
             preserveScroll: true,
             preserveState: true,
@@ -91,20 +99,32 @@ function endsIn(link: TShareLink): string {
     return hoursLeft < 24 ? `ends in ${hoursLeft} h ${minutes % 60} min` : `ends in ${Math.floor(hoursLeft / 24)} d ${hoursLeft % 24} h`;
 }
 
-const presets = [2, 12, 24, 168];
+// Patch 39: 3 h / 12 h / 24 h / 3 days (Permanent is the managers' box).
+const presets = [3, 12, 24, 72];
+function presetLabel(preset: number): string {
+    return preset < 24 ? `${preset} h` : preset === 24 ? '24 h' : `${preset / 24} days`;
+}
 </script>
 
 <template>
     <div v-if="inline" class="space-y-3">
         <slot name="before" />
         <div class="space-y-2 text-sm">
-            <p class="text-muted-foreground">Anyone with a link can see the map, read only, until it runs out. Then it's deleted.</p>
+            <p class="text-muted-foreground">
+                Anyone with a link can see the map, read only, until it runs out. Then it's deleted.<template v-if="canManage">
+                    A Full-access link lets a logged-in pilot map, scan, arm and watch like a member (no map settings).</template
+                >
+            </p>
+            <div v-if="canManage" class="flex items-center gap-1 text-xs">
+                <Button size="sm" :variant="access === 'viewer' ? 'default' : 'outline'" class="h-7 px-2 text-xs" @click="access = 'viewer'">Viewer</Button>
+                <Button size="sm" :variant="access === 'member' ? 'default' : 'outline'" class="h-7 px-2 text-xs" @click="access = 'member'">Full access</Button>
+            </div>
             <div class="flex flex-wrap items-center gap-2">
                 <span>For</span>
                 <input v-model.number="hours" type="number" min="1" :max="MAX_HOURS" :disabled="permanent" class="h-8 w-20 rounded-md border bg-background px-2" />
                 <span>hours</span>
                 <Button v-for="preset in presets" :key="preset" size="sm" variant="outline" class="h-7 px-2 text-xs" :disabled="permanent" @click="hours = preset">
-                    {{ preset < 24 ? `${preset} h` : preset === 24 ? '1 day' : '7 days' }}
+                    {{ presetLabel(preset) }}
                 </Button>
                 <label v-if="canManage" class="flex items-center gap-1 text-xs"><input v-model="permanent" type="checkbox" /> Permanent</label>
             </div>
@@ -113,13 +133,14 @@ const presets = [2, 12, 24, 168];
         </div>
         <div class="space-y-1">
             <div class="flex items-center justify-between text-xs font-medium text-muted-foreground">
-                <span>{{ canManage ? 'Live viewer links' : 'Your viewer links' }}</span>
+                <span>{{ canManage ? 'Live share links' : 'Your viewer links' }}</span>
                 <button type="button" class="underline" @click="load">refresh</button>
             </div>
             <p v-if="!links.length" class="text-xs text-muted-foreground">None.</p>
             <div v-for="link in links" :key="link.id" class="flex flex-wrap items-center justify-between gap-1 border-t py-1.5 text-xs">
                 <span class="min-w-0">
-                    <span class="font-medium">{{ link.label || (link.kind === 'route' ? 'Route report' : 'Viewer link') }}</span>
+                    <span class="font-medium">{{ link.label || (link.kind === 'route' ? 'Route report' : link.access === 'member' ? 'Full-access link' : 'Viewer link') }}</span>
+                    <span v-if="link.access === 'member'" class="ml-1 rounded bg-amber-500/15 px-1 text-[10px] text-amber-500">Full access</span>
                     <span class="text-muted-foreground">
                         · {{ link.kind === 'route' ? 'route only' : 'whole map' }} · by {{ pilotName(link.created_by_name) }} · {{ endsIn(link) }}<template v-if="link.uses">
                             · opened {{ link.uses }}×</template

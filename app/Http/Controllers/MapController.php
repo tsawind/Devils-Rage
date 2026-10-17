@@ -88,7 +88,10 @@ final class MapController extends Controller
             // Patch 37: the Share popup's viewer links (loaded when it opens).
             'share_links' => Inertia::optional(fn (): array => MapShareLinkController::linksFor($map, $user)),
             // Patch 37: each character's main from SeAT, for "Alt - Main" names.
-            'pilot_mains' => fn (): array => ['enabled' => SeatMains::enabled(), 'mains' => SeatMains::byName()],
+            // Patch 39: plus each character's person ("Name you go by" in SeAT, a guest's own name).
+            'pilot_mains' => fn (): array => ['enabled' => SeatMains::enabled(), 'mains' => SeatMains::byName(), 'people' => SeatMains::people()],
+            // Patch 39: a guest (here through a share link, not on SeAT) picks the name people call them.
+            'guest_name' => fn (): ?array => $this->guestName($map, $user),
         ])
             ->with(new MapPermissionsFeature($map, $user))
             ->with($settingsFeature)
@@ -152,6 +155,13 @@ final class MapController extends Controller
         // Patch 37: a live viewer link (timed or permanent); the old single share token still works.
         $link = MapShareLink::query()->where('token', $token)->where('kind', 'map')->live()->with('map')->first();
         if ($link instanceof MapShareLink) {
+            // Patch 39: a Full-access link works for a logged-in EVE character: log in first, then come back.
+            if ($link->access === MapShareLink::ACCESS_MEMBER && ! $this->user instanceof User) {
+                session()->put('url.intended', route('maps.share', ['token' => $token]));
+
+                return redirect()->route('login');
+            }
+
             $link->forceFill(['last_used_at' => now(), 'uses' => $link->uses + 1])->save();
 
             return redirect()->route('maps.show', ['map' => $link->map, 'share_token' => $token]);
@@ -160,6 +170,33 @@ final class MapController extends Controller
         $map = Map::query()->where('share_token', $token)->firstOrFail();
 
         return redirect()->route('maps.show', ['map' => $map, 'share_token' => $token]);
+    }
+
+    /**
+     * Patch 39: what a guest is asked on their first visit ("What should people call you?"),
+     * or null when nothing needs asking: not logged in, on SeAT, a map member, or named already.
+     *
+     * @return array{needed: bool, suggested: string|null, current: string|null}|null
+     */
+    private function guestName(Map $map, ?User $user): ?array
+    {
+        if (! $user instanceof User) {
+            return null;
+        }
+
+        $member = $map->mapAccessors()->notExpired()->whereIn('accessible_id', $user->getAccessibleIds())->exists();
+        $onSeat = $user->characters()->whereNotNull('seat_person_name')->exists();
+        if ($member || $onSeat) {
+            return null;
+        }
+
+        $current = User::query()->whereKey($user->id)->value('display_name');
+
+        return [
+            'needed' => ! is_string($current) || $current === '',
+            'suggested' => $user->active_character?->name,
+            'current' => is_string($current) ? $current : null,
+        ];
     }
 
     /**

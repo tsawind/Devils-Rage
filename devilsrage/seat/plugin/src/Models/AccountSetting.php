@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * @property int $user_id
  * @property bool $share
+ * @property string|null $person_name Patch 39: the name they go by ("Tsa"); empty = their main's
+ * @property string $discord_style Patch 39: main / name / both
  */
 class AccountSetting extends Model
 {
@@ -18,7 +20,7 @@ class AccountSetting extends Model
 
     protected $primaryKey = 'user_id';
 
-    protected $fillable = ['user_id', 'share'];
+    protected $fillable = ['user_id', 'share', 'person_name', 'discord_style'];
 
     /** @var array<string, string> */
     protected $casts = ['share' => 'boolean'];

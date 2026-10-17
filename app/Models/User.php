@@ -22,6 +22,7 @@ use Laravel\Sanctum\HasApiTokens;
  * @property int $id
  * @property string $name
  * @property int|null $preferred_character_id
+ * @property string|null $display_name Patch 39: a guest's name in the mapper
  * @property Character|null $active_character
  * @property-read Character|null $preferredCharacter
  * @property-read Collection<int,Character> $characters

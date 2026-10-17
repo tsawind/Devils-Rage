@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePilotNames } from '@/composables/usePilotNames';
 import BracketIcon from '@/components/fleet/BracketIcon.vue';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useMinuteNow } from '@/composables/useMinuteNow';
@@ -17,6 +18,9 @@ import MapConnectionJumpController from '@/actions/App/Http/Controllers/MapConne
 import { jsonFetch } from '@/lib/jsonFetch';
 import { router, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
+
+// Patch 39: the person behind a name (hover: main and character).
+const { label: pilotName } = usePilotNames();
 
 /**
  * Patch 39: fresh + watching. A hole marked fresh (or watched) counts only our logged jumps.
@@ -227,7 +231,7 @@ const mass = (kg: number) => formatMass(kg);
                     </TooltipTrigger>
                     <TooltipContent class="max-w-64 text-xs">
                         {{ item.nearName }} → {{ item.farName }} was marked fresh {{ item.minutes }} min ago by
-                        {{ item.connection.mass_watched_by_name ?? 'someone' }}: only jumps logged since count. ⌃ opens the watch banner; ✕ goes back to the normal
+                        {{ pilotName(item.connection.mass_watched_by_name) }}: only jumps logged since count. ⌃ opens the watch banner; ✕ goes back to the normal
                         (safer) mass math.
                     </TooltipContent>
                 </Tooltip>

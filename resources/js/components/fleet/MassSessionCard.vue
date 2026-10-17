@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePilotNames } from '@/composables/usePilotNames';
 import { fleetMembers } from '@/composables/useFleet';
 import { massState, sessionWindow, useMassSessions, type TMassSession, type TObservationRow, type TRollingCrew } from '@/composables/useMassSessions';
 import { rollTarget } from '@/composables/useRollHole';
@@ -11,6 +12,9 @@ import { massText, rangeText } from '@/lib/rollPlan';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import { computed, onBeforeUnmount, ref } from 'vue';
 import { toast } from 'vue-sonner';
+
+// Patch 39: the person behind a name (hover: main and character).
+const { label: pilotName, detail: pilotDetail } = usePilotNames();
 
 /**
  * Patch 37: one "⚖ Adding mass…" session: the goal, the crews, what's left (from what people
@@ -196,7 +200,7 @@ const statusClass = (status: string) => (status === 'critical' ? 'text-red-400' 
             <button type="button" class="text-muted-foreground hover:text-foreground" title="End this session" @click="api.end(session.id)">✕</button>
         </div>
         <p class="text-[11px] text-muted-foreground">
-            {{ session.started_by_name ?? 'Someone' }} started it {{ when(session.created_at) }}<template v-if="homeName"> · home side {{ homeName }}</template>
+            <span :title="pilotDetail(session.started_by_name)">{{ session.started_by_name ? pilotName(session.started_by_name) : 'Someone' }}</span> started it {{ when(session.created_at) }}<template v-if="homeName"> · home side {{ homeName }}</template>
         </p>
         <p v-if="!target" class="text-muted-foreground">This pipe has no known (or guessed) size, or it's gone from the map.</p>
 

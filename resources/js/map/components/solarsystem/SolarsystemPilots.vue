@@ -9,7 +9,8 @@ defineProps<{
 }>();
 
 // Patch 37: the hover list shows each pilot's main (from SeAT).
-const { suffix } = usePilotNames();
+// Patch 39: the card keeps the character's name, the person after it in grey ("LuigiSquirrel · Tsa").
+const { after } = usePilotNames();
 </script>
 
 <template>
@@ -18,7 +19,8 @@ const { suffix } = usePilotNames();
             <span
                 class="flex h-[20px] items-center gap-1 truncate border-t border-b-neutral-300 px-2 pt-0.5 text-[11px] leading-0 dark:border-neutral-700"
             >
-                <span class="size-1 animate-pulse rounded-full bg-green-500"></span>{{ pilots.at(0)?.name }}
+                <span class="size-1 animate-pulse rounded-full bg-green-500"></span>{{ pilots.at(0)?.name
+                }}<span v-if="pilots.at(0) && after(pilots.at(0)!.name)" class="text-muted-foreground"> · {{ after(pilots.at(0)!.name) }}</span>
                 <span v-if="pilots.length > 1">and {{ pilots.length - 1 }} more</span>
             </span>
         </TooltipTrigger>
@@ -27,7 +29,7 @@ const { suffix } = usePilotNames();
                 <div v-for="pilot in pilots" :key="pilot.id" class="flex items-center gap-2">
                     <CharacterImage :character_id="pilot.id" :character_name="pilot.name" :size="32" class="size-5 shrink-0 rounded-full" />
                     <span class="truncate font-medium"
-                        >{{ pilot.name }}<span v-if="suffix(pilot.name)" class="font-normal text-muted-foreground"> - {{ suffix(pilot.name) }}</span></span
+                        >{{ pilot.name }}<span v-if="after(pilot.name)" class="font-normal text-muted-foreground"> · {{ after(pilot.name) }}</span></span
                     >
                     <span v-if="pilot.corporation" class="shrink-0 text-muted-foreground">[{{ pilot.corporation.ticker }}]</span>
                     <span v-if="pilot.status?.ship_type" class="ml-auto truncate pl-2 text-muted-foreground">{{ pilot.status.ship_type.name }}</span>

@@ -20,6 +20,7 @@ use Illuminate\Support\Str;
  * @property string $token
  * @property string $kind
  * @property string|null $label
+ * @property string $access Patch 39: viewer (read only) or member ("Full access")
  * @property int|null $created_by_user_id
  * @property string|null $created_by_name
  * @property CarbonImmutable|null $expires_at
@@ -34,6 +35,11 @@ final class MapShareLink extends Model
 {
     /** Members can share for at most this long; managers can also make permanent links. */
     public const int MAX_HOURS = 168;
+
+    /** Patch 39: a link's access level. Full access (member) links are made by managers only. */
+    public const string ACCESS_VIEWER = 'viewer';
+
+    public const string ACCESS_MEMBER = 'member';
 
     /** A route link from a mailed route report. */
     public const int ROUTE_HOURS = 24;
@@ -75,13 +81,14 @@ final class MapShareLink extends Model
     }
 
     /**
-     * @return array{id: int, kind: string, label: string|null, url: string, created_by_name: string|null, mine: bool, expires_at: string|null, permanent: bool, last_used_at: string|null, uses: int}
+     * @return array{id: int, kind: string, access: string, label: string|null, url: string, created_by_name: string|null, mine: bool, expires_at: string|null, permanent: bool, last_used_at: string|null, uses: int}
      */
     public function toPayload(?User $viewer): array
     {
         return [
             'id' => $this->id,
             'kind' => $this->kind,
+            'access' => $this->access ?? self::ACCESS_VIEWER,
             'label' => $this->label,
             'url' => route($this->kind === 'route' ? 'share.route' : 'maps.share', ['token' => $this->token]),
             'created_by_name' => $this->created_by_name,

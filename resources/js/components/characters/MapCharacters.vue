@@ -8,10 +8,10 @@ import { useJumpCounts } from '@/composables/useJumpCounts';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import type { TMap, TResolvedSelectedMapSolarsystem, TResolvedSolarsystem } from '@/pages/maps';
 import { TCharacter } from '@/types/models';
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, reactive } from 'vue';
 import usePermission from '@/composables/usePermission';
 import { useMapPresent } from '@/composables/useMapPresence';
-import { usePilotNames } from '@/composables/usePilotNames';
+import { groupByPerson, usePilotNames } from '@/composables/usePilotNames';
 import { router, usePage } from '@inertiajs/vue3';
 
 const { map_characters, map, selected_map_solarsystem, ignored_systems } = defineProps<{
@@ -124,7 +124,18 @@ const { present } = useMapPresent();
 onMounted(() => {
     if (canManageAccess.value) router.reload({ only: ['share_links'] });
 });
-const { suffix: mainSuffix } = usePilotNames();
+const { after: mainSuffix, data: pilotData } = usePilotNames();
+
+/**
+ * Patch 39: one row per person ("Tsa · 2 online ▾"); their first character shows, the
+ * rest open from the row. Characters nobody claims stay on their own.
+ */
+const people = computed(() => groupByPerson(sorted_characters.value, (character) => character.name, pilotData.value));
+const openPeople = reactive(new Set<string>());
+function togglePerson(person: string) {
+    if (openPeople.has(person)) openPeople.delete(person);
+    else openPeople.add(person);
+}
 const presentSorted = computed(() => [...present.value].sort((a, b) => a.name.localeCompare(b.name)));
 const page = usePage();
 type TLinkSeen = { id: number; label: string | null; last_used_at: string | null; kind: string };
@@ -163,7 +174,7 @@ function linkOpened(iso: string | null): string {
                         </template>
                         <template v-else>
                             <span class="size-1.5 rounded-full bg-green-500" />{{ person.name
-                            }}<span v-if="mainSuffix(person.name)" class="text-muted-foreground"> - {{ mainSuffix(person.name) }}</span>
+                            }}<span v-if="mainSuffix(person.name)" class="text-muted-foreground"> · {{ mainSuffix(person.name) }}</span>
                             <span class="text-muted-foreground">({{ person.permission ?? '?' }}{{ person.tabs > 1 ? ` · ${person.tabs} tabs` : '' }})</span>
                         </template>
                     </span>
@@ -186,14 +197,25 @@ function linkOpened(iso: string | null): string {
                         <div></div>
                         <div class="text-right">Jumps</div>
                     </div>
-                    <TransitionGroup name="list">
-                        <Character
-                            v-for="character in sorted_characters"
-                            :key="character.id"
-                            :character="character"
-                            :static_solarsystem="character.static_solarsystem"
-                        />
-                    </TransitionGroup>
+                    <template v-for="group in people" :key="group.person">
+                        <button
+                            v-if="group.known && group.items.length > 1"
+                            type="button"
+                            class="col-span-full flex items-center gap-1.5 border-b border-border/30 bg-muted/20 px-3 py-0.5 text-left text-[11px] hover:bg-muted/40"
+                            @click="togglePerson(group.person)"
+                        >
+                            <span class="font-semibold text-foreground">{{ group.person }}</span>
+                            <span class="text-muted-foreground">· {{ group.items.length }} online {{ openPeople.has(group.person) ? '▴' : '▾' }}</span>
+                        </button>
+                        <TransitionGroup name="list">
+                            <Character
+                                v-for="character in openPeople.has(group.person) ? group.items : group.items.slice(0, 1)"
+                                :key="character.id"
+                                :character="character"
+                                :static_solarsystem="character.static_solarsystem"
+                            />
+                        </TransitionGroup>
+                    </template>
                 </div>
             </template>
             <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">

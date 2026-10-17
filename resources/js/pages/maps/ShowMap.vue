@@ -12,6 +12,7 @@ import MapIntroduction from '@/components/map/MapIntroduction.vue';
 import MapStatusBar from '@/components/map/MapStatusBar.vue';
 import ShipHistory from '@/components/ship-history/ShipHistory.vue';
 import FleetWindow from '@/components/fleet/FleetWindow.vue';
+import GuestNameDialog from '@/components/map/GuestNameDialog.vue';
 import Signatures from '@/components/signatures/Signatures.vue';
 import SignaturesEmptyState from '@/components/signatures/SignaturesEmptyState.vue';
 import SolarsystemDetails from '@/components/solarsystem/SolarsystemDetails.vue';
@@ -407,5 +408,7 @@ const handleResizeEnd = () => {
         </GridLayout>
         <!-- Layout Edit Controls -->
         <LayoutEditorToolbar :layout="layout" />
+        <!-- Patch 39: a guest names themselves once -->
+        <GuestNameDialog />
     </AppLayout>
 </template>

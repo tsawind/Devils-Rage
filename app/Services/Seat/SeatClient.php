@@ -126,6 +126,23 @@ final class SeatClient
     }
 
     /**
+     * Patch 39: every SeAT user's "Name you go by" (or their main's name) with their characters.
+     *
+     * @return list<array{user_id: int, name: string, main: string|null, character_ids: list<int>}>
+     *
+     * @throws SeatUnavailableException
+     */
+    public function people(): array
+    {
+        $json = $this->get('people') ?? [];
+
+        /** @var list<array{user_id: int, name: string, main: string|null, character_ids: list<int>}> $people */
+        $people = array_values((array) ($json['people'] ?? []));
+
+        return $people;
+    }
+
+    /**
      * @param  array<string, scalar>  $query
      * @return array<string, mixed>|null null on 404 (not linked / not found)
      */

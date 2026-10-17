@@ -208,12 +208,38 @@ final class Map extends Model
      */
     public function getUserPermission(User $user): ?Permission
     {
-        return Context::remember(sprintf('map_%d_user_%d_permission', $this->id, $user->id), fn () => $this->mapAccessors()
-            ->notExpired()
-            ->whereIn('accessible_id', $user->getAccessibleIds())
-            ->orderByRaw("CASE WHEN permission = 'manager' THEN 1 WHEN permission = 'member' THEN 2 WHEN permission = 'viewer' THEN 3 ELSE 4 END")
-            ->first()?->permission
-        );
+        return Context::remember(sprintf('map_%d_user_%d_permission', $this->id, $user->id), function () use ($user): ?Permission {
+            $permission = $this->mapAccessors()
+                ->notExpired()
+                ->whereIn('accessible_id', $user->getAccessibleIds())
+                ->orderByRaw("CASE WHEN permission = 'manager' THEN 1 WHEN permission = 'member' THEN 2 WHEN permission = 'viewer' THEN 3 ELSE 4 END")
+                ->first()?->permission;
+
+            if ($permission instanceof Permission && $permission->isAtLeast(Permission::Member)) {
+                return $permission;
+            }
+
+            return $this->hasFullAccessLinkInSession() ? Permission::Member : $permission;
+        });
+    }
+
+    /**
+     * Patch 39: a live Full-access share link opened in this session gives member rights.
+     */
+    public function hasFullAccessLinkInSession(): bool
+    {
+        if (! app()->bound('session')) {
+            return false;
+        }
+
+        $token = session("map_share_token_{$this->id}");
+
+        return is_string($token) && $token !== '' && $this->shareLinks()
+            ->where('kind', 'map')
+            ->where('token', $token)
+            ->where('access', MapShareLink::ACCESS_MEMBER)
+            ->live()
+            ->exists();
     }
 
     /**

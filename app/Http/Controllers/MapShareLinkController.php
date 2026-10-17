@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Gate;
  * Patch 37: viewer links from the Share button (and map settings). Members make links for
  * 1 h – 7 days and remove their own; managers also make permanent links and add or cut
  * time on any link. A link never runs longer than 7 days from now (unless permanent).
+ * Patch 39: managers can also make Full-access links (member rights while the link lives).
  */
 final class MapShareLinkController extends Controller
 {
@@ -28,16 +29,20 @@ final class MapShareLinkController extends Controller
             'label' => ['nullable', 'string', 'max:80'],
             'hours' => ['nullable', 'integer', 'min:1', 'max:'.MapShareLink::MAX_HOURS],
             'permanent' => ['sometimes', 'boolean'],
+            'access' => ['sometimes', 'string', 'in:'.MapShareLink::ACCESS_VIEWER.','.MapShareLink::ACCESS_MEMBER],
         ]);
 
         $permanent = (bool) ($validated['permanent'] ?? false);
-        if ($permanent) {
+        $access = $validated['access'] ?? MapShareLink::ACCESS_VIEWER;
+        // Patch 39: only managers make permanent or Full-access links.
+        if ($permanent || $access === MapShareLink::ACCESS_MEMBER) {
             Gate::authorize('manageAccess', $map);
         }
 
         $map->shareLinks()->create([
             'token' => MapShareLink::newToken(),
             'kind' => 'map',
+            'access' => $access,
             'label' => $validated['label'] ?? null,
             'created_by_user_id' => $user->id,
             'created_by_name' => Actor::name(),

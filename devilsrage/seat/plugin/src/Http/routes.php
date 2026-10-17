@@ -23,6 +23,7 @@ Route::group([
     Route::get('accounts', [AccountsController::class, 'index'])->name('devilsrage.accounts.index');
     Route::post('accounts', [AccountsController::class, 'storeAccount'])->name('devilsrage.accounts.store');
     Route::post('accounts/share', [AccountsController::class, 'share'])->name('devilsrage.accounts.share');
+    Route::post('accounts/name', [AccountsController::class, 'saveName'])->name('devilsrage.accounts.name');
     Route::post('accounts/{account}/rename', [AccountsController::class, 'renameAccount'])->name('devilsrage.accounts.rename');
     Route::post('accounts/{account}/delete', [AccountsController::class, 'deleteAccount'])->name('devilsrage.accounts.delete');
     Route::post('accounts/{account}/characters', [AccountsController::class, 'addCharacter'])->name('devilsrage.accounts.characters.add');
@@ -64,6 +65,7 @@ Route::group([
     Route::get('discord/{discordId}/extract', [BotApiController::class, 'extract']);
     Route::get('discord/{discordId}/fuel', [BotApiController::class, 'fuel']);
     Route::get('discord/{discordId}/health', [BotApiController::class, 'health']);
+    Route::get('people', [BotApiController::class, 'people']);
     Route::get('fits', [BotApiController::class, 'fits']);
     Route::get('fits/{fittingId}', [BotApiController::class, 'fit'])->whereNumber('fittingId');
 });

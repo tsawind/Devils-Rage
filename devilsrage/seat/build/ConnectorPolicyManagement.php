@@ -59,6 +59,10 @@ trait ConnectorPolicyManagement
     private function handleNicknameUpdate(User $profile, IUser $identity): void
     {
         $new_nickname = $profile->buildConnectorNickname();
+        // Devil's Rage patch 39: "[TICKER] Name" / "[TICKER] Name (Main)" when the pilot chose it.
+        if (class_exists(\DevilsRage\Seat\Services\PersonName::class) && $profile->user !== null) {
+            $new_nickname = \DevilsRage\Seat\Services\PersonName::nickname($profile->user, $new_nickname);
+        }
 
         // identity nick is already up-to-date - we have nothing to do here
         if ($identity->getName() === $new_nickname) {
