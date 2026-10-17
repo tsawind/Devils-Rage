@@ -16,8 +16,8 @@ describe('patch 37: the pipe details box', () => {
 
     it('gives the life left from the type and the age on the map', () => {
         const addedAt = new Date(now - 3 * hour).toISOString();
-        expect(lifeLine({ lifetime: 'healthy', markedAt: null, hours: [24, 24], addedAt, now })).toBe('Fresh · 24 h hole · EOL within 17 h · gone within 24 h');
-        expect(lifeLine({ lifetime: 'healthy', markedAt: null, hours: [16, 24], addedAt, now })).toBe('Fresh · 16–24 h hole · EOL within 9 h–17 h · gone within 16 h–24 h');
+        expect(lifeLine({ lifetime: 'healthy', markedAt: null, hours: [24, 24], addedAt, now })).toBe('Healthy · 24 h hole · EOL shows its last 4 h');
+        expect(lifeLine({ lifetime: 'healthy', markedAt: null, hours: [16, 24], addedAt, now })).toBe('Healthy · 16–24 h hole · EOL shows its last 4 h');
     });
 
     it('patch 37: end of life as a collapse window in EVE time', () => {

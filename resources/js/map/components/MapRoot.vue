@@ -23,6 +23,7 @@ import LayoutDecorations from '@/map/components/LayoutDecorations.vue';
 import MapViewport from '@/map/components/MapViewport.vue';
 import MapNode from '@/map/components/nodes/MapNode.vue';
 import PlaceholderLayer from '@/map/components/nodes/PlaceholderLayer.vue';
+import WatchLayer from '@/map/components/overlays/WatchLayer.vue';
 import PlaceholderContextMenu from '@/map/components/overlays/PlaceholderContextMenu.vue';
 import PlaceholderDetailsPopover from '@/map/components/overlays/PlaceholderDetailsPopover.vue';
 import ConnectionPopover from '@/map/components/overlays/ConnectionPopover.vue';
@@ -290,6 +291,7 @@ whenever(Delete, () => {
             @connection-context-menu="handleConnectionContextMenu"
         />
         <MapNode v-for="id in systemIds" :id="id" :key="id" />
+        <WatchLayer />
         <template #context-menu>
             <MapContextMenu v-if="contextMenuType === 'map' && canWrite" :position="contextMenuBasePoint" />
             <MapSolarsystemContextMenu v-else-if="contextMenuType === 'node' && contextMenuSystem" :map_solarsystem="contextMenuSystem" />

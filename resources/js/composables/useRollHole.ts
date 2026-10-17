@@ -1,5 +1,5 @@
 import { displayAlias } from '@/lib/alias';
-import { estimateMass } from '@/lib/massEstimate';
+import { estimateConnectionMass } from '@/lib/massEstimate';
 import type { TRollHole } from '@/lib/rollPlan';
 import { wormholeMass } from '@/lib/wormholeMass';
 import { guessHole } from '@/map/holeGuess';
@@ -32,7 +32,7 @@ export function rollTarget(store: MapStore, connectionId: number): TRollTarget |
     const typed = (connection.signatures ?? []).find((signature) => signature.wormhole && !signature.wormhole.name.toUpperCase().startsWith('K162'))?.wormhole ?? null;
     const total = typed?.total_mass ?? wormholeMass(typed?.name)?.total ?? guessHole({ endClasses: [from.solarsystem.class, to.solarsystem.class] })?.total ?? null;
     if (!total) return null;
-    const estimate = estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, watched: Boolean(connection.mass_watched_at), status: connection.mass_status });
+    const estimate = estimateConnectionMass(total, connection);
     if (!estimate) return null;
     const maxJump = typed?.maximum_jump_mass ?? wormholeMass(typed?.name)?.maxJump ?? null;
     const status = connection.mass_status === 'critical' || connection.mass_status === 'reduced' ? connection.mass_status : 'fresh';

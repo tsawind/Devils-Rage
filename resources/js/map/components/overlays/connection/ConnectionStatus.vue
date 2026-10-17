@@ -172,7 +172,8 @@ const lifetimeMeta = computed(() => {
                     <span v-else>{{ lifetimeMeta.label }}</span>
                 </span>
             </div>
-            <div v-if="countdown" class="col-span-full grid grid-cols-subgrid">
+            <!-- Patch 39: only life marks and ✓ Checked drive a countdown; a hole's age on the map isn't its age in game -->
+            <div v-if="countdown?.fromMarking" class="col-span-full grid grid-cols-subgrid">
                 <span>Time remaining</span>
                 <Tooltip>
                     <TooltipTrigger as-child>

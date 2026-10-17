@@ -31,11 +31,17 @@ final class UpdateMapConnectionJumpRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'direction' => ['sometimes', Rule::in(['outbound', 'inbound'])],
+            'direction' => ['sometimes', Rule::in(['outbound', 'inbound', 'unknown'])],
             'ship_type_id' => ['nullable', 'sometimes', 'integer', 'exists:types,id'],
             'mass' => ['sometimes', 'integer', 'min:-100000000000', 'max:100000000000'],
             // Patch 37: the jump log's HOT / SEMI / COLD / 🧵 buttons.
             'kind' => ['sometimes', Rule::in(JumpOptions::KINDS)],
+            // Patch 39: hand-added rows: who, fit and direction.
+            'side' => ['sometimes', 'nullable', Rule::in(['hostile', 'friendly'])],
+            'fit' => ['sometimes', 'nullable', 'array'],
+            'fit.higgs' => ['boolean'],
+            'fit.prop' => ['boolean'],
+            'fit.plate' => ['boolean'],
         ];
     }
 }

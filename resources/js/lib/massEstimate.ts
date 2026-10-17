@@ -184,3 +184,30 @@ export function guessFromCandidates(candidates: readonly TPossibleType[]): { tot
     const smallest = candidates.reduce((best, type) => (type.total < best.total ? type : best));
     return { total: smallest.total, name: names.length === 1 ? names[0] : null, maxJump: smallest.maxJump };
 }
+
+/**
+ * Patch 39: the mass estimate of a jumped pipe. Fresh / watched ("ours only"): only the jumps
+ * logged since the mark count, and nothing went through unlogged; otherwise every logged jump
+ * against the status band.
+ */
+export function estimateConnectionMass(
+    totalMass: number | null | undefined,
+    connection: {
+        jumps_mass_sum?: number | null;
+        jumps_mass_since_status?: number | null;
+        jumps_mass_since_watch?: number | null;
+        mass_watched_at?: string | null;
+        mass_status?: string | null;
+    },
+    status: string | null | undefined = connection.mass_status,
+): TMassEstimate | null {
+    const watched = Boolean(connection.mass_watched_at);
+    const sinceWatch = connection.jumps_mass_since_watch ?? connection.jumps_mass_sum ?? 0;
+    return estimateMass({
+        totalMass,
+        jumped: watched ? sinceWatch : connection.jumps_mass_sum,
+        jumpedSinceStatus: watched ? Math.min(sinceWatch, connection.jumps_mass_since_status ?? sinceWatch) : connection.jumps_mass_since_status,
+        watched,
+        status,
+    });
+}

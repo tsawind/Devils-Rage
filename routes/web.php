@@ -153,6 +153,7 @@ Route::middleware('auth')->group(function () {
     Route::post('signatures/{signature}/arm', [SignatureArmController::class, 'store'])->name('signatures.arm.store');
     Route::get('map-connections/{mapConnection}/jumps', [MapConnectionJumpController::class, 'index'])->name('map-connections.jumps.index');
     Route::post('map-connections/{mapConnection}/watched', [HoleCheckedController::class, 'watch'])->name('map-connections.watched');
+    Route::post('map-connections/{mapConnection}/fresh', [HoleCheckedController::class, 'fresh'])->name('map-connections.fresh');
     Route::post('map-connections/{mapConnection}/checked', [HoleCheckedController::class, 'connection'])->name('map-connections.checked');
     Route::post('signatures/{signature}/checked', [HoleCheckedController::class, 'signature'])->name('signatures.checked');
     Route::post('map-connections/{mapConnection}/hole-type', [ConnectionHoleTypeController::class, 'store'])->name('map-connections.hole-type.store');

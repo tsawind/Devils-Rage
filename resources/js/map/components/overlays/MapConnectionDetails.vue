@@ -6,10 +6,10 @@ import usePermission from '@/composables/usePermission';
 import { useMinuteNow } from '@/composables/useMinuteNow';
 import { uncheckedFor } from '@/lib/holeChecked';
 import { lastLook, lifeLine } from '@/lib/holeSummary';
-import { estimateMass, formatMass, massHints } from '@/lib/massEstimate';
+import { estimateConnectionMass, formatMass, massHints } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { lifetimeRange, wormholeLifetimeHours } from '@/lib/wormholeLifetime';
-import { markConnectionChecked, setConnectionWatched } from '@/map/actions/holeChecked';
+import { markConnectionChecked, markConnectionFresh, setConnectionWatched, setWatchOpen } from '@/map/actions/holeChecked';
 import { copyForwardBookmark, forwardSides } from '@/map/holeBookmark';
 import { couldBeNames, guessHole, holeCandidates } from '@/map/holeGuess';
 import { isK162Frigate } from '@/lib/k162';
@@ -70,7 +70,7 @@ const summary = computed((): THoleSummary | null => {
     const guessTotal = type ? null : (guessHole({ endClasses: classes })?.total ?? null);
     const total = type?.total_mass ?? guessTotal;
     const since = connection.jumps_mass_since_status ?? connection.jumps_mass_sum ?? 0;
-    const estimate = total ? estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, watched: Boolean(connection.mass_watched_at), status: connection.mass_status }) : null;
+    const estimate = total ? estimateConnectionMass(total, connection) : null;
     const hints = massHints({ estimate, totalMass: total, status: connection.mass_status, jumpedSinceStatus: since });
     const signatures = connection.signatures ?? [];
     const first = [...signatures].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at))[0] ?? null;
@@ -117,6 +117,13 @@ const summary = computed((): THoleSummary | null => {
 /** Patch 37: the jump log under the mass bar (click the bar). */
 const showJumpLog = ref(false);
 
+/** Patch 39: Mark fresh asks first. */
+const confirmFresh = ref(false);
+function fresh(watch: boolean): void {
+    confirmFresh.value = false;
+    markConnectionFresh(connection.id, watch);
+}
+
 function copyBookmark(): void {
     if (store) copyForwardBookmark(store, connection);
 }
@@ -130,10 +137,30 @@ function copyBookmark(): void {
     <PopoverContent class="max-h-(--reka-popover-content-available-height) w-80 overflow-y-auto">
         <div class="space-y-3">
             <HoleSummary v-if="summary" :summary="summary" :now="now" @checked="markConnectionChecked(connection.id)" @copy="copyBookmark" @jumps="showJumpLog = !showJumpLog" />
-            <!-- Patch 37: 👁 watched: every jump logged, the range is the size minus the log -->
-            <div v-if="summary && connection.mass_watched_at" class="flex items-center gap-2 rounded-md bg-sky-950/50 px-2 py-1 text-xs text-sky-200">
-                👁 Watched since {{ new Date(connection.mass_watched_at).toISOString().slice(11, 16) }} EVE by {{ connection.mass_watched_by_name ?? 'someone' }} · every jump logged
-                <button v-if="summary.canCheck" type="button" class="ml-auto underline" @click="setConnectionWatched(connection.id, false)">Stop</button>
+            <!-- Patch 39: fresh / watching: only our logged jumps since the mark count -->
+            <div v-if="summary && connection.mass_watched_at" class="flex items-center gap-2 rounded-md bg-emerald-950/50 px-2 py-1 text-xs text-emerald-200">
+                <span :title="'Jumps logged before the mark stay in the log but no longer count'">
+                    Fresh · ours only since {{ new Date(connection.mass_watched_at).toISOString().slice(11, 16) }} EVE · {{ connection.mass_watched_by_name ?? 'someone' }}
+                </span>
+                <template v-if="summary.canCheck">
+                    <button type="button" class="ml-auto underline" @click="setWatchOpen(connection.id, !connection.mass_watch_open)">
+                        {{ connection.mass_watch_open ? 'Fold' : 'Watch' }}
+                    </button>
+                    <button type="button" class="underline" title="Back to the normal (safer) mass math" @click="setConnectionWatched(connection.id, false)">Stop</button>
+                </template>
+            </div>
+            <div v-else-if="summary?.canCheck" class="text-xs">
+                <button v-if="!confirmFresh" type="button" class="rounded border border-emerald-700 px-2 py-0.5 text-emerald-300 hover:bg-emerald-950" title="You saw it in game: not significantly disrupted" @click="confirmFresh = true">
+                    Mark fresh…
+                </button>
+                <div v-else class="grid gap-1.5 rounded-md border border-emerald-700/60 bg-emerald-950/40 p-2 text-emerald-100">
+                    <p>Show Info says <i>"not significantly disrupted"</i>? Its range goes back to its size ±10%. Jumps logged before stay in the log but stop counting.</p>
+                    <div class="flex flex-wrap gap-1">
+                        <button type="button" class="rounded bg-emerald-700 px-2 py-0.5 text-white hover:bg-emerald-600" @click="fresh(true)">Fresh, start watching</button>
+                        <button type="button" class="rounded border border-emerald-700 px-2 py-0.5 hover:bg-emerald-900" @click="fresh(false)">Fresh only</button>
+                        <button type="button" class="rounded px-2 py-0.5 text-muted-foreground hover:text-foreground" @click="confirmFresh = false">Cancel</button>
+                    </div>
+                </div>
             </div>
             <JumpLog v-if="showJumpLog && summary" :connection="connection" />
             <SignatureSection v-if="outSignature" :signature="outSignature" title="Out Sig" />

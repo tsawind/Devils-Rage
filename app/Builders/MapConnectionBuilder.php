@@ -52,6 +52,9 @@ final class MapConnectionBuilder extends Builder
             ->withSum(['jumps as jumps_mass_since_status' => fn ($query) => $query->where(fn ($inner) => $inner
                 ->whereNull('map_connections.mass_status_updated_at')
                 ->orWhereColumn('map_connection_jumps.created_at', '>=', 'map_connections.mass_status_updated_at'))], 'mass')
+            // Patch 39: fresh / watched: only the jumps since the mark count ("ours only").
+            ->withSum(['jumps as jumps_mass_since_watch' => fn ($query) => $query
+                ->whereColumn('map_connection_jumps.created_at', '>=', 'map_connections.mass_watched_at')], 'mass')
             ->with(['jumps' => fn ($query) => $query
                 ->with('character:id,name', 'shipType:id,name')
                 ->latest('id')

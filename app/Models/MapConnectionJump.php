@@ -27,6 +27,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $ship_name
  * @property int $mass
  * @property bool $is_manual
+ * @property string|null $side Patch 39: hostile / friendly (hand-added from the watch banner)
+ * @property string|null $ship_class Patch 39: frigate … capital, or typed
+ * @property bool $direction_known Patch 39: false when nobody saw which way it went
+ * @property array<string, bool>|null $fit Patch 39: higgs / prop / plate
  * @property CarbonImmutable|string $created_at
  * @property CarbonImmutable|string $updated_at
  * @property-read Map $map
@@ -79,6 +83,8 @@ final class MapConnectionJump extends Model
             'updated_at' => 'immutable_datetime',
             'mass' => 'integer',
             'is_manual' => 'boolean',
+            'direction_known' => 'boolean',
+            'fit' => 'array',
         ];
     }
 }

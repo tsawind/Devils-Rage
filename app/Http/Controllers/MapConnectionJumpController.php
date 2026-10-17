@@ -47,6 +47,11 @@ final class MapConnectionJumpController extends Controller
                 'is_thread' => (bool) $jump->getAttribute('is_thread'),
                 'edited_by_name' => $jump->getAttribute('edited_by_name'),
                 'outbound' => $jump->from_solarsystem_id === $mapConnection->fromMapSolarsystem->solarsystem_id,
+                // Patch 39: hand-added rows: hostile / friendly, ship class, fit, direction seen or not.
+                'side' => $jump->side,
+                'ship_class' => $jump->ship_class,
+                'direction_known' => $jump->direction_known,
+                'fit' => $jump->fit,
                 'created_at' => $jump->created_at,
                 'options' => $options[$jump->id] ?? [],
             ])->values(),

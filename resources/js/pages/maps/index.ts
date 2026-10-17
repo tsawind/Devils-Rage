@@ -304,6 +304,12 @@ export type TMapConnection = {
     /** Patch 37: 👁 watched from new: every jump through it is logged. */
     mass_watched_at?: string | null;
     mass_watched_by_name?: string | null;
+    /** Patch 39: the watch banner is open (else a small Fresh chip). */
+    mass_watch_open?: boolean;
+    /** Patch 39: the last click in the watch banner ("still on it?" after 30 min without one). */
+    mass_watch_touched_at?: string | null;
+    /** Patch 39: jumps logged since it was marked fresh / watched (the only ones that count then). */
+    jumps_mass_since_watch?: number;
     created_at: string;
     updated_at: string;
 };

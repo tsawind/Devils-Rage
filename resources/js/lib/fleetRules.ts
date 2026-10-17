@@ -42,7 +42,38 @@ export const FLEET_RULES = {
     /** Patch 37: a hole nobody has looked at for this many hours is a risk (the purple "?"). */
     uncheckedHours: 4,
     maxScanTargets: 3,
+
+    /**
+     * Patch 39: the watch banner's buttons, by EVE overview bracket. Each click logs the WORST
+     * case for that class (kg): what the heaviest likely fit adds, so "could be Reduced" comes
+     * early rather than late. `base` is a typical hull; the fit parts are added on top:
+     * Higgs anchor doubles the hull, a 100MN prop adds 50 M (doubled with Higgs), a plate a few M.
+     */
+    watchClasses: [
+        { key: 'frigate', label: 'Frigate', short: 'F', base: 1_500_000, higgs: false, prop: 0, plate: 500_000 },
+        { key: 'destroyer', label: 'Destroyer', short: 'D', base: 2_000_000, higgs: false, prop: 0, plate: 800_000 },
+        { key: 'cruiser', label: 'Cruiser', short: 'C', base: 12_000_000, higgs: false, prop: 50_000_000, plate: 1_250_000 },
+        { key: 'battlecruiser', label: 'Battlecruiser', short: 'BC', base: 15_000_000, higgs: false, prop: 50_000_000, plate: 2_500_000 },
+        { key: 'battleship', label: 'Battleship', short: 'BS', base: 100_000_000, higgs: true, prop: 50_000_000, plate: 3_000_000 },
+        { key: 'industrial', label: 'Industrial', short: 'Ind', base: 20_000_000, higgs: false, prop: 0, plate: 2_500_000 },
+        { key: 'capital', label: 'Capital', short: 'Cap', base: 1_300_000_000, higgs: false, prop: 500_000_000, plate: 0 },
+    ],
 } as const;
+
+export type TWatchClass = (typeof FLEET_RULES.watchClasses)[number];
+
+/** Patch 39: a hand-added jump's mass from its class and fit (each switch on = the worst case). */
+export function watchJumpMass(shipClass: TWatchClass, fit: { higgs?: boolean; prop?: boolean; plate?: boolean } = { higgs: shipClass.higgs, prop: true, plate: true }): number {
+    const higgs = Boolean(fit.higgs);
+    const hull = shipClass.base * (higgs ? 2 : 1);
+    const prop = fit.prop ? shipClass.prop * (higgs ? 2 : 1) : 0;
+    return Math.round(hull + prop + (fit.plate ? shipClass.plate : 0));
+}
+
+/** Patch 39: the class of a hand-added jump by key. */
+export function watchClass(key: string | null | undefined): TWatchClass | null {
+    return FLEET_RULES.watchClasses.find((candidate) => candidate.key === key) ?? null;
+}
 
 export type TSizeLabel = (typeof FLEET_RULES.sizeBuckets)[number]['label'];
 

@@ -10,7 +10,7 @@ import { useMinuteNow } from '@/composables/useMinuteNow';
 import { holeAge } from '@/lib/holeAge';
 import { uncheckedFor } from '@/lib/holeChecked';
 import { guessHole } from '@/map/holeGuess';
-import { describeEstimate, estimateMass, formatMass, isFrigateHole, massHints, pipeWidth } from '@/lib/massEstimate';
+import { describeEstimate, estimateConnectionMass, formatMass, isFrigateHole, massHints, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { edgePathAndCenter, lightningPath, loopMarkPoint } from '@/map/core/geometry/paths';
 import type { EdgeGeometry } from '@/map/core/types';
@@ -267,7 +267,7 @@ const estimate = computed(() => {
     const total = holeType.value?.total_mass ?? guessedMass.value;
     if (!total) return null;
     // Patch 33: every logged jump is mass gone; the ones since the status was set also count against its band.
-    return estimateMass({ totalMass: total, jumped: connection.jumps_mass_sum, jumpedSinceStatus: connection.jumps_mass_since_status, watched: Boolean(connection.mass_watched_at), status: massStatus.value });
+    return estimateConnectionMass(total, connection, massStatus.value);
 });
 
 /** Patch 37: should be Crit / Reduced by now (amber-red pipe), or may have crossed a line (amber "?"). */

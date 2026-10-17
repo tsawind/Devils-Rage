@@ -8,6 +8,7 @@ import { openAddMass, parseMillionKg } from '@/map/actions/addMass';
 import { deleteMapConnectionJump } from '@/map/actions/deleteMapConnectionJump';
 import { updateMapConnectionJump } from '@/map/actions/updateMapConnectionJump';
 import type { TMapConnection, TMapSolarsystem } from '@/pages/maps';
+import { watchClass, watchJumpMass } from '@/lib/fleetRules';
 import { computed, onMounted, ref, watch } from 'vue';
 
 /**
@@ -29,6 +30,11 @@ type TLogJump = {
     is_thread: boolean;
     edited_by_name: string | null;
     outbound: boolean;
+    /** Patch 39: hand-added from the watch banner: hostile (red) / friendly not on the mapper (blue). */
+    side?: 'hostile' | 'friendly' | null;
+    ship_class?: string | null;
+    direction_known?: boolean;
+    fit?: { higgs?: boolean; prop?: boolean; plate?: boolean } | null;
     created_at: string;
     options: { kind: TKind; label: string; mass: number }[];
 };
@@ -68,6 +74,26 @@ function saveTyped(jump: TLogJump): void {
     updateMapConnectionJump(jump, { mass: kg }, { onSuccess: () => void load() });
 }
 
+/** Patch 39: a hand-added row's fit switches: its mass follows (a typed mass overrides). */
+function toggleFit(jump: TLogJump, part: 'higgs' | 'prop' | 'plate'): void {
+    const shipClass = watchClass(jump.ship_class);
+    if (!canEdit.value || !shipClass) return;
+    const fit = { higgs: Boolean(jump.fit?.higgs), prop: Boolean(jump.fit?.prop), plate: Boolean(jump.fit?.plate), [part]: !jump.fit?.[part] };
+    jump.fit = fit;
+    jump.mass = watchJumpMass(shipClass, fit);
+    updateMapConnectionJump(jump, { mass: jump.mass, fit }, { onSuccess: () => void load() });
+}
+
+/** Patch 39: which way a hand-added jump went, when someone saw it. */
+function setDirection(jump: TLogJump, direction: 'outbound' | 'inbound' | 'unknown'): void {
+    if (!canEdit.value) return;
+    jump.direction_known = direction !== 'unknown';
+    jump.outbound = direction !== 'inbound';
+    updateMapConnectionJump(jump, { direction }, { onSuccess: () => void load() });
+}
+
+const rowClass = (jump: TLogJump) => (jump.side === 'hostile' ? 'bg-red-950/40 text-red-200' : jump.side === 'friendly' ? 'bg-sky-950/40 text-sky-200' : '');
+
 function remove(jump: TLogJump): void {
     jumps.value = (jumps.value ?? []).filter((row) => row.id !== jump.id);
     deleteMapConnectionJump(jump);
@@ -106,11 +132,16 @@ const chipClass = (kind: TKind, on: boolean) =>
             v-for="jump in shown"
             :key="jump.id"
             class="grid grid-cols-[0.75rem_1fr_auto_auto_0.75rem] items-center gap-x-2 border-t border-border/40 py-1"
+            :class="rowClass(jump)"
         >
-            <span :class="jump.outbound ? 'text-sky-400' : 'text-purple-400'">{{ jump.outbound ? '→' : '←' }}</span>
+            <span v-if="jump.direction_known === false" class="text-muted-foreground" title="Direction not seen">?</span>
+            <span v-else :class="jump.outbound ? 'text-sky-400' : 'text-purple-400'">{{ jump.outbound ? '→' : '←' }}</span>
             <div class="min-w-0">
                 <div class="truncate">
                     <template v-if="jump.character_name">{{ jump.character_name }}</template>
+                    <span v-else-if="jump.side" class="font-medium" :title="jump.side === 'hostile' ? 'Hostile, added from the watch banner' : 'Friendly not on the mapper, added from the watch banner'">
+                        {{ jump.side === 'hostile' ? 'Hostile' : 'Friendly' }} · {{ watchClass(jump.ship_class)?.label ?? 'typed' }}
+                    </span>
                     <i v-else class="text-muted-foreground">manual</i>
                     <span v-if="jump.ship_type_name" class="text-muted-foreground"> · {{ jump.ship_type_name }}</span>
                     <span v-if="jump.edited_by_name" class="text-amber-400" :title="`Changed by hand by ${jump.edited_by_name}`"> ✎ {{ jump.edited_by_name }}</span>
@@ -138,6 +169,24 @@ const chipClass = (kind: TKind, on: boolean) =>
                         @blur="saveTyped(jump)"
                     />
                     <span class="text-[10.5px] text-muted-foreground">million kg</span>
+                </div>
+                <!-- Patch 39: a hand-added row's fit (mass follows) and direction -->
+                <div v-if="jump.is_manual && canEdit && (watchClass(jump.ship_class) || jump.side)" class="mt-0.5 flex flex-wrap items-center gap-0.5 text-[10.5px]">
+                    <template v-if="watchClass(jump.ship_class)">
+                        <button
+                            v-for="part in ['higgs', 'prop', 'plate'] as const"
+                            :key="part"
+                            type="button"
+                            class="rounded border px-1"
+                            :class="jump.fit?.[part] ? 'border-amber-500 text-amber-300' : 'border-border text-muted-foreground'"
+                            :title="part === 'higgs' ? 'Higgs anchor: doubles the hull (and the prop)' : part === 'prop' ? '100MN / 500MN prop on' : 'Armor plate fitted'"
+                            @click="toggleFit(jump, part)"
+                        >
+                            {{ part === 'higgs' ? 'Higgs' : part === 'prop' ? 'Prop' : 'Plate' }}
+                        </button>
+                    </template>
+                    <button type="button" class="rounded border border-border px-1" :class="jump.direction_known !== false && jump.outbound ? 'text-sky-300' : 'text-muted-foreground'" title="Went out (away from home)" @click="setDirection(jump, 'outbound')">↗</button>
+                    <button type="button" class="rounded border border-border px-1" :class="jump.direction_known !== false && !jump.outbound ? 'text-purple-300' : 'text-muted-foreground'" title="Came in (toward home)" @click="setDirection(jump, 'inbound')">↙</button>
                 </div>
             </div>
             <span class="text-right font-mono" :class="jump.mass < 0 ? 'text-amber-400' : ''">{{ m(jump.mass) }}</span>

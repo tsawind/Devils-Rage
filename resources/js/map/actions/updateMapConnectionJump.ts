@@ -6,11 +6,13 @@ import { TMapConnectionJumpDirection } from './createMapConnectionJump';
 export function updateMapConnectionJump(
     jump: Pick<TConnectionJump, 'id'>,
     data: {
-        direction?: TMapConnectionJumpDirection;
+        direction?: TMapConnectionJumpDirection | 'unknown';
         ship_type_id?: number | null;
         mass?: number;
         /** Patch 37: the jump log's HOT / SEMI / COLD / 🧵 buttons. */
         kind?: 'hot' | 'semi' | 'cold' | 'thread';
+        /** Patch 39: a hand-added row's fit. */
+        fit?: { higgs: boolean; prop: boolean; plate: boolean };
     },
     options: { onSuccess?: () => void; onError?: (errors: Record<string, string>) => void } = {},
 ): void {

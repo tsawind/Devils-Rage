@@ -12,7 +12,7 @@ use App\Support\Actor;
  * Applies a manual correction to a logged jump (tracked or manual) and pushes
  * the refreshed mass summary to the map.
  *
- * @phpstan-type JumpCorrectionData array{direction?: string, ship_type_id?: int|null, mass?: int, kind?: string}
+ * @phpstan-type JumpCorrectionData array{direction?: string, ship_type_id?: int|null, mass?: int, kind?: string, side?: string|null, fit?: array<string, bool>|null}
  */
 final readonly class UpdateMapConnectionJumpAction
 {
@@ -28,7 +28,8 @@ final readonly class UpdateMapConnectionJumpAction
         $attributes = [];
 
         if (array_key_exists('direction', $data)) {
-            $outbound = $data['direction'] === 'outbound';
+            $attributes['direction_known'] = $data['direction'] !== 'unknown';
+            $outbound = $data['direction'] !== 'inbound';
             $attributes['from_solarsystem_id'] = $outbound
                 ? $connection->fromMapSolarsystem->solarsystem_id
                 : $connection->toMapSolarsystem->solarsystem_id;
@@ -52,6 +53,13 @@ final readonly class UpdateMapConnectionJumpAction
         if (array_key_exists('kind', $data)) {
             $attributes['is_hot'] = in_array($data['kind'], ['hot', 'semi'], true);
             $attributes['is_thread'] = $data['kind'] === 'thread';
+        }
+        // Patch 39: hand-added rows say who went through and how they were fitted.
+        if (array_key_exists('side', $data)) {
+            $attributes['side'] = $data['side'];
+        }
+        if (array_key_exists('fit', $data)) {
+            $attributes['fit'] = $data['fit'];
         }
         $attributes['edited_by_name'] = Actor::name();
 

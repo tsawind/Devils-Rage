@@ -36,3 +36,27 @@ export function setConnectionWatched(connectionId: number, on: boolean): void {
         onError: () => toast.error('Could not change watching.'),
     });
 }
+
+const quiet = { preserveScroll: true, preserveState: true, only: ['map'] };
+
+/**
+ * Patch 39: Mark fresh: its range goes back to its size ±10%; earlier jumps stay in the log but
+ * stop counting ("ours only" from now). With `watch` the watch banner opens, else a Fresh chip.
+ */
+export function markConnectionFresh(connectionId: number, watch: boolean): void {
+    router.post(HoleCheckedController.fresh(connectionId).url, { watch }, {
+        ...quiet,
+        onSuccess: () => toast.success(watch ? 'Fresh · watching: every jump counts from now' : 'Marked fresh: only jumps from now count'),
+        onError: () => toast.error('Could not mark it fresh.'),
+    });
+}
+
+/** Patch 39: open the watch banner, or fold it to the Fresh chip. */
+export function setWatchOpen(connectionId: number, open: boolean): void {
+    router.post(HoleCheckedController.watch(connectionId).url, { open }, quiet);
+}
+
+/** Patch 39: "still on it?": yes. */
+export function touchWatch(connectionId: number): void {
+    router.post(HoleCheckedController.watch(connectionId).url, { touch: true }, quiet);
+}

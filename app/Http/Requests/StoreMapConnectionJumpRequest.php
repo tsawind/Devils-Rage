@@ -34,7 +34,14 @@ final class StoreMapConnectionJumpRequest extends FormRequest
     {
         return [
             'map_connection_id' => ['required', 'integer', 'exists:map_connections,id'],
-            'direction' => ['required', Rule::in(['outbound', 'inbound'])],
+            // Patch 39: "unknown" for a hand-added jump nobody saw the direction of.
+            'direction' => ['required', Rule::in(['outbound', 'inbound', 'unknown'])],
+            'side' => ['nullable', Rule::in(['hostile', 'friendly'])],
+            'ship_class' => ['nullable', Rule::in(['frigate', 'destroyer', 'cruiser', 'battlecruiser', 'battleship', 'industrial', 'capital', 'typed'])],
+            'fit' => ['nullable', 'array'],
+            'fit.higgs' => ['boolean'],
+            'fit.prop' => ['boolean'],
+            'fit.plate' => ['boolean'],
             'ship_type_id' => ['nullable', 'integer', 'exists:types,id'],
             // Patch 37: negative takes mass off (a jump logged twice, a wrong guess).
             'mass' => ['required_without:ship_type_id', 'nullable', 'integer', 'min:-100000000000', 'max:100000000000'],

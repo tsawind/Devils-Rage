@@ -46,7 +46,6 @@ export function lifeLine(params: {
     now: number;
 }): string {
     const { lifetime, now } = params;
-    const hoursSince = (iso: string | null | undefined) => (iso && Number.isFinite(Date.parse(iso)) ? (now - Date.parse(iso)) / 3_600_000 : null);
     // Patch 37: "Expired, closure imminent": it could close any moment.
     if (lifetime === 'imminent') {
         const window = collapseWindow({ lifetime, eolSince: params.eolSince ?? null, criticalSince: params.criticalSince ?? null, imminentSince: params.imminentSince ?? params.markedAt, now });
@@ -66,27 +65,17 @@ export function lifeLine(params: {
         return `${label} · ${collapseText(window)} EVE (in ${collapseIn(window, now)})`;
     }
     const hours = params.hours;
-    if (!hours) return 'Fresh';
-    const age = hoursSince(params.addedAt) ?? 0;
+    if (!hours) return 'Healthy';
     const [low, high] = hours;
-    const type = low === high ? `${low} h hole` : `${low}–${high} h hole`;
-    // Patch 37: a hole goes end-of-life for its last 4 h, and the map lets it go 3 h after its
-    // life (holes live a little past it); both counted from when it was added (it may be older).
-    const span = (from: number, to: number) => (from === to ? formatHours(from) : `${formatHours(from)}–${formatHours(to)}`);
-    const eol = span(Math.max(0, low - EOL_HOURS - age), Math.max(0, high - EOL_HOURS - age));
-    const gone = span(Math.max(0, low + GRACE_HOURS - age), Math.max(0, high + GRACE_HOURS - age));
-    return `Fresh · ${type} · EOL within ${eol} · gone within ${gone}`;
+    // Patch 39: a hole's clock starts when it is first warped to, which the mapper can't see, so
+    // "Added" is only information: no countdown from it. The life marks and ✓ Checked drive the
+    // collapse window once it shows end of life.
+    return `Healthy · ${low === high ? `${low} h hole` : `${low}–${high} h hole`} · EOL shows its last ${EOL_HOURS} h`;
 }
 
 /** A hole shows end-of-life for its last 4 h. */
 const EOL_HOURS = 4;
-/** The map keeps a hole 3 h past its life (HoleExpiry). */
-const GRACE_HOURS = 3;
 
-function formatHours(hours: number): string {
-    if (hours < 1) return `${Math.max(0, Math.round(hours * 60))} min`;
-    return `${Math.floor(hours)} h`;
-}
 
 /** The mass bar: shares (0–100) of the biggest the hole can be. */
 export type TMassBar = { left: number; width: number; loggedLeft: number; loggedWidth: number; tone: 'fresh' | 'reduced' | 'critical' };

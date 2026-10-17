@@ -52,6 +52,10 @@ final class MapConnectionResource extends JsonResource
             // Patch 37: 👁 every jump through it is logged.
             'mass_watched_at' => $this->mass_watched_at?->toISOString(),
             'mass_watched_by_name' => $this->mass_watched_by_name,
+            // Patch 39: fresh / watching: banner open or a chip, last click in it, jumps since the mark.
+            'mass_watch_open' => (bool) $this->mass_watch_open,
+            'mass_watch_touched_at' => $this->mass_watch_touched_at?->toISOString(),
+            'jumps_mass_since_watch' => $this->when($this->mass_watched_at !== null, fn (): int => (int) ($this->resource->getAttribute('jumps_mass_since_watch') ?? 0)),
             'mass_session' => MassSessions::forConnection((int) $this->map_id, (int) $this->id),
             'jumps_count' => $this->whenHas('jumps_count', fn (int|string|null $count): int => (int) $count, 0),
             'jumps' => $this->whenLoaded('jumps', fn () => $this->jumps->toResourceCollection(MapConnectionJumpResource::class)),

@@ -54,20 +54,65 @@ final class HoleCheckedController extends Controller
     public function watch(Request $request, MapConnection $mapConnection): RedirectResponse
     {
         Gate::authorize('update', $mapConnection);
-        $on = $request->boolean('on');
 
+        // Patch 39: fold / open the banner, or "still on it?" (a click in it): the watch goes on.
+        if ($request->has('open') || $request->boolean('touch')) {
+            $mapConnection->forceFill([
+                ...($request->has('open') ? ['mass_watch_open' => $request->boolean('open')] : []),
+                'mass_watch_touched_at' => now(),
+            ])->save();
+            $this->broadcast($mapConnection);
+
+            return back();
+        }
+
+        $on = $request->boolean('on');
         $mapConnection->forceFill([
             'mass_watched_at' => $on ? now() : null,
             'mass_watched_by_name' => $on ? Actor::name() : null,
+            'mass_watch_open' => $on,
+            'mass_watch_touched_at' => $on ? now() : null,
         ])->save();
+        $this->broadcast($mapConnection);
 
+        return back();
+    }
+
+    /**
+     * Patch 39: Mark fresh: someone saw it "not significantly disrupted". Its range goes back to
+     * its size ±10%; the jumps logged before stay in the log but stop counting ("ours only" from
+     * here). With `watch`, the full watch banner opens; without, a small Fresh chip shows.
+     */
+    public function fresh(Request $request, MapConnection $mapConnection): RedirectResponse
+    {
+        Gate::authorize('update', $mapConnection);
+
+        $mapConnection->forceFill([
+            'mass_status' => 'fresh',
+            'mass_status_updated_at' => now(),
+            'mass_status_from_log' => false,
+            'mass_status_set_by_name' => Actor::name(),
+            'should_have_rolled' => false,
+            'checked_at' => now(),
+            'checked_by_name' => Actor::name(),
+            'checked_note' => 'marked Fresh',
+            'mass_watched_at' => now(),
+            'mass_watched_by_name' => Actor::name(),
+            'mass_watch_open' => $request->boolean('watch'),
+            'mass_watch_touched_at' => now(),
+        ])->save();
+        $this->broadcast($mapConnection);
+
+        return back();
+    }
+
+    private function broadcast(MapConnection $mapConnection): void
+    {
         $this->mapBroadcaster->connectionsUpserted($mapConnection->map_id, MapConnection::query()
             ->whereKey($mapConnection->id)
             ->with('signatures.signatureType', 'signatures.wormhole')
             ->withJumpSummary()
             ->get());
-
-        return back();
     }
 
     public function signature(Signature $signature): RedirectResponse
