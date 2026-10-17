@@ -40,7 +40,9 @@ SEAT="$HOME/seat-docker"
 if [ -d "$SEAT" ]; then
     echo "== Stopping SeAT for the build"
     (cd "$SEAT" && docker compose stop >/dev/null)
-    trap 'echo "== Starting SeAT"; (cd "$SEAT" && docker compose up -d >/dev/null)' EXIT
+    # Its web container is recreated too: after the mapper's Traefik restarts it loses the link
+    # (SeAT showed "404 page not found" until front was recreated).
+    trap 'echo "== Starting SeAT"; (cd "$SEAT" && docker compose up -d >/dev/null && docker compose up -d --force-recreate front >/dev/null)' EXIT
 fi
 
 cd "$STACK"
