@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import FloatingNameTags from '@/map/components/nodes/FloatingNameTags.vue';
+import { requestMapRename } from '@/composables/useMapRename';
 import { useMinuteClock } from '@/composables/combat/useMinuteClock';
 import { isDeadEnd as isDeadEndSystem } from '@/lib/combat';
 import NodeCard from '@/map/components/nodes/NodeCard.vue';
@@ -142,6 +144,23 @@ function copyWayBack(): void {
 
 const canWrite = computed(() => page.props.permission === 'member' || page.props.permission === 'manager');
 
+/** Patch 39: double-click a system to rename it with the hole leading to it from where it was found. */
+function renameSystem(): void {
+    const current = system.value;
+    if (!current) return;
+    const parentId = store.bandLayout.value?.parentOf.get(current.id);
+    const connection =
+        parentId !== undefined
+            ? [...store.connections.values()].find(
+                  (candidate) =>
+                      (candidate.from_map_solarsystem_id === parentId && candidate.to_map_solarsystem_id === current.id) ||
+                      (candidate.to_map_solarsystem_id === parentId && candidate.from_map_solarsystem_id === current.id),
+              )
+            : undefined;
+    const hole = connection?.signatures?.find((signature) => signature.map_solarsystem_id === parentId) ?? null;
+    requestMapRename({ parentId: hole && parentId !== undefined ? parentId : null, signatureId: hole?.id ?? null, targetId: current.id });
+}
+
 const linkHref = computed(() => {
     const meta = store.meta.value;
     const current = system.value;
@@ -215,10 +234,13 @@ onBeforeUnmount(() => {
                             :threat-level="threatLevel"
                             :way-back="wayBack"
                             @copy-way-back="copyWayBack"
+                            :can-rename="canWrite"
+                            @rename="renameSystem"
                             :is-dead-end="isDeadEnd"
                             :compact="compact"
                         />
                     </Link>
+                    <FloatingNameTags v-if="!compact" :system="system" :store="store" :can-write="canWrite" />
                     <template v-if="canWrite">
                         <SolarsystemDragHandle data-drag-handle v-if="!system.pinned && !store.isLayoutLocked.value" />
                         <SolarsystemConnectionHandle data-connect-handle :data-connection-source="system.solarsystem_id" />

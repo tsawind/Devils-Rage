@@ -39,6 +39,7 @@ const {
     isDeadEnd = false,
     compact = false,
     wayBack = null,
+    canRename = false,
 } = defineProps<{
     system: TMapSolarsystem;
     pilots: TCharacter[];
@@ -57,9 +58,11 @@ const {
     compact?: boolean;
     /** Patch 20: the way back to the system it was found from: its sig ("XWE"), or null code until pasted. */
     wayBack?: { code: string | null } | null;
+    /** Patch 39: double-click renames the system (Alt+double-click: the name / occupier editor). */
+    canRename?: boolean;
 }>();
 
-const emit = defineEmits<{ copyWayBack: [] }>();
+const emit = defineEmits<{ copyWayBack: []; rename: [] }>();
 
 // ---- Combat chains ------------------------------------------------------------
 const chainHex = computed(() => combatColorHex(system.combat_color));
@@ -185,7 +188,7 @@ function handleSubmit() {
         :style="chainStyle"
         class="map-node-card relative grid h-[40px] rounded border border-stone-400 bg-[#fffdf8] text-left text-xs ring-offset-2 ring-offset-neutral-50 transition-colors duration-200 ease-in-out select-none hover:bg-white focus:bg-white data-[has-pilots=true]:h-[60px] data-[hovered=true]:outline-2 data-[hovered=true]:outline-yellow-500 data-[is-active=true]:ring-2 data-[is-active=true]:ring-amber-500 data-[selected=true]:bg-amber-100 data-[status=active]:border-active data-[status=empty]:border-empty data-[status=friendly]:border-friendly data-[status=hostile]:border-hostile data-[status=unknown]:border-unknown data-[is-active=false]:data-[threat-level=critical]:ring-2 data-[is-active=false]:data-[threat-level=critical]:ring-threat-critical data-[is-active=false]:data-[threat-level=high]:ring-2 data-[is-active=false]:data-[threat-level=high]:ring-threat-high dark:border-neutral-700 dark:bg-neutral-900 dark:ring-offset-neutral-900 dark:hover:bg-neutral-800 dark:focus:bg-neutral-800 dark:data-[is-active=true]:ring-2 dark:data-[is-active=true]:ring-amber-500 dark:data-[selected=true]:bg-amber-900 dark:data-[status=active]:border-active dark:data-[status=empty]:border-empty dark:data-[status=friendly]:border-friendly dark:data-[status=hostile]:border-hostile dark:data-[status=unscanned]:border-unscanned data-[dead-end=true]:opacity-60 data-[dead-end=true]:saturate-50 data-[dead-end=true]:hover:opacity-100"
         :class="compact ? '!h-[26px] !w-[80px]' : { 'w-[180px]': fixedWidth }"
-        @dblclick="openEditor()"
+        @dblclick="(event: MouseEvent) => (event.altKey || !canRename ? openEditor() : emit('rename'))"
         @drag.prevent
     >
         <!-- Patch 26: the rally point: a bright pulsing pink ring and a tag, easy to spot -->
@@ -246,12 +249,12 @@ function handleSubmit() {
                 <span class="text-[7.5px] text-muted-foreground">{{ resolvedSolarsystem.name }}</span>
                 <span class="flex items-center gap-0.5 text-[8px] font-semibold">
                     <span v-if="pilots.length" class="rounded-full bg-sky-500/80 px-[3px] text-[7px] text-white">{{ pilots.length }}</span>
-                    <SolarsystemClass :solarsystem_class="resolvedSolarsystem.class" class="!text-[8px]" />
+                    <SolarsystemClass :solarsystem_class="resolvedSolarsystem.class" :is_shattered="resolvedSolarsystem.is_shattered" class="!text-[8px]" />
                 </span>
             </span>
         </div>
         <div v-else class="row-start-1 grid grid-cols-[auto_1fr_auto] items-center justify-center gap-x-1 px-2">
-            <SolarsystemClass :solarsystem_class="resolvedSolarsystem.class" class="font-mono font-semibold" />
+            <SolarsystemClass :solarsystem_class="resolvedSolarsystem.class" :is_shattered="resolvedSolarsystem.is_shattered" class="font-mono font-semibold" />
             <Popover :open="open" @update:open="(value) => open && (open = value)">
                 <PopoverAnchor class="col-start-2 row-start-1 min-w-0">
                     <SolarsystemName :map_solarsystem="system" :truncate="fixedWidth" />

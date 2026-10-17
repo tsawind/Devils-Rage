@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Discord;
 
 use App\Enums\SolarsystemClass;
+use App\Models\Map;
 use App\Models\Solarsystem;
 use App\Services\Routing\MapProximityPathfinder;
 
@@ -24,7 +25,31 @@ final readonly class ChainExitDescriber
 
     private const int HUB_SEARCH_JUMPS = 40;
 
-    public function __construct(private MapProximityPathfinder $pathfinder) {}
+    public function __construct(private MapProximityPathfinder $pathfinder, private ChainWayDescriber $wayDescriber) {}
+
+    /**
+     * Patch 39: the exit with the way to it from home: "Daisy → Alpha (V753 XL →) → Tama (K162 L ←, reduced)
+     * · 2 jumps from Daisy · Fits: battleships · 1.2–2.0B left". Just the exit's line when the
+     * way isn't known (not linked to home).
+     */
+    public function lineWithWay(Map $map, Solarsystem $system): string
+    {
+        $line = $this->line($system);
+        $way = $this->wayDescriber->fromHome($map, $system->id);
+        if ($way === null) {
+            return $line;
+        }
+
+        return sprintf(
+            "%s\n↳ %s · %d %s from %s%s",
+            $line,
+            $way['line'],
+            $way['jumps'],
+            $way['jumps'] === 1 ? 'jump' : 'jumps',
+            $way['home'],
+            $way['fits'] !== null ? ' · '.$way['fits'] : '',
+        );
+    }
 
     public function line(Solarsystem $system): string
     {

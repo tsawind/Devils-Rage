@@ -354,7 +354,7 @@ describe('patch 37: typed names', () => {
         expect(isCustomName('A12')).toBe(false);
         expect(isCustomName('ah1')).toBe(false);
         expect(isCustomName('B')).toBe(false);
-        expect(isCustomName('A@1958')).toBe(false);
+        expect(isCustomName('A~1958')).toBe(false);
     });
 
     it('numbers the holes beyond a typed name by its first letter', () => {

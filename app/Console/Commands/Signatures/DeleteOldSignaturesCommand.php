@@ -332,7 +332,7 @@ final class DeleteOldSignaturesCommand extends AppCommand
     private function hideOldChains(): void
     {
         $map_ids = MapSolarsystem::query()
-            ->where('alias', 'like', '%@%')
+            ->where('alias', 'like', '%'.ChainMemory::STAMP.'%')
             ->distinct()
             ->pluck('map_id');
 

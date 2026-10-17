@@ -97,10 +97,10 @@ describe('patch 35: New Alpha?', () => {
 
 describe('patch 35: stamped old chains', () => {
     it('splits and shows a stamp', () => {
-        expect(splitStamp('A1@1958')).toEqual({ base: 'A1', stamp: '1958' });
+        expect(splitStamp('A1~1958')).toEqual({ base: 'A1', stamp: '1958' });
         expect(splitStamp('A1')).toEqual({ base: 'A1', stamp: null });
-        expect(displayAlias('A@1958')).toBe('Alpha@1958');
-        expect(displayAlias('A111102@1958')).toBe('A111-102@1958');
+        expect(displayAlias('A~1958')).toBe('Alpha~1958');
+        expect(displayAlias('A111102~1958')).toBe('A111-102~1958');
     });
 
     it('a stamped Alpha never blocks the new Alpha', () => {
@@ -108,32 +108,32 @@ describe('patch 35: stamped old chains', () => {
             parentAlias: 'Daisy',
             originIsWormhole: true,
             ignoredAlias: 'Daisy',
-            aliases: ['A@1958', 'A1@1958'],
+            aliases: ['A~1958', 'A1~1958'],
             signatures: [{ id: 7, isWormhole: true, isConnected: false, isStatic: true, staticIndex: 0 }],
         });
         expect(planned.get(7)).toBe('A');
     });
 
     it('holes found from a stamped system carry the stamp on', () => {
-        expect(guessNextAlias('A1@1958', ['A11@1958', 'A11'])).toBe('A12@1958');
-        expect(staticSlotAlias('A1@1958')).toBe('A10@1958');
+        expect(guessNextAlias('A1~1958', ['A11~1958', 'A11'])).toBe('A12~1958');
+        expect(staticSlotAlias('A1~1958')).toBe('A10~1958');
         const planned = planSignatureAliases({
-            parentAlias: 'A1@1958',
+            parentAlias: 'A1~1958',
             originIsWormhole: true,
-            aliases: ['A11@1958'],
+            aliases: ['A11~1958'],
             signatures: [
                 { id: 1, isWormhole: true, isConnected: false },
-                { id: 2, isWormhole: true, isConnected: false, lockedAlias: 'A13@1958' },
+                { id: 2, isWormhole: true, isConnected: false, lockedAlias: 'A13~1958' },
             ],
         });
-        expect(planned.get(1)).toBe('A12@1958');
-        expect(planned.get(2)).toBe('A13@1958');
+        expect(planned.get(1)).toBe('A12~1958');
+        expect(planned.get(2)).toBe('A13~1958');
     });
 
     it('bookmarks keep the stamp ({alias} and {here})', () => {
-        const system = { alias: 'A@1958', occupier_alias: null, solarsystem: { name: 'J100002', class: '6' as const, region: null } };
-        const values = getBookmarkTokenValues(system as never, { signatureId: 'ZGB-123' } as never, 'A1@1958', '3');
-        expect(values.alias).toBe('Alpha@1958');
-        expect(values.here).toBe('A1@1958');
+        const system = { alias: 'A~1958', occupier_alias: null, solarsystem: { name: 'J100002', class: '6' as const, region: null } };
+        const values = getBookmarkTokenValues(system as never, { signatureId: 'ZGB-123' } as never, 'A1~1958', '3');
+        expect(values.alias).toBe('Alpha~1958');
+        expect(values.here).toBe('A1~1958');
     });
 });

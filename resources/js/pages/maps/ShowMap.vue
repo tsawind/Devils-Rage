@@ -37,9 +37,9 @@ import { useIsMapGestureActive } from '@/map/api';
 import MapRoot from '@/map/components/MapRoot.vue';
 import { TMap, TResolvedMapNavigation, TResolvedSelectedMapSolarsystem, TShowMapProps } from '@/pages/maps/index';
 import { router, usePage } from '@inertiajs/vue3';
-import { echo, useEcho } from '@laravel/echo-vue';
+import { echo, useConnectionStatus, useEcho } from '@laravel/echo-vue';
 import { GridItem, GridLayout } from 'grid-layout-plus';
-import { computed, provide, ref } from 'vue';
+import { computed, onBeforeUnmount, provide, ref } from 'vue';
 
 const {
     map,
@@ -175,14 +175,32 @@ useMapPresence(map.slug, () => presenceManager.value);
 
 // Patch 37: the event now carries the kill's system and ship (it carried nothing, so the flash never fired).
 useOnClient(() =>
-    useEcho<{ killmail: { solarsystem_id: number; ship_name: string | null; is_capital: boolean; value: number | null } | null }>(
+    useEcho<{ killmail: { solarsystem_id: number; ship_name: string | null; is_capital: boolean; value: number | null; highsec?: boolean } | null }>(
         getMapChannelName(map.id),
         KillmailReceivedEvent,
         (event) => {
-            if (event.killmail) pulseKill(event.killmail.solarsystem_id, Date.now(), { ship: event.killmail.ship_name, capital: event.killmail.is_capital, value: event.killmail.value });
+            // Patch 39: high-sec kills still flash, but make no sound.
+            if (event.killmail)
+                pulseKill(
+                    event.killmail.solarsystem_id,
+                    Date.now(),
+                    { ship: event.killmail.ship_name, capital: event.killmail.is_capital, value: event.killmail.value },
+                    event.killmail.highsec ? { sound: false } : {},
+                );
         },
     ),
 );
+
+// Patch 39: when the live connection is down (or never came up), refresh the map every ~20 s
+// so a viewer still sees new systems, pipes and the rally point.
+useOnClient(() => {
+    const status = useConnectionStatus();
+    const timer = setInterval(() => {
+        if (status.value === 'connected' || document.visibilityState !== 'visible') return;
+        router.reload({ only: ['map', 'map_characters'] });
+    }, 20_000);
+    onBeforeUnmount(() => clearInterval(timer));
+});
 
 useOnClient(() =>
     router.on('before', (event) => {

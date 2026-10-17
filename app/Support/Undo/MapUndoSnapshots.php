@@ -250,7 +250,7 @@ final readonly class MapUndoSnapshots
 
     /**
      * A hidden system put back by Undo takes its old name again, unless someone
-     * else holds it now: then it keeps its "@hhmm" stamp.
+     * else holds it now: then it keeps its "~hhmm" stamp.
      *
      * @param  array<string, mixed>  $row
      * @return array<string, mixed>

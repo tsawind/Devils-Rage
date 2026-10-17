@@ -53,6 +53,11 @@ import { Check, Cloud, Copy, Crosshair, Database, Fan, Flag, Gem, Heart, Landmar
 import { AcceptableValue } from 'reka-ui';
 import { type Component, computed, nextTick, ref, toRef } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
+import { specialClassWord } from '@/lib/specialSystems';
+import { nameSeenThrough } from '@/lib/floatingNames';
+import { renameHolder } from '@/lib/renameHolder';
+import { holeKey, noteHoleCopy } from '@/lib/recopy';
+import { changeNames, type TRenameMode } from '@/map/actions/names';
 
 // Patch 37: hover texts name the human behind the alt (SeAT main).
 const { label: pilotName } = usePilotNames();
@@ -836,13 +841,22 @@ const name_title = computed(() => {
 
 function classLabel(value: string | null | undefined): string {
     if (!value) return '';
+    const word = specialClassWord(value);
+    if (word) return word;
     return /^\d+$/.test(value) ? `C${value}` : value.toUpperCase() === 'H' ? 'HS' : value.toUpperCase() === 'L' ? 'LS' : value.toUpperCase() === 'N' ? 'NS' : value.toUpperCase();
 }
+
+/** Patch 39: this system as seen through this hole from where it leads (a loop's own number), for "*@{here}". */
+const here_through_hole = computed(() => {
+    const connection = signature.map_connection_id ? map_store?.connections.get(signature.map_connection_id) : null;
+    return map_system.value && connection ? nameSeenThrough(map_system.value, connection) : undefined;
+});
 
 // The destination bookmark for this hole: the real connection target when one
 // is set, otherwise the auto-suggested next chain alias.
 const bookmark_name = computed(() =>
     buildSignatureBookmark({
+        hereName: here_through_hole.value,
         signature,
         currentSystem: {
             alias: selected_map_solarsystem.alias,
@@ -903,8 +917,26 @@ function openHoleRename(): void {
     if (isWormhole.value && can_write.value) hole_rename_open.value = true;
 }
 
-function applyHoleRename(name: string, copy: boolean): void {
-    handleChange({ alias: name, rename_system: true });
+/** Patch 39: who has a name already (another hole here, or a system on the map). */
+function renameHolderOf(name: string): { label: string; next: string | null } | null {
+    return renameHolder({
+        name,
+        signatureId: signature.id,
+        targetId: selected_connection.value?.target?.id ?? null,
+        parent: selected_map_solarsystem,
+        parentHoles: selected_map_solarsystem.signatures ?? [],
+        systems: map_solarsystems.value,
+        scheme: page.props.map.bookmark_alias_scheme,
+        ignoredAlias: page.props.map.bookmark_ignored_alias,
+    });
+}
+
+function applyHoleRename(name: string, copy: boolean, mode: TRenameMode = 'plain', next: string | null = null): void {
+    if (mode !== 'plain') {
+        changeNames(selected_map_solarsystem.id, { action: 'rename', signature_id: signature.id, name, mode, next }, `Rename to ${name}`);
+    } else {
+        handleChange({ alias: name, rename_system: true });
+    }
     const bookmark = renameBookmarks(name).thisSide;
     const copying = copy && clipboardAllowed();
     if (copying) void autoCopy(bookmark);
@@ -925,6 +957,8 @@ const armed_label = computed(() => {
 
 function copyBookmark() {
     navigator.clipboard.writeText(bookmark_name.value);
+    // Patch 39: changes to this hole in the next 20 s copy its updated name.
+    noteHoleCopy(holeKey(signature.id), bookmark_name.value, () => bookmark_name.value);
 
     // Copying an unjumped hole's bookmark locks its number, so it never shifts
     // under a bookmark someone has saved in game.
@@ -1236,6 +1270,7 @@ function copyBookmark() {
             :others="rename_others"
             :ignored-alias="page.props.map.bookmark_ignored_alias ?? null"
             :bookmarks="renameBookmarks"
+            :holder-of="renameHolderOf"
             :jumped="Boolean(selected_connection?.target)"
             @rename="applyHoleRename"
         />

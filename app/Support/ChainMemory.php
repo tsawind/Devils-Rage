@@ -14,7 +14,7 @@ use Illuminate\Support\Collection;
 
 /**
  * Patch 36: chain memory. Clears hide systems instead of deleting them; a
- * hidden system never holds a name (its alias gets a "@hhmm" stamp), comes
+ * hidden system never holds a name (its alias gets a "~hhmm" stamp), comes
  * back as it was when someone reconnects to it within 27 h, and loses its
  * name after that. Every number of the plan lives here.
  */
@@ -29,8 +29,11 @@ final class ChainMemory
     /** Other signatures (data, relic, gas, ore, combat…) are kept this long. */
     public const int SIGNATURE_LIFETIME_DAYS = 30;
 
+    /** Patch 39: what separates a name from its stamp ("A1~1958"); was "@" before patch 39. */
+    public const string STAMP = '~';
+
     /**
-     * The name without its stamp: "A1@1958" → "A1".
+     * The name without its stamp: "A1~1958" → "A1".
      */
     public static function plainAlias(?string $alias): ?string
     {
@@ -38,14 +41,14 @@ final class ChainMemory
             return null;
         }
 
-        $plain = mb_trim(explode('@', $alias, 2)[0]);
+        $plain = mb_trim(explode(self::STAMP, $alias, 2)[0]);
 
         return $plain === '' ? null : $plain;
     }
 
     public static function isStamped(?string $alias): bool
     {
-        return $alias !== null && str_contains($alias, '@');
+        return $alias !== null && str_contains($alias, self::STAMP);
     }
 
     /**
@@ -150,7 +153,7 @@ final class ChainMemory
             && $system->hidden_at->greaterThan(CarbonImmutable::now()->subHours(self::HIDDEN_NAME_KEPT_HOURS));
 
         $alias = $kept_name ? $system->alias : null;
-        $stamp = self::isStamped($system->alias) ? explode('@', (string) $system->alias, 2)[1] : null;
+        $stamp = self::isStamped($system->alias) ? explode(self::STAMP, (string) $system->alias, 2)[1] : null;
         $plain = self::plainAlias($alias);
 
         if ($kept_name && $stamp !== null && $plain !== null && self::isNameFree($system->map_id, $plain, $system->id)) {
@@ -186,13 +189,13 @@ final class ChainMemory
     {
         Signature::query()
             ->where('map_solarsystem_id', $system->id)
-            ->where('alias', 'like', '%@%')
+            ->where('alias', 'like', '%'.self::STAMP.'%')
             ->update(['alias' => null]);
     }
 
     /**
      * Patch 37: a system that came back with nothing remembered beyond it lets go of its old
-     * name: the system's alias and its unjumped holes' names that came from it ("A0@1917",
+     * name: the system's alias and its unjumped holes' names that came from it ("A0~1917",
      * "ALPHA1"). Names typed on holes that don't come from the old name stay.
      */
     /**

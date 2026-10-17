@@ -64,12 +64,14 @@ it('assigns the alias to a tracked system and broadcasts it', function () {
     });
 });
 
-it('assigns the alias when the tracked system is already on the map', function () {
+it('assigns the alias when the tracked system is already on the map without a name', function () {
     Event::fake([MapSolarsystemsUpsertedEvent::class]);
 
     $map = Map::factory()->create();
     $origin = placeMapSolarsystem($map, 30012007);
     $target = placeMapSolarsystem($map, 30012008, 300, 300);
+    // Patch 39: a named system keeps its name (a loop); only an unnamed one takes the hole's.
+    $target->update(['alias' => null]);
 
     app(StoreTrackingAction::class)->handle(TrackingData::from([
         'from_map_solarsystem_id' => $origin->id,
@@ -264,8 +266,8 @@ it('patch 37: a cleared system with nothing remembered beyond it takes the jumpe
     $map = Map::factory()->create();
     $origin = placeMapSolarsystem($map, 31000961);
     $old = placeMapSolarsystem($map, 31000962, 300, 300);
-    $old->forceFill(['alias' => 'ALPHA@1917', 'hidden_at' => now()->subHours(2), 'memory_links' => null])->save();
-    $oldStatic = Signature::create(['map_solarsystem_id' => $old->id, 'signature_id' => 'OLD-001', 'alias' => 'A0@1917']);
+    $old->forceFill(['alias' => 'ALPHA~1917', 'hidden_at' => now()->subHours(2), 'memory_links' => null])->save();
+    $oldStatic = Signature::create(['map_solarsystem_id' => $old->id, 'signature_id' => 'OLD-001', 'alias' => 'A0~1917']);
     $typed = Signature::create(['map_solarsystem_id' => $old->id, 'signature_id' => 'GAS-001', 'alias' => 'Gas']);
 
     app(StoreTrackingAction::class)->handle(TrackingData::from([

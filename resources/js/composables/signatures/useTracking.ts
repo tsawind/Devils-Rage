@@ -11,7 +11,10 @@ import { useTrackingSystems } from '@/composables/useTrackingSystems';
 import { useCombat } from '@/composables/combat/useCombat';
 import { offerWayBack } from '@/composables/signatures/wayBack';
 import useUser from '@/composables/useUser';
-import { aliasTargetKind, displayAlias, staticSlotAlias, staticSlotAliasAt, suggestAlias } from '@/lib/alias';
+import { aliasTargetKind, displayAlias, isIgnoredAlias, staticSlotAlias, staticSlotAliasAt, suggestAlias } from '@/lib/alias';
+import { askLoop } from '@/composables/signatures/loopPrompt';
+import { isStampedName } from '@/lib/floatingNames';
+import { countsUp } from '@/lib/numberingHubs';
 import { isWormholeSignature, planAliasesForSystem } from '@/lib/aliasPlan';
 import { jumpMatchesArm, myArmedHole } from '@/lib/arming';
 import { formatBookmarkName, isFrigateOnly } from '@/lib/bookmark';
@@ -131,17 +134,20 @@ export function useTracking() {
     // first), so the jump dialog can prefill the one for the chosen signature.
     // Empty when the target already carries an alias or suggestions are off.
     const planned_aliases = computed<Map<number, string>>(() => {
-        if (existing_map_solarsystem.value?.alias || !map_user_settings.value.suggest_alias_enabled) return new Map();
+        // Patch 39: holes into a system already on the map keep their own number too (a loop's floating name).
+        if (!map_user_settings.value.suggest_alias_enabled) return new Map();
 
         const origin = origin_map_solarsystem.value;
         return planAliasesForSystem({
             signatures: signatures.value,
             system: origin
                 ? {
+                      id: origin_map_system.value?.id,
                       alias: origin.alias,
                       solarsystem: origin.solarsystem,
                       combat_home: origin_is_combat_home.value,
                       combat_color: origin_map_system.value?.combat_color ?? null,
+                      hole_slot_high: origin_map_system.value?.hole_slot_high ?? null,
                   }
                 : null,
             aliases: known_aliases.value,
@@ -175,6 +181,9 @@ export function useTracking() {
             targetKind: aliasTargetKind(targetIsWormhole, target.class),
             ignoredAlias: page.props.map.bookmark_ignored_alias,
             combatHome: origin_is_combat_home.value,
+            targetClass: target.class,
+            countUp: countsUp(origin_map_system.value),
+            slotHigh: origin_map_system.value?.hole_slot_high ?? null,
         });
     });
 
@@ -408,7 +417,7 @@ export function useTracking() {
             return false;
         }
 
-        const alias = existing_map_solarsystem.value?.alias ? suggested_alias.value : (armed.alias ?? planned_aliases.value.get(armed.id) ?? suggested_alias.value);
+        const alias = armed.alias ?? planned_aliases.value.get(armed.id) ?? suggested_alias.value;
         used_arm_id = armed.id;
         toast.info(`Jumped armed ${label}${alias ? ` → ${displayAlias(alias)}` : ''}`, { description: 'Linked to the hole you armed, no prompt.' });
         handleSelectSignature({
@@ -457,7 +466,7 @@ export function useTracking() {
 
         if (wormholes.length === 1 && unidentified.length === 0) {
             const signature = wormholes[0];
-            const alias = existing_map_solarsystem.value?.alias ? suggested_alias.value : (planned_aliases.value.get(signature.id) ?? suggested_alias.value);
+            const alias = signature.alias ?? planned_aliases.value.get(signature.id) ?? suggested_alias.value;
             toast.info(`Jumped ${signature.signature_id ?? 'the only hole'}${alias ? ` → ${displayAlias(alias)}` : ''}`, {
                 description: 'The only hole that fits, so no prompt.',
             });
@@ -506,8 +515,18 @@ export function useTracking() {
 
         const target_solarsystem_id = target_solarsystem.value.id;
         const byMain = current_jump.value?.byMain !== false;
+        // A hole back into home is named after home (patch 12), never a loop.
+        if (existing_map_solarsystem.value?.alias && isIgnoredAlias(existing_map_solarsystem.value.alias, page.props.map.bookmark_ignored_alias)) {
+            selection = { ...selection, alias: existing_map_solarsystem.value.alias };
+        }
 
         copyConnectionBookmark(selection.signatureId, selection.alias);
+        // Patch 39: jumping into a system already on the map through a hole with another number: a loop.
+        const existing = existing_map_solarsystem.value;
+        const loop =
+            byMain && selection.signatureId && existing?.alias && selection.alias && selection.alias.toUpperCase() !== existing.alias.toUpperCase() && !isStampedName(existing.alias)
+                ? { systemId: existing.id, main: existing.alias, holeName: selection.alias, signatureId: selection.signatureId, originId: origin_map_solarsystem.value.id }
+                : null;
         createTracking(
             origin_map_solarsystem.value.id,
             target_solarsystem_id,
@@ -520,7 +539,10 @@ export function useTracking() {
                 is_static: selection.isStatic,
                 is_wandering: selection.isWandering,
             },
-            () => followInto(target_solarsystem_id, 0, byMain),
+            () => {
+                followInto(target_solarsystem_id, 0, byMain);
+                if (loop) askLoop(loop);
+            },
         );
     }
 
@@ -538,6 +560,7 @@ export function useTracking() {
         if (!origin?.solarsystem || !target_solarsystem.value) return;
 
         const signature = signatures.value?.find((s) => s.id === signatureId) ?? null;
+        // Patch 39: through a loop the way back says the hole's own number ("*@A2"), as seen from where it leads.
         const here = alias || existing_map_solarsystem.value?.alias || null;
         // The chain the system we jumped into belongs to; a new system joins the origin's chain.
         const here_color = existing_map_solarsystem.value

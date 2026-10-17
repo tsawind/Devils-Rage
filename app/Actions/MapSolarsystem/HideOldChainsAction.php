@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Throwable;
 
 /**
- * Patch 36: an old chain (one that carries a "@hhmm" stamp, e.g. after a rage
+ * Patch 36: an old chain (one that carries a "~hhmm" stamp, e.g. after a rage
  * roll's "New Alpha?" → Yes) that no longer hangs off the map hides, unless a
  * pilot is still inside it, one of its systems is kept (pinned, home, rally
  * point, rage home), or it still has another way out (a k-space system). Then

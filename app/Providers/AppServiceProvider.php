@@ -12,8 +12,11 @@ use App\Services\NameResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Console\Scheduling\Event as ScheduledEvent;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Auth\GenericUser;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -68,6 +71,10 @@ final class AppServiceProvider extends ServiceProvider
         });
 
         Gate::policy(PersonalAccessToken::class, PersonalAccessTokenPolicy::class);
+
+        // Patch 39: a share-link viewer who isn't logged in can still follow the map live: the
+        // "map-share" guard (broadcasting only) stands for whoever holds a share link in their session.
+        Auth::viaRequest('map-share', fn (Request $request): ?GenericUser => self::shareViewer($request));
 
         $this->reloads('app:restart-killmail-listener', 'killmails');
         $this->reloads('discord:restart', 'discord');
@@ -156,5 +163,19 @@ final class AppServiceProvider extends ServiceProvider
         } catch (\Throwable) {
             // Not fatal: `php artisan storage:link` still works by hand.
         }
+    }
+
+    /**
+     * Patch 39: the share-link viewer of this request (session holds a share token), or null.
+     */
+    public static function shareViewer(Request $request): ?GenericUser
+    {
+        if (! $request->hasSession()) {
+            return null;
+        }
+        $tokens = collect($request->session()->all())
+            ->filter(fn (mixed $value, string $key): bool => str_starts_with($key, 'map_share_token_') && is_string($value) && $value !== '');
+
+        return $tokens->isEmpty() ? null : new GenericUser(['id' => 0, 'name' => 'Share-link viewer']);
     }
 }

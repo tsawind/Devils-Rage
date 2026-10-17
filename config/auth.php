@@ -42,6 +42,11 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Patch 39: share-link viewers who aren't logged in (live map updates only).
+        'map-share' => [
+            'driver' => 'map-share',
+        ],
     ],
 
     /*

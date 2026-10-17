@@ -11,14 +11,15 @@ use App\Models\MapConnection;
 use App\Models\MapSolarsystem;
 use App\Models\Signature;
 use App\Support\Broadcasting\MapBroadcaster;
+use App\Support\ChainMemory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
  * Patch 35: "New Alpha?" → Yes. The old static's chain keeps its names with a
- * stamp of when it was first mapped, in EVE time ("A" → "A@1958", "A1" →
- * "A1@1958"), so its slot is free at once; the old static's signature (and its
+ * stamp of when it was first mapped, in EVE time ("A" → "A~1958", "A1" →
+ * "A1~1958"), so its slot is free at once; the old static's signature (and its
  * pipe) is deleted and the old chain hides (patch 36, unless a pilot is still
  * in it, it is pinned or it has another way out), and the new signature becomes the static with the old name
  * and, when known, the old static's hole type.
@@ -34,7 +35,7 @@ final readonly class NewStaticAction
     public static function isInChain(string $alias, string $base): bool
     {
         $name = mb_strtoupper(mb_trim($alias));
-        if ($name === '' || str_contains($name, '@') || preg_match('/^[A-Z0-9]+$/', $name) !== 1) {
+        if ($name === '' || str_contains($name, ChainMemory::STAMP) || preg_match('/^[A-Z0-9]+$/', $name) !== 1) {
             return false;
         }
 
@@ -44,7 +45,7 @@ final readonly class NewStaticAction
 
     public static function stamped(string $alias, string $stamp): string
     {
-        return mb_strtoupper(mb_trim($alias)).'@'.$stamp;
+        return mb_strtoupper(mb_trim($alias)).ChainMemory::STAMP.$stamp;
     }
 
     /**
@@ -71,7 +72,7 @@ final readonly class NewStaticAction
             $stamped = 0;
             $stamp = null;
 
-            if ($old_system !== null && $base !== '' && ! str_contains($base, '@')) {
+            if ($old_system !== null && $base !== '' && ! str_contains($base, ChainMemory::STAMP)) {
                 $stamp = $old_system->created_at->utc()->format('Hi');
                 $stamped = $this->stampChain($rolling, $base, $stamp);
             }
@@ -83,7 +84,7 @@ final readonly class NewStaticAction
             $new->update([
                 'is_static' => true,
                 'is_wandering' => false,
-                'alias' => $base !== '' && ! str_contains($base, '@') ? $base : $new->alias,
+                'alias' => $base !== '' && ! str_contains($base, ChainMemory::STAMP) ? $base : $new->alias,
                 'wormhole_id' => $new->wormhole_id ?? $wormhole_id,
             ]);
 
@@ -143,7 +144,7 @@ final readonly class NewStaticAction
             ->whereIn('map_solarsystem_id', $systems->pluck('id'))
             ->whereNotNull('alias')
             ->get()
-            ->filter(fn (Signature $signature): bool => ! str_contains((string) $signature->alias, '@'))
+            ->filter(fn (Signature $signature): bool => ! str_contains((string) $signature->alias, ChainMemory::STAMP))
             ->each(fn (Signature $signature) => $signature->update(['alias' => self::stamped((string) $signature->alias, $stamp)]));
 
         return $systems->count();

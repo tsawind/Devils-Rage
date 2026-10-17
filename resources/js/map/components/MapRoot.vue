@@ -8,6 +8,8 @@ import usePermission from '@/composables/usePermission';
 import { useRallyRoute } from '@/composables/useRallyRoute';
 import StaticCertainDialog from '@/components/signatures/StaticCertainDialog.vue';
 import StaticConfirmDialog from '@/components/signatures/StaticConfirmDialog.vue';
+import LoopDialog from '@/components/signatures/LoopDialog.vue';
+import MapRenameDialog from '@/map/components/overlays/MapRenameDialog.vue';
 import WayBackPopup from '@/components/signatures/WayBackPopup.vue';
 import RageRollOverlay from '@/components/map/RageRollOverlay.vue';
 import { useStaticCertainty } from '@/composables/signatures/useStaticCertainty';
@@ -323,6 +325,8 @@ whenever(Delete, () => {
     <ClearSideChainsDialog />
     <StaticCertainDialog />
     <StaticConfirmDialog />
+    <LoopDialog />
+    <MapRenameDialog />
 </template>
 
 <style scoped></style>

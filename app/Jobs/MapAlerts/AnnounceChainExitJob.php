@@ -43,7 +43,7 @@ final class AnnounceChainExitJob implements ShouldQueue
             return;
         }
 
-        $content = sprintf('🚪 New exit on **%s**: %s', $placement->map->name, $describer->line($placement->solarsystem));
+        $content = sprintf('🚪 New exit on **%s**: %s', $placement->map->name, $describer->lineWithWay($placement->map, $placement->solarsystem));
 
         foreach ($feeds as $feed) {
             if (Gate::forUser($feed->creator)->denies('view', $placement->map)) {

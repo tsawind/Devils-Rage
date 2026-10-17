@@ -33,6 +33,7 @@ use App\Http\Controllers\MapController;
 use App\Http\Controllers\MapDiscordController;
 use App\Http\Controllers\MapIgnoredSolarsystemController;
 use App\Http\Controllers\MapImportController;
+use App\Http\Controllers\MapNamesController;
 use App\Http\Controllers\FleetController;
 use App\Http\Controllers\JumpInController;
 use App\Http\Controllers\MassSessionController;
@@ -140,6 +141,7 @@ Route::middleware('auth')->group(function () {
     Route::post('map-solarsystems/{mapSolarsystem}/notes', [SystemNoteController::class, 'store'])->name('map-solarsystems.notes.store');
     Route::post('map-solarsystems/{mapSolarsystem}/cleanup-convert', [ChainCleanupController::class, 'convert'])->name('map-solarsystems.cleanup.convert');
     Route::delete('map-solarsystems/{mapSolarsystem}/cleanup-return', [ChainCleanupController::class, 'returnDone'])->name('map-solarsystems.cleanup.return');
+    Route::post('map-solarsystems/{mapSolarsystem}/names', [MapNamesController::class, 'update'])->name('map-solarsystems.names.update');
     Route::post('map-undo/{token}', [MapUndoController::class, 'store'])->whereUuid('token')->name('map-undo.store');
     Route::put('map-selection', [MapSelectionController::class, 'update'])->name('map-selection.update');
     Route::delete('map-selection', [MapSelectionController::class, 'destroy'])->name('map-selection.destroy');

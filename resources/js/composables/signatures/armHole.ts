@@ -4,6 +4,9 @@ import { armSignature } from '@/map/actions/arm';
 import type { TStringedSolarsystemClass } from '@/types/models';
 import { signatureToast as toast } from '@/lib/signatureToast';
 import { autoCopy, clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
+import { holeKey, noteHoleCopy } from '@/lib/recopy';
+import { pendingHoleBookmark } from '@/map/holeBookmark';
+import { tryUseMapStore } from '@/map/store/mapStore';
 
 /**
  * Patch 13: arm a hole as your next jump, from the signature list, a paste or
@@ -32,6 +35,15 @@ export function armHole(params: {
     });
     const copying = Boolean(name) && clipboardAllowed();
     if (copying) void autoCopy(name);
+    // Patch 39: changes to the armed hole in the next 20 s copy its updated name.
+    if (name) {
+        const store = tryUseMapStore();
+        noteHoleCopy(holeKey(params.signature.id), name, () => {
+            const system = store ? [...store.systems.values()].find((candidate) => candidate.pending_holes?.some((hole) => hole.id === params.signature.id)) : undefined;
+            const hole = system?.pending_holes?.find((candidate) => candidate.id === params.signature.id);
+            return store && system && hole ? pendingHoleBookmark(store, system, hole, hole.alias ?? params.alias) : name;
+        });
+    }
 
     const short = params.signature.signature_id?.slice(0, 3) ?? 'the hole';
     armSignature(

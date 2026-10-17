@@ -38,7 +38,9 @@ final readonly class ListChainExitsAction
 
         $lines = [sprintf('🚪 **Exits on %s** (%d)', $map->name, $exits->count())];
         foreach ($exits->take(self::EXITS) as $exit) {
-            $lines[] = '• '.$this->describer->line($exit);
+            // Patch 39: the way from home too, while the reply stays inside Discord's 2000 characters.
+            $full = '• '.$this->describer->lineWithWay($map, $exit);
+            $lines[] = mb_strlen(implode("\n", [...$lines, $full])) < 1800 ? $full : '• '.$this->describer->line($exit);
         }
 
         if ($exits->count() > self::EXITS) {

@@ -2,6 +2,9 @@ import { aliasesBelow, suggestAlias } from '@/lib/alias';
 import { buildSignatureBookmark, formatBookmarkName, isFrigateOnly, visibleBookmarkName } from '@/lib/bookmark';
 import { returnFlag, staticNames } from '@/lib/chainNumbering';
 import { chainAliases } from '@/lib/combat';
+import { nameSeenThrough } from '@/lib/floatingNames';
+import { countsUp } from '@/lib/numberingHubs';
+import { holeKey, noteHoleCopy } from '@/lib/recopy';
 import { getTypeById } from '@/const/signatures';
 import { shipSizeFromJumpMass } from '@/lib/shipSize';
 import { wormholeMass } from '@/lib/wormholeMass';
@@ -41,6 +44,9 @@ export function claimFor(store: MapStore, system: TMapSolarsystem, hole: TPendin
         scheme: meta?.bookmark_alias_scheme,
         ignoredAlias: meta?.bookmark_ignored_alias,
         combatHome: Boolean(system.combat_home),
+        targetClass: hole.target_class,
+        countUp: countsUp(system),
+        slotHigh: system.hole_slot_high ?? null,
     });
 }
 
@@ -194,8 +200,11 @@ export function mappedBelow(store: MapStore, system: TMapSolarsystem, alias: str
     return aliasesBelow(chainAliases([...store.systems.values()], system), alias, store.meta.value?.bookmark_ignored_alias);
 }
 
-/** Patch 14: the forward bookmark of a jumped hole from `system`, if the system it leads to were named `alias`. */
-export function linkedForwardBookmark(store: MapStore, system: TMapSolarsystem, targetId: number, alias: string): string {
+/**
+ * Patch 14: the forward bookmark of a jumped hole from `system`, if the system it leads to were named `alias`.
+ * Patch 39: with `oldName`, the old chain's name is added ("old=A1~1917").
+ */
+export function linkedForwardBookmark(store: MapStore, system: TMapSolarsystem, targetId: number, alias: string, oldName: string | null = null): string {
     const meta = store.meta.value;
     const target = store.systems.get(targetId);
     if (!meta || !target) return '';
@@ -205,8 +214,11 @@ export function linkedForwardBookmark(store: MapStore, system: TMapSolarsystem, 
             (candidate.to_map_solarsystem_id === system.id && candidate.from_map_solarsystem_id === targetId),
     );
     const signature = (connection?.signatures ?? []).find((candidate) => candidate.map_solarsystem_id === system.id) ?? null;
+    const renamed = alias !== (target.alias ?? '');
     return buildSignatureBookmark({
         signature: {
+            // Renamed: the hole takes the new name too (no loop). Otherwise its own number (a loop shows "loop=").
+            alias: renamed ? alias : (signature?.alias ?? null),
             signature_id: signature?.signature_id ?? null,
             ship_size: connection?.ship_size ?? null,
             mass_status: connection?.mass_status ?? null,
@@ -217,7 +229,7 @@ export function linkedForwardBookmark(store: MapStore, system: TMapSolarsystem, 
             is_wandering: Boolean(signature?.is_wandering),
         },
         currentSystem: { alias: system.alias, class: system.solarsystem.class, statics: staticsOf(system), combatHome: Boolean(system.combat_home), combatColor: system.combat_color ?? null },
-        connectionTarget: { ...target, alias, combat_color: null, combat_home: false },
+        connectionTarget: { ...target, alias, combat_color: null, combat_home: false, old_aliases: oldName ? [...(target.old_aliases ?? []), oldName] : target.old_aliases },
         aliases: chainAliases([...store.systems.values()], system),
         formats: meta,
         detectReturn: true,
@@ -247,7 +259,8 @@ export function wayBackBookmark(store: MapStore, system: TMapSolarsystem, parent
         },
         meta,
         system.alias,
-        system.alias,
+        // Patch 39: through a loop, this system as seen from where the hole leads ("*@A2").
+        nameSeenThrough(system, connection),
         system.solarsystem.class,
         system.combat_color ?? null,
         Boolean(system.combat_home),
@@ -287,6 +300,12 @@ export function copyPlaceholderBookmark(store: MapStore, placeholder: TPlacehold
     const name = pendingHoleBookmark(store, parent, hole, claim);
     if (!name) return;
     navigator.clipboard.writeText(name).catch(() => undefined);
+    // Patch 39: changes to this hole in the next 20 s copy its updated name.
+    const parentId = parent.id;
+    noteHoleCopy(holeKey(placeholder.signatureId), name, () => {
+        const now = pendingHole(store, parentId, placeholder.signatureId);
+        return now ? pendingHoleBookmark(store, now.system, now.hole, now.hole.alias ?? claim) : '';
+    });
     if (canEdit && !hole.alias && claim) {
         updateSignature({ id: placeholder.signatureId } as TSignature, { alias: claim });
     }

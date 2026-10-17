@@ -80,6 +80,23 @@ export function edgePathAndCenter(geometry: EdgeGeometry, scale: number): { d: s
     };
 }
 
+/**
+ * Patch 39: where a loop's lightning mark sits: the middle of the pipe (the middle run of
+ * an elbow, between its two corners), away from the pill near the far system.
+ */
+export function loopMarkPoint(geometry: EdgeGeometry, scale: number): Vec2 {
+    if (geometry.kind === 'curve') return midpoint(scalePoint(geometry.from, scale), scalePoint(geometry.to, scale));
+    const points = elbowPoints(geometry, scale);
+    const offset = geometry.start ? 1 : 0;
+    return midpoint(points[offset + 1], points[offset + 2]);
+}
+
+/** A lightning zigzag (about 18 × 14 px) centred on `at`. */
+export function lightningPath(at: Vec2): string {
+    const { x, y } = at;
+    return `M ${x - 7} ${y - 7} L ${x + 1} ${y - 1} L ${x - 2} ${y + 1} L ${x + 7} ${y + 7}`;
+}
+
 /** Patch 21: an elbow's corner points in screen pixels (the top/bottom exit included). */
 export function elbowPoints(geometry: Extract<EdgeGeometry, { kind: 'elbow' }>, scale: number): Vec2[] {
     const from = scalePoint(geometry.from, scale);

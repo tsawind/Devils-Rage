@@ -18,7 +18,7 @@ use Carbon\CarbonImmutable;
 use function Pest\Laravel\artisan;
 
 /**
- * Patch 36: chain memory. Clears hide systems; names get a "@hhmm" stamp; a
+ * Patch 36: chain memory. Clears hide systems; names get a "~hhmm" stamp; a
  * reconnect within 27 h brings a system back as it was.
  */
 function chainMap(): array
@@ -42,11 +42,11 @@ it('hides a cleared chain instead of deleting it, stamping its names', function 
     app(DeleteMapSelectionAction::class)->handle([$alpha->id, $a1->id, $daisy->id]);
 
     expect(MapSolarsystem::query()->whereKey([$alpha->id, $a1->id])->count())->toBe(0)
-        ->and(MapSolarsystem::withHidden()->find($alpha->id)->alias)->toBe('A@1958')
-        ->and(MapSolarsystem::withHidden()->find($a1->id)->alias)->toBe('A1@1958')
+        ->and(MapSolarsystem::withHidden()->find($alpha->id)->alias)->toBe('A~1958')
+        ->and(MapSolarsystem::withHidden()->find($a1->id)->alias)->toBe('A1~1958')
         ->and(MapSolarsystem::withHidden()->find($a1->id)->hidden_at)->not->toBeNull()
         ->and($site->fresh())->not->toBeNull()
-        ->and($locked->fresh()->alias)->toBe('A12@1958')
+        ->and($locked->fresh()->alias)->toBe('A12~1958')
         ->and(MapConnection::query()->where('map_id', $map->id)->count())->toBe(0)
         // The home is never hidden; selected by hand it is still deleted as before.
         ->and(MapSolarsystem::withHidden()->find($daisy->id))->toBeNull();
@@ -104,7 +104,7 @@ it('keeps the stamp when the plain name is taken again', function () {
         'solarsystem_id' => $alpha->solarsystem_id, 'position_x' => 100, 'position_y' => 100,
     ]);
 
-    expect($back->fresh()->alias)->toBe('A@1958');
+    expect($back->fresh()->alias)->toBe('A~1958');
 });
 
 it('comes back with no name after 27 h hidden', function () {
@@ -140,7 +140,7 @@ it('cleanup: wormhole signatures go at 27 h and a system left without pipes hide
         ->and($young->fresh())->not->toBeNull()
         ->and($site->fresh())->not->toBeNull()
         ->and(MapSolarsystem::query()->find($a1->id))->toBeNull()
-        ->and(MapSolarsystem::withHidden()->find($a1->id)->alias)->toBe('A1@1958')
+        ->and(MapSolarsystem::withHidden()->find($a1->id)->alias)->toBe('A1~1958')
         // Alpha still hangs off Daisy.
         ->and(MapSolarsystem::query()->find($alpha->id))->not->toBeNull();
 });
@@ -170,8 +170,8 @@ it('cleanup: other signatures are kept 30 days, names go after 27 h, empty hidde
 it('rage roll: a detached old chain hides unless something keeps it', function () {
     ['map' => $map, 'alpha' => $alpha, 'a1' => $a1, 'daisy_alpha' => $daisy_alpha] = chainMap();
     $daisy_alpha->delete();
-    MapSolarsystem::query()->whereKey($alpha->id)->update(['alias' => 'A@1958']);
-    MapSolarsystem::query()->whereKey($a1->id)->update(['alias' => 'A1@1958', 'pinned' => true]);
+    MapSolarsystem::query()->whereKey($alpha->id)->update(['alias' => 'A~1958']);
+    MapSolarsystem::query()->whereKey($a1->id)->update(['alias' => 'A1~1958', 'pinned' => true]);
 
     expect(app(HideOldChainsAction::class)->handle($map, [$alpha->id]))->toBe([]);
 
@@ -183,7 +183,7 @@ it('rage roll: a detached old chain hides unless something keeps it', function (
 it('rage roll: an old chain with a k-space exit stays shown', function () {
     ['map' => $map, 'alpha' => $alpha, 'daisy_alpha' => $daisy_alpha] = chainMap();
     $daisy_alpha->delete();
-    MapSolarsystem::query()->whereKey($alpha->id)->update(['alias' => 'A@1958']);
+    MapSolarsystem::query()->whereKey($alpha->id)->update(['alias' => 'A~1958']);
     $tama = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(30002813, 0.3, 'eve'), 'alias' => null, 'pinned' => false]);
     MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $alpha->id, 'to_map_solarsystem_id' => $tama->id]);
 
@@ -203,7 +203,7 @@ it('stamps by when the chain start was mapped', function () {
     $stamps = ChainMemory::stampsFor(collect([$a1]), collect([$alpha, $daisy]));
 
     expect($stamps)->toBe([$a1->id => '1958'])
-        ->and(ChainMemory::plainAlias('A111@1958'))->toBe('A111');
+        ->and(ChainMemory::plainAlias('A111~1958'))->toBe('A111');
 });
 
 function wormholeCategoryId(): int

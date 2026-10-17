@@ -16,9 +16,16 @@ export function clipboardAllowed(): boolean {
     }
 }
 
+/** Patch 39: called on every copy the mapper makes, so a copy of something else ends the re-copy window. */
+let onAnyCopy: ((text: string) => void) | null = null;
+export function onMapperCopy(listener: (text: string) => void): void {
+    onAnyCopy = listener;
+}
+
 /** Write the clipboard on the mapper's own initiative, if the switch allows it. Resolves true when copied. */
 export async function autoCopy(text: string | null | undefined): Promise<boolean> {
     if (!text || !clipboardAllowed()) return false;
+    onAnyCopy?.(text);
     try {
         await navigator.clipboard.writeText(text);
         return true;

@@ -28,7 +28,8 @@ import type { TPlaceholder } from '@/lib/placeholders';
 import { disarmSignature } from '@/map/actions/arm';
 import { deleteSignature } from '@/map/actions/deleteSignature';
 import { updateSignature } from '@/map/actions/updateSignature';
-import { claimFor, copyPlaceholderBookmark, holeAsSignature, pendingHoleBookmark } from '@/map/holeBookmark';
+import { claimFor, copyPlaceholderBookmark, holeAsSignature, pendingHole, pendingHoleBookmark } from '@/map/holeBookmark';
+import { holeKey, noteHoleCopy } from '@/lib/recopy';
 import { useMapStore } from '@/map/store/mapStore';
 import { show } from '@/routes/maps';
 import type { TSignature } from '@/types/models';
@@ -209,15 +210,23 @@ function setType(typeId: number): void {
     const lock = canEdit.value && hole.value && !hole.value.alias && claim.value ? claim.value : null;
     const name =
         hole.value && type
-            ? pendingHoleBookmark(store, system, { ...hole.value, wormhole: type.signature, target_class: type.target_class }, hole.value.alias ?? claim.value)
+            ? pendingHoleBookmark(store, system, { ...hole.value, wormhole: type.signature, target_class: type.target_class, signature_type_id: typeId }, hole.value.alias ?? claim.value)
             : '';
     updateSignature({ id: placeholder.signatureId } as TSignature, { signature_type_id: typeId, ...(lock ? { alias: lock } : {}) });
     if (name) {
-        void autoCopy(name).then((copied) =>
-            copied
-                ? toast.success(`${type?.signature ?? 'Type'} set · copied bookmark`, { description: visibleBookmarkName(name) })
-                : toast.success(`${type?.signature ?? 'Type'} set`, { description: visibleBookmarkName(name), action: copyButton(name) }),
-        );
+        // Patch 39: further changes to this hole in the next 20 s copy its updated name.
+        const parentId = system.id;
+        const signatureId = placeholder.signatureId;
+        const claimed = hole.value?.alias ?? claim.value;
+        const rebuild = (): string => {
+            const now = pendingHole(store, parentId, signatureId);
+            return now ? pendingHoleBookmark(store, now.system, now.hole, now.hole.alias ?? claimed) : '';
+        };
+        void autoCopy(name).then((copied) => {
+            noteHoleCopy(holeKey(signatureId), name, rebuild);
+            if (copied) toast.success(`${type?.signature ?? 'Type'} set · copied bookmark`, { description: visibleBookmarkName(name) });
+            else toast.success(`${type?.signature ?? 'Type'} set`, { description: visibleBookmarkName(name), action: copyButton(name) });
+        });
     }
     // The type may make a static certain (everything scanned, nothing else can be it).
     requestStaticCheck(system.id, system);

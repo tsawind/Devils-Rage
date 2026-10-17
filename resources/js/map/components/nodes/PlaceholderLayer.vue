@@ -13,6 +13,7 @@ import { badgeSize, type EdgeIndicator } from '@/map/components/edges/badgeWidth
 import { openPlaceholderDetails } from '@/map/components/overlays/placeholderDetails';
 import { copyPlaceholderBookmark } from '@/map/holeBookmark';
 import usePermission from '@/composables/usePermission';
+import { requestMapRename } from '@/composables/useMapRename';
 import type { TPlaceholder } from '@/lib/placeholders';
 import { pillSizes, setPillSize, usePillSpots } from '@/map/store/pillLayout';
 import { holeFacts } from '@/map/placeholderFacts';
@@ -106,6 +107,12 @@ watch(
 
 function openDetails(event: MouseEvent, nodeId: number): void {
     openPlaceholderDetails.value = { nodeId, x: event.clientX, y: event.clientY };
+}
+
+/** Patch 39: double-click a dotted box to rename the hole (expected statics have no signature yet). */
+function renameHole(placeholder: TPlaceholder): void {
+    if (!canEdit.value || placeholder.signatureId <= 0) return;
+    requestMapRename({ parentId: placeholder.parentId, signatureId: placeholder.signatureId, targetId: null });
 }
 
 /** Patch 21: clicking the green signature ID copies the hole's bookmark (like right-click → Copy bookmark). */
@@ -375,6 +382,7 @@ const chips = computed(() => {
             :only="['map', 'selected_map_solarsystem', 'map_navigation', 'map_characters', 'eve_scout_connections', 'threat_analysis']"
             :data-placeholder-id="item.signatureId > 0 ? item.signatureId : undefined"
             :title="item.title"
+            @dblclick.stop.prevent="renameHole(item)"
             class="pointer-events-auto absolute top-0 left-0 flex flex-col items-center justify-center rounded border border-dashed border-stone-500 bg-[#fbf7ef] leading-tight text-stone-800 transition-colors hover:bg-white dark:border-neutral-600 dark:bg-neutral-900/40 dark:text-neutral-300 dark:hover:bg-neutral-900/80"
             :style="item.style"
         >

@@ -10,6 +10,8 @@ import ReturnHoleDialog from '@/components/signatures/ReturnHoleDialog.vue';
 import SideChainLetterDialog from '@/components/signatures/SideChainLetterDialog.vue';
 import CombatControls from '@/components/combat/CombatControls.vue';
 import ChainCleanupRows from '@/components/signatures/ChainCleanupRows.vue';
+import OldChainRows from '@/components/signatures/OldChainRows.vue';
+import { nameSeenThrough } from '@/lib/floatingNames';
 import SolarsystemClass from '@/components/solarsystem/SolarsystemClass.vue';
 import Signature from '@/components/signatures/Signature.vue';
 import SignaturesEmptyState from '@/components/signatures/SignaturesEmptyState.vue';
@@ -111,6 +113,9 @@ const planned_aliases = computed(() =>
                   solarsystem: props.map_solarsystem.solarsystem,
                   combat_home: map_system.value?.combat_home ?? false,
                   combat_color: map_system.value?.combat_color ?? null,
+                  // Patch 39: numbers only count up (outside hubs).
+                  id: props.map_solarsystem.id,
+                  hole_slot_high: map_system.value?.hole_slot_high ?? null,
               }
             : null,
         aliases: chain_aliases.value,
@@ -497,6 +502,16 @@ async function handlePastedScan(pasted: TRawSignature[]): Promise<void> {
     return_dialog_open.value = true;
 }
 
+/** Patch 39: this system's name as seen through a pipe (a loop's own number), or null when unknown. */
+function hereThrough(connectionId: number): string | null {
+    try {
+        const connection = useMapStore().connections.get(connectionId);
+        return map_system.value && connection ? nameSeenThrough(map_system.value, connection) : null;
+    } catch {
+        return null;
+    }
+}
+
 /** Link the return hole, copy its return bookmark, and offer Undo. */
 function linkReturnHole(signature: TSignature, connection: TProcessedConnection, automatic: boolean): void {
     const system = props.map_solarsystem;
@@ -523,7 +538,8 @@ function linkReturnHole(signature: TSignature, connection: TProcessedConnection,
         },
         page.props.map,
         system.alias,
-        system.alias,
+        // Patch 39: through a loop, this system as seen from where the hole leads ("*@A2").
+        hereThrough(connection.id) ?? system.alias,
         system.solarsystem.class,
         map_system.value?.combat_color ?? null,
         Boolean(map_system.value?.combat_home),
@@ -825,6 +841,7 @@ function createNewSignature() {
 
             <!-- Patch 14: cleanup rows (a combat chain being converted, one system at a time) -->
             <ChainCleanupRows :map-solarsystem-id="map_solarsystem.id" />
+            <OldChainRows :map-solarsystem-id="map_solarsystem.id" />
 
             <!-- Auto-link countdown -->
             <div

@@ -1,6 +1,7 @@
 import { signatureCategories } from '@/const/signatures';
 import { isWormholeClass } from '@/const/solarsystemClasses';
 import { planSignatureAliases, staticIndexOf, TAliasScheme } from '@/lib/alias';
+import { countsUp } from '@/lib/numberingHubs';
 import { TSignature, TStringedSolarsystemClass } from '@/types/models';
 
 /** Whether a signature is categorised as a wormhole, whichever shape the data arrived in. */
@@ -32,6 +33,9 @@ export function planAliasesForSystem(params: {
               combat_home?: boolean | null;
               /** In a combat chain: holes are numbered in jump order. */
               combat_color?: string | null;
+              id?: number;
+              /** Patch 39: the highest hole number the system ever handed out. */
+              hole_slot_high?: string | null;
           }
         | null
         | undefined;
@@ -50,6 +54,9 @@ export function planAliasesForSystem(params: {
         combatHome: Boolean(system.combat_home),
         limbo: Boolean(system.combat_color),
         staticCount: system.solarsystem?.statics?.length ?? 1,
+        // Patch 39: numbers only count up, except in hubs (home, pinned, side chain starts).
+        countUp: countsUp(system),
+        slotHigh: system.hole_slot_high ?? null,
         signatures: signatures.map((signature) => {
             const targetClass = signature.signature_type?.target_class ?? null;
             const knownClass = targetClass && targetClass !== 'unknown' ? targetClass : null;

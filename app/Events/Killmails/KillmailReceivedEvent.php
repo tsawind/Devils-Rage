@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Events\Killmails;
 
+use App\Enums\SolarsystemClass;
 use App\Models\Killmail;
 use App\Models\Map;
+use App\Models\Solarsystem;
 use App\Models\Type;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
@@ -50,6 +52,8 @@ final class KillmailReceivedEvent implements ShouldBroadcastNow, ShouldDispatchA
             'ship_name' => $ship?->name,
             'is_capital' => $ship instanceof Type && in_array($ship->group_id, self::CAPITAL_GROUP_IDS, true),
             'value' => $value,
+            // Patch 39: high-sec kills flash on the map but make no sound.
+            'highsec' => SolarsystemClass::fromSecurity((float) (Solarsystem::query()->whereKey($this->killmail->solarsystem_id)->value('security') ?? -1.0)) === SolarsystemClass::H,
         ]];
     }
 

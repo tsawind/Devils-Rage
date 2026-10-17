@@ -1,3 +1,5 @@
+import { isTheraClass, isTheraName, THERA_NAME, theraCase } from '@/lib/specialSystems';
+
 /**
  * The per-map alias suggestion convention. Kept in sync with the `AliasScheme`
  * enum on the backend.
@@ -17,6 +19,9 @@ type TGuessNextAliasOptions = {
     ignoredAlias?: string;
     /** The parent is a combat home: its holes start a fresh chain numbered 1, 2, 3 (static 0). */
     combatHome?: boolean;
+    /** Patch 39: numbers only count up in the parent (not a hub); see `planSignatureAliases`. */
+    countUp?: boolean;
+    slotHigh?: string | null;
 };
 
 /**
@@ -232,7 +237,7 @@ function nextNumericSlot(prefix: string, aliases: string[], slots: string = NUME
 export function guessNextAlias(parentAlias: string | null | undefined, aliases: string[], opts?: TGuessNextAliasOptions): string {
     const { base, stamp } = splitStamp(parentAlias);
     if (stamp) {
-        return `${guessNextAlias(base, namesWithStamp(aliases, stamp), opts)}@${stamp}`;
+        return `${guessNextAlias(base, namesWithStamp(aliases, stamp), opts)}${STAMP}${stamp}`;
     }
     const combatHome = Boolean(opts?.combatHome);
     const isHome = usesHomeLetters(parentAlias, opts?.ignoredAlias, combatHome);
@@ -246,7 +251,14 @@ export function guessNextAlias(parentAlias: string | null | undefined, aliases: 
     }
 
     // A guess is never the static: home's holes start at B, others at 1.
-    return `${prefix}${nextNumericSlot(prefix, knownAliases, slotsFor(isHome).slots)}`;
+    const { slots } = slotsFor(isHome);
+    if (opts?.countUp && !isHome) {
+        const taken = new Set(knownAliases);
+        let index = countUpStart(prefix, slots, taken, opts.slotHigh);
+        while (index > 0 && index < DIGIT_SLOTS && taken.has(`${prefix}${slots[index]}`)) index++;
+        if (index > 0 && index < DIGIT_SLOTS) return theraCase(`${prefix}${slots[index]}`);
+    }
+    return theraCase(`${prefix}${nextNumericSlot(prefix, knownAliases, slots)}`);
 }
 
 /**
@@ -266,7 +278,12 @@ export function suggestAlias(params: {
     ignoredAlias?: string;
     /** The origin is a combat home (its holes number 1, 2, 3 with static 0). */
     combatHome?: boolean;
+    /** Patch 39: the class the hole leads to, when known: Thera is always just "Thera". */
+    targetClass?: string | null;
+    countUp?: boolean;
+    slotHigh?: string | null;
 }): string | null {
+    if (isTheraClass(params.targetClass) && params.scheme !== 'alphabetical') return THERA_NAME;
     const originIsAliased = Boolean(params.parentAlias && params.parentAlias.trim());
 
     if (!params.targetIsWormhole && !params.originIsWormhole && !originIsAliased && !params.combatHome) {
@@ -278,6 +295,8 @@ export function suggestAlias(params: {
         targetKind: params.targetKind,
         ignoredAlias: params.ignoredAlias,
         combatHome: params.combatHome,
+        countUp: params.countUp,
+        slotHigh: params.slotHigh,
     });
 }
 
@@ -306,20 +325,23 @@ export type TAliasPlanSignature = {
     reserveOnly?: boolean;
 };
 
+/** Patch 39: what separates a name from its stamp ("A1~1958"). It was "@" until patch 39, when "*@" became the way back. */
+export const STAMP = '~';
+
 /**
  * Patch 35: a chain retired by a rage roll keeps its names with a stamp of when it was
- * first mapped, in EVE time: "A@1958", "A12@1958". The stamp never counts as part
+ * first mapped, in EVE time: "A~1958", "A12~1958". The stamp never counts as part
  * of the chain number, so the plain name ("A") is free again for the new static.
  */
 export function splitStamp(alias: string | null | undefined): { base: string; stamp: string | null } {
     const value = (alias ?? '').trim();
-    const at = value.indexOf('@');
+    const at = value.indexOf(STAMP);
     return at === -1 ? { base: value, stamp: null } : { base: value.slice(0, at), stamp: value.slice(at + 1) || null };
 }
 
 function restamp(alias: string, parentAlias: string | null | undefined): string {
     const { stamp } = splitStamp(parentAlias);
-    return stamp ? `${alias}@${stamp}` : alias;
+    return stamp ? `${alias}${STAMP}${stamp}` : alias;
 }
 
 /** Only the names carrying `stamp`, without it (the rest belong to other chains). */
@@ -349,7 +371,7 @@ export function chainPrefix(parentAlias: string | null | undefined, ignoredAlias
  */
 export function isCustomName(alias: string | null | undefined): boolean {
     const base = splitStamp(alias).base.trim();
-    if (!base) return false;
+    if (!base || isTheraName(base)) return false;
     return /[^A-Za-z0-9-]/.test(base) || /^[A-Za-z]{3,}$/.test(base);
 }
 
@@ -368,7 +390,7 @@ export function customLetter(alias: string | null | undefined): string {
 export function renameProblem(name: string, others: readonly string[], ignoredAlias?: string | null): string | null {
     const value = name.trim();
     if (!value) return 'Type a name.';
-    if (value.includes('@')) return 'A name can\'t contain "@".';
+    if (value.includes(STAMP) || value.includes('@')) return `A name can't contain "${STAMP}" or "@".`;
     if (value.length > 24) return 'Keep it to 24 characters.';
     const upper = value.toUpperCase();
     const bases = others.map((other) => splitStamp(other)).filter((split) => !split.stamp).map((split) => split.base.trim()).filter(Boolean);
@@ -385,7 +407,7 @@ export function renameProblem(name: string, others: readonly string[], ignoredAl
 /** The alias reserved for a system's static: "A" (Alpha) in home, "0" in a combat home, otherwise slot 0, e.g. "A0", "10". */
 export function staticSlotAlias(parentAlias: string | null | undefined, ignoredAlias?: string | null, combatHome = false): string {
     const isHome = usesHomeLetters(parentAlias, ignoredAlias, combatHome);
-    return restamp(`${chainPrefix(parentAlias, ignoredAlias, combatHome)}${slotsFor(isHome).staticSlot}`, parentAlias);
+    return restamp(theraCase(`${chainPrefix(parentAlias, ignoredAlias, combatHome)}${slotsFor(isHome).staticSlot}`), parentAlias);
 }
 
 /**
@@ -418,7 +440,7 @@ export function orderStatics<T extends { leads_to?: string | null; leadsTo?: str
 export function staticSlotAliasAt(parentAlias: string | null | undefined, index: number, ignoredAlias?: string | null, combatHome = false): string {
     const { staticSlot, slots } = slotsFor(usesHomeLetters(parentAlias, ignoredAlias, combatHome));
     const sequence = staticSlot + slots;
-    return restamp(`${chainPrefix(parentAlias, ignoredAlias, combatHome)}${sequence[Math.min(Math.max(index, 0), sequence.length - 1)]}`, parentAlias);
+    return restamp(theraCase(`${chainPrefix(parentAlias, ignoredAlias, combatHome)}${sequence[Math.min(Math.max(index, 0), sequence.length - 1)]}`), parentAlias);
 }
 
 /** Patch 20: the index of a static type among the system's statics (orderStatics order), or -1. */
@@ -452,7 +474,7 @@ export function aliasForSlot(parentAlias: string | null | undefined, slot: strin
     const normalized = slot.trim().toUpperCase();
     const { staticSlot, slots } = slotsFor(usesHomeLetters(parentAlias, ignoredAlias, combatHome));
     if (normalized.length !== 1 || !(staticSlot + slots).includes(normalized)) return null;
-    return restamp(`${chainPrefix(parentAlias, ignoredAlias, combatHome)}${normalized}`, parentAlias);
+    return restamp(theraCase(`${chainPrefix(parentAlias, ignoredAlias, combatHome)}${normalized}`), parentAlias);
 }
 
 /**
@@ -489,6 +511,14 @@ export function planSignatureAliases(params: {
      * and the other holes start at A2.
      */
     staticCount?: number;
+    /**
+     * Patch 39: numbers only count up in this system: a freed number stays retired
+     * until 9 is reached, then gaps are refilled, then letters. Off for hubs (home,
+     * pinned systems, the start of a side chain), which refill freed numbers at once.
+     */
+    countUp?: boolean;
+    /** Patch 39: the highest number this system ever handed out (server memory). */
+    slotHigh?: string | null;
 }): Map<number, string> {
     const { base, stamp } = splitStamp(params.parentAlias);
     if (stamp) {
@@ -501,7 +531,7 @@ export function planSignatureAliases(params: {
                 lockedAlias: signature.lockedAlias ? (splitStamp(signature.lockedAlias).stamp === stamp ? splitStamp(signature.lockedAlias).base : signature.lockedAlias) : signature.lockedAlias,
             })),
         });
-        return new Map([...unstamped].map(([id, alias]) => [id, alias.includes('@') ? alias : `${alias}@${stamp}`]));
+        return new Map([...unstamped].map(([id, alias]) => [id, alias.includes(STAMP) ? alias : `${alias}${STAMP}${stamp}`]));
     }
 
     const planned = new Map<number, string>();
@@ -513,7 +543,10 @@ export function planSignatureAliases(params: {
 
     const combatHome = Boolean(params.combatHome);
     const prefix = chainPrefix(params.parentAlias, params.ignoredAlias, combatHome);
-    const { staticSlot: staticChar, slots } = slotsFor(usesHomeLetters(params.parentAlias, params.ignoredAlias, combatHome));
+    const homeLetters = usesHomeLetters(params.parentAlias, params.ignoredAlias, combatHome);
+    const { staticSlot: staticChar, slots } = slotsFor(homeLetters);
+    // Patch 39: home always refills its callsigns.
+    const countUp = Boolean(params.countUp) && !homeLetters && !combatHome;
     const taken = new Set(params.aliases.map((alias) => alias.trim().toUpperCase()));
 
     // Every locked number is taken, whatever the signature is now (a hole later
@@ -544,20 +577,52 @@ export function planSignatureAliases(params: {
         taken.add(slot);
     }
 
+    const free = (index: number): boolean => !taken.has(`${prefix}${slots[index]}`) && !reserved.includes(`${prefix}${slots[index]}`);
+
     for (const signature of unnumbered) {
         if (planned.has(signature.id) || params.limbo) continue;
 
-        let index = 0;
-        while (index < slots.length - 1 && (taken.has(`${prefix}${slots[index]}`) || reserved.includes(`${prefix}${slots[index]}`))) {
+        // Patch 39: a hole into Thera is just "Thera" (Thera has a name of its own).
+        if (isTheraClass(signature.targetClass)) {
+            planned.set(signature.id, THERA_NAME);
+            continue;
+        }
+
+        let index = countUp ? countUpStart(prefix, slots, taken, params.slotHigh) : 0;
+        if (index > 0) {
+            // Counting up stays in 1–9; past 9 (or with nothing free above) it refills from the lowest.
+            while (index < DIGIT_SLOTS && !free(index)) index++;
+            if (index >= DIGIT_SLOTS) index = 0;
+        }
+        while (index < slots.length - 1 && !free(index)) {
             index++;
         }
 
-        const alias = `${prefix}${slots[index]}`;
+        const alias = theraCase(`${prefix}${slots[index]}`);
         planned.set(signature.id, alias);
-        taken.add(alias);
+        taken.add(alias.toUpperCase());
     }
 
     return planned;
+}
+
+/** How many slots are digits (1–9): past them, counting up refills the gaps before letters. */
+const DIGIT_SLOTS = 9;
+
+/**
+ * Patch 39: where counting up starts in a system: one past the highest number it ever
+ * handed out (`slotHigh`) or that is in use now. Once 9 was reached it starts at the
+ * lowest number again (gaps are refilled, then the letters follow).
+ */
+export function countUpStart(prefix: string, slots: string, taken: ReadonlySet<string>, slotHigh?: string | null): number {
+    let high = slotHigh ? slots.indexOf(slotHigh.trim().toUpperCase()) : -1;
+    const upper = prefix.toUpperCase();
+    for (const alias of taken) {
+        const name = alias.toUpperCase();
+        if (name.length !== upper.length + 1 || !name.startsWith(upper)) continue;
+        high = Math.max(high, slots.indexOf(name.slice(upper.length)));
+    }
+    return high + 1 >= DIGIT_SLOTS ? 0 : high + 1;
 }
 
 /** The alphabetical scheme keeps the stock behaviour: locked numbers first, then the next free letter. */
@@ -627,7 +692,7 @@ export function formatAliasPath(alias: string | null | undefined): string {
  */
 export function displayAlias(alias: string | null | undefined, scheme?: TAliasScheme): string {
     const { base, stamp } = splitStamp(alias);
-    if (stamp) return `${displayAlias(base, scheme)}@${stamp}`;
+    if (stamp) return `${displayAlias(base, scheme)}${STAMP}${stamp}`;
     const value = (alias ?? '').trim();
     if (scheme === 'alphabetical') return value;
     return homeCallsign(value) ?? formatAliasPath(value);

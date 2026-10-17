@@ -26,6 +26,7 @@ use App\Models\Solarsystem;
 use App\Traits\PositionsMapSolarsystems;
 use App\Support\Broadcasting\MapBroadcaster;
 use App\Support\ChainMemory;
+use App\Support\HoleNumbers;
 use App\Utilities\StargatePairDetector;
 use App\Utilities\WormholeConnectionClassifier;
 use Illuminate\Container\Attributes\Config;
@@ -102,17 +103,21 @@ final readonly class StoreTrackingAction
                 ->first();
             $was_hidden = $hidden_row instanceof MapSolarsystem;
             // Patch 37: a cleared system with no remembered chain beyond it is just a system again:
-            // reached through a named hole it takes that hole's name, not its old one ("Alpha@1917").
+            // reached through a named hole it takes that hole's name, not its old one ("Alpha~1917").
             $old_chain = $was_hidden && $hidden_row->memory_links !== null && $hidden_row->memory_links !== [];
             // Its holes' stamped names, noted before coming back (unhiding takes the stamps off).
             $stamped_signature_ids = $was_hidden && ! $old_chain
-                ? Signature::query()->where('map_solarsystem_id', $hidden_row->id)->where('alias', 'like', '%@%')->pluck('id')->map(fn (mixed $id): int => (int) $id)->all()
+                ? Signature::query()->where('map_solarsystem_id', $hidden_row->id)->where('alias', 'like', '%'.ChainMemory::STAMP.'%')->pluck('id')->map(fn (mixed $id): int => (int) $id)->all()
                 : [];
             $target_map_solarsystem = $existing_map_solarsystem ?? $this->addSolarsystemToMap($origin, $to_solarsystem);
             if ($was_hidden && ! $old_chain && filled($data->alias)) {
                 ChainMemory::dropOldName($target_map_solarsystem, $stamped_signature_ids);
             }
-            $restored_name = $was_hidden && $old_chain && filled($target_map_solarsystem->alias) ? (string) $target_map_solarsystem->alias : null;
+            /* Patch 39: a system already on the map (a loop) or an old chain coming back keeps its
+             * name: the hole keeps its own number, which floats on the system ("also A2"), until
+             * someone switches or renames it (the loop popup, the old chain's rows).
+             */
+            $keeps_name = ($existing_map_solarsystem instanceof MapSolarsystem || ($was_hidden && $old_chain)) && filled($target_map_solarsystem->alias);
 
             /* The alias goes through the update action so the broadcast payload
              * carries it — a raw update() here left other viewers (and the
@@ -121,7 +126,7 @@ final readonly class StoreTrackingAction
              * A system newly found from a combat chain joins that chain (its color).
              */
             $system_update = [];
-            if (filled($data->alias) && $restored_name === null) {
+            if (filled($data->alias) && ! $keeps_name) {
                 $system_update['alias'] = $data->alias;
             }
             if (! $existing_map_solarsystem instanceof MapSolarsystem && filled($origin->combat_color)) {
@@ -152,8 +157,6 @@ final readonly class StoreTrackingAction
                 $signature_update = [
                     'map_connection_id' => $connection->id,
                     ...$this->getChainNumberingUpdate($signature, $data),
-                    // Patch 36: the hole into a restored system takes its old name (like a loop).
-                    ...($restored_name !== null && $signature instanceof Signature && $signature->alias === null ? ['alias' => $restored_name] : []),
                     // Patch 13: jumping the hole uses up its arm (the number stays).
                     'armed_by_user_id' => null,
                     'armed_by_name' => null,
@@ -167,6 +170,11 @@ final readonly class StoreTrackingAction
 
                 Signature::query()->where('id', $data->signature_id)
                     ->update($signature_update);
+                // Patch 39: the number is used (numbers only count up).
+                $jumped = Signature::query()->find($data->signature_id);
+                if ($jumped instanceof Signature) {
+                    HoleNumbers::remember($jumped);
+                }
 
                 $this->fillFarSideK162Action->handle($connection->id);
                 // Patch 37: through a K162, the far side's type when only one fits (frigate K162 C5 → C5 = C008).

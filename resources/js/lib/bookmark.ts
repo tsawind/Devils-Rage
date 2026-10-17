@@ -1,14 +1,18 @@
 import { isWormholeClass } from '@/const/solarsystemClasses';
-import { aliasTargetKind, formatAliasPath, homeCallsign, isIgnoredAlias, splitStamp, suggestAlias, TAliasScheme } from '@/lib/alias';
+import { aliasTargetKind, formatAliasPath, homeCallsign, isIgnoredAlias, splitStamp, STAMP, suggestAlias, TAliasScheme } from '@/lib/alias';
 import { connectionFlag } from '@/lib/chainNumbering';
 import { combatColorLabel } from '@/lib/combat';
 import { TResolvedSolarsystem } from '@/pages/maps';
 import { TSignature, TStringedSolarsystemClass } from '@/types/models';
 import { k162RangeLabel } from '@/lib/k162';
 import { wormholeMass } from '@/lib/wormholeMass';
+import { forwardSuffix } from '@/lib/floatingNames';
+import { isTheraClass, specialClassWord, THERA_NAME } from '@/lib/specialSystems';
 
 type BookmarkSolarsystem = Pick<TResolvedSolarsystem, 'class' | 'name'> & {
     region?: { name?: string | null } | null;
+    /** Patch 39: a shattered C1–C6 reads "C4shattered". */
+    is_shattered?: boolean | null;
 };
 
 const KSPACE_BOOKMARK_LABELS: Record<string, string> = { h: 'HS', l: 'LS', n: 'NS' };
@@ -30,6 +34,8 @@ export type BookmarkSystem = {
     combat_home?: boolean | null;
     /** The combat chain the system belongs to, if any. */
     combat_color?: string | null;
+    /** Patch 39: names it was known by before a rename ("old=A1~1917" on bookmarks into it). */
+    old_aliases?: readonly string[] | null;
 };
 
 /**
@@ -86,10 +92,11 @@ export const DEFAULT_BOOKMARK_FORMAT_WORMHOLE = '{alias} {sig} {class}';
 export const DEFAULT_BOOKMARK_FORMAT_KSPACE = '{alias} {class} {sig} {name} {region}';
 
 /**
- * Default template for a return (up-chain / home) connection, e.g. "*Home ABC C3".
- * The leading "*" sorts the bookmark to the top of the in-game folder.
+ * Default template for a return (up-chain / home) connection. Patch 39: "  *@A2 KQX C4":
+ * the leading spaces and "*" sort the bookmark to the top of the in-game folder, "@" then
+ * the name of the system you stand in, as seen from where the hole leads.
  */
-export const DEFAULT_BOOKMARK_FORMAT_RETURN = '*{alias} {sig} {class}';
+export const DEFAULT_BOOKMARK_FORMAT_RETURN = '{_}{_}*@{here} {sig} {hereclass}';
 
 export type TBookmarkFormats = {
     bookmark_format_wormhole?: string | null;
@@ -159,6 +166,12 @@ export function isCombatHomeReturn(
  * otherwise "HS" / "LS" / "NS" derived from security.
  */
 export function getBookmarkClassString(solarsystem: BookmarkSolarsystem): string {
+    // Patch 39: Thera's name already says it (its bookmarks drop the class); other special systems in words.
+    if (isTheraClass(solarsystem.class)) return '';
+    // C13 is frigate-only: "C13" and the marker after it ("C13k frig").
+    if (String(solarsystem.class) === '13') return 'C13';
+    const word = specialClassWord(solarsystem.class, { isShattered: solarsystem.is_shattered });
+    if (word) return word;
     if (isWormholeClass(solarsystem.class)) return `C${solarsystem.class}`;
     return KSPACE_BOOKMARK_LABELS[solarsystem.class] ?? solarsystem.class.toUpperCase();
 }
@@ -180,10 +193,12 @@ export function getSignatureIdShort(signatureId: string | null | undefined): str
  */
 function aliasTokenValue(alias: string | null | undefined, useCallsigns: boolean): string {
     if (!useCallsigns) return alias ?? '';
-    // Patch 35: a stamped old chain keeps its stamp ("Alpha@1958", "A111-102@1958").
+    // Patch 35: a stamped old chain keeps its stamp ("Alpha~1958", "A111-102~1958").
     const { base, stamp } = splitStamp(alias);
-    if (stamp) return `${homeCallsign(base) ?? formatAliasPath(base)}@${stamp}`;
+    if (stamp) return `${homeCallsign(base) ?? formatAliasPath(base)}${STAMP}${stamp}`;
     const callsign = homeCallsign(alias);
+    // Patch 39: Thera is named like a callsign ("  Thera AUX").
+    if (!callsign && (alias ?? '').trim() === THERA_NAME) return `${BOOKMARK_SPACE}${THERA_NAME}`;
     return callsign ? `${BOOKMARK_SPACE}${callsign}` : formatAliasPath(alias);
 }
 
@@ -191,7 +206,7 @@ function aliasTokenValue(alias: string | null | undefined, useCallsigns: boolean
 function hereTokenValue(alias: string | null | undefined, useCallsigns: boolean): string {
     if (!useCallsigns) return alias ?? '';
     const { base, stamp } = splitStamp(alias);
-    if (stamp) return `${homeCallsign(base) ?? formatAliasPath(base)}@${stamp}`;
+    if (stamp) return `${homeCallsign(base) ?? formatAliasPath(base)}${STAMP}${stamp}`;
     return homeCallsign(alias) ?? formatAliasPath(alias);
 }
 
@@ -223,7 +238,7 @@ export function getBookmarkTokenValues(
         here: hereTokenValue(hereAlias, useCallsigns),
         hereclass: hereClass ? getBookmarkClassString({ class: hereClass, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
-        class: `${getBookmarkClassString(system.solarsystem)}${context.classSuffix ?? ''}${context.frigate ? ` ${FRIGATE_MARK}` : ''}`,
+        class: isTheraClass(system.solarsystem.class) ? '' : `${getBookmarkClassString(system.solarsystem)}${context.classSuffix ?? ''}${context.frigate || String(system.solarsystem.class) === '13' ? ` ${FRIGATE_MARK}` : ''}`,
         name: system.solarsystem.name,
         region: system.solarsystem.region?.name ?? '',
         occupier: system.occupier_alias ?? '',
@@ -297,6 +312,8 @@ export function formatBookmarkName(
     hereClass?: TStringedSolarsystemClass | null,
     oppositeCombatColor?: string | null,
     oppositeCombatHome?: boolean | null,
+    /** Patch 39: added to a forward bookmark into a system with another name ("loop=A2", "old=A1~1917"). */
+    extras: { forwardSuffix?: string | null } = {},
 ): string {
     const ignoredAlias = formats?.bookmark_ignored_alias;
     const hereKnown = oppositeCombatColor !== undefined;
@@ -321,7 +338,7 @@ export function formatBookmarkName(
 
     if (isReturn) {
         // Patch 20: the way back carries its hole's marker too ("C4k", "C5s"), plus "frig".
-        if (values.hereclass) values.hereclass = `${values.hereclass}${context.classSuffix ?? ''}${context.frigate ? ` ${FRIGATE_MARK}` : ''}`;
+        if (values.hereclass) values.hereclass = `${values.hereclass}${context.classSuffix ?? ''}${context.frigate || String(hereClass) === '13' ? ` ${FRIGATE_MARK}` : ''}`;
         // A way back inside a combat chain: both ends in the same chain (the combat home counts for its own chain).
         const color = hereChain && system.combat_color === hereChain ? combatColorLabel(hereChain) : null;
         if (color && useCallsigns) {
@@ -331,14 +348,15 @@ export function formatBookmarkName(
         return renderBookmarkTemplate(template, values);
     }
 
-    if (!destinationChain) return renderBookmarkTemplate(template, values);
+    const withSuffix = (name: string): string => (name && extras.forwardSuffix ? `${name} ${extras.forwardSuffix}` : name);
+    if (!destinationChain) return withSuffix(renderBookmarkTemplate(template, values));
 
     // Into another chain's system (a loop): name it with that chain's color.
     const hereColor = hereKnown ? (oppositeCombatColor ?? null) : destinationChain;
     if (useCallsigns && values.alias && hereColor !== destinationChain) {
         values.alias = `${values.alias}${combatColorLabel(destinationChain) ?? ''}`;
     }
-    return dropFirstLeadingSpace(renderBookmarkTemplate(template, values));
+    return withSuffix(dropFirstLeadingSpace(renderBookmarkTemplate(template, values)));
 }
 
 /**
@@ -408,6 +426,8 @@ function knownTargetClass(targetClass: string | null | undefined): TStringedSola
  */
 export function buildSignatureBookmark(params: {
     signature: Pick<TSignature, 'signature_id' | 'ship_size' | 'mass_status' | 'lifetime'> & {
+        /** Patch 39: the hole's own number (a loop's floating name when it differs from where it leads). */
+        alias?: string | null;
         wormhole?: { name?: string | null } | null;
         signature_type?: { target_class?: string | null; extra?: string | null; signature?: string | null } | null;
         is_static?: boolean | null;
@@ -427,8 +447,11 @@ export function buildSignatureBookmark(params: {
     detectReturn?: boolean;
     /** The alias reserved for this signature by `planSignatureAliases`; wins over a fresh guess when unconnected. */
     plannedAlias?: string | null;
+    /** Patch 39: `{here}` of a way back: this system's name as seen from where the hole leads (`nameSeenThrough`). */
+    hereName?: string | null;
 }): string {
     const { signature, currentSystem, connectionTarget, aliases, formats, detectReturn = false, plannedAlias } = params;
+    const hereName = params.hereName !== undefined ? params.hereName : currentSystem.alias;
 
     const context: TBookmarkContext = {
         signatureId: signature.signature_id,
@@ -445,8 +468,12 @@ export function buildSignatureBookmark(params: {
 
     if (connectionTarget) {
         const targetIsWormhole = isWormholeClass(connectionTarget.solarsystem.class);
+        // Patch 39: a loop / an old chain: the main name, plus "loop=" / "old=" the other one.
+        const named = connectionTarget.alias
+            ? forwardSuffix({ mainName: connectionTarget.alias, holeName: signature.alias, oldAliases: connectionTarget.old_aliases, scheme: formats.bookmark_alias_scheme })
+            : { name: null, suffix: null };
         const system: BookmarkSystem = connectionTarget.alias
-            ? connectionTarget
+            ? { ...connectionTarget, alias: named.name ?? connectionTarget.alias }
             : {
                   ...connectionTarget,
                   alias: suggestAlias({
@@ -458,6 +485,7 @@ export function buildSignatureBookmark(params: {
                       targetKind: aliasTargetKind(targetIsWormhole, connectionTarget.solarsystem.class),
                       ignoredAlias: formats.bookmark_ignored_alias,
                       combatHome: currentSystem.combatHome,
+                      targetClass: connectionTarget.solarsystem.class,
                   }),
               };
 
@@ -466,10 +494,11 @@ export function buildSignatureBookmark(params: {
             context,
             formats,
             detectReturn ? currentSystem.alias : undefined,
-            currentSystem.alias,
+            hereName,
             currentSystem.class,
             currentSystem.combatColor ?? null,
             currentSystem.combatHome ?? false,
+            { forwardSuffix: named.suffix },
         );
     }
 
@@ -489,13 +518,14 @@ export function buildSignatureBookmark(params: {
                     targetKind: aliasTargetKind(isTargetWormhole, knownClass),
                     ignoredAlias: formats.bookmark_ignored_alias,
                     combatHome: currentSystem.combatHome,
+                    targetClass: knownClass,
                 }),
             useCallsigns,
         ),
-        here: hereTokenValue(currentSystem.alias, useCallsigns),
+        here: hereTokenValue(hereName, useCallsigns),
         hereclass: currentSystem.class ? getBookmarkClassString({ class: currentSystem.class, name: '' }) : '',
         sig: getSignatureIdShort(context.signatureId),
-        class: `${knownClass ? getBookmarkClassString({ class: knownClass, name: '' }) : (context.classRange ?? '')}${context.classSuffix ?? ''}${context.frigate ? ` ${FRIGATE_MARK}` : ''}`,
+        class: isTheraClass(knownClass) ? '' : `${knownClass ? getBookmarkClassString({ class: knownClass, name: '' }) : (context.classRange ?? '')}${context.classSuffix ?? ''}${context.frigate || String(knownClass) === '13' ? ` ${FRIGATE_MARK}` : ''}`,
         name: '',
         region: '',
         occupier: '',

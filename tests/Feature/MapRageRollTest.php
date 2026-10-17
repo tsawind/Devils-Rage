@@ -155,11 +155,11 @@ it('patch 35: New Alpha stamps the old chain, frees the name and makes the new s
     $this->post(route('maps.rage-roll.new-static', $map), ['old_signature_id' => $old->id, 'signature_id' => $new->id])
         ->assertRedirect()->assertSessionHasNoErrors();
 
-    expect($alpha->refresh()->alias)->toBe('A@1958')
-        ->and($a1->refresh()->alias)->toBe('A1@1958')
+    expect($alpha->refresh()->alias)->toBe('A~1958')
+        ->and($a1->refresh()->alias)->toBe('A1~1958')
         ->and($bravo->refresh()->alias)->toBe('B')
         ->and($daisy->refresh()->alias)->toBe('Daisy')
-        ->and($locked->refresh()->alias)->toBe('A12@1958')
+        ->and($locked->refresh()->alias)->toBe('A12~1958')
         ->and(Signature::query()->find($old->id))->toBeNull()
         ->and(MapConnection::query()->find($connection->id))->toBeNull()
         ->and($new->refresh()->is_static)->toBeTrue()
@@ -173,7 +173,7 @@ it('patch 35: chain membership by name', function (string $alias, string $base, 
     'down the chain' => ['A101', 'A', true],
     'another of home\'s holes' => ['B', 'A', false],
     'home\'s own name' => ['Daisy', 'D', false],
-    'already stamped' => ['A1@1958', 'A', false],
+    'already stamped' => ['A1~1958', 'A', false],
     'a side chain static' => ['Z01', 'Z0', true],
     'a sibling of the static' => ['Z1', 'Z0', false],
 ]);

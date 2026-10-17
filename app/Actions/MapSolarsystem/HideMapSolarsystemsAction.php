@@ -19,7 +19,7 @@ use Throwable;
  * Patch 36: chain memory. Clears hide systems instead of deleting them. A
  * hidden system keeps its row, notes and signatures; its pipes go (their
  * holes are gone from the map, patch 37: pipes inside the cleared chain are
- * remembered on its systems), and its name gets a "@hhmm" stamp so it never
+ * remembered on its systems), and its name gets a "~hhmm" stamp so it never
  * blocks a new system of the same name. Reconnecting within 27 h brings it
  * back as it was ({@see ChainMemory::unhide()}).
  */
@@ -89,7 +89,7 @@ final readonly class HideMapSolarsystemsAction
                 $stamp = $stamps[$system->id] ?? null;
                 $system->forceFill([
                     'hidden_at' => $now,
-                    'alias' => $stamp === null ? $system->alias : mb_strtoupper(mb_trim((string) $system->alias)).'@'.$stamp,
+                    'alias' => $stamp === null ? $system->alias : mb_strtoupper(mb_trim((string) $system->alias)).ChainMemory::STAMP.$stamp,
                     'combat_color' => null,
                     'combat_home' => false,
                     'combat_active' => false,
@@ -108,9 +108,9 @@ final readonly class HideMapSolarsystemsAction
                     Signature::query()
                         ->where('map_solarsystem_id', $system->id)
                         ->whereNotNull('alias')
-                        ->where('alias', 'not like', '%@%')
+                        ->where('alias', 'not like', '%'.ChainMemory::STAMP.'%')
                         ->get()
-                        ->each(fn (Signature $signature) => $signature->update(['alias' => mb_strtoupper(mb_trim((string) $signature->alias)).'@'.$stamp]));
+                        ->each(fn (Signature $signature) => $signature->update(['alias' => mb_strtoupper(mb_trim((string) $signature->alias)).ChainMemory::STAMP.$stamp]));
                 }
             }
 

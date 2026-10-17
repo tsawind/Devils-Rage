@@ -114,6 +114,12 @@ export type TMapSolarsystemBase = {
     combat_previous_color?: string | null;
     /** Patch 14: converted during cleanup, way back ("*") not re-bookmarked yet. */
     cleanup_return_pending?: boolean;
+    /** Patch 39: names the system was known by before a rename ("was A1~1917"). */
+    old_aliases?: string[] | null;
+    /** Patch 39: someone kept an old chain's name ("Keep old"): no rename rows. */
+    name_kept?: boolean;
+    /** Patch 39: the highest hole number the system ever handed out (numbers only count up). */
+    hole_slot_high?: string | null;
     /** Combat homes: who is working the chain (names). */
     combat_workers?: string[];
     /** Wormhole signatures nobody has jumped yet: placeholder systems on the map (patch 12). */

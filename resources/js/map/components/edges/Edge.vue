@@ -12,7 +12,7 @@ import { uncheckedFor } from '@/lib/holeChecked';
 import { guessHole } from '@/map/holeGuess';
 import { describeEstimate, estimateMass, formatMass, isFrigateHole, massHints, pipeWidth } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
-import { edgePathAndCenter } from '@/map/core/geometry/paths';
+import { edgePathAndCenter, lightningPath, loopMarkPoint } from '@/map/core/geometry/paths';
 import type { EdgeGeometry } from '@/map/core/types';
 import type { TMapConnection } from '@/pages/maps';
 import type { TShipSize } from '@/types/models';
@@ -32,7 +32,7 @@ type Props = {
     chainColor?: string | null;
     /** Patch 35: the static being rage rolled: a pulsing red band. */
     rolling?: boolean;
-    /** A loop (patch 12): not how either end was found, drawn dashed amber. */
+    /** A loop (patch 12): not how either end was found. Patch 39: a lightning mark mid-pipe. */
     isLoop?: boolean;
     /** Pipes drawn this much thinner (patch 13: compact combat lanes). */
     pipeScale?: number;
@@ -77,6 +77,8 @@ const lifetime = computed(() => connection?.lifetime_status);
 
 /** The SVG path and badge-cluster centre in screen pixels; the one place scale is applied. */
 const path = computed(() => edgePathAndCenter(geometry, scale));
+/** Patch 39: the loop's lightning mark, mid-pipe. */
+const loopMark = computed(() => (isLoop ? lightningPath(loopMarkPoint(geometry, scale)) : ''));
 
 const scaledFrom = computed(() => scalePoint(geometry.from, scale));
 const scaledTo = computed(() => scalePoint(geometry.to, scale));
@@ -476,19 +478,12 @@ const pillLayer = inject('edgePillLayer', false);
             :data-highlighted="isOnRoute"
             class="cursor-pointer transition-colors duration-200 ease-in-out"
         />
-        <!-- Loop: this connection isn't how either system was found -->
-        <path
-            v-if="isLoop"
-            :d="path.d"
-            stroke="#f59e0b"
-            fill="none"
-            :stroke-width="isOrthogonal ? 2 : 3"
-            stroke-opacity="0.85"
-            stroke-dasharray="6,5"
-            stroke-linejoin="round"
-            stroke-linecap="round"
-            class="pointer-events-none"
-        />
+        <!-- Patch 39: a loop (not how either end was found): a lightning zigzag in the middle, in the pipe's own colours -->
+        <g v-if="isLoop" class="pointer-events-none">
+            <title>A loop: this hole joins two systems already on the map</title>
+            <path :d="loopMark" fill="none" :stroke-width="7" stroke-linejoin="round" stroke-linecap="round" class="stroke-stone-100 dark:stroke-neutral-950" />
+            <path :d="loopMark" fill="none" stroke="currentColor" :stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" class="text-stone-500 dark:text-neutral-400" />
+        </g>
         <!-- Rally route animated overlay -->
         <template v-if="rallyDirection">
             <path

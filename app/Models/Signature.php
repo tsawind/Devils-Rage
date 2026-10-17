@@ -8,6 +8,7 @@ use App\Enums\LifetimeStatus;
 use App\Enums\MassStatus;
 use App\Enums\ShipSize;
 use App\Support\Actor;
+use App\Support\HoleNumbers;
 use App\Support\LifeMarks;
 use Carbon\CarbonImmutable;
 use Database\Factories\SignatureFactory;
@@ -105,6 +106,13 @@ final class Signature extends Model
                 $signature->checked_at = now()->toImmutable();
                 $signature->checked_by_name = $actor;
                 $signature->checked_note = self::checkNote($signature->isDirty('mass_status') ? $signature->getAttributes()['mass_status'] ?? null : null, $signature->isDirty('lifetime') ? $signature->getAttributes()['lifetime'] ?? null : null);
+            }
+        });
+        // Patch 39: a hole number handed out is remembered by its system (numbers only count up).
+        self::saved(function (Signature $signature): void {
+            $attributes = $signature->getAttributes();
+            if (($attributes['alias'] ?? null) !== null && isset($attributes['map_solarsystem_id']) && ($signature->wasRecentlyCreated || $signature->wasChanged('alias'))) {
+                HoleNumbers::remember($signature);
             }
         });
         self::saving(function (Signature $signature): void {

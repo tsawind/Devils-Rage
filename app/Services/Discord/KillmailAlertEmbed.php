@@ -27,6 +27,7 @@ final readonly class KillmailAlertEmbed
     public function __construct(
         private KillmailFilterDescriber $filterDescriber,
         private NameResolver $nameResolver,
+        private ChainWayDescriber $wayDescriber,
     ) {}
 
     /**
@@ -58,12 +59,16 @@ final readonly class KillmailAlertEmbed
         $attackerName = $names[(int) ($finalBlow['character_id'] ?? 0)] ?? null;
         $attackerShip = ($id = (int) ($finalBlow['ship_type_id'] ?? 0)) > 0 ? $this->typeName($id) : null;
 
+        // Patch 39: the map's names: "Pioneer killed in A3 (J150533)", how far from home, and the way there.
+        $way = $this->way($alert, $killmail, $result);
+        $placeName = $way['alias'] !== null ? sprintf('%s (%s)', $way['alias'], $systemName) : $systemName;
+
         $embed = [
-            'title' => sprintf('%s killed in %s', $shipName, $systemName),
+            'title' => sprintf('%s killed in %s', $shipName, $placeName),
             'url' => sprintf('https://zkillboard.com/kill/%d/', $killmail->id),
-            'description' => $this->description($result, $systemName, $shipName, $pilot, $affiliation, $attackerName, $attackerShip),
+            'description' => $this->description($result, $systemName, $shipName, $pilot, $affiliation, $attackerName, $attackerShip).$way['from_home'],
             'color' => $this->colorForSecurity($security),
-            'fields' => $this->fields($alert, $killmail, $result, $systems, $systemName, $security, $shipName, $pilot, $affiliation, $attackerName, $attackerShip, $matchedFilters),
+            'fields' => [...$this->fields($alert, $killmail, $result, $systems, $systemName, $security, $shipName, $pilot, $affiliation, $attackerName, $attackerShip, $matchedFilters, $way['system']), ...$way['fields']],
         ];
 
         $embed['timestamp'] = $killmail->time->toIso8601String();
@@ -133,12 +138,12 @@ final readonly class KillmailAlertEmbed
      * @param  Collection<int, KillmailFilterRule>  $matchedFilters
      * @return array<int, array<string, mixed>>
      */
-    private function fields(MapAlert $alert, Killmail $killmail, ProximityResult $result, Collection $systems, string $systemName, float $security, string $shipName, ?string $pilot, string $affiliation, ?string $attackerName, ?string $attackerShip, Collection $matchedFilters): array
+    private function fields(MapAlert $alert, Killmail $killmail, ProximityResult $result, Collection $systems, string $systemName, float $security, string $shipName, ?string $pilot, string $affiliation, ?string $attackerName, ?string $attackerShip, Collection $matchedFilters, ?string $mapSystem = null): array
     {
         $totalValue = (float) (data_get($killmail->zkb, 'totalValue') ?? 0.0);
 
         $fields = [
-            ['name' => 'System', 'value' => sprintf('%s (%.1f)', $systemName, $security), 'inline' => true],
+            ['name' => 'System', 'value' => $mapSystem ?? sprintf('%s (%.1f)', $systemName, $security), 'inline' => true],
             ['name' => 'Ship', 'value' => $shipName, 'inline' => true],
             ['name' => 'Value', 'value' => sprintf('%s ISK', number_format($totalValue)), 'inline' => true],
         ];
@@ -189,6 +194,63 @@ final readonly class KillmailAlertEmbed
             ->value('alias');
 
         return $alias ? sprintf('%s (%s)', $alias, $name) : $name;
+    }
+
+    /**
+     * Patch 39: the kill as the map sees it: its alias there, "N jumps from Daisy", the System
+     * field ("A3 · C5 J150533"), and the way from home with what fits through it. Gate jumps
+     * past the chain's exit are added to the count.
+     *
+     * @return array{alias: string|null, from_home: string, system: string|null, fields: list<array<string, mixed>>}
+     */
+    private function way(MapAlert $alert, Killmail $killmail, ProximityResult $result): array
+    {
+        $none = ['alias' => null, 'from_home' => '', 'system' => null, 'fields' => []];
+        $map = $alert->map;
+        if ($map === null) {
+            return $none;
+        }
+        $inChain = $result->jumps === 0;
+        $way = $this->wayDescriber->fromHome($map, $inChain ? $killmail->solarsystem_id : $result->matchedOriginSolarsystemId);
+        if ($way === null) {
+            return $none;
+        }
+
+        $jumps = $way['jumps'] + $result->jumps;
+        $solarsystem = Solarsystem::query()->with('wormholeSystem')->find($killmail->solarsystem_id, ['id', 'name', 'security']);
+        $class = $solarsystem instanceof Solarsystem ? $this->classLabel($solarsystem) : '';
+        $line = $way['line'].($inChain ? '' : sprintf(' → %d %s → %s', $result->jumps, $result->jumps === 1 ? 'gate' : 'gates', $solarsystem->name ?? ''));
+
+        return [
+            'alias' => $inChain && $way['alias'] !== null ? $this->displayAlias($way['alias']) : null,
+            'from_home' => sprintf(' **%d %s from %s.**', $jumps, $jumps === 1 ? 'jump' : 'jumps', $way['home']),
+            'system' => $inChain && $way['alias'] !== null && $solarsystem instanceof Solarsystem
+                ? trim(sprintf('%s · %s %s', $this->displayAlias($way['alias']), $class, $solarsystem->name))
+                : null,
+            'fields' => array_values(array_filter([
+                ['name' => 'Way from home', 'value' => mb_substr($line, 0, 1000)],
+                $way['fits'] !== null ? ['name' => 'Fits', 'value' => mb_substr(mb_substr($way['fits'], 0, 6) === 'Fits: ' ? mb_substr($way['fits'], 6) : $way['fits'], 0, 1000)] : null,
+            ])),
+        ];
+    }
+
+    /** Home's holes by their callsign ("A" → "Alpha"), chain numbers as they are. */
+    private function displayAlias(string $alias): string
+    {
+        $callsigns = ['A' => 'Alpha', 'B' => 'Bravo', 'D' => 'Delta', 'G' => 'Golf', 'J' => 'Juliett', 'K' => 'Kilo', 'M' => 'Mike', 'N' => 'November', 'P' => 'Papa', 'Q' => 'Quebec', 'R' => 'Romeo', 'S' => 'Sierra', 'T' => 'Tango', 'U' => 'Uniform', 'V' => 'Victor', 'W' => 'Whiskey', 'X' => 'X-ray', 'Y' => 'Yankee', 'Z' => 'Zulu'];
+
+        return $callsigns[mb_strtoupper(mb_trim($alias))] ?? $alias;
+    }
+
+    private function classLabel(Solarsystem $solarsystem): string
+    {
+        $class = (string) ($solarsystem->wormholeSystem?->class->value ?? '');
+
+        return match (true) {
+            $class === '12' => 'Thera',
+            ctype_digit($class) => 'C'.$class,
+            default => '',
+        };
     }
 
     /**

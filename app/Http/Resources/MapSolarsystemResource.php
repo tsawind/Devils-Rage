@@ -39,6 +39,10 @@ final class MapSolarsystemResource extends JsonResource
             'combat_previous_color' => $this->combat_previous_color,
             // Patch 14: converted during cleanup, way back not re-bookmarked yet.
             'cleanup_return_pending' => (bool) $this->cleanup_return_pending,
+            // Patch 39: earlier names ("was A1~1917"), an old name kept on purpose, and the highest hole number handed out.
+            'old_aliases' => $this->old_aliases ?? [],
+            'name_kept' => (bool) $this->name_kept,
+            'hole_slot_high' => $this->hole_slot_high,
             // Who is working this combat home's chain (patch 12: named in the Clear chain warning).
             'combat_workers' => $this->when(
                 (bool) $this->combat_home && filled($this->combat_color),

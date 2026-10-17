@@ -144,7 +144,7 @@ describe('buildSignatureBookmark (unconnected, alphabetical)', () => {
         expect(name).toBe('BN2 NS ABC');
     });
 
-    it('reserves P for a Pochven target', () => {
+    it('reserves P for a Pochven target (patch 39: the class reads "Pochven")', () => {
         const name = buildSignatureBookmark({
             signature: baseSignature({ signature_type: { target_class: 'p' } }),
             currentSystem: { alias: 'A' },
@@ -153,7 +153,7 @@ describe('buildSignatureBookmark (unconnected, alphabetical)', () => {
             formats: ALPHABETICAL_FORMATS,
         });
 
-        expect(name).toBe('AP1 P ABC');
+        expect(name).toBe('AP1 Pochven ABC');
     });
 
     it('treats an unidentified type as a wormhole for the guess and leaves the class blank', () => {

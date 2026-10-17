@@ -2,6 +2,8 @@ import { isWormholeClass } from '@/const/solarsystemClasses';
 import { displayAlias, orderStatics, planSignatureAliases, staticIndexOf, staticSlotAlias, staticSlotAliasAt, suggestAlias, type TAliasScheme } from '@/lib/alias';
 import { connectionFlag } from '@/lib/chainNumbering';
 import { chainAliases } from '@/lib/combat';
+import { countsUp } from '@/lib/numberingHubs';
+import { specialClassWord } from '@/lib/specialSystems';
 import { signatureTypeById } from '@/const/signatures';
 import { isK162Frigate, k162RangeLabel } from '@/lib/k162';
 import { classCode, wayBackCouldBe } from '@/lib/staticCertainty';
@@ -43,6 +45,8 @@ type TPlaceholderSystem = {
     pending_holes?: TPlaceholderHole[] | null;
     /** Patch 18b fix: signatures not yet scanned down here (0 = fully scanned). */
     uncategorized_signatures_count?: number | null;
+    /** Patch 39: the highest hole number the system ever handed out. */
+    hole_slot_high?: string | null;
 };
 
 /** A connection as the expected-statics check needs it (patch 13). */
@@ -114,6 +118,9 @@ const KSPACE: Record<string, string> = { h: 'HS', l: 'LS', n: 'NS', p: 'Pochven'
 /** Where a hole leads: "C3", "HS", or "?" when the type isn't known. */
 export function holeDestination(targetClass: TStringedSolarsystemClass | null | undefined): string {
     if (!targetClass || targetClass === 'unknown') return '?';
+    // Patch 39: special systems in words (Thera, C13 frig, Vidette, Pochven).
+    const word = specialClassWord(targetClass);
+    if (word) return word;
     if (isWormholeClass(targetClass)) return `C${targetClass}`;
     return KSPACE[targetClass] ?? targetClass.toUpperCase();
 }
@@ -192,6 +199,9 @@ export function planPendingHoles(
         limbo: Boolean(system.combat_color),
         // Patch 20: one reserved slot per static (A0, A1…); other holes start after them.
         staticCount: system.solarsystem?.statics?.length ?? 1,
+        // Patch 39: numbers only count up, except in hubs.
+        countUp: countsUp(system),
+        slotHigh: system.hole_slot_high ?? null,
         signatures: holes.map((hole) => ({
             id: hole.id,
             isWormhole: true,

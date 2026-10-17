@@ -1,5 +1,6 @@
 import { computeBandLayout, isLoopEdge, type BandLayoutInput, type BandLayoutResult } from '@/map/core/layout/bandLayout';
 import { BUSY_SYSTEM_CONNECTIONS, buildPlaceholders, foldLaneHoles, type TPlaceholder } from '@/lib/placeholders';
+import { findNumberingHubs, numberingHubIds } from '@/lib/numberingHubs';
 import { compareSystems } from '@/map/core/sorting';
 import { isWormholeClass } from '@/const/solarsystemClasses';
 import type { Vec2 } from '@/map/core/types';
@@ -49,6 +50,17 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
     const isLayoutLocked = isTreeLayout;
 
     const isConstantWidthEnabled = computed(() => meta.value?.constant_width_enabled ?? false);
+
+    /** Patch 39: systems that refill freed hole numbers (home, pinned, side chain starts, rage homes). */
+    const numberingHubs = computed((): ReadonlySet<number> => {
+        if (!meta.value) return new Set();
+        const systems = [...entities.systems.values()];
+        const connections = [...entities.connections.values()];
+        const homeSolarsystemId = meta.value.home_solarsystem_id;
+        const homeId = homeSolarsystemId !== null ? (systems.find((system) => system.solarsystem_id === homeSolarsystemId)?.id ?? null) : null;
+        return findNumberingHubs(systems, chainParents(systems, connections, homeId), homeId);
+    });
+    watch(numberingHubs, (hubs) => (numberingHubIds.value = hubs), { immediate: true, flush: 'sync' });
 
     /** Unjumped wormhole signatures shown as placeholder systems (tree layout, when switched on). */
     const placeholderBuild = computed((): { placeholders: TPlaceholder[]; staticDoubts: Set<number> } => {
@@ -268,6 +280,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         allPlaceholders,
         foldedHoles,
         busyHoleParents,
+        numberingHubs,
         loopConnectionIds,
         staticDoubtSignatureIds,
         treePositions,
@@ -284,7 +297,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
  * from the remaining systems (lowest id first). The band layout has its own
  * tree, but it takes the placeholders as input, so this can't use it.
  */
-function chainParents(systems: readonly TMapSolarsystem[], connections: readonly TMapConnection[], homeId: number | null): Map<number, number> {
+export function chainParents(systems: readonly TMapSolarsystem[], connections: readonly TMapConnection[], homeId: number | null): Map<number, number> {
     const neighbours = new Map<number, number[]>();
     for (const connection of connections) {
         const a = connection.from_map_solarsystem_id;

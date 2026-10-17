@@ -112,7 +112,7 @@ function copyNewStatic(candidate: TSignature, old: TSignature | null): void {
     >
         <p class="font-display text-base font-bold tracking-wider text-red-400 uppercase">⚡ New {{ question.olds.length === 1 ? staticName(question.olds[0]) : 'static' }}?</p>
         <p class="mt-1 text-xs text-stone-400">
-            Yes: the old one's chain keeps its names with a time stamp (e.g. Alpha@1958), its signature and pipe go, and the new signature takes the name.
+            Yes: the old one's chain keeps its names with a time stamp (e.g. Alpha~1958), its signature and pipe go, and the new signature takes the name.
         </p>
         <div v-if="question.olds.length > 1" class="mt-2 flex flex-wrap gap-1">
             <span class="text-xs text-stone-400">Replacing:</span>
