@@ -16,7 +16,7 @@ final class PersonName
 {
     public const array STYLES = ['main', 'name', 'both'];
 
-    public const int MAX = 24;
+    public const MAX = 24;
 
     public static function of(User $user): string
     {

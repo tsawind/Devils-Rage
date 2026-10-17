@@ -69,4 +69,54 @@ final class SkillMath
             default => max(1, $minutes).'m',
         };
     }
+
+    /**
+     * Patch 39: skill points one Large Skill Injector gives at a character's total SP.
+     */
+    public static function injectorYield(int $totalSp): int
+    {
+        return match (true) {
+            $totalSp < 5_000_000 => 500_000,
+            $totalSp < 50_000_000 => 400_000,
+            $totalSp < 80_000_000 => 300_000,
+            default => 150_000,
+        };
+    }
+
+    /**
+     * Patch 39: Large Skill Injectors needed to cover the missing SP, starting at the
+     * character's total SP (each one gives less once the total crosses 5M / 50M / 80M).
+     */
+    public static function injectorsFor(int $totalSp, int $missingSp): int
+    {
+        $count = 0;
+        while ($missingSp > 0 && $count < 10_000) {
+            $gain = self::injectorYield($totalSp);
+            $missingSp -= $gain;
+            $totalSp += $gain;
+            $count++;
+        }
+
+        return $count;
+    }
+
+    /**
+     * Patch 39: a plan as EVE's skill planner pastes it: one skill level per line
+     * ("Caldari Frigate 1", "Caldari Frigate 2", ...), from the level after $from.
+     *
+     * @param  array<int, int>  $levels  skill ID => level wanted
+     * @param  array<int, string>  $names  skill ID => name
+     * @param  array<int, int>  $from  skill ID => level already trained (0 when missing)
+     */
+    public static function planText(array $levels, array $names, array $from = []): string
+    {
+        $lines = [];
+        foreach ($levels as $skillId => $level) {
+            for ($step = ($from[$skillId] ?? 0) + 1; $step <= $level; $step++) {
+                $lines[] = ($names[$skillId] ?? (string) $skillId).' '.$step;
+            }
+        }
+
+        return implode("\n", $lines);
+    }
 }

@@ -35,13 +35,7 @@
             <option value="{{ $item->id }}" @selected($plan && $plan->id === $item->id)>{{ $item->name }}</option>
           @endforeach
         </select>
-        <label for="dr-group">Launch group</label>
-        <select id="dr-group" name="group" class="form-control form-control-sm" onchange="this.form.submit()">
-          <option value="">Everyone</option>
-          @foreach($groupNames as $name)
-            <option value="{{ $name }}" @selected($group === $name)>{{ $name }}</option>
-          @endforeach
-        </select>
+        @include('devilsrage::partials.group-filter')
         <noscript><button type="submit" class="btn btn-sm btn-primary">Show</button></noscript>
       </form>
     </div>

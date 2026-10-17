@@ -6,8 +6,10 @@ use DevilsRage\Seat\Http\Controllers\AccountsController;
 use DevilsRage\Seat\Http\Controllers\BotApiController;
 use DevilsRage\Seat\Http\Controllers\HomeController;
 use DevilsRage\Seat\Http\Controllers\PlannerController;
+use DevilsRage\Seat\Http\Controllers\RemindersController;
 use DevilsRage\Seat\Http\Controllers\SkillPlansController;
 use DevilsRage\Seat\Http\Controllers\SpFarmController;
+use DevilsRage\Seat\Http\Controllers\SuggestionsController;
 use DevilsRage\Seat\Http\Middleware\BotApiKey;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +21,7 @@ Route::group([
     Route::get('home', [HomeController::class, 'home'])->name('devilsrage.home');
     Route::get('stuff', [HomeController::class, 'stuff'])->name('devilsrage.stuff');
     Route::get('menu', [HomeController::class, 'menu'])->name('devilsrage.menu');
+    Route::post('view-mode', [HomeController::class, 'viewMode'])->name('devilsrage.viewmode');
     Route::post('menu', [HomeController::class, 'saveMenu'])->name('devilsrage.menu.save');
     Route::get('accounts', [AccountsController::class, 'index'])->name('devilsrage.accounts.index');
     Route::post('accounts', [AccountsController::class, 'storeAccount'])->name('devilsrage.accounts.store');
@@ -51,6 +54,16 @@ Route::group([
     Route::post('skill-plans', [SkillPlansController::class, 'store'])->name('devilsrage.skillplans.store');
     Route::get('skill-plans/{plan}', [SkillPlansController::class, 'show'])->name('devilsrage.skillplans.show');
     Route::post('skill-plans/{plan}/delete', [SkillPlansController::class, 'destroy'])->name('devilsrage.skillplans.delete');
+
+    // Patch 39: suggestions board and one-time reminders.
+    Route::get('suggestions', [SuggestionsController::class, 'index'])->name('devilsrage.suggestions.index');
+    Route::post('suggestions', [SuggestionsController::class, 'store'])->name('devilsrage.suggestions.store');
+    Route::post('suggestions/{suggestion}/vote', [SuggestionsController::class, 'vote'])->name('devilsrage.suggestions.vote');
+    Route::post('suggestions/{suggestion}/comment', [SuggestionsController::class, 'comment'])->name('devilsrage.suggestions.comment');
+    Route::post('suggestions/{suggestion}/status', [SuggestionsController::class, 'status'])->name('devilsrage.suggestions.status');
+    Route::post('suggestions/{suggestion}/delete', [SuggestionsController::class, 'destroy'])->name('devilsrage.suggestions.delete');
+    Route::get('reminders', [RemindersController::class, 'index'])->name('devilsrage.reminders.index');
+    Route::post('reminders', [RemindersController::class, 'send'])->name('devilsrage.reminders.send');
 });
 
 // Read-only API for the mapper's Discord bot (key in X-DR-Key; see BotApiKey).

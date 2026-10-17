@@ -61,11 +61,9 @@ describe('ConnectionStatus lifetime countdown', () => {
         expect(text).toContain('2h 30m');
     });
 
-    it('counts a healthy connection down from the lifetime its shape implies', () => {
-        const text = render();
-
-        expect(text).toContain('Time remaining');
-        expect(text).toContain('22h 30m');
+    // Patch 39: a healthy hole's age says little (16–24 h holes), so there is no countdown from when it was added.
+    it('shows no countdown for a healthy connection', () => {
+        expect(render()).not.toContain('Time remaining');
     });
 
     it('shows no countdown for a stargate, which is permanent', () => {

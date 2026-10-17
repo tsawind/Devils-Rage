@@ -11,8 +11,10 @@ use DevilsRage\Seat\Models\AccountSetting;
 use DevilsRage\Seat\Models\LaunchGroup;
 use DevilsRage\Seat\Models\SkillPlan;
 use DevilsRage\Seat\Services\Corporation;
+use DevilsRage\Seat\Services\GroupFilter;
 use DevilsRage\Seat\Services\Leadership;
 use DevilsRage\Seat\Services\OmegaStatus;
+use DevilsRage\Seat\Services\ViewMode;
 use DevilsRage\Seat\Skills\SkillCheck;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -28,16 +30,17 @@ use Seat\Web\Models\User;
  */
 class PlannerController extends Controller
 {
-    public function index(Request $request, Leadership $leadership, Corporation $corporation, SkillCheck $skills): View
+    public function index(Request $request, Leadership $leadership, Corporation $corporation, SkillCheck $skills, GroupFilter $groupFilter): View
     {
-        abort_unless($leadership->isLeader(auth()->user()), 403);
+        $user = auth()->user();
+        abort_unless($leadership->isLeader($user), 403);
 
         $doctrines = Doctrine::query()->orderBy('name')->get(['id', 'name']);
         $plans = SkillPlan::query()->orderBy('name')->get(['id', 'name']);
         $doctrine = $doctrines->firstWhere('id', (int) $request->query('doctrine')) ?? $doctrines->first();
         $plan = $plans->firstWhere('id', (int) $request->query('plan'));
-        $groupNames = $this->groupNames();
-        $group = in_array((string) $request->query('group'), $groupNames, true) ? (string) $request->query('group') : null;
+        // Patch 39: corp groups, your groups and (leaders) every pilot's groups.
+        $group = $groupFilter->resolve((string) $request->query('group'), $user, true);
 
         $fits = $doctrine === null
             ? collect()
@@ -52,7 +55,12 @@ class PlannerController extends Controller
             ->pluck('character_id')
             ->map(fn ($id): int => (int) $id)
             ->all();
-        $rows = $this->rows(array_values(array_unique([...$memberIds, ...$accountIds])), $group, $memberIds);
+        $candidates = array_values(array_unique([...$memberIds, ...$accountIds]));
+        if ($group !== null) {
+            $candidates = array_values(array_intersect($candidates, $groupFilter->characterIds($group)));
+        }
+        // Patch 39: "My characters only" narrows the planner too.
+        $rows = $this->rows(ViewMode::narrow($candidates, $user), $memberIds);
         // Only characters SeAT has skills for are compared.
         $characterIds = array_keys(array_filter($rows, fn (array $row): bool => $row['flag'] === null || $row['flag'] === 'corp'));
 
@@ -86,8 +94,8 @@ class PlannerController extends Controller
             'doctrine' => $doctrine,
             'plans' => $plans,
             'plan' => $plan,
-            'group' => $group,
-            'groupNames' => $groupNames,
+            'groupValue' => $group === null ? '' : 'g:'.$group->id,
+            'groupOptions' => $groupFilter->options($user, true),
             'fits' => $fits,
             'rows' => $rows,
             'status' => $status,
@@ -100,16 +108,6 @@ class PlannerController extends Controller
     }
 
     /**
-     * Filter choices: Main / Second / Third. Pilots' own launch groups are private.
-     *
-     * @return list<string>
-     */
-    private function groupNames(): array
-    {
-        return LaunchGroup::query()->whereNull('user_id')->orderBy('position')->pluck('name')->all();
-    }
-
-    /**
      * Characters with their pilot, account (when shared), launch group and why SeAT may
      * not know their skills: flag "external" (not on SeAT), "token" (login expired),
      * "corp" (not in the corp right now) or null.
@@ -118,7 +116,7 @@ class PlannerController extends Controller
      * @param  list<int>  $memberIds
      * @return array<int, array{name: string, pilot: string, user_id: int, account: ?string, omega_ended: bool, account_key: string, groups: list<array{name: string, class: string}>, flag: ?string, fits: list<int>}>
      */
-    private function rows(array $characterIds, ?string $group, array $memberIds): array
+    private function rows(array $characterIds, array $memberIds): array
     {
         $names = CharacterInfo::query()->whereIn('character_id', $characterIds)->pluck('name', 'character_id');
         $owners = RefreshToken::query()->whereIn('character_id', $characterIds)->pluck('user_id', 'character_id');
@@ -142,9 +140,6 @@ class PlannerController extends Controller
             $link = $private->has($userId) ? null : $links->get($characterId);
 
             $groups = $link?->launchGroups ?? collect();
-            if ($group !== null && ! $groups->contains(fn (LaunchGroup $item): bool => strcasecmp($item->name, $group) === 0)) {
-                continue;
-            }
 
             $external = (bool) $links->get($characterId)?->external;
             $rows[$characterId] = [

@@ -173,14 +173,14 @@ final class SeatMains
 
         try {
             $people = $client->people();
-        } catch (SeatUnavailableException|SeatForbiddenException) {
+        } catch (SeatUnavailableException) {
             return;
         }
 
         $seen = [];
         foreach ($people as $person) {
             $ids = array_map(intval(...), $person['character_ids']);
-            if ($ids === [] || ! is_string($person['name']) || $person['name'] === '') {
+            if ($ids === [] || $person['name'] === '') {
                 continue;
             }
             Character::query()->whereKey($ids)->update(['seat_person_name' => mb_substr($person['name'], 0, 32)]);

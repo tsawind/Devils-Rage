@@ -46,6 +46,17 @@ return [
                 'permission' => 'devilsrage-leader',
             ],
             [
+                'name' => 'Suggestions',
+                'icon' => 'fas fa-lightbulb',
+                'route' => 'devilsrage.suggestions.index',
+            ],
+            [
+                'name' => 'Reminders',
+                'icon' => 'fas fa-bell',
+                'route' => 'devilsrage.reminders.index',
+                'permission' => 'devilsrage-leader',
+            ],
+            [
                 'name' => 'Arrange menu',
                 'icon' => 'fas fa-bars',
                 'route' => 'devilsrage.menu',

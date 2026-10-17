@@ -156,7 +156,7 @@ final class MapController extends Controller
         $link = MapShareLink::query()->where('token', $token)->where('kind', 'map')->live()->with('map')->first();
         if ($link instanceof MapShareLink) {
             // Patch 39: a Full-access link works for a logged-in EVE character: log in first, then come back.
-            if ($link->access === MapShareLink::ACCESS_MEMBER && ! $this->user instanceof User) {
+            if ($link->access === MapShareLink::ACCESS_MEMBER && auth()->guest()) {
                 session()->put('url.intended', route('maps.share', ['token' => $token]));
 
                 return redirect()->route('login');

@@ -15,6 +15,7 @@ use DevilsRage\Seat\Services\Holdings;
 use DevilsRage\Seat\Services\OmegaStatus;
 use DevilsRage\Seat\Services\PersonName;
 use DevilsRage\Seat\Services\PublicCharacter;
+use DevilsRage\Seat\Services\ViewMode;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -424,6 +425,8 @@ class AccountsController extends Controller
         $private = AccountSetting::query()->where('share', false)->pluck('user_id')->all();
         $accounts = Account::query()
             ->whereNotIn('user_id', $private)
+            // Patch 39: "My characters only" shows just your own accounts here too.
+            ->when(ViewMode::ownOnly(), fn ($query) => $query->where('user_id', auth()->id()))
             // Pilots' own launch groups are private: the corp view only shows Main / Second / Third.
             ->with(['characters.character', 'characters.launchGroups' => fn ($query) => $query->whereNull('devilsrage_launch_groups.user_id')])
             ->orderBy('nickname')
@@ -431,7 +434,7 @@ class AccountsController extends Controller
             ->groupBy('user_id');
 
         $users = User::query()->whereIn('id', $accounts->keys())->with('main_character')->get()->keyBy('id');
-        $memberIds = $corporation->memberCharacterIds();
+        $memberIds = ViewMode::narrow($corporation->memberCharacterIds(), auth()->user());
         $tokens = RefreshToken::query()->whereIn('character_id', $memberIds)->pluck('user_id', 'character_id');
         $links = $accounts->flatten()->flatMap(fn (Account $account) => $account->characters);
         $notGrouped = collect($memberIds)->diff($links->pluck('character_id'))->groupBy(fn (int $id): int => (int) ($tokens[$id] ?? 0));

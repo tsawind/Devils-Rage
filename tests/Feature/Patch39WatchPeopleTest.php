@@ -91,7 +91,7 @@ it('logs a hostile jump by class with an unknown direction, and its fit', functi
     expect($jump->side)->toBe('hostile')
         ->and($jump->ship_class)->toBe('battleship')
         ->and($jump->direction_known)->toBeFalse()
-        ->and($jump->fit)->toBe(['higgs' => true, 'prop' => true, 'plate' => false]);
+        ->and($jump->fit)->toEqual(['higgs' => true, 'prop' => true, 'plate' => false]);
 });
 
 it('refuses a ship class it does not know', function () {
@@ -190,5 +190,7 @@ it('sends someone opening a Full-access link to log in first', function () {
     $map = Map::factory()->create();
     $map->shareLinks()->create(['token' => 'full-token', 'kind' => 'map', 'access' => 'member', 'expires_at' => now()->addHours(3)]);
 
-    get(route('maps.share', ['token' => 'full-token']))->assertRedirect(route('login'));
+    $response = get(route('maps.share', ['token' => 'full-token']));
+
+    expect($response->headers->get('Location'))->toEndWith('/login');
 });

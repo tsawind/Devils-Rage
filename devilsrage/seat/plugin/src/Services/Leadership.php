@@ -16,6 +16,7 @@ use Seat\Web\Models\User;
  *    SeAT permission devilsrage.skillplans.
  * CEO, role and titles only count in the main corporation (see Corporation), so being
  * CEO or director of a personal alt corp gives nothing here.
+ * Patch 39: "View as member" (ViewMode) turns both off for the session.
  */
 final class Leadership
 {
@@ -25,6 +26,17 @@ final class Leadership
     private array $cache = [];
 
     public function isLeader(?User $user): bool
+    {
+        // Patch 39: "View as member" drops leader rights on these pages.
+        if ($user === null || ViewMode::asMember()) {
+            return false;
+        }
+
+        return $this->isRealLeader($user);
+    }
+
+    /** A leader, whatever the view mode (who gets the "View as member" switch). */
+    public function isRealLeader(?User $user): bool
     {
         if ($user === null) {
             return false;
@@ -39,7 +51,7 @@ final class Leadership
 
     public function canManagePlans(?User $user): bool
     {
-        if ($user === null) {
+        if ($user === null || ViewMode::asMember()) {
             return false;
         }
 

@@ -7,7 +7,14 @@
   @include('devilsrage::partials.flash')
 
   <div class="card">
-    <div class="card-header"><h3 class="card-title">Corp skill plans · your characters</h3></div>
+    <div class="card-header">
+      <h3 class="card-title">Corp skill plans · your characters</h3>
+      <div class="card-tools">
+        <form method="get" class="form-inline" style="gap: .4rem;">
+          @include('devilsrage::partials.group-filter')
+        </form>
+      </div>
+    </div>
     <div class="card-body p-0" style="overflow-x: auto;">
       <table class="table table-sm mb-0">
         <thead>

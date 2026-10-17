@@ -11,11 +11,13 @@ use DevilsRage\Seat\Models\Setting;
 use DevilsRage\Seat\Services\AssetLocator;
 use DevilsRage\Seat\Services\AssetSearch;
 use DevilsRage\Seat\Services\Clones;
+use DevilsRage\Seat\Services\GettingStarted;
 use DevilsRage\Seat\Services\Holdings;
 use DevilsRage\Seat\Services\Leadership;
 use DevilsRage\Seat\Services\Locations;
 use DevilsRage\Seat\Services\MenuLayout;
 use DevilsRage\Seat\Services\OmegaStatus;
+use DevilsRage\Seat\Services\ViewMode;
 use DevilsRage\Seat\Skills\SkillCheck;
 use DevilsRage\Seat\Skills\SkillMath;
 use Illuminate\Http\RedirectResponse;
@@ -33,7 +35,7 @@ use Seat\Web\Http\Controllers\Controller;
  */
 class HomeController extends Controller
 {
-    public function home(Leadership $leadership, OmegaStatus $omega, Holdings $holdings): View
+    public function home(Leadership $leadership, OmegaStatus $omega, Holdings $holdings, GettingStarted $gettingStarted): View
     {
         $user = auth()->user();
         $characterIds = array_map('intval', $user->associatedCharacterIds());
@@ -66,7 +68,24 @@ class HomeController extends Controller
             'endingSoon' => $endingSoon,
             'doctrines' => $this->doctrines($user->id, $characterIds),
             'isLeader' => $leadership->isLeader($user),
+            'checklist' => $gettingStarted->checklist($user),
         ]);
+    }
+
+    /**
+     * Patch 39: "View as member" on / off for this login session (leaders only). On also
+     * turns "My characters only" on; off goes back to how it was before.
+     */
+    public function viewMode(Request $request, Leadership $leadership): RedirectResponse
+    {
+        abort_unless($leadership->isRealLeader(auth()->user()), 403);
+
+        $on = $request->boolean('as_member');
+        session([ViewMode::AS_MEMBER => $on]);
+
+        return back()->with('success', $on
+            ? 'Viewing as a member: your own characters, no leader rights. Switch back any time.'
+            : 'Back to your leader view.');
     }
 
     public function stuff(Request $request, AssetSearch $search, AssetLocator $locator, Locations $locations, Clones $clones): View

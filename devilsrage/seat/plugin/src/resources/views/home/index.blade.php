@@ -10,6 +10,30 @@
 @section('full')
   @include('devilsrage::partials.flash')
 
+  @php($todo = collect($checklist)->reject(fn (array $item): bool => $item['done'] || $item['optional'])->count())
+  @if(collect($checklist)->contains(fn (array $item): bool => ! $item['done']))
+    {{-- Patch 39: getting started --}}
+    <div class="card {{ $todo > 0 ? 'card-outline card-warning' : '' }}">
+      <div class="card-header"><h3 class="card-title"><i class="fas fa-flag-checkered"></i> Getting started
+        @if($todo > 0)<span class="badge badge-warning ml-1">{{ $todo }} to do</span>@endif</h3></div>
+      <div class="card-body py-2">
+        <ul class="list-unstyled mb-0 d-flex flex-wrap" style="gap: .5rem 1.5rem;">
+          @foreach($checklist as $item)
+            <li class="small">
+              @if($item['done'])
+                <i class="fas fa-check-circle text-success"></i> <span class="text-muted">{{ $item['label'] }}</span>
+              @else
+                <i class="far {{ $item['optional'] ? 'fa-circle text-secondary' : 'fa-circle text-warning' }}"></i>
+                @if($item['link'])<a href="{{ $item['link'] }}">{{ $item['label'] }}</a>@else{{ $item['label'] }}@endif
+                <div class="text-muted" style="margin-left: 1.2rem;">{{ $item['hint'] }}</div>
+              @endif
+            </li>
+          @endforeach
+        </ul>
+      </div>
+    </div>
+  @endif
+
   <div class="row">
     <div class="col-lg-4">
       <div class="card">
@@ -62,6 +86,10 @@
           @if($isLeader)
             <a href="{{ route('devilsrage.layout') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-sitemap"></i> Corp layout</a>
             <a href="{{ route('devilsrage.planner') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-chess"></i> FC planner</a>
+          @endif
+          <a href="{{ route('devilsrage.suggestions.index') }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-lightbulb"></i> Suggestions</a>
+          @if($isLeader)
+            <a href="{{ route('devilsrage.reminders.index') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-bell"></i> Reminders</a>
           @endif
           <a href="{{ route('devilsrage.menu') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-bars"></i> Arrange menu</a>
           <a href="{{ route('seatcore::home', ['seat' => 1]) }}" class="btn btn-sm btn-link">SeAT home</a>
