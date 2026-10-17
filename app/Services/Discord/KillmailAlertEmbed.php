@@ -207,9 +207,6 @@ final readonly class KillmailAlertEmbed
     {
         $none = ['alias' => null, 'from_home' => '', 'system' => null, 'fields' => []];
         $map = $alert->map;
-        if ($map === null) {
-            return $none;
-        }
         $inChain = $result->jumps === 0;
         $way = $this->wayDescriber->fromHome($map, $inChain ? $killmail->solarsystem_id : $result->matchedOriginSolarsystemId);
         if ($way === null) {
@@ -227,10 +224,10 @@ final readonly class KillmailAlertEmbed
             'system' => $inChain && $way['alias'] !== null && $solarsystem instanceof Solarsystem
                 ? trim(sprintf('%s · %s %s', $this->displayAlias($way['alias']), $class, $solarsystem->name))
                 : null,
-            'fields' => array_values(array_filter([
+            'fields' => [
                 ['name' => 'Way from home', 'value' => mb_substr($line, 0, 1000)],
-                $way['fits'] !== null ? ['name' => 'Fits', 'value' => mb_substr(mb_substr($way['fits'], 0, 6) === 'Fits: ' ? mb_substr($way['fits'], 6) : $way['fits'], 0, 1000)] : null,
-            ])),
+                ...($way['fits'] !== null ? [['name' => 'Fits', 'value' => mb_substr(str_starts_with($way['fits'], 'Fits: ') ? mb_substr($way['fits'], 6) : $way['fits'], 0, 1000)]] : []),
+            ],
         ];
     }
 

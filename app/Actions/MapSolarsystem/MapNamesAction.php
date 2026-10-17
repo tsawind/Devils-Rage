@@ -188,7 +188,7 @@ final readonly class MapNamesAction
             $target = $connection instanceof MapConnection
                 ? MapSolarsystem::query()->find((int) $connection->from_map_solarsystem_id === (int) $system->id ? $connection->to_map_solarsystem_id : $connection->from_map_solarsystem_id)
                 : null;
-            $old = (string) ($signature->alias ?? $target?->alias ?? '');
+            $old = (string) ($signature->alias ?? ($target instanceof MapSolarsystem ? $target->alias : null) ?? '');
 
             $holderHole = Signature::query()->where('map_solarsystem_id', $system->id)->whereKeyNot($signature->id)->where('alias', $name)->first();
             $holderSystem = MapSolarsystem::query()->where('map_id', $system->map_id)->where('alias', $name)
@@ -301,7 +301,7 @@ final readonly class MapNamesAction
     {
         $name = mb_trim($name);
 
-        return $name === '' ? array_values($names ?? []) : [...$this->withoutName($names, $name), $name];
+        return $name === '' ? ($names ?? []) : [...$this->withoutName($names, $name), $name];
     }
 
     /**
@@ -312,7 +312,7 @@ final readonly class MapNamesAction
     {
         $upper = mb_strtoupper(mb_trim($name));
 
-        return array_values(array_filter($names ?? [], fn (mixed $candidate): bool => is_string($candidate) && mb_strtoupper(mb_trim($candidate)) !== $upper));
+        return array_values(array_filter($names ?? [], fn (string $candidate): bool => mb_strtoupper(mb_trim($candidate)) !== $upper));
     }
 
     private function afterHoleChange(Signature $signature, ?MapConnection $connection): void

@@ -1,4 +1,5 @@
 import { classMeta } from '@/const/solarsystemClasses';
+import type { TStringedSolarsystemClass } from '@/types/models';
 
 /**
  * Patch 39: special systems are named in words, not a raw class number, wherever a
@@ -13,7 +14,7 @@ export function specialClassWord(solarsystemClass: string | null | undefined, op
     if (value === '13') return 'C13 frig';
     if (value === 'p') return 'Pochven';
     if (['14', '15', '16', '17', '18'].includes(value)) {
-        return /\(([^)]+)\)/.exec(classMeta(value).label)?.[1] ?? `C${value}`;
+        return /\(([^)]+)\)/.exec(classMeta(value as TStringedSolarsystemClass).label)?.[1] ?? `C${value}`;
     }
     if (options.isShattered && /^[1-6]$/.test(value)) return `C${value}shattered`;
     return null;
