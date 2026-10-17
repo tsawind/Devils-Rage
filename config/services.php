@@ -39,8 +39,9 @@ return [
     'zkillboard' => [
         'identifier' => env('ZKILLBOARD_IDENTIFIER', 'nbrvecs7654vb68mnbv'),
 
-        // Killmails older than this are skipped during ingestion.
-        'max_age_days' => env('ZKILLBOARD_MAX_AGE_DAYS', 2 * 365),
+        // Killmails older than this are skipped during ingestion and purged daily.
+        // Devil's Rage: 100 days (threat analysis looks back 90); 2 years filled the VPS disk.
+        'max_age_days' => env('ZKILLBOARD_MAX_AGE_DAYS', 100),
 
         // Base URL for the R2Z2 ephemeral killmail stream.
         'r2z2_base_url' => env('ZKILLBOARD_R2Z2_BASE_URL', 'https://r2z2.zkillboard.com'),
