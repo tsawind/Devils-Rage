@@ -4,22 +4,19 @@ declare(strict_types=1);
 
 namespace App\Jobs\MapAlerts;
 
-use App\Enums\DiscordFeedKind;
 use App\Events\Maps\KnownHomeConnectedEvent;
-use App\Models\DiscordChannelFeed;
 use App\Models\MapSolarsystem;
 use App\Services\Discord\ChainWayDescriber;
 use App\Services\Discord\DiscordHttp;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Gate;
 use Throwable;
 
 /**
  * Patch 43: a system marked as someone's home ("Home of …" in the rename popup) was added
- * to the map or connected to it: everyone on the map gets a notice, and the channels that
- * follow the map's exits ("/exits here") get a post. Once per system every few hours, and
+ * to the map or connected to it: everyone on the map gets a notice, and the bot posts a plain
+ * message (no @here) in the "devils-pings" channel. Once per system every few hours, and
  * never for the map's own home.
  */
 final class AnnounceKnownHomeJob implements ShouldQueue
@@ -69,23 +66,49 @@ final class AnnounceKnownHomeJob implements ShouldQueue
             $wayLine !== null ? "\n↳ ".$wayLine : '',
         );
 
-        DiscordChannelFeed::query()
-            ->where('kind', DiscordFeedKind::ChainExits)
-            ->where('map_id', $placement->map_id)
-            ->with('creator')
-            ->get()
-            ->each(function (DiscordChannelFeed $feed) use ($placement, $content, $http): void {
-                if (Gate::forUser($feed->creator)->denies('view', $placement->map)) {
-                    return;
+        foreach ($this->pingChannels($http) as $channelId) {
+            try {
+                $http->bot()->post('/channels/'.$channelId.'/messages', [
+                    'content' => mb_substr($content, 0, 1950),
+                    'allowed_mentions' => ['parse' => []],
+                ])->throw();
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+        }
+    }
+
+    /**
+     * The "devils-pings" channel (config services.discord.home_pings_channel) in every server
+     * the bot is in, looked up by name and remembered for a day.
+     *
+     * @return list<string>
+     */
+    private function pingChannels(DiscordHttp $http): array
+    {
+        $name = (string) config('services.discord.home_pings_channel', 'devils-pings');
+        if ($name === '' || ! config('services.discord.bot_token')) {
+            return [];
+        }
+
+        /** @var list<string> $ids */
+        $ids = Cache::remember('discord:home-pings-channels:'.$name, 86400, function () use ($http, $name): array {
+            $found = [];
+            try {
+                foreach ((array) $http->bot()->get('/users/@me/guilds')->throw()->json() as $guild) {
+                    foreach ((array) $http->bot()->get('/guilds/'.data_get($guild, 'id').'/channels')->throw()->json() as $channel) {
+                        if (data_get($channel, 'name') === $name && (int) data_get($channel, 'type') === 0) {
+                            $found[] = (string) data_get($channel, 'id');
+                        }
+                    }
                 }
-                try {
-                    $http->bot()->post('/channels/'.$feed->discord_channel_id.'/messages', [
-                        'content' => mb_substr($content, 0, 1950),
-                        'allowed_mentions' => ['parse' => []],
-                    ])->throw();
-                } catch (Throwable $exception) {
-                    report($exception);
-                }
-            });
+            } catch (Throwable $exception) {
+                report($exception);
+            }
+
+            return $found;
+        });
+
+        return $ids;
     }
 }

@@ -86,5 +86,7 @@ return [
         'bot_token' => env('DISCORD_BOT_TOKEN'),
         'redirect' => env('DISCORD_CALLBACK', env('APP_URL').'/discord/callback'),
         'test_guild_id' => env('DISCORD_TEST_GUILD_ID'),
+        // Patch 43: the channel the bot posts home pings into (by name, in every server it's in).
+        'home_pings_channel' => env('DISCORD_HOME_PINGS_CHANNEL', 'devils-pings'),
     ],
 ];
