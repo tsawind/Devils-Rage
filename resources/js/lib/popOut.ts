@@ -41,9 +41,10 @@ function copyStyles(target: Window): void {
 }
 
 /** Opens (or moves) the pop-out to this character. Must run from a click. Returns false when not supported. */
-export async function openPopOut(characterId: number, name: string): Promise<boolean> {
+export async function openPopOut(characterId: number, name: string, color: string = POP_OUT_COLOR): Promise<boolean> {
     if (!canPopOut()) return false;
-    popOut.value = { characterId, name, color: POP_OUT_COLOR };
+    // Patch 41: the pop-out wears its character's colour.
+    popOut.value = { characterId, name, color };
     if (popOutWindow.value && !popOutWindow.value.closed) return true;
 
     const pip = (window as unknown as { documentPictureInPicture: TDocumentPip }).documentPictureInPicture;

@@ -7,7 +7,6 @@ import LayoutEditorToolbar from '@/components/layout/LayoutEditorToolbar.vue';
 import MapKillmails from '@/components/map-killmails/MapKillmails.vue';
 import MapSkyhooks from '@/components/map-skyhooks/MapSkyhooks.vue';
 import CommandPalette from '@/components/map/CommandPalette.vue';
-import MapFloatingBar from '@/components/map/MapFloatingBar.vue';
 import MapIntroduction from '@/components/map/MapIntroduction.vue';
 import MapStatusBar from '@/components/map/MapStatusBar.vue';
 import ShipHistory from '@/components/ship-history/ShipHistory.vue';
@@ -24,7 +23,6 @@ import { useDisableTextSelection } from '@/composables/useDisableTextSelection';
 import { pulseKill } from '@/composables/useKillPulses';
 import { useMapBackground } from '@/composables/useMapBackground';
 import { useMapEffects } from '@/composables/useMapEffects';
-import { useMapChrome } from '@/composables/useMapChrome';
 import { getMapChannelName } from '@/const/channels';
 import { KillmailReceivedEvent } from '@/const/events';
 import { useMapLayout } from '@/composables/useMapLayout';
@@ -59,7 +57,6 @@ const {
 
 const { isViewer } = usePermission();
 // Patch 23: both top bars can fold away for more map.
-const { barsFolded } = useMapChrome();
 const page = usePage();
 
 const { resolveSolarsystem } = useStaticSolarsystems();
@@ -238,7 +235,8 @@ const handleResizeEnd = () => {
 </script>
 
 <template>
-    <AppLayout :hide-header="barsFolded">
+    <!-- Patch 41: the map page has one slim bar (MapStatusBar); the site header is gone here -->
+    <AppLayout hide-header>
         <SeoHead
             :title="map.name"
             :description="`Explore the ${map.name} wormhole mapping network. Navigate dangerous wormhole space with real-time intel, signature tracking, and collaborative mapping tools.`"
@@ -290,7 +288,6 @@ const handleResizeEnd = () => {
             <GridItem v-bind="getLayoutItem('map').value" @resize="handleResizeStart" @resized="handleResizeEnd">
                 <div class="relative h-full w-full">
                     <MapRoot :map="resolvedMap" :config="config" />
-                    <MapFloatingBar />
                 </div>
             </GridItem>
 

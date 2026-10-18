@@ -3,7 +3,8 @@ import { CharacterImage } from '@/components/images';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TCharacter } from '@/types/models';
 import { usePilotNames } from '@/composables/usePilotNames';
-import { isPoppedOut, POP_OUT_COLOR } from '@/lib/popOut';
+import { isPoppedOut } from '@/lib/popOut';
+import { characterColor } from '@/lib/characterColor';
 
 defineProps<{
     pilots: TCharacter[];
@@ -21,8 +22,10 @@ const { after } = usePilotNames();
             <span
                 class="flex h-[20px] items-center gap-1 truncate border-t border-b-neutral-300 px-2 pt-0.5 text-[11px] leading-0 dark:border-neutral-700"
             >
-                <span class="size-1 animate-pulse rounded-full bg-green-500"></span
-                ><span v-if="pilots.some((pilot) => isPoppedOut(pilot.id))" :style="{ color: POP_OUT_COLOR }" title="Scanning in your pop-out">◉</span>{{ pilots.at(0)?.name
+                <!-- Patch 41: each pilot's own colour (everyone sees it) -->
+                <span class="flex shrink-0 items-center gap-px"
+                    ><span v-for="pilot in pilots.slice(0, 4)" :key="pilot.id" class="size-1.5 rounded-full" :style="{ background: characterColor(pilot) }"></span></span
+                ><span v-for="pilot in pilots.filter((candidate) => isPoppedOut(candidate.id))" :key="`pop-${pilot.id}`" :style="{ color: characterColor(pilot) }" title="Scanning in your pop-out">◉</span>{{ pilots.at(0)?.name
                 }}<span v-if="pilots.at(0) && after(pilots.at(0)!.name)" class="text-muted-foreground"> · {{ after(pilots.at(0)!.name) }}</span>
                 <span v-if="pilots.length > 1">and {{ pilots.length - 1 }} more</span>
             </span>
@@ -30,6 +33,7 @@ const { after } = usePilotNames();
         <TooltipContent side="bottom" class="p-2">
             <div class="flex max-h-64 flex-col gap-1.5 overflow-y-auto">
                 <div v-for="pilot in pilots" :key="pilot.id" class="flex items-center gap-2">
+                    <span class="size-2 shrink-0 rounded-full" :style="{ background: characterColor(pilot) }" />
                     <CharacterImage :character_id="pilot.id" :character_name="pilot.name" :size="32" class="size-5 shrink-0 rounded-full" />
                     <span class="truncate font-medium"
                         >{{ pilot.name }}<span v-if="after(pilot.name)" class="font-normal text-muted-foreground"> · {{ after(pilot.name) }}</span></span

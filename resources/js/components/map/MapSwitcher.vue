@@ -9,7 +9,8 @@ import { Check, ChevronDown, LayoutGrid, Loader2, Map as MapIcon, Plus } from 'l
 import { ref } from 'vue';
 
 /** Patch 26: the map's name opens a list of your maps, plus New map. */
-const { map } = defineProps<{ map: { id: number; name: string } }>();
+/** Patch 41: `iconOnly`: just the map icon (the slim bar shows map tabs after it). */
+const { map, iconOnly = false } = defineProps<{ map: { id: number; name: string }; iconOnly?: boolean }>();
 
 type TMapLink = { id: number; name: string; slug: string };
 const page = usePage<AppPageProps<{ available_maps?: TMapLink[]; can_create_map?: boolean }>>();
@@ -28,7 +29,7 @@ function load(open: boolean): void {
         <DropdownMenuTrigger as-child>
             <button type="button" class="flex items-center gap-2 rounded px-1 py-0.5 hover:bg-muted" title="Your maps">
                 <MapIcon class="size-4 text-muted-foreground" />
-                <span class="hidden font-mono text-xs font-medium sm:inline">{{ map.name }}</span>
+                <span v-if="!iconOnly" class="hidden font-mono text-xs font-medium sm:inline">{{ map.name }}</span>
                 <ChevronDown class="size-3 text-muted-foreground" />
             </button>
         </DropdownMenuTrigger>

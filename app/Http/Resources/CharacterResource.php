@@ -30,6 +30,8 @@ final class CharacterResource extends JsonResource
             'alliance' => $this->alliance?->toResource(AllianceResource::class),
             'faction' => $this->faction?->toResource(FactionResource::class),
             'security_status' => $this->security_status,
+            // Patch 41: its colour (null = handed out by id on the page).
+            'map_color' => $this->resource->getAttributes()['map_color'] ?? null,
             'status' => $this->whenLoaded('characterStatus', fn () => $this->characterStatus?->toResource(CharacterStatusResource::class)),
             'esi_scopes' => $this->whenLoaded('esiScopes', fn () => $this->esiScopes->map(fn (EsiScope $scope) => $scope->name)),
             'is_preferred' => ($request->user()?->getAttributes()['preferred_character_id'] ?? null) === $this->id,

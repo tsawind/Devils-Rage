@@ -261,6 +261,8 @@ export type TCharacter = {
     route?: TResolvedSolarsystem[]; // Fastest route
     esi_scopes?: string[];
     is_preferred?: boolean;
+    /** Patch 41: its colour (#rrggbb), picked by its owner; null = handed out by id. */
+    map_color?: string | null;
 };
 
 export type TCharacterStatus = {

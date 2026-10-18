@@ -6,7 +6,6 @@ import MapSettingsController from '@/actions/App/Http/Controllers/MapSettingsCon
 import TrackingIcon from '@/components/icons/TrackingIcon.vue';
 import AddMassDialog from '@/map/components/overlays/connection/AddMassDialog.vue';
 import StaleConnectionsBadge from '@/components/map/StaleConnectionsBadge.vue';
-import SolarsystemClass from '@/components/solarsystem/SolarsystemClass.vue';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -20,32 +19,33 @@ import { useStaticSolarsystem } from '@/composables/useStaticSolarsystems';
 import { updateMapUserSettings, useMapSolarsystems } from '@/map/api';
 import type { TMap } from '@/pages/maps';
 import type { TMapUserSetting } from '@/types/models';
-import { Link } from '@inertiajs/vue3';
 import { useConnectionStatus } from '@laravel/echo-vue';
 import { ConnectionStatus } from 'laravel-echo';
 import {
-    ChevronsDown,
-    ChevronsUp,
+    CircleHelp,
     ClipboardCopy,
     Crosshair,
     Eye,
-    EyeOff,
     LayoutGrid,
     LocateFixed,
+    LogOut,
+    Map as MapIcon,
+    PictureInPicture2,
     Redo2,
+    Search,
     Settings,
+    Shield,
     ShieldAlert,
+    SlidersHorizontal,
+    SunMoon,
     Undo2,
-    Wifi,
-    WifiOff,
+    UserCog,
 } from 'lucide-vue-next';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { canRedo, canUndo, handleUndoKeydown, redoLabel, redoLast, undoLabel, undoLast } from '@/composables/signatures/signatureUndo';
-import { useMapChrome } from '@/composables/useMapChrome';
 import { displayAlias } from '@/lib/alias';
 import type { TResolvedMapNavigation, TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TCharacter } from '@/types/models';
-import CommandPaletteButton from './CommandPaletteButton.vue';
 import RageRollChip from './RageRollChip.vue';
 import RallyChip from './RallyChip.vue';
 import { useRageRoll } from '@/composables/useRageRoll';
@@ -53,6 +53,31 @@ import RouteCopyButtons from './RouteCopyButtons.vue';
 import MapSwitcher from './MapSwitcher.vue';
 import MapSharePopover from './MapSharePopover.vue';
 import RoutingBox from './RoutingBox.vue';
+import BarHandle from '@/components/bar/BarHandle.vue';
+import CharacterTabs from '@/components/bar/CharacterTabs.vue';
+import MapTabs from '@/components/bar/MapTabs.vue';
+import { CharacterImage } from '@/components/images';
+import ServerStatus from '@/components/server-status/ServerStatus.vue';
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import DocumentationController from '@/actions/App/Http/Controllers/DocumentationController';
+import SettingsController from '@/actions/App/Http/Controllers/SettingsController';
+import { useAppearance } from '@/composables/useAppearance';
+import { useCommandPalette } from '@/composables/useCommandPalette';
+import useUser from '@/composables/useUser';
+import { characterColor } from '@/lib/characterColor';
+import { openPopOut } from '@/lib/popOut';
+import { driverId, soloTab, urlAs } from '@/lib/windowDriver';
+import { home, logout } from '@/routes';
+import { Link, router, usePage } from '@inertiajs/vue3';
+import { useElementSize, useLocalStorage } from '@vueuse/core';
 import TrackingSignatureDialog from './TrackingSignatureDialog.vue';
 
 const { map, map_user_settings, layout, map_navigation = null, map_characters = null, selected_map_solarsystem = null, ignored_systems = [] } = defineProps<{
@@ -65,11 +90,54 @@ const { map, map_user_settings, layout, map_navigation = null, map_characters = 
     ignored_systems?: number[];
 }>();
 
-// Patch 23: fold the site header away (your character floats on the map; this toolbar shrinks to small icons).
-const { barsFolded, setBarsFolded } = useMapChrome();
 /** Patch 35: the bar pulses red while a rage roll is on. */
 const { rageRoll } = useRageRoll();
-const labelClass = computed(() => (barsFolded.value ? 'hidden' : 'hidden md:inline'));
+
+// Patch 41: the slim bar. Room for the map tabs and the character tabs (the two drag handles),
+// remembered in this browser; never so much that the right side is pushed off the bar.
+const barWidths = useLocalStorage('slim-bar-widths', { maps: 3 * 92, chars: 3 * 136 });
+const bar = ref<HTMLElement | null>(null);
+const middle = ref<HTMLElement | null>(null);
+const right = ref<HTMLElement | null>(null);
+const { width: barWidth } = useElementSize(bar);
+const { width: middleWidth } = useElementSize(middle);
+const { width: rightWidth } = useElementSize(right);
+/** Room left for both tab areas (map picker, Share, the handles and gaps take about 110 px). */
+const tabRoom = computed(() => Math.max(228, barWidth.value - middleWidth.value - rightWidth.value - 110));
+const mapsWidth = computed(() => Math.max(92, Math.min(barWidths.value.maps, tabRoom.value - 136)));
+const charsWidth = computed(() => Math.max(136, Math.min(barWidths.value.chars, tabRoom.value - mapsWidth.value)));
+
+const { openPalette } = useCommandPalette();
+const { appearance, updateAppearance } = useAppearance();
+const page = usePage();
+const missingScopes = computed(() => ((page.props as { missing_scopes?: unknown[] }).missing_scopes ?? []).length);
+
+// A character in its own window: its strip, Pop out, Back to a tab.
+const user = useUser();
+const driverCharacter = computed(() => (user.value?.characters ?? []).find((candidate) => candidate.id === driverId.value) ?? null);
+const driverColor = computed(() => characterColor(driverCharacter.value));
+async function popOutDriver(): Promise<void> {
+    const character = driverCharacter.value;
+    if (!character) return;
+    if (!(await openPopOut(character.id, character.name, driverColor.value).catch(() => false))) {
+        window.open(urlAs(window.location.href, character.id, true), '_blank', 'popup=yes,width=900,height=440');
+    }
+}
+/** Close this window; the character is a tab in the main window again (the tab list is shared by this browser). */
+function backToTab(): void {
+    const id = driverId.value;
+    if (id !== null) {
+        try {
+            const listed = JSON.parse(window.localStorage.getItem('character-tab-listed') ?? '[]') as number[];
+            window.localStorage.setItem('character-tab-listed', JSON.stringify(listed.filter((other) => other !== id)));
+            const order = JSON.parse(window.localStorage.getItem('character-tab-order') ?? '[]') as number[];
+            window.localStorage.setItem('character-tab-order', JSON.stringify([id, ...order.filter((other) => other !== id)]));
+        } catch {
+            // Storage unavailable: the tab is still there in its old place.
+        }
+    }
+    window.close();
+}
 
 // Initialize tracking
 usePing(map);
@@ -195,24 +263,54 @@ const settingsUrl = computed(() => {
 </script>
 
 <template>
+    <!-- Patch 41: one slim bar: map tabs, Share, character tabs (two drag handles), search, route, Clipboard / Follow / Center, the toggles and ⚙ -->
     <div
-        class="relative flex h-10 shrink-0 items-center gap-2 border-b border-border/50 bg-muted/30 px-2 sm:gap-3 sm:px-3"
+        ref="bar"
+        class="relative flex h-10 shrink-0 items-center gap-1 border-b border-border/50 bg-muted/30 px-2"
         :class="{ 'rage-bar': rageRoll }"
+        :style="soloTab && driverCharacter ? { background: `linear-gradient(90deg, color-mix(in srgb, ${driverColor} 26%, transparent), color-mix(in srgb, ${driverColor} 6%, transparent) 45%, transparent)`, borderBottomColor: `color-mix(in srgb, ${driverColor} 55%, transparent)` } : undefined"
     >
-        <!-- Map Name (patch 26: opens a list of your maps, plus New map) -->
-        <MapSwitcher :map="map" />
-        <!-- Patch 37: share the map read only (timed viewer links; permanent for managers) -->
-        <MapSharePopover v-if="canShare" :map-slug="map.slug" />
+        <!-- A character in its own window or browser tab: whose window this is, in its colour -->
+        <template v-if="soloTab">
+            <span class="shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-extrabold tracking-[0.1em]" :style="{ color: driverColor, borderColor: `color-mix(in srgb, ${driverColor} 60%, transparent)` }">ALT WINDOW</span>
+            <span v-if="driverCharacter" class="flex shrink-0 items-center gap-1.5 px-1">
+                <CharacterImage :character_id="driverCharacter.id" :character_name="driverCharacter.name" class="size-5 rounded" />
+                <span class="flex flex-col leading-[1.05]">
+                    <span class="text-[11px] font-semibold">{{ driverCharacter.name }}</span>
+                    <span class="text-[9.5px] text-muted-foreground">{{ currentAlias || currentSolarsystem?.name || 'offline' }}</span>
+                </span>
+            </span>
+            <button v-if="driverCharacter" type="button" class="flex h-7 shrink-0 items-center gap-1 rounded-md border border-border px-2 text-[11px] text-muted-foreground hover:text-foreground" title="Open this character in the always-on-top pop-out" @click="popOutDriver">
+                <PictureInPicture2 class="size-3.5" /> Pop out
+            </button>
+            <button v-if="driverCharacter" type="button" class="flex h-7 shrink-0 items-center gap-1 rounded-md border border-border px-2 text-[11px] text-muted-foreground hover:text-foreground" title="Close this window; the character shows as a tab in your main window again" @click="backToTab">
+                ⇥ Back to a tab
+            </button>
+            <div class="mx-1 h-4 w-px bg-border/60" />
+            <MapSwitcher :map="map" />
+        </template>
+        <template v-else>
+            <MapSwitcher :map="map" icon-only />
+            <MapTabs :map="map" :width="mapsWidth" />
+            <!-- Patch 37: share the map read only (timed viewer links; permanent for managers) -->
+            <MapSharePopover v-if="canShare" :map-slug="map.slug" />
+            <BarHandle :width="mapsWidth" :min="92" @resize="(width) => (barWidths.maps = width)" />
+            <CharacterTabs v-if="$page.props.auth.user" :width="charsWidth" :map-slug="map.slug" />
+            <BarHandle :width="charsWidth" :min="136" @resize="(width) => (barWidths.chars = width)" />
+        </template>
 
-        <div class="hidden h-4 w-px bg-border/50 sm:block" />
-
-        <!-- Search + Routing (patch 23: Search a bit narrower, Routing next to it) -->
-        <div class="hidden items-center gap-2 sm:flex">
-            <div class="w-56 lg:w-64">
-                <CommandPaletteButton />
-            </div>
-            <div class="w-40 lg:w-48">
-                <RoutingBox :map :map_navigation :map_characters :selected_map_solarsystem :ignored_systems />
+        <div ref="middle" class="hidden shrink-0 items-center gap-1 sm:flex">
+            <!-- Search: just the icon (Ctrl K still works) -->
+            <Tooltip>
+                <TooltipTrigger as-child>
+                    <button type="button" class="flex h-7 w-8 items-center justify-center rounded-md border border-border/60 bg-background text-muted-foreground hover:text-foreground" @click="openPalette">
+                        <Search class="size-3.5" />
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom"><p class="text-xs">Search (Ctrl K)</p></TooltipContent>
+            </Tooltip>
+            <div class="w-36">
+                <RoutingBox compact :map :map_navigation :map_characters :selected_map_solarsystem :ignored_systems />
             </div>
             <!-- Patch 26: copy the route for fleet chat (Default, Safest, ▾ the rest) -->
             <RouteCopyButtons variant="bar" />
@@ -222,309 +320,161 @@ const settingsUrl = computed(() => {
         <!-- Patch 35: the rage roll, for everyone while it's on -->
         <RageRollChip />
 
-        <!-- Spacer -->
-        <div class="flex-1" />
+        <div class="min-w-0 flex-1" />
 
-        <!-- Info badges: in line before the pilot location (centred, they covered it) -->
-        <div class="flex shrink-0 items-center gap-2">
-            <!-- Active Character Access Warning -->
+        <div ref="right" class="flex shrink-0 items-center gap-1">
+            <!-- Info badges -->
             <Tooltip v-if="$page.props.auth.user && !$page.props.active_character_has_access">
                 <TooltipTrigger as-child>
                     <component
                         :is="canManageAccess ? Link : 'div'"
                         :href="canManageAccess ? MapAccessController.show(map.slug) : undefined"
-                        class="flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-300 shadow-sm transition-colors hover:bg-sky-500/20"
+                        class="flex items-center gap-1.5 rounded-full border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-300"
                     >
-                        <span class="whitespace-nowrap">Alt · account access</span>
+                        <span class="whitespace-nowrap">Alt access</span>
                     </component>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                    <p class="text-xs font-medium text-sky-300">Alt access</p>
                     <p class="max-w-xs text-xs text-muted-foreground">
                         {{ $page.props.auth.user.active_character?.name ?? 'This character' }}
-                        isn't on the access list itself, so it uses the best access of the other characters on your account
-                        (your main): it can map, track and shows on the map the same way.{{
-                            canManageAccess ? ' Click to manage access.' : ''
-                        }}
+                        isn't on the access list itself, so it uses the best access of the other characters on your account.{{ canManageAccess ? ' Click to manage access.' : '' }}
                     </p>
                 </TooltipContent>
             </Tooltip>
-
-            <!-- Stale Connections Cleanup -->
             <StaleConnectionsBadge />
-        </div>
 
-        <!-- Pilot Location -->
-        <div v-if="character && currentSolarsystem" class="hidden items-center gap-2 lg:flex">
-            <span class="text-[11px] tracking-wider text-muted-foreground uppercase">Location</span>
-            <div class="flex items-center gap-1.5">
-                <SolarsystemClass :solarsystem_class="currentSolarsystem.class" :name="currentSolarsystem.name" />
-                <span v-if="currentAlias" class="text-xs font-semibold">{{ currentAlias }}</span>
-                <span class="text-xs" :class="currentAlias ? 'text-muted-foreground' : ''">{{ currentSolarsystem.name }}</span>
-            </div>
-        </div>
-
-        <div class="hidden h-4 w-px bg-border/50 lg:block" />
-
-        <!-- Patch 23: the toolbar; small icons only while the site header is folded away -->
-        <div class="flex items-center" :class="barsFolded ? 'origin-right scale-[0.7] gap-1' : 'gap-2 sm:gap-3'">
-        <!-- Connection Status -->
-        <Tooltip>
-            <TooltipTrigger as-child>
-                <div class="flex items-center gap-1.5">
-                    <div
-                        class="size-2 rounded-full"
-                        :class="{
-                            'bg-green-500': isConnected,
-                            'animate-pulse bg-yellow-500': isConnecting,
-                            'bg-red-500': !isConnected && !isConnecting,
-                        }"
-                    />
-                    <Wifi v-if="isConnected" class="hidden size-3.5 text-muted-foreground sm:block" />
-                    <WifiOff v-else class="hidden size-3.5 text-muted-foreground sm:block" />
-                </div>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-                <p class="text-xs">{{ connectionStatusText }}</p>
-            </TooltipContent>
-        </Tooltip>
-
-        <div class="hidden h-4 w-px bg-border/50 md:block" />
-
-        <!-- Location Visibility Toggle -->
-        <Tooltip v-if="canEdit">
-            <TooltipTrigger as-child>
-                <button
-                    @click="handleToggleVisibility"
-                    class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors sm:px-2"
-                    :class="
-                        map_user_settings.tracking_allowed
-                            ? 'bg-green-700 text-white hover:bg-green-800 dark:bg-green-500/20 dark:text-green-400 dark:hover:bg-green-500/30'
-                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    "
-                >
-                    <Eye v-if="map_user_settings.tracking_allowed" class="size-3.5" />
-                    <EyeOff v-else class="size-3.5" />
-                    <span :class="labelClass">Visible</span>
-                </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-                <p class="text-xs font-medium">Location Monitoring</p>
-                <p class="text-xs text-muted-foreground">
-                    {{ map_user_settings.tracking_allowed ? 'Enabled' : 'Disabled' }} - Share location with map users
-                </p>
-            </TooltipContent>
-        </Tooltip>
-
-        <!-- Tracking Toggle -->
-        <Tooltip v-if="canEdit">
-            <TooltipTrigger as-child>
-                <button
-                    @click="toggleTracking"
-                    :disabled="!can_track"
-                    class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:px-2"
-                    :class="is_tracking ? 'bg-amber-600 text-white hover:bg-amber-700 dark:bg-amber-500/20 dark:text-amber-400 dark:hover:bg-amber-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
-                >
-                    <TrackingIcon class="size-3.5" />
-                    <span :class="labelClass">Tracking</span>
-                </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-                <template v-if="!is_tracking_allowed">
-                    <p class="text-xs font-medium text-red-500">Tracking Unavailable</p>
-                    <p class="text-xs text-muted-foreground">Enable location monitoring first</p>
-                </template>
-                <template v-else-if="!character">
-                    <p class="text-xs font-medium text-red-500">Character Status Unknown</p>
-                    <p class="max-w-xs text-xs text-muted-foreground">Active character must be online with scopes granted</p>
-                </template>
-                <template v-else>
-                    <p class="text-xs font-medium">Auto-Tracking</p>
-                    <p class="text-xs text-muted-foreground">{{ is_tracking ? 'Enabled' : 'Disabled' }} - Track system changes</p>
-                </template>
-            </TooltipContent>
-        </Tooltip>
-
-        <!-- Patch 19: Clipboard: off = the mapper never writes your clipboard on its own -->
-        <Tooltip v-if="canEdit">
-            <TooltipTrigger as-child>
-                <button
-                    @click="toggleClipboard"
-                    class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors sm:px-2"
-                    :class="clipboard_on ? 'bg-violet-700 text-white hover:bg-violet-800 dark:bg-violet-500/20 dark:text-violet-300 dark:hover:bg-violet-500/30' : 'bg-muted text-muted-foreground hover:bg-muted/80'"
-                >
-                    <ClipboardCopy class="size-3.5" />
-                    <span :class="labelClass">Clipboard</span>
-                </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-                <p class="text-xs font-medium">Clipboard</p>
-                <p class="max-w-xs text-xs text-muted-foreground">
-                    {{
-                        clipboard_on
-                            ? 'On - the mapper copies bookmark names for you (arming, type picks, renames, the way back)'
-                            : 'Off - the mapper never writes your clipboard on its own; names show with a Copy button'
-                    }}
-                </p>
-            </TooltipContent>
-        </Tooltip>
-
-        <!-- Patch 19: Follow and Center joined, each on/off by itself -->
-        <div
-            class="flex items-stretch overflow-hidden rounded transition-shadow"
-            :class="follow_enabled && centerOnMe ? 'shadow-[0_0_8px_rgba(56,189,248,0.45)]' : ''"
-        >
+            <!-- Clipboard, Follow, Center: icons only, lit when on -->
             <Tooltip v-if="canEdit">
                 <TooltipTrigger as-child>
                     <button
+                        type="button"
+                        class="flex h-7 w-7 items-center justify-center rounded-md border transition-colors"
+                        :class="clipboard_on ? 'border-violet-500/50 bg-violet-500/15 text-violet-300' : 'border-border/60 text-muted-foreground hover:text-foreground'"
+                        @click="toggleClipboard"
+                    >
+                        <ClipboardCopy class="size-3.5" />
+                    </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                    <p class="text-xs font-medium">Clipboard {{ clipboard_on ? 'on' : 'off' }}</p>
+                    <p class="max-w-xs text-xs text-muted-foreground">
+                        {{ clipboard_on ? 'The mapper copies bookmark names for you (arming, type picks, renames, the way back)' : 'The mapper never writes your clipboard on its own; names show with a Copy button' }}
+                    </p>
+                </TooltipContent>
+            </Tooltip>
+            <Tooltip v-if="canEdit">
+                <TooltipTrigger as-child>
+                    <button
+                        type="button"
+                        class="flex h-7 w-7 items-center justify-center rounded-md border transition-colors"
+                        :class="follow_enabled ? 'border-sky-500/50 bg-sky-500/15 text-sky-300' : 'border-border/60 text-muted-foreground hover:text-foreground'"
                         @click="toggleFollow"
-                        class="flex items-center gap-1.5 px-1.5 py-1 text-xs transition-colors sm:px-2"
-                        :class="follow_enabled ? 'bg-sky-700 text-white hover:bg-sky-800 dark:bg-sky-500/30 dark:text-sky-200 dark:hover:bg-sky-500/40' : 'bg-sky-100 text-sky-800 hover:bg-sky-200 dark:bg-sky-950/60 dark:text-sky-600 dark:hover:bg-sky-900/60'"
                     >
                         <LocateFixed class="size-3.5" />
-                        <span :class="labelClass">Follow</span>
                     </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">
-                    <p class="text-xs font-medium">Follow Pilot</p>
-                    <p class="text-xs text-muted-foreground">
-                        {{ follow_enabled ? 'Enabled' : 'Disabled' }} - Select the system your character jumps into
-                    </p>
-                </TooltipContent>
+                <TooltipContent side="bottom"><p class="text-xs">Follow {{ follow_enabled ? 'on' : 'off' }} · select the system you jump into</p></TooltipContent>
             </Tooltip>
-            <div class="w-px bg-sky-400/30" />
             <Tooltip>
                 <TooltipTrigger as-child>
                     <button
+                        type="button"
+                        class="flex h-7 w-7 items-center justify-center rounded-md border transition-colors"
+                        :class="centerOnMe ? 'border-sky-500/50 bg-sky-500/15 text-sky-300' : 'border-border/60 text-muted-foreground hover:text-foreground'"
                         @click="setCenterOnMe(!centerOnMe)"
-                        class="flex items-center gap-1.5 px-1.5 py-1 text-xs transition-colors sm:px-2"
-                        :class="centerOnMe ? 'bg-sky-700 text-white hover:bg-sky-800 dark:bg-sky-500/30 dark:text-sky-200 dark:hover:bg-sky-500/40' : 'bg-sky-100 text-sky-800 hover:bg-sky-200 dark:bg-sky-950/60 dark:text-sky-600 dark:hover:bg-sky-900/60'"
                     >
                         <Crosshair class="size-3.5" />
-                        <span :class="labelClass">Center</span>
                     </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">
-                    <p class="text-xs font-medium">Center on me</p>
-                    <p class="text-xs text-muted-foreground">
-                        {{ centerOnMe ? 'On' : 'Off' }} - Center the map on your system after every jump, and when it moves on the map (this browser)
-                    </p>
-                </TooltipContent>
+                <TooltipContent side="bottom"><p class="text-xs">Center {{ centerOnMe ? 'on' : 'off' }} · keep the map centred on your system</p></TooltipContent>
             </Tooltip>
-        </div>
 
-        <!-- Patch 21: the global undo / redo (any of your map changes) -->
-        <div v-if="canEdit" class="flex items-center gap-0.5">
-            <Tooltip>
+            <!-- Patch 21: undo / redo -->
+            <Tooltip v-if="canEdit">
                 <TooltipTrigger as-child>
-                    <button
-                        @click="undoLast()"
-                        :disabled="!canUndo"
-                        class="flex items-center rounded px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                        aria-label="Undo"
-                    >
+                    <button type="button" class="flex h-7 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40" :disabled="!canUndo" aria-label="Undo" @click="undoLast()">
                         <Undo2 class="size-3.5" />
                     </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">
-                    <p class="text-xs font-medium">Undo{{ undoLabel ? `: ${undoLabel}` : '' }}</p>
-                    <p class="max-w-xs text-xs text-muted-foreground">Ctrl+Z · your last map change: moves, deletes, pastes, signature edits…</p>
-                </TooltipContent>
+                <TooltipContent side="bottom"><p class="text-xs">Undo{{ undoLabel ? `: ${undoLabel}` : '' }} (Ctrl+Z)</p></TooltipContent>
             </Tooltip>
-            <Tooltip>
+            <Tooltip v-if="canEdit">
                 <TooltipTrigger as-child>
-                    <button
-                        @click="redoLast()"
-                        :disabled="!canRedo"
-                        class="flex items-center rounded px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-                        aria-label="Redo"
-                    >
+                    <button type="button" class="flex h-7 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-40" :disabled="!canRedo" aria-label="Redo" @click="redoLast()">
                         <Redo2 class="size-3.5" />
                     </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">
-                    <p class="text-xs font-medium">Redo{{ redoLabel ? `: ${redoLabel}` : '' }}</p>
-                    <p class="text-xs text-muted-foreground">Ctrl+Y · put back what you undid</p>
-                </TooltipContent>
+                <TooltipContent side="bottom"><p class="text-xs">Redo{{ redoLabel ? `: ${redoLabel}` : '' }} (Ctrl+Y)</p></TooltipContent>
             </Tooltip>
+
+            <!-- The toggles (dots: which are on) -->
+            <DropdownMenu>
+                <DropdownMenuTrigger as-child>
+                    <button type="button" class="flex h-7 items-center gap-1 rounded-md border border-border/60 px-1.5 text-muted-foreground hover:text-foreground" title="Visible, Tracking, Threats, connection">
+                        <SlidersHorizontal class="size-3.5" />
+                        <span class="flex gap-0.5">
+                            <span v-if="map_user_settings.tracking_allowed" class="size-1.5 rounded-full bg-green-500" />
+                            <span v-if="is_tracking" class="size-1.5 rounded-full bg-amber-500" />
+                            <span v-if="map_user_settings.show_threat_level" class="size-1.5 rounded-full bg-red-500" />
+                            <span v-if="!isConnected" class="size-1.5 animate-pulse rounded-full bg-yellow-400" />
+                        </span>
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" class="w-60">
+                    <DropdownMenuLabel class="text-xs">This map</DropdownMenuLabel>
+                    <DropdownMenuCheckboxItem v-if="canEdit" class="text-xs" :model-value="map_user_settings.tracking_allowed" @select.prevent="handleToggleVisibility">
+                        <Eye class="size-3.5" /> Visible to others
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem v-if="canEdit" class="text-xs" :model-value="Boolean(is_tracking)" :disabled="!can_track" @select.prevent="toggleTracking">
+                        <TrackingIcon class="size-3.5" /> Tracking{{ !is_tracking_allowed ? ' (needs Visible)' : '' }}
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem class="text-xs" :model-value="map_user_settings.show_threat_level" @select.prevent="handleToggleThreatLevel">
+                        <ShieldAlert class="size-3.5" /> Threats
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuSeparator />
+                    <div class="flex items-center gap-2 px-2 py-1 text-xs text-muted-foreground">
+                        <span class="size-2 rounded-full" :class="isConnected ? 'bg-green-500' : isConnecting ? 'animate-pulse bg-yellow-500' : 'bg-red-500'" />
+                        Live updates: {{ connectionStatusText }}
+                    </div>
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <!-- ⚙: layout, settings, theme, scopes, docs, log out -->
+            <DropdownMenu>
+                <DropdownMenuTrigger as-child>
+                    <button type="button" class="flex h-7 w-7 items-center justify-center rounded-md border transition-colors" :class="layout.isEditMode.value ? 'border-blue-500/50 bg-blue-500/15 text-blue-300' : 'border-border/60 text-muted-foreground hover:text-foreground'" title="Layout, settings, theme…">
+                        <Settings class="size-3.5" />
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" class="w-52">
+                    <DropdownMenuItem class="text-xs" @select="handleLayoutToggle"><LayoutGrid class="size-3.5" /> {{ layout.isEditMode.value ? 'Stop editing the layout' : 'Layout (edit cards)' }}</DropdownMenuItem>
+                    <DropdownMenuItem v-if="$page.props.auth.user" as-child class="text-xs"><Link :href="settingsUrl" class="flex w-full items-center gap-2"><MapIcon class="size-3.5" /> Map settings</Link></DropdownMenuItem>
+                    <DropdownMenuItem class="text-xs" @select.prevent="updateAppearance(appearance === 'dark' ? 'light' : 'dark')">
+                        <SunMoon class="size-3.5" /> Theme: {{ appearance === 'dark' ? 'dark' : 'light' }}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <template v-if="$page.props.auth.user">
+                        <DropdownMenuItem as-child class="text-xs"><Link :href="SettingsController.show()" class="flex w-full items-center gap-2"><UserCog class="size-3.5" /> Settings</Link></DropdownMenuItem>
+                        <DropdownMenuItem as-child class="text-xs">
+                            <Link :href="SettingsController.show({ query: { section: 'esi' } })" class="flex w-full items-center gap-2" :class="missingScopes ? 'text-red-400' : ''">
+                                <Shield class="size-3.5" /> {{ missingScopes ? `Scopes (${missingScopes} missing)` : 'Scopes' }}
+                            </Link>
+                        </DropdownMenuItem>
+                    </template>
+                    <DropdownMenuItem as-child class="text-xs"><Link :href="DocumentationController.index()" class="flex w-full items-center gap-2"><CircleHelp class="size-3.5" /> Documentation</Link></DropdownMenuItem>
+                    <DropdownMenuItem as-child class="text-xs"><Link :href="home()" class="flex w-full items-center gap-2"><LayoutGrid class="size-3.5" /> All maps</Link></DropdownMenuItem>
+                    <template v-if="$page.props.auth.user">
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem as-child class="text-xs text-red-400">
+                            <Link :href="logout()" method="delete" as="button" class="flex w-full items-center gap-2" @click="router.flushAll()"><LogOut class="size-3.5" /> Log out</Link>
+                        </DropdownMenuItem>
+                    </template>
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <!-- EVE time and players online -->
+            <div class="hidden pl-1 lg:block"><ServerStatus /></div>
         </div>
-
-        <!-- Threat Analysis Toggle -->
-        <Tooltip>
-            <TooltipTrigger as-child>
-                <button
-                    @click="handleToggleThreatLevel"
-                    class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors sm:px-2"
-                    :class="
-                        map_user_settings.show_threat_level
-                            ? 'bg-red-700 text-white hover:bg-red-800 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
-                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    "
-                >
-                    <ShieldAlert class="size-3.5" />
-                    <span :class="labelClass">Threats</span>
-                </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-                <p class="text-xs font-medium">Wormhole Threat Analysis</p>
-                <p class="text-xs text-muted-foreground">
-                    {{ map_user_settings.show_threat_level ? 'Showing' : 'Hidden' }} - Threat level rings on systems
-                </p>
-            </TooltipContent>
-        </Tooltip>
-
-        <div class="hidden h-4 w-px bg-border/50 md:block" />
-
-        <!-- Layout Edit Toggle (patch 26: hidden while the top bar is folded, unless you are editing) -->
-        <Tooltip v-if="!barsFolded || layout.isEditMode.value">
-            <TooltipTrigger as-child>
-                <button
-                    @click="handleLayoutToggle"
-                    class="flex items-center gap-1.5 rounded px-1.5 py-1 text-xs transition-colors sm:px-2"
-                    :class="
-                        layout.isEditMode.value
-                            ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30'
-                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    "
-                >
-                    <LayoutGrid class="size-3.5" />
-                    <span :class="labelClass">Layout</span>
-                </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-                <p class="text-xs">{{ layout.isEditMode.value ? 'Exit Layout Edit Mode' : 'Edit Layout' }}</p>
-            </TooltipContent>
-        </Tooltip>
-
-        <!-- Settings (authenticated users only) -->
-        <Link
-            v-if="$page.props.auth.user"
-            :href="settingsUrl"
-            class="flex items-center gap-1.5 rounded bg-muted px-1.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground sm:px-2"
-            prefetch
-        >
-            <Settings class="size-3.5" />
-            <span :class="labelClass">Settings</span>
-        </Link>
-        </div>
-
-        <!-- Patch 23: fold the site header away -->
-        <Tooltip>
-            <TooltipTrigger as-child>
-                <button
-                    type="button"
-                    class="flex items-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    :aria-label="barsFolded ? 'Show the top bar' : 'Fold the top bar away'"
-                    @click="setBarsFolded(!barsFolded)"
-                >
-                    <ChevronsDown v-if="barsFolded" class="size-3.5" />
-                    <ChevronsUp v-else class="size-3.5" />
-                </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-                <p class="text-xs">{{ barsFolded ? 'Show the top bar' : 'Fold the top bar away (more room; your character floats on the map)' }}</p>
-            </TooltipContent>
-        </Tooltip>
     </div>
 
     <!-- Tracking Signature Dialog -->
