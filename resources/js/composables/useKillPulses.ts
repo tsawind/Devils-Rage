@@ -1,5 +1,5 @@
 import { soundsEnabled, useMapEffects } from '@/composables/useMapEffects';
-import { playDistanceKill } from '@/lib/distanceSound';
+import { playKillAt } from '@/lib/distanceSound';
 import { killPlace } from '@/lib/killDistance';
 import { numberingHubIds } from '@/lib/numberingHubs';
 import { playKillSound } from '@/lib/rageSound';
@@ -67,7 +67,7 @@ function playKillFor(solarsystemId: number, capital: boolean): void {
         playKillSound(capital);
         return;
     }
-    playDistanceKill(place.jumps, place.side ? effects.value.sideKillSound : effects.value.mainKillSound, capital);
+    playKillAt(place, { home: effects.value.homeKillSound, main: effects.value.mainKillSound, side: effects.value.sideKillSound }, capital);
 }
 
 export function useKillPulses() {

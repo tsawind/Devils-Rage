@@ -18,7 +18,7 @@ import { CircleDashed, ImageUp, Loader2, Trash2, Volume1, Volume2, VolumeX, Wayp
 import { useMapEffects } from '@/composables/useMapEffects';
 import { pulseKill } from '@/composables/useKillPulses';
 import { playKillSound, playTargetAcquired } from '@/lib/rageSound';
-import { KILL_SOUND_FAMILIES, MAX_SOUND_JUMPS, playDistanceKill, type TKillSoundFamily } from '@/lib/distanceSound';
+import { KILL_SOUND_FAMILIES, MAX_SOUND_JUMPS, playDistanceKill, playKillAt, type TKillSoundFamily } from '@/lib/distanceSound';
 import { computed, ref, useTemplateRef, type Component } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -124,17 +124,18 @@ const soundTests: { label: string; play: () => void }[] = [
 const distanceSteps = Array.from({ length: MAX_SOUND_JUMPS + 1 }, (_, jumps) => jumps);
 const testCapital = ref(false);
 const testFamily = ref<TKillSoundFamily | 'main' | 'side'>('main');
-function familyFor(choice: TKillSoundFamily | 'main' | 'side'): TKillSoundFamily {
-    if (choice === 'main') return effects.value.mainKillSound;
-    if (choice === 'side') return effects.value.sideKillSound;
-    return choice;
-}
 function testDistance(jumps: number): void {
-    playDistanceKill(jumps, familyFor(testFamily.value), testCapital.value);
+    const choice = { home: effects.value.homeKillSound, main: effects.value.mainKillSound, side: effects.value.sideKillSound };
+    if (testFamily.value === 'main' || testFamily.value === 'side') {
+        // As a real kill: home sound at 0 jumps on the main chain, side chains dimmer.
+        playKillAt({ jumps, side: testFamily.value === 'side' }, choice, testCapital.value);
+        return;
+    }
+    playDistanceKill(jumps, testFamily.value, testCapital.value);
 }
 let sweepTimer: ReturnType<typeof setTimeout> | null = null;
 const sweeping = ref(false);
-/** Plays home → 12 jumps, one every 1.6 s (click again to stop). */
+/** Plays home → 12 jumps, one after another (click again to stop). */
 function sweep(): void {
     if (sweepTimer) clearTimeout(sweepTimer);
     if (sweeping.value) {
@@ -148,7 +149,8 @@ function sweep(): void {
             return;
         }
         testDistance(jumps);
-        sweepTimer = setTimeout(() => next(jumps + 1), 1600);
+        // Long enough for every string / tone of this one before the next.
+        sweepTimer = setTimeout(() => next(jumps + 1), 1400 + jumps * 260);
     };
     next(0);
 }
@@ -323,6 +325,12 @@ function onDrop(event: DragEvent) {
                             <input v-model="effects.distanceSounds" type="checkbox" class="size-4 accent-red-600" />
                         </label>
                         <label class="flex items-center justify-between gap-2 text-xs">
+                            <span>Home system</span>
+                            <select v-model="effects.homeKillSound" class="h-7 w-40 rounded border bg-background px-1 text-xs">
+                                <option v-for="family in KILL_SOUND_FAMILIES" :key="family.value" :value="family.value">{{ family.label }}</option>
+                            </select>
+                        </label>
+                        <label class="flex items-center justify-between gap-2 text-xs">
                             <span>Main chain</span>
                             <select v-model="effects.mainKillSound" class="h-7 w-40 rounded border bg-background px-1 text-xs">
                                 <option v-for="family in KILL_SOUND_FAMILIES" :key="family.value" :value="family.value">{{ family.label }}</option>
@@ -337,8 +345,8 @@ function onDrop(event: DragEvent) {
                         <div class="flex items-center gap-2 text-xs">
                             <span class="font-medium text-muted-foreground">Test</span>
                             <select v-model="testFamily" class="h-7 flex-1 rounded border bg-background px-1 text-xs">
-                                <option value="main">Main chain sound</option>
-                                <option value="side">Side chain sound</option>
+                                <option value="main">Home + main chain (as real kills)</option>
+                                <option value="side">Side chains (as real kills)</option>
                                 <option v-for="family in KILL_SOUND_FAMILIES" :key="family.value" :value="family.value">{{ family.label }}</option>
                             </select>
                             <label class="flex items-center gap-1" title="Test as a capital kill"><input v-model="testCapital" type="checkbox" class="size-3.5 accent-red-600" />Cap</label>
@@ -356,7 +364,10 @@ function onDrop(event: DragEvent) {
                             >
                             <Button variant="outline" size="sm" class="col-span-1 h-7 px-0 text-xs" :title="sweeping ? 'Stop' : 'Play home → 12 jumps'" @click="sweep">{{ sweeping ? '■' : '▶ all' }}</Button>
                         </div>
-                        <p class="text-[11px] text-muted-foreground">Closer = higher and faster. Past 3 jumps it gets a little quieter. Side chains: chains not connected to home, and rage lanes.</p>
+                        <p class="text-[11px] text-muted-foreground">
+                            Pluck plays one string per jump; Klaxon a high tone, then one lower tone per jump. Closer = higher. Past 3 jumps it gets a little
+                            quieter; side chains (chains not connected to home, rage lanes) a little dimmer.
+                        </p>
                     </div>
                     <p class="text-[11px] text-muted-foreground">Tests only play on your screen. The test kill flashes your home system with its sound.</p>
                 </div>

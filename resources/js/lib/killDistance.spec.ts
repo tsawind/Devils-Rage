@@ -1,5 +1,5 @@
 import { killPlace } from '@/lib/killDistance';
-import { distanceSoundShape } from '@/lib/distanceSound';
+import { countedNotes, distanceSoundShape, killSoundFor, SIDE_CHAIN_DIM } from '@/lib/distanceSound';
 import { describe, expect, it } from 'vitest';
 
 // Daisy(1) – Alpha(2) – A1(3) – A11(4); a rage lane Red1(5) off Alpha; a side chain Zulu(6) – Z1(7).
@@ -47,5 +47,19 @@ describe('patch 40: kill sounds by distance from home', () => {
         expect(far.volume).toBeLessThan(1);
         expect(far.volume).toBeGreaterThan(0.6);
         expect(distanceSoundShape(40)).toEqual(far);
+    });
+
+    it('plays sonar at home, plucks on the main chain and the klaxon (dimmer) on side chains', () => {
+        const choice = { home: 'sonar', main: 'pluck', side: 'klaxon' } as const;
+        expect(killSoundFor({ jumps: 0, side: false }, choice)).toEqual({ family: 'sonar', dim: 1 });
+        expect(killSoundFor({ jumps: 5, side: false }, choice)).toEqual({ family: 'pluck', dim: 1 });
+        expect(killSoundFor({ jumps: 4, side: true }, choice)).toEqual({ family: 'klaxon', dim: SIDE_CHAIN_DIM });
+    });
+
+    it('counts one string or tone per jump', () => {
+        expect(countedNotes(1)).toBe(1);
+        expect(countedNotes(5)).toBe(5);
+        expect(countedNotes(7)).toBe(7);
+        expect(countedNotes(30)).toBe(12);
     });
 });

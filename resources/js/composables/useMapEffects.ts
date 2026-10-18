@@ -19,8 +19,11 @@ type TMapEffects = {
     volume: number;
     /** Patch 40: kill sounds by distance from home, and the sound for the main chain and for side chains. */
     distanceSounds: boolean;
+    homeKillSound: TKillSoundFamily;
     mainKillSound: TKillSoundFamily;
     sideKillSound: TKillSoundFamily;
+    /** Patch 40b: which default set the kill sounds come from (older picks are replaced once). */
+    soundScheme: number;
 };
 
 const DEFAULTS: TMapEffects = {
@@ -30,8 +33,10 @@ const DEFAULTS: TMapEffects = {
     panelSolidity: 0.75,
     volume: 0.7,
     distanceSounds: true,
-    mainKillSound: 'alarm',
-    sideKillSound: 'chime',
+    homeKillSound: 'sonar',
+    mainKillSound: 'pluck',
+    sideKillSound: 'klaxon',
+    soundScheme: 2,
 };
 const isFamily = (value: unknown): value is TKillSoundFamily => KILL_SOUND_FAMILIES.some((family) => family.value === value);
 
@@ -47,8 +52,11 @@ function read(): TMapEffects {
             panelSolidity: typeof parsed.panelSolidity === 'number' ? Math.min(Math.max(parsed.panelSolidity, 0.3), 1) : DEFAULTS.panelSolidity,
             volume: typeof parsed.volume === 'number' ? Math.min(Math.max(parsed.volume, 0), 1) : DEFAULTS.volume,
             distanceSounds: typeof parsed.distanceSounds === 'boolean' ? parsed.distanceSounds : DEFAULTS.distanceSounds,
-            mainKillSound: isFamily(parsed.mainKillSound) ? parsed.mainKillSound : DEFAULTS.mainKillSound,
-            sideKillSound: isFamily(parsed.sideKillSound) ? parsed.sideKillSound : DEFAULTS.sideKillSound,
+            // Patch 40b: picks saved before the new defaults (Sonar / Pluck / Klaxon) are replaced once.
+            homeKillSound: parsed.soundScheme === 2 && isFamily(parsed.homeKillSound) ? parsed.homeKillSound : DEFAULTS.homeKillSound,
+            mainKillSound: parsed.soundScheme === 2 && isFamily(parsed.mainKillSound) ? parsed.mainKillSound : DEFAULTS.mainKillSound,
+            sideKillSound: parsed.soundScheme === 2 && isFamily(parsed.sideKillSound) ? parsed.sideKillSound : DEFAULTS.sideKillSound,
+            soundScheme: 2,
         };
     } catch {
         return { ...DEFAULTS };

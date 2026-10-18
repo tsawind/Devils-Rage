@@ -5,17 +5,19 @@ import { playKillSound, soundOut } from '@/lib/rageSound';
  * and more pulses; each jump out goes lower and slower. Up to 3 jumps the sound is full
  * volume, then it gets a little quieter per jump (about two thirds at 12). The main chain
  * and side chains (unconnected chains, rage lanes) each pick their own sound family.
+ * Patch 40b defaults: Sonar for home, Pluck for the main chain (one string per jump),
+ * Klaxon for side chains (a high tone, then one lower tone per jump), side chains dimmer.
  * Everything is made in the browser (no audio files).
  */
 export type TKillSoundFamily = 'alarm' | 'klaxon' | 'chime' | 'sonar' | 'drum' | 'pluck' | 'blip';
 
 export const KILL_SOUND_FAMILIES: { value: TKillSoundFamily; label: string }[] = [
     { value: 'alarm', label: 'Alarm (sharp pulses)' },
-    { value: 'klaxon', label: 'Klaxon (two-tone)' },
+    { value: 'klaxon', label: 'Klaxon (one tone per jump)' },
     { value: 'chime', label: 'Chime (bells)' },
     { value: 'sonar', label: 'Sonar (ping and echo)' },
     { value: 'drum', label: 'War drum' },
-    { value: 'pluck', label: 'Pluck (strings)' },
+    { value: 'pluck', label: 'Pluck (one string per jump)' },
     { value: 'blip', label: 'Blip (soft)' },
 ];
 
@@ -53,14 +55,21 @@ function tone(out: TOut, type: OscillatorType, frequency: number, start: number,
     oscillator.stop(start + length + 0.02);
 }
 
-const FAMILIES: Record<TKillSoundFamily, (out: TOut, shape: TSoundShape) => void> = {
+/** Patch 40b: the counted sounds play one string / one second tone per jump (at least one). */
+export function countedNotes(jumps: number): number {
+    return Math.min(Math.max(Math.round(jumps), 1), MAX_SOUND_JUMPS);
+}
+
+const FAMILIES: Record<TKillSoundFamily, (out: TOut, shape: TSoundShape, jumps: number) => void> = {
     // Sharp square pulses bending down a little: urgent close to home.
     alarm: (out, { pitch, gap, pulses }) => {
         for (let i = 0; i < pulses; i++) tone(out, 'square', pitch, out.t + i * gap, Math.min(0.08, gap * 0.8), 0.14, pitch * 0.85);
     },
-    // Two tones a minor third apart, alternating, through a soft filter.
-    klaxon: (out, { pitch, gap, pulses }) => {
-        for (let i = 0; i < pulses + 1; i++) tone(out, 'sawtooth', i % 2 ? pitch * 0.84 : pitch, out.t + i * gap * 1.4, gap * 1.3, 0.08);
+    // Patch 40b: one high tone, then one lower tone per jump (counted), evenly spaced.
+    klaxon: (out, { pitch }, jumps) => {
+        tone(out, 'sawtooth', pitch, out.t, 0.28, 0.09);
+        const count = jumps > 0 ? countedNotes(jumps) : 0;
+        for (let i = 0; i < count; i++) tone(out, 'sawtooth', pitch * 0.84, out.t + 0.36 + i * 0.24, 0.18, 0.08);
     },
     // Bells: a pure tone with a ringing partial, stepping up a third each strike.
     chime: (out, { pitch, gap, pulses }) => {
@@ -79,9 +88,11 @@ const FAMILIES: Record<TKillSoundFamily, (out: TOut, shape: TSoundShape) => void
     drum: (out, { pitch, gap, pulses }) => {
         for (let i = 0; i < pulses; i++) tone(out, 'sine', pitch / 3, out.t + i * gap * 1.2, 0.3, i === 0 ? 0.6 : 0.45, pitch / 8);
     },
-    // A quick string pluck, falling a fourth each note.
-    pluck: (out, { pitch, gap, pulses }) => {
-        for (let i = 0; i < pulses; i++) tone(out, 'triangle', pitch * Math.pow(0.75, i), out.t + i * gap * 1.3, 0.28, 0.25);
+    // Patch 40b: one string per jump (counted), evenly spaced, a light strum between two notes.
+    pluck: (out, { pitch }, jumps) => {
+        const count = countedNotes(jumps);
+        const gap = 0.2 + Math.min(jumps, MAX_SOUND_JUMPS) * 0.006;
+        for (let i = 0; i < count; i++) tone(out, 'triangle', i % 2 ? pitch * 1.122 : pitch, out.t + i * gap, 0.26, 0.26);
     },
     // Short soft sine blips: the quiet option.
     blip: (out, { pitch, gap, pulses }) => {
@@ -89,12 +100,29 @@ const FAMILIES: Record<TKillSoundFamily, (out: TOut, shape: TSoundShape) => void
     },
 };
 
-/** Play a kill `jumps` from home in a sound family; a capital adds the heavy boom under it. */
-export function playDistanceKill(jumps: number, family: TKillSoundFamily, capital = false): void {
+/** Play a kill `jumps` from home in a sound family; a capital adds the heavy boom under it. `dim` turns it down (side chains). */
+export function playDistanceKill(jumps: number, family: TKillSoundFamily, capital = false, dim = 1): void {
     const shape = distanceSoundShape(jumps);
-    const out = soundOut(shape.volume * 0.8);
+    const volume = shape.volume * dim;
+    const out = soundOut(volume * 0.8);
     if (!out) return;
-    FAMILIES[family](out, shape);
+    FAMILIES[family](out, shape, jumps);
     // The kill itself, quieter, under the pattern (full boom for a capital).
-    playKillSound(capital, (capital ? 0.4 : 0.2) * shape.volume);
+    playKillSound(capital, (capital ? 0.4 : 0.2) * volume);
+}
+
+/** Patch 40b: side chains sound a little dimmer than the main chain. */
+export const SIDE_CHAIN_DIM = 0.75;
+
+export type TKillSoundChoice = { home: TKillSoundFamily; main: TKillSoundFamily; side: TKillSoundFamily };
+
+/** The sound for a kill: home (0 jumps, main chain), the main chain, or a side chain (dimmer). */
+export function killSoundFor(place: { jumps: number; side: boolean }, choice: TKillSoundChoice): { family: TKillSoundFamily; dim: number } {
+    if (place.side) return { family: choice.side, dim: SIDE_CHAIN_DIM };
+    return { family: place.jumps === 0 ? choice.home : choice.main, dim: 1 };
+}
+
+export function playKillAt(place: { jumps: number; side: boolean }, choice: TKillSoundChoice, capital = false): void {
+    const { family, dim } = killSoundFor(place, choice);
+    playDistanceKill(place.jumps, family, capital, dim);
 }
