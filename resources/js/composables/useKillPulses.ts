@@ -1,5 +1,9 @@
 import { soundsEnabled, useMapEffects } from '@/composables/useMapEffects';
+import { playDistanceKill } from '@/lib/distanceSound';
+import { killPlace } from '@/lib/killDistance';
+import { numberingHubIds } from '@/lib/numberingHubs';
 import { playKillSound } from '@/lib/rageSound';
+import { tryUseMapStore } from '@/map/store/mapStore';
 import { shallowRef } from 'vue';
 
 /**
@@ -22,7 +26,7 @@ export function pulseKill(solarsystemId: number, now: number = Date.now(), note:
     const { effects } = useMapEffects();
     const kill: TKillNote = { at: now, ship: note.ship ?? null, capital: Boolean(note.capital), value: note.value ?? null };
 
-    if (options.sound ?? soundsEnabled()) playKillSound(kill.capital);
+    if (options.sound ?? soundsEnabled()) playKillFor(solarsystemId, kill.capital);
     if (!effects.value.killEffects && !options.force) return;
 
     const next = new Map(pulses.value);
@@ -45,6 +49,25 @@ export function pulseKill(solarsystemId: number, now: number = Date.now(), note:
         else after.delete(solarsystemId);
         recent.value = after;
     }, KILL_MARKER_MS + 1000);
+}
+
+/**
+ * Patch 40: a kill on the map sounds by its distance from home (main chain or side chain
+ * sound, chosen in the speaker menu); a kill off the map, or with distance sounds off,
+ * keeps the plain kill sound.
+ */
+function playKillFor(solarsystemId: number, capital: boolean): void {
+    const { effects } = useMapEffects();
+    const store = tryUseMapStore();
+    const place =
+        effects.value.distanceSounds && store
+            ? killPlace(solarsystemId, [...store.systems.values()], [...store.connections.values()], store.meta.value?.home_solarsystem_id ?? null, numberingHubIds.value)
+            : null;
+    if (!place) {
+        playKillSound(capital);
+        return;
+    }
+    playDistanceKill(place.jumps, place.side ? effects.value.sideKillSound : effects.value.mainKillSound, capital);
 }
 
 export function useKillPulses() {

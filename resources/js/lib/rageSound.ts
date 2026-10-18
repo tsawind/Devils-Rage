@@ -38,6 +38,22 @@ export function unlockRageSound(): () => void {
     };
 }
 
+/**
+ * Patch 40: the audio output for a sound at `volume` (times the speaker menu's volume),
+ * or null when the browser has no audio. `t` is when to start.
+ */
+export function soundOut(volume: number): { ctx: AudioContext; master: GainNode; t: number } | null {
+    const ctx = audio();
+    if (!ctx) return null;
+    if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => undefined);
+    }
+    const master = ctx.createGain();
+    master.gain.value = Math.min(Math.max(volume, 0), 1) * soundVolume;
+    master.connect(ctx.destination);
+    return { ctx, master, t: ctx.currentTime + 0.02 };
+}
+
 function distortionCurve(amount: number): Float32Array<ArrayBuffer> {
     const samples = 1024;
     const curve = new Float32Array(new ArrayBuffer(samples * 4));

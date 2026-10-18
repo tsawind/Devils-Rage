@@ -18,6 +18,7 @@ import { CircleDashed, ImageUp, Loader2, Trash2, Volume1, Volume2, VolumeX, Wayp
 import { useMapEffects } from '@/composables/useMapEffects';
 import { pulseKill } from '@/composables/useKillPulses';
 import { playKillSound, playTargetAcquired } from '@/lib/rageSound';
+import { KILL_SOUND_FAMILIES, MAX_SOUND_JUMPS, playDistanceKill, type TKillSoundFamily } from '@/lib/distanceSound';
 import { computed, ref, useTemplateRef, type Component } from 'vue';
 import { toast } from 'vue-sonner';
 
@@ -118,6 +119,39 @@ const soundTests: { label: string; play: () => void }[] = [
     { label: '💥 Kill', play: () => playKillSound(false) },
     { label: '☠ Capital kill', play: () => playKillSound(true) },
 ];
+
+/** Patch 40: kill sounds by distance from home: test every distance, main chain and side chains. */
+const distanceSteps = Array.from({ length: MAX_SOUND_JUMPS + 1 }, (_, jumps) => jumps);
+const testCapital = ref(false);
+const testFamily = ref<TKillSoundFamily | 'main' | 'side'>('main');
+function familyFor(choice: TKillSoundFamily | 'main' | 'side'): TKillSoundFamily {
+    if (choice === 'main') return effects.value.mainKillSound;
+    if (choice === 'side') return effects.value.sideKillSound;
+    return choice;
+}
+function testDistance(jumps: number): void {
+    playDistanceKill(jumps, familyFor(testFamily.value), testCapital.value);
+}
+let sweepTimer: ReturnType<typeof setTimeout> | null = null;
+const sweeping = ref(false);
+/** Plays home → 12 jumps, one every 1.6 s (click again to stop). */
+function sweep(): void {
+    if (sweepTimer) clearTimeout(sweepTimer);
+    if (sweeping.value) {
+        sweeping.value = false;
+        return;
+    }
+    sweeping.value = true;
+    const next = (jumps: number) => {
+        if (!sweeping.value || jumps > MAX_SOUND_JUMPS) {
+            sweeping.value = false;
+            return;
+        }
+        testDistance(jumps);
+        sweepTimer = setTimeout(() => next(jumps + 1), 1600);
+    };
+    next(0);
+}
 
 /** The full kill effect with its sound on the home system, on this screen only. */
 function testKill(): void {
@@ -252,7 +286,7 @@ function onDrop(event: DragEvent) {
                     <VolumeX v-else class="size-4" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent class="w-64 p-3" side="top" align="end">
+            <PopoverContent class="max-h-[80vh] w-80 overflow-y-auto p-3" side="top" align="end">
                 <div class="flex flex-col gap-2 text-sm">
                     <label class="flex items-center justify-between gap-2">
                         <span>Sounds</span>
@@ -281,6 +315,49 @@ function onDrop(event: DragEvent) {
                         >
                     </div>
                     <Button variant="outline" size="sm" class="h-7 text-xs" @click="testKill">💥 Show a test kill on home</Button>
+
+                    <!-- Patch 40: kill sounds by distance from home -->
+                    <div class="mt-2 flex flex-col gap-1.5 border-t pt-2" :class="{ 'opacity-50': !effects.sounds }">
+                        <label class="flex items-center justify-between gap-2">
+                            <span>Kill sound by distance from home</span>
+                            <input v-model="effects.distanceSounds" type="checkbox" class="size-4 accent-red-600" />
+                        </label>
+                        <label class="flex items-center justify-between gap-2 text-xs">
+                            <span>Main chain</span>
+                            <select v-model="effects.mainKillSound" class="h-7 w-40 rounded border bg-background px-1 text-xs">
+                                <option v-for="family in KILL_SOUND_FAMILIES" :key="family.value" :value="family.value">{{ family.label }}</option>
+                            </select>
+                        </label>
+                        <label class="flex items-center justify-between gap-2 text-xs">
+                            <span>Side chains &amp; lanes</span>
+                            <select v-model="effects.sideKillSound" class="h-7 w-40 rounded border bg-background px-1 text-xs">
+                                <option v-for="family in KILL_SOUND_FAMILIES" :key="family.value" :value="family.value">{{ family.label }}</option>
+                            </select>
+                        </label>
+                        <div class="flex items-center gap-2 text-xs">
+                            <span class="font-medium text-muted-foreground">Test</span>
+                            <select v-model="testFamily" class="h-7 flex-1 rounded border bg-background px-1 text-xs">
+                                <option value="main">Main chain sound</option>
+                                <option value="side">Side chain sound</option>
+                                <option v-for="family in KILL_SOUND_FAMILIES" :key="family.value" :value="family.value">{{ family.label }}</option>
+                            </select>
+                            <label class="flex items-center gap-1" title="Test as a capital kill"><input v-model="testCapital" type="checkbox" class="size-3.5 accent-red-600" />Cap</label>
+                        </div>
+                        <div class="grid grid-cols-7 gap-1">
+                            <Button
+                                v-for="jumps in distanceSteps"
+                                :key="jumps"
+                                variant="outline"
+                                size="sm"
+                                class="h-7 px-0 text-xs"
+                                :title="jumps === 0 ? 'A kill in the home system' : `A kill ${jumps} jump${jumps === 1 ? '' : 's'} from home`"
+                                @click="testDistance(jumps)"
+                                >{{ jumps === 0 ? 'Home' : jumps }}</Button
+                            >
+                            <Button variant="outline" size="sm" class="col-span-1 h-7 px-0 text-xs" :title="sweeping ? 'Stop' : 'Play home → 12 jumps'" @click="sweep">{{ sweeping ? '■' : '▶ all' }}</Button>
+                        </div>
+                        <p class="text-[11px] text-muted-foreground">Closer = higher and faster. Past 3 jumps it gets a little quieter. Side chains: chains not connected to home, and rage lanes.</p>
+                    </div>
                     <p class="text-[11px] text-muted-foreground">Tests only play on your screen. The test kill flashes your home system with its sound.</p>
                 </div>
             </PopoverContent>

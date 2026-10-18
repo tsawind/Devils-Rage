@@ -1,3 +1,4 @@
+import { KILL_SOUND_FAMILIES, type TKillSoundFamily } from '@/lib/distanceSound';
 import { setSoundVolume } from '@/lib/rageSound';
 import { ref, watch } from 'vue';
 
@@ -16,9 +17,23 @@ type TMapEffects = {
     panelSolidity: number;
     /** Patch 37: volume of every mapper sound (0–1). */
     volume: number;
+    /** Patch 40: kill sounds by distance from home, and the sound for the main chain and for side chains. */
+    distanceSounds: boolean;
+    mainKillSound: TKillSoundFamily;
+    sideKillSound: TKillSoundFamily;
 };
 
-const DEFAULTS: TMapEffects = { sounds: true, killEffects: true, fullScreenBackground: false, panelSolidity: 0.75, volume: 0.7 };
+const DEFAULTS: TMapEffects = {
+    sounds: true,
+    killEffects: true,
+    fullScreenBackground: false,
+    panelSolidity: 0.75,
+    volume: 0.7,
+    distanceSounds: true,
+    mainKillSound: 'alarm',
+    sideKillSound: 'chime',
+};
+const isFamily = (value: unknown): value is TKillSoundFamily => KILL_SOUND_FAMILIES.some((family) => family.value === value);
 
 function read(): TMapEffects {
     try {
@@ -31,6 +46,9 @@ function read(): TMapEffects {
             fullScreenBackground: typeof parsed.fullScreenBackground === 'boolean' ? parsed.fullScreenBackground : DEFAULTS.fullScreenBackground,
             panelSolidity: typeof parsed.panelSolidity === 'number' ? Math.min(Math.max(parsed.panelSolidity, 0.3), 1) : DEFAULTS.panelSolidity,
             volume: typeof parsed.volume === 'number' ? Math.min(Math.max(parsed.volume, 0), 1) : DEFAULTS.volume,
+            distanceSounds: typeof parsed.distanceSounds === 'boolean' ? parsed.distanceSounds : DEFAULTS.distanceSounds,
+            mainKillSound: isFamily(parsed.mainKillSound) ? parsed.mainKillSound : DEFAULTS.mainKillSound,
+            sideKillSound: isFamily(parsed.sideKillSound) ? parsed.sideKillSound : DEFAULTS.sideKillSound,
         };
     } catch {
         return { ...DEFAULTS };
