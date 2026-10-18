@@ -42,7 +42,30 @@ const target = computed(() => popOutWindow.value?.document.body ?? null);
 // Patch 42d: menus, selects and popovers in the pop-out open in the pop-out; prompts the main
 // window draws (rename, add a note, …) open there too while you're working in the pop-out.
 providePortalTarget(target);
-useEventListener(() => popOutWindow.value?.document ?? null, 'pointerdown', () => (workingInPopOut.value = target.value), { capture: true });
+useEventListener(() => popOutWindow.value?.document ?? null, 'pointerdown', closeMenusOnOutsideClick, { capture: true });
+
+/** Open menus, popovers and selects in the pop-out (their "click outside" watch is on the main window). */
+const FLOATING = '[data-reka-popper-content-wrapper], [role="menu"], [role="listbox"], [role="dialog"]';
+
+/**
+ * Patch 42e: a click in the pop-out outside an open menu closes it (with Escape, the way the
+ * menus close themselves), as a click outside does in the main window.
+ */
+function closeMenusOnOutsideClick(event: PointerEvent): void {
+    workingInPopOut.value = target.value;
+    const doc = popOutWindow.value?.document;
+    if (!doc || !doc.querySelector(FLOATING)) return;
+    if (event.target instanceof Element && event.target.closest(FLOATING)) return;
+    pressEscape(doc, 3);
+}
+
+/** Escape closes the top layer (a sub-menu first), so press it again while something is still open. */
+function pressEscape(doc: Document, times: number): void {
+    for (const where of [doc, document]) {
+        where.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }));
+    }
+    if (times > 1) setTimeout(() => doc.querySelector('[role="menu"], [role="listbox"]') && pressEscape(doc, times - 1), 30);
+}
 for (const type of ['pointerdown', 'pointerover'] as const) {
     useEventListener(document, type, () => {
         if (workingInPopOut.value) workingInPopOut.value = null;
