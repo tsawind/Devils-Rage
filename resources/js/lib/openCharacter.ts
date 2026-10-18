@@ -9,8 +9,8 @@ import { windowName } from '@/lib/windowRegistry';
  * the Main pill and the character tabs.
  *
  * - Pop out: a small always-on-top scanner over EVE (Chrome / Edge). A browser allows one
- *   per mapper window, so a second pop-out opens that character in its own window, which
- *   pops it out with one click there (minimise that window afterwards).
+ *   per mapper tab, so a second pop-out opens that character in a browser tab, which pops
+ *   it out with one click there and then goes back to the tab you were on (keep it open).
  * - Own window: a separate mapper window with no address bar, for another screen.
  * - Browser tab: a new tab next to this one.
  *
@@ -39,8 +39,8 @@ export async function openCharacter(character: TOpenable, how: TOpenHow): Promis
     }
     const busy = popOutWindow.value && !popOutWindow.value.closed && popOut.value?.characterId !== character.id;
     if (!canPopOut() || busy) {
-        // One pop-out per window: this one goes from the character's own window.
-        openWindow(character, 'window', canPopOut());
+        // One pop-out per tab: this one goes from the character's own browser tab.
+        openWindow(character, canPopOut() ? 'tab' : 'window', canPopOut());
         return;
     }
     if (!(await openPopOut(character.id, character.name, characterColor(character)).catch(() => false))) openWindow(character, 'window');

@@ -121,10 +121,20 @@ const driverColor = computed(() => characterColor(driverCharacter.value));
 async function popOutDriver(): Promise<void> {
     const character = driverCharacter.value;
     if (!character) return;
+    const backToOpener = waitingToPopOut.value;
     waitingToPopOut.value = false;
     forgetPopOutHere();
     if (!(await openPopOut(character.id, character.name, driverColor.value).catch(() => false))) {
         window.open(urlAs(window.location.href, character.id, true), '_blank', 'popup=yes,width=900,height=440');
+        return;
+    }
+    // Patch 44b: this tab was opened just for the pop-out: go back to the tab it came from.
+    if (backToOpener) {
+        try {
+            window.opener?.focus();
+        } catch {
+            // The browser kept this tab in front: switch back by hand.
+        }
     }
 }
 
