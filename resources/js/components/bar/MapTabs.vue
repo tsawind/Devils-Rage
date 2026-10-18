@@ -1,17 +1,23 @@
 <script setup lang="ts">
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { tabsThatFit } from '@/lib/characterColor';
+import { clearTabAlerts, currentMapId, describeAlerts, keepNextMap, tabAlerts, watchTabMaps, type TTabAlerts } from '@/lib/mapTabs';
 import { updateMapUserSettings } from '@/map/api';
 import { show } from '@/routes/maps';
 import type { AppPageProps } from '@/types';
 import { router, usePage } from '@inertiajs/vue3';
-import { ChevronDown, X } from 'lucide-vue-next';
+import { useIntervalFn } from '@vueuse/core';
+import { ChevronDown, Pin, X } from 'lucide-vue-next';
 import { computed, watch } from 'vue';
 
 /**
  * Patch 41: map tabs, like a browser's. The maps you opened (kept per person: they're the
  * maps pinned to your bar), the one you're on underlined in red; × closes a tab (the map
  * itself isn't touched). As many as fit in `width`; the rest go into "+N ▾".
+ *
+ * Patch 42: only maps opened from the map picker / All maps (or kept with the pin) become
+ * tabs; a map reached from a link is a passing tab (dashed) until you leave it. Tabs show
+ * kills and notices on their map while you're elsewhere.
  */
 const { map, width } = defineProps<{ map: { id: number; name: string; slug: string }; width: number }>();
 
@@ -37,15 +43,41 @@ const split = computed(() => {
     return { shown, rest: tabs.value.filter((tab) => !ids.has(tab.id)) };
 });
 
-// A map you open becomes a tab (kept until you close it).
+const kept = computed(() => (page.props.pinned_maps ?? []).some((tab) => tab.id === map.id));
+
+/** Keeps a map as a tab (until you close it). */
+function keep(slug: string): void {
+    if (page.props.auth?.user) updateMapUserSettings(slug, { is_pinned: true }, ['pinned_maps']);
+}
+
+// A map opened from the picker (or your very first map) becomes a tab; one reached from a link passes.
 watch(
     () => map.slug,
     (slug) => {
-        if (!page.props.auth?.user) return;
-        if (!(page.props.pinned_maps ?? []).some((tab) => tab.slug === slug)) updateMapUserSettings(slug, { is_pinned: true }, ['pinned_maps']);
+        const asked = keepNextMap.value === slug;
+        keepNextMap.value = null;
+        if (!kept.value && (asked || !(page.props.pinned_maps ?? []).length)) keep(slug);
     },
     { immediate: true },
 );
+
+// Kills and notices: the map you're on is seen; the other tabs' maps are listened to.
+watch(
+    () => map.id,
+    (id) => {
+        currentMapId.value = id;
+        clearTabAlerts(id);
+    },
+    { immediate: true },
+);
+const otherIds = computed(() => tabs.value.filter((tab) => tab.id !== map.id).map((tab) => tab.id));
+watch(otherIds, (ids) => setTimeout(() => watchTabMaps(ids), 1_000), { immediate: true });
+useIntervalFn(() => watchTabMaps(otherIds.value), 20_000);
+
+function alertsOf(tab: TMapTab): TTabAlerts | undefined {
+    return tab.id === map.id ? undefined : tabAlerts.value[tab.id];
+}
+const hiddenAlerts = computed(() => split.value.rest.some((tab) => alertsOf(tab)));
 
 function open(tab: TMapTab): void {
     if (tab.id !== map.id) router.visit(show(tab.slug).url);
@@ -67,14 +99,37 @@ function close(tab: TMapTab): void {
             :key="tab.id"
             type="button"
             class="group relative flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px]"
-            :class="tab.id === map.id ? 'border-border bg-muted text-foreground' : 'border-transparent text-muted-foreground hover:bg-muted/60'"
+            :class="
+                tab.id !== map.id
+                    ? 'border-transparent text-muted-foreground hover:bg-muted/60'
+                    : kept
+                      ? 'border-border bg-muted text-foreground'
+                      : 'border-dashed border-muted-foreground/60 bg-muted text-foreground'
+            "
             :style="{ width: `${TAB_WIDTH - 2}px` }"
-            :title="tab.name"
+            :title="[tab.name, tab.id === map.id && !kept ? '(passing tab: pin it to keep it)' : '', describeAlerts(alertsOf(tab))].filter(Boolean).join('\n')"
             @click="open(tab)"
         >
-            <span class="min-w-0 flex-1 truncate text-left">{{ tab.name }}</span>
+            <span class="min-w-0 flex-1 truncate text-left" :class="tab.id === map.id && !kept ? 'italic' : ''">{{ tab.name }}</span>
             <span
-                v-if="tabs.length > 1"
+                v-if="alertsOf(tab)?.kills"
+                class="shrink-0 rounded-full px-1 text-[9px] leading-[14px] font-bold text-white group-hover:hidden"
+                :class="alertsOf(tab)?.capitals ? 'animate-pulse bg-red-600' : 'bg-red-600/90'"
+            >
+                {{ alertsOf(tab)?.kills }}
+            </span>
+            <span v-else-if="alertsOf(tab)?.notices" class="size-2 shrink-0 rounded-full bg-amber-400 group-hover:hidden" />
+            <span
+                v-if="tab.id === map.id && !kept && $page.props.auth?.user"
+                role="button"
+                class="shrink-0 rounded text-muted-foreground hover:text-foreground"
+                title="Keep this map as a tab"
+                @click.stop="keep(tab.slug)"
+            >
+                <Pin class="size-3" />
+            </span>
+            <span
+                v-else-if="tabs.length > 1"
                 role="button"
                 class="hidden shrink-0 rounded text-muted-foreground group-hover:block hover:text-foreground"
                 :title="`Close the ${tab.name} tab (the map isn't touched)`"
@@ -88,12 +143,15 @@ function close(tab: TMapTab): void {
             <DropdownMenuTrigger as-child>
                 <button type="button" class="flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-dashed border-border px-1.5 text-[11px] text-muted-foreground hover:text-foreground">
                     +{{ split.rest.length }}<ChevronDown class="size-3" />
+                    <span v-if="hiddenAlerts" class="size-1.5 rounded-full bg-red-500" />
                 </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" class="w-52">
                 <DropdownMenuLabel class="text-xs">Open maps</DropdownMenuLabel>
                 <DropdownMenuItem v-for="tab in split.rest" :key="tab.id" class="text-xs" @select="open(tab)">
                     <span class="flex-1 truncate">{{ tab.name }}</span>
+                    <span v-if="alertsOf(tab)?.kills" class="rounded-full bg-red-600 px-1 text-[9px] font-bold text-white" :title="describeAlerts(alertsOf(tab))">{{ alertsOf(tab)?.kills }}</span>
+                    <span v-else-if="alertsOf(tab)?.notices" class="size-2 rounded-full bg-amber-400" :title="describeAlerts(alertsOf(tab))" />
                     <span role="button" class="text-muted-foreground hover:text-foreground" title="Close this tab" @click.stop="close(tab)"><X class="size-3" /></span>
                 </DropdownMenuItem>
             </DropdownMenuContent>

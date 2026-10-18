@@ -14,6 +14,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { openingAsTab } from '@/lib/mapTabs';
 import { TMapSummary } from '@/pages/maps';
 import { Link, router } from '@inertiajs/vue3';
 import { Archive, ArchiveRestore, ArrowRight, Crown, Eye, Globe, Lock, MoreVertical, Pencil, Pin, PinOff, Settings, Spline } from 'lucide-vue-next';
@@ -68,7 +69,7 @@ function setPinned(value: boolean): void {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" class="w-48">
                     <DropdownMenuItem as-child>
-                        <Link :href="MapController.show(map.slug)" prefetch class="flex w-full items-center gap-2">
+                        <Link :href="MapController.show(map.slug)" prefetch @click="openingAsTab(map.slug)" class="flex w-full items-center gap-2">
                             <ArrowRight class="size-4" />
                             Open map
                         </Link>
@@ -95,7 +96,7 @@ function setPinned(value: boolean): void {
         </div>
 
         <!-- Body: name and stats, one large click target -->
-        <Link :href="MapController.show(map.slug)" prefetch class="group/body flex flex-1 flex-col gap-3 p-4">
+        <Link :href="MapController.show(map.slug)" prefetch @click="openingAsTab(map.slug)" class="group/body flex flex-1 flex-col gap-3 p-4">
             <h3 class="truncate font-display text-lg font-bold tracking-tight transition-colors group-hover/body:text-primary">
                 {{ map.name }}
             </h3>

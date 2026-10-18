@@ -3,6 +3,7 @@ import useUser from '@/composables/useUser';
 import { getUserChannelName } from '@/const/channels';
 import { CombatModeTurnedOffEvent, MapNoticeEvent, UserCharacterStatusUpdatedEvent } from '@/const/events';
 import { visibleBookmarkName } from '@/lib/bookmark';
+import { noteMapNotice } from '@/lib/mapTabs';
 import { pendingHoleBookmark } from '@/map/holeBookmark';
 import { useMapStore } from '@/map/store/mapStore';
 import { router, usePage } from '@inertiajs/vue3';
@@ -34,6 +35,7 @@ export function useUserEvents() {
         // until you close it.
         useEcho<{ map_id: number; message: string; detail: string }>(getUserChannelName(userId), CombatModeTurnedOffEvent, (event) => {
             toast.warning(event.message, { description: event.detail, duration: Infinity, closeButton: true });
+            noteMapNotice(event.map_id);
             const props = page.props as unknown as { map?: { id?: number } };
             if (props.map?.id === event.map_id) router.reload({ only: ['map_user_settings'] });
         });
@@ -41,6 +43,7 @@ export function useUserEvents() {
         // Patch 13: a notice for you alone (e.g. someone took your armed number).
         // Clicking Copy copies the hole's new bookmark name.
         useEcho<{ map_id: number; message: string; detail: string; signature_id: number | null }>(getUserChannelName(userId), MapNoticeEvent, (event) => {
+            noteMapNotice(event.map_id);
             toast.warning(event.message, {
                 description: event.detail,
                 duration: Infinity,

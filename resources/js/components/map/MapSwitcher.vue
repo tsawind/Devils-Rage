@@ -2,6 +2,7 @@
 import MapController from '@/actions/App/Http/Controllers/MapController';
 import CreateMapDialog from '@/components/map/CreateMapDialog.vue';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { openingAsTab } from '@/lib/mapTabs';
 import { home } from '@/routes';
 import type { AppPageProps } from '@/types';
 import { Link, router, usePage } from '@inertiajs/vue3';
@@ -39,7 +40,7 @@ function load(open: boolean): void {
                 <Loader2 class="size-3.5 animate-spin" /> Loading…
             </div>
             <DropdownMenuItem v-for="item in page.props.available_maps ?? []" :key="item.id" as-child class="text-xs">
-                <Link :href="MapController.show(item.slug)" class="flex w-full items-center gap-2">
+                <Link :href="MapController.show(item.slug)" class="flex w-full items-center gap-2" @click="openingAsTab(item.slug)">
                     <Check v-if="item.id === map.id" class="size-3.5 text-amber-400" />
                     <MapIcon v-else class="size-3.5 text-muted-foreground" />
                     <span class="truncate" :class="item.id === map.id ? 'font-semibold' : ''">{{ item.name }}</span>
