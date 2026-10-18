@@ -308,8 +308,11 @@ export type TMapConnection = {
     mass_watch_open?: boolean;
     /** Patch 39: the last click in the watch banner ("still on it?" after 30 min without one). */
     mass_watch_touched_at?: string | null;
-    /** Patch 39: jumps logged since it was marked fresh / watched (the only ones that count then). */
+    /** Patch 39: jumps logged since it was marked fresh / watched (old: no longer sent). */
     jumps_mass_since_watch?: number;
+    /** Patch 40c: "every jump logged" on since then (the watcher's switch): only jumps since count. */
+    mass_counting_since?: string | null;
+    jumps_mass_since_counting?: number;
     created_at: string;
     updated_at: string;
 };

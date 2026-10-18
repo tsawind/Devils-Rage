@@ -67,7 +67,7 @@ it('marks a hole fresh and starts watching it, open or folded', function () {
     expect($hole->mass_status)->toBe(MassStatus::Fresh)
         ->and($hole->mass_watched_at)->not->toBeNull()
         ->and($hole->mass_watch_open)->toBeTrue()
-        ->and($hole->checked_note)->toBe('marked Fresh');
+        ->and($hole->checked_note)->toBe('marked brand new');
 
     post(route('map-connections.watched', $hole), ['open' => false])->assertRedirect();
     expect($hole->fresh()->mass_watch_open)->toBeFalse();

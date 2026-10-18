@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { markConnectionChecked, setConnectionWatched } from '@/map/actions/holeChecked';
+import { markConnectionChecked, markConnectionFresh, setConnectionWatched } from '@/map/actions/holeChecked';
 import {
     ContextMenuContent,
     ContextMenuItem,
@@ -25,7 +25,7 @@ import CopyConnectionNameMenu from '@/map/components/overlays/CopyConnectionName
 import { TMapConnection, TMapSolarsystem } from '@/pages/maps';
 import { TConnectionType, TLifetimeStatus, TMassStatus, TShipSize } from '@/types/models';
 import { UTCDate } from '@date-fns/utc';
-import { Check, Clock, Eye, Heart, Plus, Scale, Ship, Trash2, TriangleAlert, Unlink, Waypoints, Weight } from 'lucide-vue-next';
+import { Check, Clock, Eye, Heart, Plus, Scale, Ship, Sparkles, Trash2, TriangleAlert, Unlink, Waypoints, Weight } from 'lucide-vue-next';
 import type { AcceptableValue } from 'reka-ui';
 import { computed } from 'vue';
 
@@ -111,15 +111,24 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
             <Check class="size-4" />
             Checked in game
         </ContextMenuItem>
-        <!-- Patch 37: we saw it new and log every jump: the range is its size minus the log -->
+        <!-- Patch 40c: watching = the 👁 on the pill and the watcher popup; it doesn't change the mass math -->
         <ContextMenuItem
             v-if="map_connection.type !== 'stargate'"
-            :title="map_connection.mass_watched_at ? `Watched by ${map_connection.mass_watched_by_name ?? 'someone'}: click to stop (back to the normal mass math)` : 'We saw it new and every jump through it gets logged'"
+            :title="map_connection.mass_watched_at ? `Watched by ${map_connection.mass_watched_by_name ?? 'someone'}: click to stop` : 'Shows a 👁 on the pill and opens the watcher (log hostiles, \'every jump logged\')'"
             @select="setConnectionWatched(map_connection.id, !map_connection.mass_watched_at)"
         >
             <Eye class="size-4" />
-            Watching (every jump logged)
+            Watching
             <Check v-if="map_connection.mass_watched_at" class="ml-auto size-4" />
+        </ContextMenuItem>
+        <!-- Patch 40c: Brand new hole: seen in game "not significantly disrupted" -->
+        <ContextMenuItem
+            v-if="map_connection.type !== 'stargate'"
+            title="Show Info says &quot;not significantly disrupted&quot;: marks it fresh and checked"
+            @select="markConnectionFresh(map_connection.id, false)"
+        >
+            <Sparkles class="size-4" />
+            Brand new hole
         </ContextMenuItem>
         <ContextMenuSub>
             <ContextMenuSubTrigger>

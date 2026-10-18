@@ -195,14 +195,15 @@ export function estimateConnectionMass(
     connection: {
         jumps_mass_sum?: number | null;
         jumps_mass_since_status?: number | null;
-        jumps_mass_since_watch?: number | null;
-        mass_watched_at?: string | null;
+        jumps_mass_since_counting?: number | null;
+        mass_counting_since?: string | null;
         mass_status?: string | null;
     },
     status: string | null | undefined = connection.mass_status,
 ): TMassEstimate | null {
-    const watched = Boolean(connection.mass_watched_at);
-    const sinceWatch = connection.jumps_mass_since_watch ?? connection.jumps_mass_sum ?? 0;
+    // Patch 40c: only "every jump logged" (the watcher's switch) changes the math; watching alone doesn't.
+    const watched = Boolean(connection.mass_counting_since);
+    const sinceWatch = connection.jumps_mass_since_counting ?? connection.jumps_mass_sum ?? 0;
     return estimateMass({
         totalMass,
         jumped: watched ? sinceWatch : connection.jumps_mass_sum,

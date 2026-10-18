@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePilotNames } from '@/composables/usePilotNames';
 import { isDark } from '@/composables/useIsDark';
 import EdgeBadges from '@/map/components/edges/EdgeBadges.vue';
 import { badgeSize, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
@@ -46,6 +47,8 @@ type Props = {
     scale: number;
 };
 
+// Patch 40c: who is watching, for the 👁 on the pill.
+const { detail: pilotDetail } = usePilotNames();
 const {
     geometry,
     connection = null,
@@ -186,8 +189,8 @@ const indicators = computed<EdgeIndicator[]>(() => {
         items.push({ type: 'clock', fill: 'var(--color-purple-500)', stroke: 'var(--color-purple-600)', faint: true });
     }
 
-    // Patch 37: 👁 watched from new (every jump logged).
-    if (connection?.mass_watched_at) items.push({ type: 'eol', label: '👁', fill: 'var(--color-sky-700)', stroke: 'var(--color-sky-800)' });
+    // Patch 40c: watching is a little 👁 hovering on the pill (EdgeBadges); "every jump logged" shows as ✓ log.
+    if (connection?.mass_counting_since) items.push({ type: 'eol', label: '✓ log', fill: 'var(--color-sky-700)', stroke: 'var(--color-sky-800)' });
 
     // Patch 37: someone is "⚖ Adding mass…" on this hole.
     if (connection?.mass_session) {
@@ -529,6 +532,7 @@ const pillLayer = inject('edgePillLayer', false);
                     :scale="scale"
                     :clickable="Boolean(connection)"
                     :title="pipeTitle"
+                    :watcher="connection?.mass_watched_at ? pilotDetail(connection.mass_watched_by_name) || 'someone' : null"
                     @open="(event) => emit('connectionClick', event)"
                     @menu="(event) => emit('connectionContextMenu', event)"
                     @copy="() => store && connection && copyForwardBookmark(store, connection)"

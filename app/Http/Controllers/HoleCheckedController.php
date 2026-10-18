@@ -66,12 +66,29 @@ final class HoleCheckedController extends Controller
             return back();
         }
 
+        // Patch 40c: "every jump logged" on / off (the watcher's switch): the mass math counts only
+        // the jumps logged since it was turned on. Turning it on also starts watching.
+        if ($request->has('counting')) {
+            $counting = $request->boolean('counting');
+            $mapConnection->forceFill([
+                'mass_counting_since' => $counting ? now() : null,
+                ...($counting && $mapConnection->mass_watched_at === null ? ['mass_watched_at' => now(), 'mass_watched_by_name' => Actor::name()] : []),
+                'mass_watch_open' => true,
+                'mass_watch_touched_at' => now(),
+            ])->save();
+            $this->broadcast($mapConnection);
+
+            return back();
+        }
+
+        // Patch 40c: watching alone (the 👁 on the pill) doesn't change the mass math.
         $on = $request->boolean('on');
         $mapConnection->forceFill([
             'mass_watched_at' => $on ? now() : null,
             'mass_watched_by_name' => $on ? Actor::name() : null,
             'mass_watch_open' => $on,
             'mass_watch_touched_at' => $on ? now() : null,
+            ...($on ? [] : ['mass_counting_since' => null]),
         ])->save();
         $this->broadcast($mapConnection);
 
@@ -95,11 +112,15 @@ final class HoleCheckedController extends Controller
             'should_have_rolled' => false,
             'checked_at' => now(),
             'checked_by_name' => Actor::name(),
-            'checked_note' => 'marked Fresh',
-            'mass_watched_at' => now(),
-            'mass_watched_by_name' => Actor::name(),
-            'mass_watch_open' => $request->boolean('watch'),
-            'mass_watch_touched_at' => now(),
+            'checked_note' => 'marked brand new',
+            // Patch 40c: "Brand new hole" is only a mark; watching (the 👁) is asked for separately
+            // and never changes the mass math on its own.
+            ...($request->boolean('watch') ? [
+                'mass_watched_at' => $mapConnection->mass_watched_at ?? now(),
+                'mass_watched_by_name' => $mapConnection->mass_watched_by_name ?? Actor::name(),
+                'mass_watch_open' => true,
+                'mass_watch_touched_at' => now(),
+            ] : []),
         ])->save();
         $this->broadcast($mapConnection);
 

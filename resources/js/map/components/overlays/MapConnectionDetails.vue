@@ -10,7 +10,7 @@ import { lastLook, lifeLine } from '@/lib/holeSummary';
 import { estimateConnectionMass, formatMass, massHints } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { lifetimeRange, wormholeLifetimeHours } from '@/lib/wormholeLifetime';
-import { markConnectionChecked, markConnectionFresh, setConnectionWatched, setWatchOpen } from '@/map/actions/holeChecked';
+import { markConnectionChecked, markConnectionFresh, setConnectionWatched, setCounting } from '@/map/actions/holeChecked';
 import { copyForwardBookmark, forwardSides } from '@/map/holeBookmark';
 import { couldBeNames, guessHole, holeCandidates } from '@/map/holeGuess';
 import { isK162Frigate } from '@/lib/k162';
@@ -141,27 +141,26 @@ function copyBookmark(): void {
     <PopoverContent class="max-h-(--reka-popover-content-available-height) w-80 overflow-y-auto">
         <div class="space-y-3">
             <HoleSummary v-if="summary" :summary="summary" :now="now" @checked="markConnectionChecked(connection.id)" @copy="copyBookmark" @jumps="showJumpLog = !showJumpLog" />
-            <!-- Patch 39: fresh / watching: only our logged jumps since the mark count -->
-            <div v-if="summary && connection.mass_watched_at" class="flex items-center gap-2 rounded-md bg-emerald-950/50 px-2 py-1 text-xs text-emerald-200">
-                <span :title="'Jumps logged before the mark stay in the log but no longer count'">
-                    Fresh · ours only since {{ new Date(connection.mass_watched_at).toISOString().slice(11, 16) }} EVE · <span :title="pilotDetail(connection.mass_watched_by_name)">{{ pilotName(connection.mass_watched_by_name) }}</span>
+            <!-- Patch 40c: every jump logged (switched on in the watcher): only our logged jumps since then count -->
+            <div v-if="summary && connection.mass_counting_since" class="flex items-center gap-2 rounded-md bg-emerald-950/50 px-2 py-1 text-xs text-emerald-200">
+                <span :title="'Jumps logged before stay in the log but no longer count'">
+                    Every jump logged since {{ new Date(connection.mass_counting_since).toISOString().slice(11, 16) }} EVE
                 </span>
-                <template v-if="summary.canCheck">
-                    <button type="button" class="ml-auto underline" @click="setWatchOpen(connection.id, !connection.mass_watch_open)">
-                        {{ connection.mass_watch_open ? 'Fold' : 'Watch' }}
-                    </button>
-                    <button type="button" class="underline" title="Back to the normal (safer) mass math" @click="setConnectionWatched(connection.id, false)">Stop</button>
-                </template>
+                <button v-if="summary.canCheck" type="button" class="ml-auto underline" title="Back to the normal (safer) mass math" @click="setCounting(connection.id, false)">Stop</button>
+            </div>
+            <div v-if="summary && connection.mass_watched_at" class="flex items-center gap-2 px-2 text-xs text-sky-300">
+                👁 Watching · <span :title="pilotDetail(connection.mass_watched_by_name)">{{ pilotName(connection.mass_watched_by_name) }}</span>
+                <button v-if="summary.canCheck" type="button" class="ml-auto underline" @click="setConnectionWatched(connection.id, false)">Stop watching</button>
             </div>
             <div v-else-if="summary?.canCheck" class="text-xs">
                 <button v-if="!confirmFresh" type="button" class="rounded border border-emerald-700 px-2 py-0.5 text-emerald-300 hover:bg-emerald-950" title="You saw it in game: not significantly disrupted" @click="confirmFresh = true">
-                    Mark fresh…
+                    Brand new hole…
                 </button>
                 <div v-else class="grid gap-1.5 rounded-md border border-emerald-700/60 bg-emerald-950/40 p-2 text-emerald-100">
-                    <p>Show Info says <i>"not significantly disrupted"</i>? Its range goes back to its size ±10%. Jumps logged before stay in the log but stop counting.</p>
+                    <p>Show Info says <i>"not significantly disrupted"</i>? It's marked fresh and checked. To count only the jumps you log from now on, switch on "Every jump logged" in the watcher.</p>
                     <div class="flex flex-wrap gap-1">
-                        <button type="button" class="rounded bg-emerald-700 px-2 py-0.5 text-white hover:bg-emerald-600" @click="fresh(true)">Fresh, start watching</button>
-                        <button type="button" class="rounded border border-emerald-700 px-2 py-0.5 hover:bg-emerald-900" @click="fresh(false)">Fresh only</button>
+                        <button type="button" class="rounded bg-emerald-700 px-2 py-0.5 text-white hover:bg-emerald-600" @click="fresh(true)">Brand new, watch it</button>
+                        <button type="button" class="rounded border border-emerald-700 px-2 py-0.5 hover:bg-emerald-900" @click="fresh(false)">Brand new only</button>
                         <button type="button" class="rounded px-2 py-0.5 text-muted-foreground hover:text-foreground" @click="confirmFresh = false">Cancel</button>
                     </div>
                 </div>

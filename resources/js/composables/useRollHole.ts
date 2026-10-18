@@ -42,7 +42,7 @@ export function rollTarget(store: MapStore, connectionId: number): TRollTarget |
         typeName: typed?.name ?? null,
         hole: { total, low: estimate.min, high: estimate.max, maxJump, status },
         connection,
-        watched: Boolean(connection.mass_watched_at),
+        watched: Boolean(connection.mass_counting_since),
         logged: connection.jumps_mass_sum ?? 0,
     };
 }

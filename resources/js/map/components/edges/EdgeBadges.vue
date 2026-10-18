@@ -19,9 +19,11 @@ type Props = {
     title?: string;
     /** Patch 21b: the pill grows and shrinks with the map's zoom. */
     scale?: number;
+    /** Patch 40c: who is watching the hole: a little 👁 hovers on the pill (hover: who). */
+    watcher?: string | null;
 };
 
-const { indicators, center, dot = false, clickable = false, title, scale = 1 } = defineProps<Props>();
+const { indicators, center, dot = false, clickable = false, title, scale = 1, watcher = null } = defineProps<Props>();
 
 /** Patch 37: 'menu': right-click on the pill opens the same menu as its pipe (the event goes on to the map's menu). */
 const emit = defineEmits<{ (e: 'open', event: MouseEvent): void; (e: 'copy', event: MouseEvent): void; (e: 'menu', event: MouseEvent): void }>();
@@ -134,4 +136,16 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
             </div>
         </div>
     </foreignObject>
+    <!-- Patch 40c: the watcher's eye hovers on the pill's corner (hover: who is watching) -->
+    <g
+        v-if="watcher && indicators.length"
+        class="pointer-events-auto cursor-default"
+        :transform="`translate(${center.x + (dot ? 6 * scale : (size.width * scale) / 2 - 2 * scale)}, ${center.y - (dot ? 6 * scale : (size.height * scale) / 2 + 2 * scale)})`"
+        @pointerdown.stop
+        @click.stop
+    >
+        <title>Watching: {{ watcher }}</title>
+        <circle :r="8 * scale" fill="var(--color-sky-700)" class="stroke-white dark:stroke-neutral-900" stroke-width="1.5" />
+        <text text-anchor="middle" dominant-baseline="central" :font-size="10 * scale">👁</text>
+    </g>
 </template>

@@ -8,7 +8,7 @@ import { displayAlias } from '@/lib/alias';
 import { FLEET_RULES, watchJumpMass, type TWatchClass } from '@/lib/fleetRules';
 import { estimateConnectionMass, formatMass, massHints } from '@/lib/massEstimate';
 import { wormholeMass } from '@/lib/wormholeMass';
-import { markConnectionChecked, setConnectionWatched, setWatchOpen, touchWatch } from '@/map/actions/holeChecked';
+import { markConnectionChecked, setConnectionWatched, setCounting, touchWatch } from '@/map/actions/holeChecked';
 import { updateMapConnection } from '@/map/api';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
 import { forwardSides } from '@/map/holeBookmark';
@@ -17,12 +17,18 @@ import type { TMapConnection } from '@/pages/maps';
 import MapConnectionJumpController from '@/actions/App/Http/Controllers/MapConnectionJumpController';
 import { jsonFetch } from '@/lib/jsonFetch';
 import { router, usePage } from '@inertiajs/vue3';
+import { useLocalStorage } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
 
 // Patch 39: the person behind a name (hover: main and character).
 const { label: pilotName } = usePilotNames();
 
 /**
+ * Patch 40c: the watcher. Watching a hole (the 👁 on its pill) opens this popup by the system
+ * the pipe runs into; it doesn't change the mass math. Its "Every jump logged" switch does: from
+ * then on only the jumps logged count. Drag the popup by its top line (it stays with its system
+ * as the map moves); double-click the top line to shrink it to a tiny chip, and again to open it.
+ *
  * Patch 39: fresh + watching. A hole marked fresh (or watched) counts only our logged jumps.
  * Folded it's a tiny green Fresh chip ("ours only · 12 min", ⌃ watch, ✕); open it's the watch
  * banner, floating top-left of the system the pipe runs into: one button per ship class
@@ -43,6 +49,34 @@ const counts = ref<Record<number, Record<string, number>>>({});
 const newest = ref<Record<number, Record<string, number[]>>>({});
 
 const STILL_ON_IT_MINUTES = 30;
+
+/** Patch 40c: where each watcher sits, relative to its system (screen px), and which are shrunk (this browser). */
+const offsets = useLocalStorage<Record<string, { dx: number; dy: number }>>('watcher-offsets', {});
+const shrunk = useLocalStorage<Record<string, boolean>>('watcher-shrunk', {});
+function offsetOf(id: number): { dx: number; dy: number } {
+    return offsets.value[String(id)] ?? { dx: 0, dy: 0 };
+}
+function toggleShrunk(id: number): void {
+    shrunk.value = { ...shrunk.value, [String(id)]: !shrunk.value[String(id)] };
+}
+
+/** Drag a watcher by its top line; it keeps that spot next to its system. */
+function startDrag(event: PointerEvent, id: number): void {
+    if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
+    const start = { x: event.clientX, y: event.clientY };
+    const from = offsetOf(id);
+    const target = event.currentTarget as HTMLElement;
+    target.setPointerCapture(event.pointerId);
+    const move = (moved: PointerEvent) => {
+        offsets.value = { ...offsets.value, [String(id)]: { dx: from.dx + moved.clientX - start.x, dy: from.dy + moved.clientY - start.y } };
+    };
+    const up = () => {
+        target.removeEventListener('pointermove', move);
+        target.removeEventListener('pointerup', up);
+    };
+    target.addEventListener('pointermove', move);
+    target.addEventListener('pointerup', up);
+}
 
 type TWatched = {
     connection: TMapConnection;
@@ -218,43 +252,54 @@ const mass = (kg: number) => formatMass(kg);
 <template>
     <div class="pointer-events-none absolute inset-0">
         <template v-for="item in items" :key="item.connection.id">
-            <!-- Folded: a tiny green Fresh chip -->
+            <!-- Patch 40c: shrunk (double-click): a tiny chip -->
             <div
-                v-if="!item.connection.mass_watch_open"
-                class="pointer-events-auto absolute z-20 flex items-center gap-1 rounded-full border border-emerald-600/70 bg-emerald-950/90 py-px pr-1 pl-2 text-[11px] text-emerald-200 shadow"
-                :style="{ left: `${item.left}px`, top: `${item.top - 40}px` }"
+                v-if="shrunk[String(item.connection.id)]"
+                class="pointer-events-auto absolute z-20 flex cursor-move items-center gap-1 rounded-full border border-sky-600/70 bg-neutral-950/95 px-2 py-px text-[11px] text-sky-200 shadow select-none"
+                :style="{ left: `${item.left + offsetOf(item.connection.id).dx}px`, top: `${item.top - 6 + offsetOf(item.connection.id).dy}px`, transform: 'translateY(-100%)' }"
+                :title="`Watching ${item.nearName} → ${item.farName} · ${pilotName(item.connection.mass_watched_by_name)}. Double-click to open; drag to move.`"
                 @click.stop
+                @pointerdown.stop="(event) => startDrag(event, item.connection.id)"
+                @dblclick.stop="toggleShrunk(item.connection.id)"
             >
-                <Tooltip>
-                    <TooltipTrigger as-child>
-                        <span>Fresh · ours only · {{ item.minutes }} min</span>
-                    </TooltipTrigger>
-                    <TooltipContent class="max-w-64 text-xs">
-                        {{ item.nearName }} → {{ item.farName }} was marked fresh {{ item.minutes }} min ago by
-                        {{ pilotName(item.connection.mass_watched_by_name) }}: only jumps logged since count. ⌃ opens the watch banner; ✕ goes back to the normal
-                        (safer) mass math.
-                    </TooltipContent>
-                </Tooltip>
-                <button v-if="canEdit" type="button" class="rounded px-1 hover:bg-emerald-800" title="Open the watch banner" @click="setWatchOpen(item.connection.id, true)">⌃</button>
-                <button v-if="canEdit" type="button" class="rounded px-1 hover:bg-emerald-800" title="Stop: back to the normal mass math" @click="setConnectionWatched(item.connection.id, false)">✕</button>
+                👁 {{ item.farName }}<span v-if="item.connection.mass_counting_since" class="text-emerald-300">· ✓ log</span>
             </div>
 
-            <!-- Open: the watch banner -->
+            <!-- The watcher -->
             <div
                 v-else
                 class="pointer-events-auto absolute z-20 w-[262px] rounded-md border border-sky-600/60 bg-neutral-950/95 p-1.5 text-[11px] text-neutral-200 shadow-lg"
-                :style="{ left: `${item.left}px`, top: `${item.top - 6}px`, transform: 'translateY(-100%)' }"
+                :style="{ left: `${item.left + offsetOf(item.connection.id).dx}px`, top: `${item.top - 6 + offsetOf(item.connection.id).dy}px`, transform: 'translateY(-100%)' }"
                 @click.stop
                 @contextmenu.prevent
             >
-                <div class="flex items-center gap-1">
-                    <span class="truncate font-semibold text-sky-200" :title="`Watching ${item.nearName} → ${item.farName}: every jump counts from the mark`">
-                        👁 {{ item.nearName }} → {{ item.farName }}
-                    </span>
+                <div
+                    class="flex cursor-move items-center gap-1 select-none"
+                    title="Drag to move · double-click to shrink"
+                    @pointerdown.stop="(event) => startDrag(event, item.connection.id)"
+                    @dblclick.stop="toggleShrunk(item.connection.id)"
+                >
+                    <span class="truncate font-semibold text-sky-200">👁 {{ item.nearName }} → {{ item.farName }}</span>
                     <span class="shrink-0 text-neutral-400">· {{ item.minutes }} min</span>
-                    <button v-if="canEdit" type="button" class="ml-auto rounded px-1 hover:bg-neutral-800" title="Fold to the small Fresh chip" @click="setWatchOpen(item.connection.id, false)">⌄</button>
-                    <button v-if="canEdit" type="button" class="rounded px-1 hover:bg-neutral-800" title="Stop watching: back to the normal mass math" @click="setConnectionWatched(item.connection.id, false)">✕</button>
+                    <button type="button" class="ml-auto rounded px-1 hover:bg-neutral-800" title="Shrink (or double-click the top line)" @click="toggleShrunk(item.connection.id)">⌄</button>
+                    <button v-if="canEdit" type="button" class="rounded px-1 hover:bg-neutral-800" title="Stop watching" @click="setConnectionWatched(item.connection.id, false)">✕</button>
                 </div>
+                <div class="truncate text-neutral-500">watching: {{ pilotName(item.connection.mass_watched_by_name) }}</div>
+                <!-- Patch 40c: every jump logged: only the jumps logged from now count -->
+                <label
+                    class="mt-1 flex cursor-pointer items-center gap-1.5 rounded border px-1.5 py-0.5"
+                    :class="item.connection.mass_counting_since ? 'border-emerald-600/70 bg-emerald-950/50 text-emerald-200' : 'border-neutral-700 text-neutral-300'"
+                    title="On: we see every jump and log it, so only the jumps logged from now count (tighter mass math). Off: the normal, safer math."
+                >
+                    <input
+                        type="checkbox"
+                        class="size-3.5 accent-emerald-600"
+                        :checked="Boolean(item.connection.mass_counting_since)"
+                        :disabled="!canEdit"
+                        @change="(event) => setCounting(item.connection.id, (event.target as HTMLInputElement).checked)"
+                    />
+                    Every jump logged<span v-if="item.connection.mass_counting_since" class="text-emerald-400/80"> · since {{ new Date(item.connection.mass_counting_since).toISOString().slice(11, 16) }}</span>
+                </label>
                 <div v-if="item.estimate && item.total" class="mt-0.5 text-neutral-400" title="What may be left: its size ±10% minus everything logged since the mark">
                     left ≈ <span class="font-mono text-neutral-100">{{ mass(item.estimate.min) }}–{{ mass(item.estimate.max) }}</span> of {{ mass(item.total) }}
                 </div>

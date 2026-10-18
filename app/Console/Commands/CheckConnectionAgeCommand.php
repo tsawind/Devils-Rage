@@ -186,20 +186,20 @@ final class CheckConnectionAgeCommand extends AppCommand
 
     private function isC6toKSpaceConnection(MapConnection $connection): bool
     {
-        return $connection->fromMapSolarsystem->wormholeSystem?->class === SolarsystemClass::C6
-            && $connection->toMapSolarsystem->wormholeSystem === null
-            || $connection->toMapSolarsystem->wormholeSystem?->class === SolarsystemClass::C6
-            && $connection->fromMapSolarsystem->wormholeSystem === null;
+        return $connection->fromMapSolarsystem?->wormholeSystem?->class === SolarsystemClass::C6
+            && $connection->toMapSolarsystem?->wormholeSystem === null
+            || $connection->toMapSolarsystem?->wormholeSystem?->class === SolarsystemClass::C6
+            && $connection->fromMapSolarsystem?->wormholeSystem === null;
     }
 
     private function isDrifterToKSpaceConnection(MapConnection $connection): bool
     {
-        if ($connection->fromMapSolarsystem->wormholeSystem?->class?->isDrifter() === true
-            && $connection->toMapSolarsystem->wormholeSystem === null) {
+        if ($connection->fromMapSolarsystem?->wormholeSystem?->class?->isDrifter() === true
+            && $connection->toMapSolarsystem?->wormholeSystem === null) {
             return true;
         }
 
-        return $connection->toMapSolarsystem->wormholeSystem?->class?->isDrifter() === true
-        && $connection->fromMapSolarsystem->wormholeSystem === null;
+        return $connection->toMapSolarsystem?->wormholeSystem?->class?->isDrifter() === true
+        && $connection->fromMapSolarsystem?->wormholeSystem === null;
     }
 }

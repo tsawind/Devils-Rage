@@ -26,13 +26,13 @@ export function markSignatureChecked(signatureId: number): void {
     });
 }
 
-/** Patch 37: 👁 Watching on / off: every jump through this hole is logged. */
+/** Patch 37: 👁 Watching on / off. Patch 40c: watching alone doesn't change the mass math. */
 export function setConnectionWatched(connectionId: number, on: boolean): void {
     router.post(HoleCheckedController.watch(connectionId).url, { on }, {
         preserveScroll: true,
         preserveState: true,
         only: ['map'],
-        onSuccess: () => toast.success(on ? 'Watching: every jump through it is logged' : 'Stopped watching: back to the normal mass math'),
+        onSuccess: () => toast.success(on ? 'Watching this hole' : 'Stopped watching'),
         onError: () => toast.error('Could not change watching.'),
     });
 }
@@ -40,14 +40,23 @@ export function setConnectionWatched(connectionId: number, on: boolean): void {
 const quiet = { preserveScroll: true, preserveState: true, only: ['map'] };
 
 /**
- * Patch 39: Mark fresh: its range goes back to its size ±10%; earlier jumps stay in the log but
- * stop counting ("ours only" from now). With `watch` the watch banner opens, else a Fresh chip.
+ * Patch 40c: Brand new hole: marked fresh (not disrupted). With `watch` the watcher opens too.
+ * Neither changes the mass math by itself; "every jump logged" (setCounting) does.
  */
 export function markConnectionFresh(connectionId: number, watch: boolean): void {
     router.post(HoleCheckedController.fresh(connectionId).url, { watch }, {
         ...quiet,
-        onSuccess: () => toast.success(watch ? 'Fresh · watching: every jump counts from now' : 'Marked fresh: only jumps from now count'),
-        onError: () => toast.error('Could not mark it fresh.'),
+        onSuccess: () => toast.success(watch ? 'Brand new · watching' : 'Marked brand new'),
+        onError: () => toast.error('Could not mark it brand new.'),
+    });
+}
+
+/** Patch 40c: the watcher's "every jump logged" switch: from now only logged jumps count. */
+export function setCounting(connectionId: number, on: boolean): void {
+    router.post(HoleCheckedController.watch(connectionId).url, { counting: on }, {
+        ...quiet,
+        onSuccess: () => toast.success(on ? 'Every jump logged: only jumps from now count' : 'Back to the normal mass math'),
+        onError: () => toast.error('Could not change it.'),
     });
 }
 

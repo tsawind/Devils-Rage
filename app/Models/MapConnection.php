@@ -41,6 +41,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $mass_watched_at
  * @property string|null $mass_watched_by_name
  * @property bool $mass_watch_open Patch 39: the watch banner is open (else a Fresh chip)
+ * @property CarbonImmutable|null $mass_counting_since Patch 40c: "every jump logged" on since then (only those jumps count)
  * @property CarbonImmutable|null $mass_watch_touched_at Patch 39: last click in the watch banner
  * @property CarbonImmutable|null $checked_at
  * @property CarbonImmutable|null $eol_since Patch 37: first marked End of life
@@ -84,6 +85,7 @@ final class MapConnection extends Model
         'mass_status_updated_at' => 'immutable_datetime',
         'mass_watched_at' => 'immutable_datetime',
         'mass_watch_open' => 'boolean',
+        'mass_counting_since' => 'immutable_datetime',
         'mass_watch_touched_at' => 'immutable_datetime',
         'checked_at' => 'immutable_datetime',
         'eol_since' => 'immutable_datetime',
