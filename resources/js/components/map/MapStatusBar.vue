@@ -74,11 +74,12 @@ import { useCommandPalette } from '@/composables/useCommandPalette';
 import useUser from '@/composables/useUser';
 import { characterColor } from '@/lib/characterColor';
 import { addCharacterTab } from '@/lib/characterTabs';
+import { forgetPopOutHere, wantsPopOutHere } from '@/lib/openCharacter';
 import { openPopOut } from '@/lib/popOut';
 import { driverId, soloTab, urlAs } from '@/lib/windowDriver';
 import { home, logout } from '@/routes';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { useElementSize, useLocalStorage } from '@vueuse/core';
+import { useElementSize, useEventListener, useLocalStorage } from '@vueuse/core';
 import TrackingSignatureDialog from './TrackingSignatureDialog.vue';
 
 const { map, map_user_settings, layout, map_navigation = null, map_characters = null, selected_map_solarsystem = null, ignored_systems = [] } = defineProps<{
@@ -120,10 +121,24 @@ const driverColor = computed(() => characterColor(driverCharacter.value));
 async function popOutDriver(): Promise<void> {
     const character = driverCharacter.value;
     if (!character) return;
+    waitingToPopOut.value = false;
+    forgetPopOutHere();
     if (!(await openPopOut(character.id, character.name, driverColor.value).catch(() => false))) {
         window.open(urlAs(window.location.href, character.id, true), '_blank', 'popup=yes,width=900,height=440');
     }
 }
+
+// Patch 44: this window was opened to pop its character out (one pop-out per window): the
+// first click anywhere here pops it out (a browser only opens one from a click).
+const waitingToPopOut = ref(soloTab.value && wantsPopOutHere());
+useEventListener(
+    document,
+    'pointerdown',
+    () => {
+        if (waitingToPopOut.value) void popOutDriver();
+    },
+    { capture: true },
+);
 /** Close this window; the character is a tab in the main window again (the tab list is shared by this browser). */
 function backToTab(): void {
     if (driverId.value !== null) addCharacterTab(driverId.value);
@@ -271,8 +286,15 @@ const settingsUrl = computed(() => {
                     <span class="text-[9.5px] text-muted-foreground">{{ currentAlias || currentSolarsystem?.name || 'offline' }}</span>
                 </span>
             </span>
-            <button v-if="driverCharacter" type="button" class="flex h-7 shrink-0 items-center gap-1 rounded-md border border-border px-2 text-[11px] text-muted-foreground hover:text-foreground" title="Open this character in the always-on-top pop-out" @click="popOutDriver">
-                <PictureInPicture2 class="size-3.5" /> Pop out
+            <button
+                v-if="driverCharacter"
+                type="button"
+                class="flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px]"
+                :class="waitingToPopOut ? 'animate-pulse border-cyan-400 bg-cyan-500/20 font-semibold text-cyan-200' : 'border-border text-muted-foreground hover:text-foreground'"
+                title="Open this character in the always-on-top pop-out"
+                @click="popOutDriver"
+            >
+                <PictureInPicture2 class="size-3.5" /> {{ waitingToPopOut ? 'Click anywhere to pop out' : 'Pop out' }}
             </button>
             <button v-if="driverCharacter" type="button" class="flex h-7 shrink-0 items-center gap-1 rounded-md border border-border px-2 text-[11px] text-muted-foreground hover:text-foreground" title="Close this window; the character shows as a tab in your main window again" @click="backToTab">
                 ⇥ Back to a tab

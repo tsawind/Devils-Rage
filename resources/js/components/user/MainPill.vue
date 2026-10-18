@@ -13,7 +13,7 @@ import {
     ContextMenuSubTrigger,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import PillLocation from '@/components/user/PillLocation.vue';
 import { useCharacterPills } from '@/composables/useCharacterPills';
 import useUser from '@/composables/useUser';
@@ -22,8 +22,9 @@ import UserCharacters from '@/routes/user-characters';
 import type { AppPageProps } from '@/types';
 import type { TCharacter } from '@/types/models';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { LogOut, Minus, Plus, Settings } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { AppWindow, ExternalLink, LogOut, Minus, PictureInPicture2, Plus, Settings } from 'lucide-vue-next';
+import { computed, type Component } from 'vue';
+import { OPEN_LABELS, openCharacter, type TOpenHow } from '@/lib/openCharacter';
 import { switchDriver } from '@/lib/windowDriver';
 
 /**
@@ -46,6 +47,16 @@ const quick = computed(() => new Set(myQuick.value));
  * Patch 39: switching main changes THIS window's main only (other windows and tabs keep
  * theirs); new windows start from it. Tracked-alt ticks are never cleared.
  */
+/** Patch 44: pop out / own window / browser tab. */
+const OPEN_WAYS: { value: TOpenHow; label: string; icon: Component }[] = [
+    { value: 'popout', label: 'Pop out (on top of EVE)', icon: PictureInPicture2 },
+    { value: 'window', label: 'Own window (no address bar)', icon: AppWindow },
+    { value: 'tab', label: 'Browser tab', icon: ExternalLink },
+];
+function openWith(character: TCharacter, how: TOpenHow): void {
+    void openCharacter(character, how);
+}
+
 function switchMain(characterId: number): void {
     switchDriver(characterId);
     router.put(UserCharacters.update(characterId).url, {}, { preserveScroll: true });
@@ -67,7 +78,15 @@ function switchMain(characterId: number): void {
                             <span class="max-w-32 truncate">{{ main.name }}</span>
                         </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" class="max-h-[60vh] w-56 overflow-y-auto">
+                    <DropdownMenuContent align="end" class="max-h-[60vh] w-60 overflow-y-auto">
+                        <!-- Patch 44: the same three ways to open a character as the Alt pill -->
+                        <template v-if="onMap">
+                            <DropdownMenuLabel class="text-xs">Open {{ main.name }}</DropdownMenuLabel>
+                            <DropdownMenuItem class="text-xs" :title="OPEN_LABELS.popout.hint" @select="openWith(main, 'popout')"><PictureInPicture2 class="size-3.5" /> Pop out (on top of EVE)</DropdownMenuItem>
+                            <DropdownMenuItem class="text-xs" :title="OPEN_LABELS.window.hint" @select="openWith(main, 'window')"><AppWindow class="size-3.5" /> Own window (no address bar)</DropdownMenuItem>
+                            <DropdownMenuItem class="text-xs" :title="OPEN_LABELS.tab.hint" @select="openWith(main, 'tab')"><ExternalLink class="size-3.5" /> Browser tab</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                        </template>
                         <DropdownMenuLabel class="text-xs">Switch to</DropdownMenuLabel>
                         <DropdownMenuItem v-for="character in switchable" :key="character.id" as-child>
                             <button type="button" class="flex w-full items-center gap-2 text-xs" @click="switchMain(character.id)">
@@ -99,6 +118,18 @@ function switchMain(characterId: number): void {
                     </ContextMenuCheckboxItem>
                 </ContextMenuSubContent>
             </ContextMenuSub>
+            <template v-if="onMap">
+                <ContextMenuSeparator />
+                <ContextMenuSub v-for="how in OPEN_WAYS" :key="how.value">
+                    <ContextMenuSubTrigger class="text-xs"><component :is="how.icon" class="mr-1 size-3.5" /> {{ how.label }}</ContextMenuSubTrigger>
+                    <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">
+                        <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">{{ OPEN_LABELS[how.value].hint }}</ContextMenuLabel>
+                        <ContextMenuItem v-for="character in user.characters" :key="character.id" class="text-xs" @select="openWith(character, how.value)">
+                            {{ character.name }}
+                        </ContextMenuItem>
+                    </ContextMenuSubContent>
+                </ContextMenuSub>
+            </template>
             <ContextMenuSeparator />
             <ContextMenuItem as-child class="text-xs">
                 <a class="flex w-full items-center gap-2" :href="auth({ query: { add_to_account: true } }).url"><Plus class="size-3.5" /> Add character</a>

@@ -42,7 +42,9 @@ const SOLO_KEY = 'map-solo-tab';
 
 export function initDriver(loginMain: number | null): number | null {
     try {
-        const solo = typeof window !== 'undefined' && new URL(window.location.href).searchParams.get('solo') === '1';
+        // Patch 44: a window opened for one character is named after it (dr-map-<id>), so it stays one even if ?solo= is lost.
+        const solo =
+            typeof window !== 'undefined' && (new URL(window.location.href).searchParams.get('solo') === '1' || window.name.startsWith('dr-map-'));
         if (solo) storage()?.setItem(SOLO_KEY, '1');
         soloTab.value = solo || storage()?.getItem(SOLO_KEY) === '1';
     } catch {

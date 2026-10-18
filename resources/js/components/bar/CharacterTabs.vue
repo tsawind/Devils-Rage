@@ -18,9 +18,10 @@ import useUser from '@/composables/useUser';
 import { classMeta } from '@/const/solarsystemClasses';
 import { displayAlias } from '@/lib/alias';
 import { CHARACTER_COLORS, characterColor, rememberColor, tabsThatFit } from '@/lib/characterColor';
-import { isPoppedOut, openPopOut } from '@/lib/popOut';
-import { driverId, switchDriver, urlAs } from '@/lib/windowDriver';
-import { drivenElsewhere, others, windowName } from '@/lib/windowRegistry';
+import { OPEN_LABELS, openCharacter, type TOpenHow } from '@/lib/openCharacter';
+import { isPoppedOut } from '@/lib/popOut';
+import { driverId, switchDriver } from '@/lib/windowDriver';
+import { drivenElsewhere, others } from '@/lib/windowRegistry';
 import { useMapSolarsystems } from '@/map/api';
 import { auth } from '@/routes';
 import UserCharacters from '@/routes/user-characters';
@@ -112,15 +113,9 @@ function setColor(character: TCharacter, color: string | null): void {
     router.put(CharacterColorController.update(character.id).url, { color }, { preserveScroll: true, preserveState: true, only: ['auth', 'map_characters'] });
 }
 
-function openAs(character: TCharacter, mode: 'window' | 'tab'): void {
-    addCharacterTab(character.id);
-    const url = urlAs(window.location.href, character.id, true);
-    window.open(url, windowName(character.id), mode === 'window' ? 'popup=yes,width=1400,height=900' : undefined);
-}
-
-async function popOut(character: TCharacter): Promise<void> {
-    addCharacterTab(character.id);
-    if (!(await openPopOut(character.id, character.name, characterColor(character)).catch(() => false))) openAs(character, 'window');
+// Patch 44: the same three ways to open a character as the Alt and Main pills.
+function openAs(character: TCharacter, how: TOpenHow): void {
+    void openCharacter(character, how);
 }
 </script>
 
@@ -197,9 +192,9 @@ async function popOut(character: TCharacter): Promise<void> {
                     Map its jumps in the background
                 </ContextMenuCheckboxItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem class="text-xs" @select="popOut(character)"><PictureInPicture2 class="size-3.5" /> Pop out (always on top)</ContextMenuItem>
-                <ContextMenuItem class="text-xs" @select="openAs(character, 'window')"><AppWindow class="size-3.5" /> Open in its own window</ContextMenuItem>
-                <ContextMenuItem class="text-xs" @select="openAs(character, 'tab')"><ExternalLink class="size-3.5" /> Open in a browser tab</ContextMenuItem>
+                <ContextMenuItem class="text-xs" :title="OPEN_LABELS.popout.hint" @select="openAs(character, 'popout')"><PictureInPicture2 class="size-3.5" /> Pop out (on top of EVE)</ContextMenuItem>
+                <ContextMenuItem class="text-xs" :title="OPEN_LABELS.window.hint" @select="openAs(character, 'window')"><AppWindow class="size-3.5" /> Own window (no address bar)</ContextMenuItem>
+                <ContextMenuItem class="text-xs" :title="OPEN_LABELS.tab.hint" @select="openAs(character, 'tab')"><ExternalLink class="size-3.5" /> Browser tab</ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuCheckboxItem class="text-xs" :model-value="altClipboard" @update:model-value="(value: boolean | 'indeterminate') => setAltClipboard(value === true)" @select.prevent>
                     Clipboard on background jumps

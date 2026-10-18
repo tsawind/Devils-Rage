@@ -20,12 +20,12 @@ import useUser from '@/composables/useUser';
 import type { AppPageProps } from '@/types';
 import type { TCharacter } from '@/types/models';
 import { usePage } from '@inertiajs/vue3';
-import { AppWindow, ExternalLink, PictureInPicture2, Users } from 'lucide-vue-next';
-import { soloTab, urlAs } from '@/lib/windowDriver';
+import { AppWindow, ChevronDown, ExternalLink, PictureInPicture2, Users } from 'lucide-vue-next';
+import { soloTab } from '@/lib/windowDriver';
 import { drivenElsewhere, others, windowName } from '@/lib/windowRegistry';
-import { canPopOut, openPopOut } from '@/lib/popOut';
-import { addCharacterTab } from '@/lib/characterTabs';
-import { computed } from 'vue';
+import { canPopOut } from '@/lib/popOut';
+import { OPEN_LABELS, openCharacter, type TOpenHow } from '@/lib/openCharacter';
+import { computed, ref } from 'vue';
 
 /**
  * Patch 25: one alt as a pill, left of your main: where it is (click copies the route there)
@@ -52,19 +52,22 @@ const location = computed(() => (alt.value ? locationOf(alt.value.id) : null));
  * Patch 39: open an alt as the main of its own window or tab (a full mapper). That window
  * maps the alt from then on; here its row says "own window ↗" (click brings it up).
  */
-function openAs(characterId: number, mode: 'window' | 'tab'): void {
-    // Patch 41b: a character in its own window or the pop-out gets a tab on the bar.
-    addCharacterTab(characterId);
-    const url = urlAs(window.location.href, characterId, true);
-    const features = mode === 'window' ? 'popup=yes,width=1400,height=900' : undefined;
-    window.open(url, windowName(characterId), features);
+function openAs(characterId: number, how: TOpenHow): void {
+    // Patch 44: the shared way (a character opened elsewhere gets a tab on the bar).
+    const character = (user.value?.characters ?? []).find((candidate) => candidate.id === characterId);
+    if (character) void openCharacter(character, how);
 }
-/** Patch 39: the always-on-top scanner pop-out (Chrome / Edge); elsewhere the character's own window. */
-async function popOutCharacter(characterId: number, name: string): Promise<void> {
-    addCharacterTab(characterId);
-    if (!(await openPopOut(characterId, name).catch(() => false))) openAs(characterId, 'window');
+function popOutCharacter(characterId: number): void {
+    openAs(characterId, 'popout');
 }
-const popOutLabel = canPopOut() ? 'Pop out (always on top)' : 'Pop out (opens a window: Chrome / Edge only)';
+const popOutLabel = canPopOut() ? 'Pop out (on top of EVE)' : 'Pop out (opens a window: Chrome / Edge only)';
+
+/** Patch 44: clicking the alt pops it out; the ▾ picks another alt (and has the other ways to open it). */
+const pickerOpen = ref(false);
+function clickAlt(): void {
+    if (alt.value) popOutCharacter(alt.value.id);
+    else pickerOpen.value = true;
+}
 function focusWindow(characterId: number): void {
     // Opening the same window name again brings the existing window up (it isn't reloaded).
     window.open('', windowName(characterId));
@@ -94,15 +97,33 @@ function pick(id: number | null): void {
                     <span class="font-semibold tracking-wider text-amber-400 uppercase">Alt</span>
                     <span v-if="tracked.size > 1" class="rounded-full bg-amber-500/20 px-1 text-amber-400" :title="`${tracked.size} alts tracked on this map`">{{ tracked.size }}</span>
                 </div>
-                <DropdownMenu>
-                    <DropdownMenuTrigger as-child>
-                        <button type="button" class="flex items-center gap-2 rounded px-0.5 text-xs font-medium hover:bg-muted">
+                <DropdownMenu v-model:open="pickerOpen">
+                    <div class="flex items-center">
+                        <button
+                            type="button"
+                            class="flex items-center gap-2 rounded px-0.5 text-xs font-medium hover:bg-muted"
+                            :title="alt ? `Pop out ${alt.name} (on top of EVE)` : 'Pick an alt'"
+                            @click="clickAlt"
+                        >
                             <CharacterImage v-if="alt" :character_id="alt.id" :character_name="alt.name" class="size-6 rounded" />
                             <Users v-else class="size-5 text-muted-foreground" />
                             <span class="max-w-32 truncate" :class="alt ? '' : 'text-muted-foreground'">{{ alt?.name ?? 'Pick an alt' }}</span>
+                            <PictureInPicture2 v-if="alt" class="size-3 text-muted-foreground" />
                         </button>
-                    </DropdownMenuTrigger>
+                        <DropdownMenuTrigger as-child>
+                            <button type="button" class="rounded px-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Pick another alt, or open this one">
+                                <ChevronDown class="size-3.5" />
+                            </button>
+                        </DropdownMenuTrigger>
+                    </div>
                     <DropdownMenuContent align="end" class="max-h-[60vh] w-64 overflow-y-auto">
+                        <template v-if="alt">
+                            <DropdownMenuLabel class="text-xs">Open {{ alt.name }}</DropdownMenuLabel>
+                            <DropdownMenuItem class="text-xs" :title="OPEN_LABELS.popout.hint" @select="openAs(alt.id, 'popout')"><PictureInPicture2 class="size-3.5" /> Pop out (on top of EVE)</DropdownMenuItem>
+                            <DropdownMenuItem class="text-xs" :title="OPEN_LABELS.window.hint" @select="openAs(alt.id, 'window')"><AppWindow class="size-3.5" /> Own window (no address bar)</DropdownMenuItem>
+                            <DropdownMenuItem class="text-xs" :title="OPEN_LABELS.tab.hint" @select="openAs(alt.id, 'tab')"><ExternalLink class="size-3.5" /> Browser tab</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                        </template>
                         <DropdownMenuLabel class="text-xs">{{ mapSlug ? 'Alt to show and track' : 'Alt to show' }}</DropdownMenuLabel>
                         <DropdownMenuItem v-for="candidate in pickable" :key="candidate.id" class="flex items-center gap-2 text-xs" @select="pick(candidate.id)">
                             <CharacterImage :character_id="candidate.id" :character_name="candidate.name" class="size-5 rounded" />
@@ -153,13 +174,13 @@ function pick(id: number | null): void {
                     <ContextMenuSubTrigger class="text-xs"><PictureInPicture2 class="mr-1 size-3.5" /> {{ popOutLabel }}</ContextMenuSubTrigger>
                     <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">
                         <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">A small scanner window over EVE: where it is, its way back, its signatures (Ctrl+V)</ContextMenuLabel>
-                        <ContextMenuItem v-for="candidate in user.characters" :key="candidate.id" class="text-xs" @select="popOutCharacter(candidate.id, candidate.name)">
+                        <ContextMenuItem v-for="candidate in user.characters" :key="candidate.id" class="text-xs" @select="popOutCharacter(candidate.id)">
                             {{ candidate.name }}
                         </ContextMenuItem>
                     </ContextMenuSubContent>
                 </ContextMenuSub>
                 <ContextMenuSub>
-                    <ContextMenuSubTrigger class="text-xs"><AppWindow class="mr-1 size-3.5" /> Open as a window</ContextMenuSubTrigger>
+                    <ContextMenuSubTrigger class="text-xs"><AppWindow class="mr-1 size-3.5" /> Own window (no address bar)</ContextMenuSubTrigger>
                     <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">
                         <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">A separate full mapper window with this alt as its main</ContextMenuLabel>
                         <ContextMenuItem v-for="candidate in quickList('alt', alts)" :key="candidate.id" class="text-xs" @select="openAs(candidate.id, 'window')">
@@ -168,7 +189,7 @@ function pick(id: number | null): void {
                     </ContextMenuSubContent>
                 </ContextMenuSub>
                 <ContextMenuSub>
-                    <ContextMenuSubTrigger class="text-xs"><ExternalLink class="mr-1 size-3.5" /> Open in a full tab</ContextMenuSubTrigger>
+                    <ContextMenuSubTrigger class="text-xs"><ExternalLink class="mr-1 size-3.5" /> Browser tab</ContextMenuSubTrigger>
                     <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">
                         <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">A browser tab with this alt as its only main</ContextMenuLabel>
                         <ContextMenuItem v-for="candidate in quickList('alt', alts)" :key="candidate.id" class="text-xs" @select="openAs(candidate.id, 'tab')">
