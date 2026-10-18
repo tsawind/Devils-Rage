@@ -30,6 +30,7 @@ final class SelectedMapSolarsystemResource extends JsonResource
             'alias' => $this->alias,
             'status' => $this->details->status,
             'occupier_alias' => $this->details->occupier_alias,
+            'home_of' => $this->details->home_of,
             'notes' => in_array('notes', $this->details->getHidden(), true) ? null : $this->details->notes,
             'position' => $this->getPositionArray(),
             'is_pinned' => $this->pinned,

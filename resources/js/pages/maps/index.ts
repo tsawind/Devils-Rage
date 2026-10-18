@@ -90,6 +90,8 @@ export type TMapSolarsystemBase = {
     alias: string | null;
     status: TMapSolarsystemStatus;
     occupier_alias: string | null;
+    /** Patch 43: whose home the system is (pings when it's connected). */
+    home_of?: string | null;
     notes: string | null;
     position: {
         x: number;

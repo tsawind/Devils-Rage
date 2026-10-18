@@ -23,6 +23,7 @@ use OwenIt\Auditing\Models\Audit;
  * @property int $map_id
  * @property int $solarsystem_id
  * @property string|null $occupier_alias
+ * @property string|null $home_of
  * @property MapSolarsystemStatus $status
  * @property string|null $notes
  * @property-read Solarsystem $solarsystem

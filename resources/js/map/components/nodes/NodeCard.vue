@@ -280,6 +280,13 @@ function handleSubmit() {
                     </TooltipTrigger>
                     <TooltipContent> Home system </TooltipContent>
                 </Tooltip>
+                <!-- Patch 43: someone else's home (pings when it's connected) -->
+                <Tooltip v-else-if="system.home_of" :delay-duration="300">
+                    <TooltipTrigger>
+                        <HomeIcon class="size-[14px] text-rose-500" />
+                    </TooltipTrigger>
+                    <TooltipContent>Home of {{ system.home_of }}</TooltipContent>
+                </Tooltip>
                 <Tooltip v-if="isRally" :delay-duration="500">
                     <TooltipTrigger>
                         <FlagIcon class="size-[14px] text-red-400" />

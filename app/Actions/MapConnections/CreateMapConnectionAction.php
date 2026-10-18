@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\MapConnections;
 
 use App\Enums\ShipSize;
+use App\Jobs\MapAlerts\AnnounceKnownHomeJob;
 use App\Jobs\MapAlerts\EvaluateMapAlertsJob;
 use App\Models\MapConnection;
 use App\Models\MapSolarsystem;
@@ -50,6 +51,9 @@ final readonly class CreateMapConnectionAction
          */
         EvaluateMapAlertsJob::dispatch($map_connection->from_map_solarsystem_id)->afterCommit();
         EvaluateMapAlertsJob::dispatch($map_connection->to_map_solarsystem_id)->afterCommit();
+        // Patch 43: a pipe to a marked home pings (once every few hours).
+        AnnounceKnownHomeJob::dispatch($map_connection->from_map_solarsystem_id)->afterCommit();
+        AnnounceKnownHomeJob::dispatch($map_connection->to_map_solarsystem_id)->afterCommit();
 
         $this->mapBroadcaster->connectionsUpserted($map_id, MapConnection::query()
             ->whereKey($map_connection->id)

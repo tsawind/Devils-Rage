@@ -25,7 +25,9 @@ import { pulseKill } from '@/composables/useKillPulses';
 import { useMapBackground } from '@/composables/useMapBackground';
 import { useMapEffects } from '@/composables/useMapEffects';
 import { getMapChannelName } from '@/const/channels';
-import { KillmailReceivedEvent } from '@/const/events';
+import { KillmailReceivedEvent, KnownHomeConnectedEvent } from '@/const/events';
+import { playTargetAcquired } from '@/lib/rageSound';
+import { toast } from 'vue-sonner';
 import { useMapLayout } from '@/composables/useMapLayout';
 import { useOnClient } from '@/composables/useOnClient';
 import { useMapPresence } from '@/composables/useMapPresence';
@@ -189,6 +191,18 @@ useOnClient(() =>
                 );
         },
     ),
+);
+
+// Patch 43: a system marked as someone's home was connected: a notice that stays, and a sound.
+useOnClient(() =>
+    useEcho<{ home_of: string; system_name: string; alias: string | null; way: string | null }>(getMapChannelName(map.id), KnownHomeConnectedEvent, (event) => {
+        toast.warning(`🏠 Home of ${event.home_of} is connected`, {
+            description: [`${event.alias ? `${event.alias} · ` : ''}${event.system_name}`, event.way].filter(Boolean).join(' — '),
+            duration: Infinity,
+            closeButton: true,
+        });
+        if (mapEffects.value.sounds) playTargetAcquired();
+    }),
 );
 
 // Patch 39: when the live connection is down (or never came up), refresh the map every ~20 s

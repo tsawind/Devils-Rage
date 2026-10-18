@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support\Undo;
 
 use App\Jobs\MapAlerts\AnnounceChainExitJob;
+use App\Jobs\MapAlerts\AnnounceKnownHomeJob;
 use App\Jobs\MapAlerts\EvaluateAssetWatchesJob;
 use App\Jobs\MapAlerts\EvaluateMapAlertsJob;
 use App\Models\Map;
@@ -237,6 +238,7 @@ final readonly class MapUndoSnapshots
                 EvaluateMapAlertsJob::dispatch($id)->afterCommit();
                 EvaluateAssetWatchesJob::dispatch($id)->afterCommit();
                 AnnounceChainExitJob::dispatch($id)->afterCommit();
+                AnnounceKnownHomeJob::dispatch($id)->afterCommit();
             }
 
             return $counts;

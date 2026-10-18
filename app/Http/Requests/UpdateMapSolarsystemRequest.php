@@ -37,6 +37,7 @@ final class UpdateMapSolarsystemRequest extends FormRequest
         return [
             'alias' => ['nullable', 'string', 'max:255'],
             'occupier_alias' => ['nullable', 'string', 'max:255'],
+            'home_of' => ['nullable', 'string', 'max:100'],
             'position_x' => ['nullable',  Rule::numeric()->min($grid_size)->max($max_size_x - $grid_size)],
             'position_y' => ['nullable', Rule::numeric()->min($grid_size)->max($max_size_y - $grid_size)],
             'status' => ['nullable', 'sometimes', Rule::enum(MapSolarsystemStatus::class)],

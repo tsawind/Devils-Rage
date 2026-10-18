@@ -30,6 +30,7 @@ final class MapSolarsystemResource extends JsonResource
             'alias' => $this->alias,
             'status' => $this->details->status,
             'occupier_alias' => $this->details->occupier_alias,
+            'home_of' => $this->details->home_of,
             'position' => $this->getPositionArray(),
             'pinned' => $this->pinned,
             'combat_color' => $this->combat_color,

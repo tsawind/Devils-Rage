@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { clipboardAllowed } from '@/composables/useClipboardSetting';
-import { customLetter, isCustomName, renameProblem } from '@/lib/alias';
+import { customLetter, displayAlias, isCustomName, renameProblem } from '@/lib/alias';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { computed, ref, watch } from 'vue';
 import type { TRenameMode } from '@/map/actions/names';
@@ -30,15 +30,28 @@ const props = defineProps<{
      * give them the next number, or keep it as a floating name. Null when nobody has it.
      */
     holderOf?: ((name: string) => { label: string; next: string | null } | null) | null;
+    /** Patch 43: the system's occupier and whose home it is (shown when the system is on the map). */
+    details?: { occupier: string; homeOf: string } | null;
 }>();
 
 const open = defineModel<boolean>('open', { required: true });
-const emit = defineEmits<{ rename: [name: string, copy: boolean, mode: TRenameMode, next: string | null] }>();
+const emit = defineEmits<{
+    rename: [name: string, copy: boolean, mode: TRenameMode, next: string | null];
+    details: [occupier: string, homeOf: string];
+}>();
 
 const name = ref(props.currentName);
+const occupier = ref(props.details?.occupier ?? '');
+const homeOf = ref(props.details?.homeOf ?? '');
 watch(open, (isOpen) => {
-    if (isOpen) name.value = props.currentName;
+    if (!isOpen) return;
+    name.value = props.currentName;
+    occupier.value = props.details?.occupier ?? '';
+    homeOf.value = props.details?.homeOf ?? '';
 });
+const detailsChanged = computed(
+    () => Boolean(props.details) && (occupier.value.trim() !== (props.details?.occupier ?? '').trim() || homeOf.value.trim() !== (props.details?.homeOf ?? '').trim()),
+);
 
 const trimmed = computed(() => name.value.trim());
 const unchanged = computed(() => trimmed.value === props.currentName.trim());
@@ -67,10 +80,14 @@ const beyondNote = computed(() => {
 });
 const offerQuiet = computed(() => clipboardAllowed());
 
+/** Patch 43: only the occupier / home changed (the name stays): just save those. */
+const onlyDetails = computed(() => unchanged.value && detailsChanged.value);
+
 function rename(copy: boolean): void {
-    if (!canRename.value) return;
+    if (!canRename.value && !onlyDetails.value) return;
     open.value = false;
-    emit('rename', trimmed.value, copy, holder.value ? mode.value : 'plain', holder.value?.next ?? null);
+    if (detailsChanged.value) emit('details', occupier.value.trim(), homeOf.value.trim());
+    if (canRename.value) emit('rename', trimmed.value, copy, holder.value ? mode.value : 'plain', holder.value?.next ?? null);
 }
 </script>
 
@@ -78,7 +95,7 @@ function rename(copy: boolean): void {
     <Dialog v-model:open="open">
         <DialogScrollContent class="max-w-md gap-0 overflow-hidden p-0">
             <DialogHeader class="gap-1.5 border-b border-border/50 bg-muted/30 px-6 py-4 text-left">
-                <DialogTitle>Rename {{ currentName || 'this hole' }}</DialogTitle>
+                <DialogTitle>Rename {{ displayAlias(currentName) || 'this hole' }}</DialogTitle>
                 <DialogDescription>
                     Your own name for {{ jumped ? 'this hole and the system it leads to' : 'this hole' }}. The mapper never changes a typed name by
                     itself.
@@ -86,6 +103,16 @@ function rename(copy: boolean): void {
             </DialogHeader>
             <form class="grid gap-3 px-6 py-4 text-xs" @submit.prevent="rename(true)">
                 <Input v-model="name" autofocus maxlength="24" class="font-mono" placeholder="Gas" aria-label="New name" />
+                <div v-if="details" class="grid grid-cols-2 gap-2">
+                    <label class="grid gap-1">
+                        <span class="text-muted-foreground">Occupier</span>
+                        <Input v-model="occupier" maxlength="255" placeholder="Who lives there" aria-label="Occupier" />
+                    </label>
+                    <label class="grid gap-1" title="Mark it as someone's home: everyone on the map is pinged (and the /exits channel) when it's connected">
+                        <span class="text-muted-foreground">🏠 Home of</span>
+                        <Input v-model="homeOf" maxlength="100" placeholder="e.g. The Devil's Rage" aria-label="Home of" />
+                    </label>
+                </div>
                 <p v-if="problem" class="rounded-md bg-amber-500/15 px-3 py-2 text-amber-700 dark:text-amber-300">{{ problem }}</p>
                 <div v-if="holder && !problem" class="grid gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-3 py-2">
                     <span class="font-medium">{{ trimmed }} is {{ holder.label }}'s. Use it anyway:</span>
@@ -120,8 +147,11 @@ function rename(copy: boolean): void {
             <DialogFooter class="gap-2 border-t border-border/50 bg-muted/30 px-6 py-3 sm:justify-between">
                 <Button variant="outline" @click="open = false">Cancel</Button>
                 <div class="flex flex-wrap justify-end gap-2">
-                    <Button v-if="offerQuiet" variant="secondary" :disabled="!canRename" @click="rename(false)">Rename, don't copy</Button>
-                    <Button :disabled="!canRename" @click="rename(true)">Rename{{ offerQuiet ? ' and copy' : '' }}</Button>
+                    <Button v-if="onlyDetails" @click="rename(false)">Save</Button>
+                    <template v-else>
+                        <Button v-if="offerQuiet" variant="secondary" :disabled="!canRename" @click="rename(false)">Rename, don't copy</Button>
+                        <Button :disabled="!canRename" @click="rename(true)">Rename{{ offerQuiet ? ' and copy' : '' }}</Button>
+                    </template>
                 </div>
             </DialogFooter>
         </DialogScrollContent>

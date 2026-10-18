@@ -77,6 +77,25 @@ function holderOf(name: string): { label: string; next: string | null } | null {
     });
 }
 
+/** Patch 43: the occupier and whose home it is (kept with the system's intel on this map). */
+function saveDetails(occupier: string, homeOf: string): void {
+    const id = request.value?.targetId;
+    if (id == null) return;
+    router.put(
+        MapSolarsystems.update(id).url,
+        { occupier_alias: occupier || null, home_of: homeOf || null },
+        {
+            // Its own request: a rename sent at the same time doesn't cancel it.
+            async: true,
+            preserveScroll: true,
+            preserveState: true,
+            only: ['map', 'selected_map_solarsystem'],
+            onSuccess: () => toast.success(homeOf ? `Marked as the home of ${homeOf}` : 'Saved', { description: homeOf ? "Everyone's pinged when it's connected." : undefined }),
+            onError: (errors) => toast.error(Object.values(errors)[0] ?? 'Could not save it.'),
+        },
+    );
+}
+
 function rename(name: string, copy: boolean, mode: TRenameMode, next: string | null): void {
     const current = request.value;
     if (!current) return;
@@ -111,6 +130,8 @@ function rename(name: string, copy: boolean, mode: TRenameMode, next: string | n
         :bookmarks="bookmarks"
         :holder-of="request?.signatureId ? holderOf : null"
         :jumped="Boolean(target && parent)"
+        :details="target ? { occupier: target.occupier_alias ?? '', homeOf: target.home_of ?? '' } : null"
         @rename="rename"
+        @details="saveDetails"
     />
 </template>
