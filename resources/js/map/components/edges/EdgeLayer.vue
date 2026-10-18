@@ -48,7 +48,9 @@ const pendingGeometry = computed<EdgeGeometry | null>(() => {
 });
 
 // Patch 37: every pill goes on one layer drawn after all the pipes.
-provide('edgePillLayer', true);
+// Patch 42i: this map's own layer (by element, not by id: the pop-out's map has one too).
+const pillLayer = useTemplateRef<SVGGElement>('pillLayer');
+provide('edgePillLayer', pillLayer);
 
 // Patch 17: no halo pass over a background image (it would show as a solid band).
 const { backgroundImageUrl } = useMapBackground();
@@ -70,7 +72,7 @@ const { backgroundImageUrl } = useMapBackground();
                 @connection-context-menu="(event, connection) => emit('connectionContextMenu', event, connection)"
             />
             <Edge v-if="pendingGeometry" :geometry="pendingGeometry" :scale="store.scale.value" />
-            <g id="edge-pill-layer" />
+            <g ref="pillLayer" data-edge-pill-layer />
         </svg>
     </div>
 </template>

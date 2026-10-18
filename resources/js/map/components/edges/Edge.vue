@@ -17,7 +17,7 @@ import { edgePathAndCenter, lightningPath, loopMarkPoint } from '@/map/core/geom
 import type { EdgeGeometry } from '@/map/core/types';
 import type { TMapConnection } from '@/pages/maps';
 import type { TShipSize } from '@/types/models';
-import { computed, inject, onBeforeUnmount, watch } from 'vue';
+import { computed, inject, onBeforeUnmount, watch, type Ref } from 'vue';
 
 type Props = {
     geometry: EdgeGeometry;
@@ -394,7 +394,7 @@ function getDashArray(): string | undefined {
 }
 
 /** Patch 37: the map's pill layer (above every pipe); not there in tests or the drag ghost. */
-const pillLayer = inject('edgePillLayer', false);
+const pillLayer = inject<Readonly<Ref<SVGGElement | null>> | null>('edgePillLayer', null);
 </script>
 
 <template>
@@ -523,7 +523,7 @@ const pillLayer = inject('edgePillLayer', false);
         <!-- Patch 37: drawn after the wide click path, so clicks on the pill (and its copy chip) reach it -->
         <!-- Connection status indicators -->
         <!-- Patch 37: pills sit on their own layer above every pipe (a later pipe never covers one) -->
-        <Teleport defer to="#edge-pill-layer" :disabled="!pillLayer">
+        <Teleport defer :to="pillLayer?.value ?? 'body'" :disabled="!pillLayer?.value">
             <g class="text-stone-600 dark:text-neutral-700" :opacity="fromMemory ? 0.4 : undefined">
                 <EdgeBadges
                     :indicators="indicators"
