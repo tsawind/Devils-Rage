@@ -61,9 +61,10 @@ const MAP_STORE_KEY: InjectionKey<MapStore> = Symbol('mapStore');
  */
 const currentStore: ShallowRef<MapStore | null> = shallowRef(null);
 
-export function provideMapStore(store: MapStore): void {
+/** Patch 42c: the pop-out's copy of the map (`page: false`) is only provided to its own subtree. */
+export function provideMapStore(store: MapStore, page: boolean = true): void {
     provide(MAP_STORE_KEY, store);
-    currentStore.value = store;
+    if (page) currentStore.value = store;
 }
 
 /** Patch 21: the store when there is one (a pipe drawn on its own, e.g. in a test, has none). */

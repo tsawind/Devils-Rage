@@ -84,7 +84,8 @@ export function createLinkDragGesture(store: MapStore): LinkDrag {
 
 /** The node the pointer was released over, via the topmost element under it. */
 function resolveDropNodeId(event: PointerEvent): number | null {
-    const element = document.elementFromPoint(event.clientX, event.clientY);
+    const owner = event.target instanceof Node ? (event.target.ownerDocument ?? document) : document;
+    const element = owner.elementFromPoint(event.clientX, event.clientY);
     const node = element?.closest('[data-node-id]');
     if (!(node instanceof HTMLElement) || node.dataset.nodeId === undefined) {
         return null;

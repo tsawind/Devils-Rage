@@ -3,7 +3,7 @@ import type { Vec2 } from '@/map/core/types';
 import type { MapStore } from '@/map/store/mapStore';
 import type { GestureKind } from '@/map/store/viewState';
 import { useEventListener } from '@vueuse/core';
-import type { Ref } from 'vue';
+import { computed, type Ref } from 'vue';
 
 /**
  * The single pointer-gesture arbiter for the map surface. Exactly one gesture
@@ -126,7 +126,7 @@ export function usePointerGestures(surface: Ref<HTMLElement | null>, gestures: G
             // window-level listeners still finish the gesture without capture.
         }
         event.preventDefault();
-        document.body.style.userSelect = 'none';
+        (surface.value?.ownerDocument ?? document).body.style.userSelect = 'none';
     }
 
     function reset(): void {
@@ -139,7 +139,7 @@ export function usePointerGestures(surface: Ref<HTMLElement | null>, gestures: G
         }
         active = null;
         store.activeGesture.value = 'none';
-        document.body.style.userSelect = '';
+        (surface.value?.ownerDocument ?? document).body.style.userSelect = '';
     }
 
     function handlePointerDown(event: PointerEvent): void {
@@ -216,8 +216,10 @@ export function usePointerGestures(surface: Ref<HTMLElement | null>, gestures: G
         pointer.gesture.onCancel();
     }
 
+    // Patch 42c: the surface's own window (the pop-out draws the map in another window).
+    const surfaceWindow = computed(() => surface.value?.ownerDocument.defaultView ?? window);
     useEventListener(surface, 'pointerdown', handlePointerDown);
-    useEventListener(window, 'pointermove', handlePointerMove);
-    useEventListener(window, 'pointerup', handlePointerUp);
-    useEventListener(window, 'pointercancel', handlePointerCancel);
+    useEventListener(surfaceWindow, 'pointermove', handlePointerMove);
+    useEventListener(surfaceWindow, 'pointerup', handlePointerUp);
+    useEventListener(surfaceWindow, 'pointercancel', handlePointerCancel);
 }

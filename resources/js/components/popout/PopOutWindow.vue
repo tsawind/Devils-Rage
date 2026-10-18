@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import PopOutController from '@/actions/App/Http/Controllers/PopOutController';
 import { CharacterImage } from '@/components/images';
-import PopOutMap from '@/components/popout/PopOutMap.vue';
 import Signatures from '@/components/signatures/Signatures.vue';
 import { heldWayBack } from '@/composables/signatures/wayBack';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
@@ -11,12 +10,15 @@ import { jsonFetch } from '@/lib/jsonFetch';
 import { closePopOut, focusedClipboard, popOut, popOutWindow } from '@/lib/popOut';
 import { driverId } from '@/lib/windowDriver';
 import { useMapSolarsystems } from '@/map/api';
+import MapRoot from '@/map/components/MapRoot.vue';
+import { POPOUT_MAP } from '@/map/popoutMap';
 import type { TMap, TResolvedSelectedMapSolarsystem, TSelectedMapSolarsystem } from '@/pages/maps';
 import type { AppPageProps } from '@/types';
+import type { TMapConfig } from '@/types/map';
 import type { TCharacter } from '@/types/models';
 import { usePage } from '@inertiajs/vue3';
 import { useIntervalFn, useLocalStorage } from '@vueuse/core';
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
 
 /**
  * Patch 39: the scanner pop-out, drawn into the always-on-top window: the character,
@@ -25,7 +27,11 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
  * signature panel as the main mapper for the character's system (Ctrl+V pastes into it).
  * Clicking another system on the pop-out map shows its signatures until the next jump.
  * Questions the mapper asks (the jump prompt, renames) still open in the main window.
+ *
+ * Patch 42c: the map is the real map (a second copy with its own zoom, always centred on
+ * the character), not a drawing of the systems around it.
  */
+const { map, config } = defineProps<{ map: TMap; config: TMapConfig }>();
 const page = usePage<AppPageProps<{ map: TMap; map_characters?: TCharacter[] | null }>>();
 const { map_solarsystems } = useMapSolarsystems();
 const { resolveSolarsystem } = useStaticSolarsystems();
@@ -120,6 +126,7 @@ const popoutOptions = {
 function pick(solarsystemId: number): void {
     viewing.value = solarsystemId === hereId.value ? null : solarsystemId;
 }
+provide(POPOUT_MAP, { pick });
 
 onBeforeUnmount(() => closePopOut());
 </script>
@@ -153,10 +160,10 @@ onBeforeUnmount(() => closePopOut());
             <div class="flex min-h-0 flex-1">
                 <!-- The map around the character: ◂ folds it away and the window shrinks by its width -->
                 <div v-if="mapOpen" ref="mapPane" class="relative min-w-0 flex-1 border-r border-border">
-                    <PopOutMap :map-solarsystem-id="hereMapSystem?.id ?? null" :color="popOut.color" @select="pick" />
+                    <MapRoot :map="map" :config="config" popout :follow-solarsystem-id="hereId" />
                     <button
                         type="button"
-                        class="absolute top-1 right-1 rounded bg-neutral-800/80 px-1.5 text-xs text-neutral-300 hover:bg-neutral-700"
+                        class="absolute top-1 right-1 z-40 rounded bg-neutral-800/80 px-1.5 text-xs text-neutral-300 hover:bg-neutral-700"
                         title="Fold the map away (the window gets narrower)"
                         @click="foldMap"
                     >

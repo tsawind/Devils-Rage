@@ -43,8 +43,9 @@ import { createMarqueeGesture } from '@/map/interactions/marquee';
 import { createNodeDragGesture } from '@/map/interactions/nodeDrag';
 import { createPanGesture } from '@/map/interactions/pan';
 import { useIsUsingInput } from '@/map/interactions/useIsUsingInput';
-import { createMapStore, provideMapStore } from '@/map/store/mapStore';
+import { createMapStore, provideMapStore, tryUseMapStore } from '@/map/store/mapStore';
 import { useMassLogToasts } from '@/composables/useMassLogToasts';
+import { popoutMapScale } from '@/map/popoutMap';
 import { useMapSync } from '@/map/sync/useMapSync';
 import { TMap, TMapConnection, TSolarsystem } from '@/pages/maps';
 import { TMapConfig } from '@/types/map';
@@ -56,10 +57,21 @@ import { computed, ref, useTemplateRef, watch, watchEffect } from 'vue';
  * MapComponent: it takes the resolved map and the canvas config, everything
  * else comes from page props. It owns the store, the gestures, and all the
  * canvas-level overlays (context menus, connection popover, options, dialogs).
+ *
+ * Patch 42c: `popout` draws a second copy in the scanner pop-out: its own zoom, always
+ * centred on `followSolarsystemId` (the pop-out's character), the zoom / sound / layout
+ * buttons only (no menus, dialogs, Jumping hot or watcher: those stay in the main window).
  */
-const { map, config } = defineProps<{
+const {
+    map,
+    config,
+    popout = false,
+    followSolarsystemId = null,
+} = defineProps<{
     map: TMap;
     config: TMapConfig;
+    popout?: boolean;
+    followSolarsystemId?: number | null;
 }>();
 
 const { path } = usePath();
@@ -69,8 +81,17 @@ const { getRallyRouteInfo } = useRallyRoute();
 // store's RouteDeps expects (the store only ever reads it).
 const routePath = computed(() => path.value as readonly TSolarsystem[] | null);
 
+// The pop-out's copy borrows the card sizes the main map measured (its window may not report them).
+const pageStore = popout ? tryUseMapStore() : null;
 const store = createMapStore({ path: routePath, getRallyRouteInfo });
-provideMapStore(store);
+provideMapStore(store, !popout);
+if (pageStore) {
+    watchEffect(() => {
+        for (const [id, size] of pageStore.nodeSizes) {
+            if (!store.nodeSizes.has(id)) store.nodeSizes.set(id, size);
+        }
+    });
+}
 
 watch(
     () => map,
@@ -90,7 +111,7 @@ watch(
 // useLayout); the old createLayout mirrored it into mapState.scale the same way.
 const { layout } = useLayout();
 watchEffect(() => {
-    store.scale.value = layout.value?.scale ?? 1;
+    store.scale.value = popout ? popoutMapScale.value : (layout.value?.scale ?? 1);
 });
 
 // Mirror the viewer's personal layout override (map_user_settings.layout_override,
@@ -100,18 +121,21 @@ watchEffect(() => {
     store.userLayoutOverride.value = mapUserSettings.value?.layout_override ?? null;
 });
 
-useMapSync(store, () => map.id);
-// Patch 13: mark a static once it is certain, after your own paste / type change.
-useStaticCertainty(store);
-// Patch 33: the jump log marked a hole reduced / critical / rolled.
-useMassLogToasts(store);
-useUserEvents();
+// The pop-out's copy takes the same live updates but leaves the reloads to the main window.
+useMapSync(store, () => map.id, { reload: !popout });
+if (!popout) {
+    // Patch 13: mark a static once it is certain, after your own paste / type change.
+    useStaticCertainty(store);
+    // Patch 33: the jump log marked a hole reduced / critical / rolled.
+    useMassLogToasts(store);
+    useUserEvents();
+}
 
 // Patch 15: the system you're in (its rage-lane holes stay open), and Center:
 // keep the map on it after every jump and whenever it moves on the map.
 const activeCharacter = useActiveMapCharacter();
 const locationMapSystemId = computed(() => {
-    const solarsystemId = activeCharacter.value?.status?.solarsystem_id ?? null;
+    const solarsystemId = popout ? followSolarsystemId : (activeCharacter.value?.status?.solarsystem_id ?? null);
     if (!solarsystemId) return null;
     for (const system of store.systems.values()) if (system.solarsystem_id === solarsystemId) return system.id;
     return null;
@@ -120,13 +144,15 @@ watch(locationMapSystemId, (id) => (store.currentSystemId.value = id), { immedia
 // Patch 16: the map only moves when you near an edge (MapViewport decides); switching
 // Center on, loading the page or switching Rage Scanning always re-centers.
 const { is_combat } = useCombat();
+// The pop-out always follows its character.
+const centering = computed(() => popout || centerOnMe.value);
 // Forced only on page load, switching Center on, or switching Rage Scanning; a jump never
 // forces (your location briefly drops out mid-jump, which used to count as "just switched on").
 let centerMode: string | null = null;
 watch(
     () => {
         const id = locationMapSystemId.value;
-        if (!centerOnMe.value || id === null) return null;
+        if (!centering.value || id === null) return null;
         const point = store.renderPosition(id);
         return point ? `${id}:${Math.round(point.x)}:${Math.round(point.y)}` : null;
     },
@@ -149,7 +175,7 @@ watch(centerOnMe, (on) => {
 watch(is_combat, () => {
     const id = locationMapSystemId.value;
     const point = id === null ? null : store.renderPosition(id);
-    if (!centerOnMe.value || !point) return;
+    if (!centering.value || !point) return;
     centerMode = is_combat.value ? 'rage' : 'map';
     store.requestCenter({ x: point.x + 50, y: point.y }, true);
 });
@@ -201,6 +227,7 @@ function handleConnectionContextMenu(_event: MouseEvent, connection: TMapConnect
 }
 
 function handleConnectionClick(event: MouseEvent, connection: TMapConnection): void {
+    if (popout) return;
     connectionPopoverOpen.value = true;
     // Store the click in viewport coordinates.
     connectionPopoverPosition.value = { x: event.clientX, y: event.clientY };
@@ -269,7 +296,7 @@ const { Delete } = useMagicKeys();
 const isUsingInput = useIsUsingInput();
 
 whenever(Delete, () => {
-    if (!isUsingInput.value) {
+    if (!popout && !isUsingInput.value) {
         deleteSelectedMapSolarsystems();
     }
 });
@@ -279,6 +306,7 @@ whenever(Delete, () => {
     <MapViewport
         ref="viewport"
         :gestures="gestures"
+        :popout="popout"
         @context-menu-open-change="handleContextMenuOpenChange"
         @surface-context-menu="handleSurfaceContextMenu"
     >
@@ -291,8 +319,8 @@ whenever(Delete, () => {
             @connection-context-menu="handleConnectionContextMenu"
         />
         <MapNode v-for="id in systemIds" :id="id" :key="id" />
-        <WatchLayer />
-        <template #context-menu>
+        <WatchLayer v-if="!popout" />
+        <template v-if="!popout" #context-menu>
             <MapContextMenu v-if="contextMenuType === 'map' && canWrite" :position="contextMenuBasePoint" />
             <MapSolarsystemContextMenu v-else-if="contextMenuType === 'node' && contextMenuSystem" :map_solarsystem="contextMenuSystem" />
             <PlaceholderContextMenu v-else-if="contextMenuType === 'placeholder' && contextMenuPlaceholder" :placeholder="contextMenuPlaceholder" />
@@ -301,7 +329,10 @@ whenever(Delete, () => {
                 :map_connection="selectedConnection"
             />
         </template>
-        <template #overlays>
+        <template v-if="popout" #overlays>
+            <MapOptions popout />
+        </template>
+        <template v-else #overlays>
             <MapOptions />
             <WayBackPopup />
             <RageRollOverlay />
@@ -312,6 +343,7 @@ whenever(Delete, () => {
             </div>
         </template>
     </MapViewport>
+    <template v-if="!popout">
     <ConnectionPopover
         v-if="selectedConnection"
         :key="selectedConnection.id"
@@ -329,6 +361,7 @@ whenever(Delete, () => {
     <StaticConfirmDialog />
     <LoopDialog />
     <MapRenameDialog />
+    </template>
 </template>
 
 <style scoped></style>

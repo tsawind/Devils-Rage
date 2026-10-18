@@ -24,8 +24,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, useTemplateRef, watch }
  * content of the canvas-wide ContextMenu, #overlays = panel-fixed chrome
  * (rally badge, options, …) rendered above the scroll surface.
  */
-const { gestures } = defineProps<{
+const { gestures, popout = false } = defineProps<{
     gestures: Gesture[];
+    /** Patch 42c: the pop-out's copy draws its own background (the page's full-screen one isn't in that window). */
+    popout?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -127,10 +129,12 @@ onBeforeUnmount(() => {
     if (settleTimer) clearTimeout(settleTimer);
 });
 
-const { backgroundImageUrl: ownBackgroundUrl, backgroundMode } = useMapBackground();
+const { backgroundImageUrl: ownBackgroundUrl, backgroundMode: chosenBackgroundMode } = useMapBackground();
+// The pop-out keeps the picture still behind the map, like the main page's full-screen background.
+const backgroundMode = computed(() => (popout ? 'viewport' : chosenBackgroundMode.value));
 // Patch 37: a full-screen background is drawn behind the whole page; the map then draws none of its own.
 const { effects } = useMapEffects();
-const fullScreenBackground = computed(() => effects.value.fullScreenBackground && Boolean(ownBackgroundUrl.value));
+const fullScreenBackground = computed(() => !popout && effects.value.fullScreenBackground && Boolean(ownBackgroundUrl.value));
 const backgroundImageUrl = computed(() => (fullScreenBackground.value ? '' : ownBackgroundUrl.value));
 
 // The manual map uses the full configured canvas. The tree layout instead sizes the

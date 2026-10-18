@@ -411,6 +411,6 @@ const handleResizeEnd = () => {
         <!-- Patch 39: a guest names themselves once -->
         <GuestNameDialog />
         <!-- Patch 39: the scanner pop-out (drawn into its always-on-top window) -->
-        <PopOutWindow />
+        <PopOutWindow :map="resolvedMap" :config="config" />
     </AppLayout>
 </template>

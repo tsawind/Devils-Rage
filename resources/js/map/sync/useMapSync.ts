@@ -25,7 +25,9 @@ type PusherConnection = {
  * Reconnects (sleep, network blip, Reverb restart) trigger one coalesced
  * full-prop reload that flows through reconcileMap — no missed-event tracking.
  */
-export function useMapSync(store: MapStore, mapId: MaybeRefOrGetter<number>): void {
+export function useMapSync(store: MapStore, mapId: MaybeRefOrGetter<number>, options: { reload?: boolean } = {}): void {
+    // Patch 42c: the pop-out's copy of the map applies the events but leaves the reloads to the main window.
+    const reload = options.reload ?? true;
     const page = usePage<AppPageProps<TShowMapProps>>();
     const { resolveSolarsystem } = useStaticSolarsystems();
     const coalescer = createReloadCoalescer();
@@ -33,6 +35,7 @@ export function useMapSync(store: MapStore, mapId: MaybeRefOrGetter<number>): vo
     const channelName = computed(() => getMapChannelName(toValue(mapId)));
 
     function applyEffect(effect: SyncEffect): void {
+        if (!reload) return;
         const props = [...(effect.reload ?? [])];
         if (effect.reloadIfSelected?.length) {
             const selectedId = page.props.selected_map_solarsystem?.id;
@@ -54,6 +57,7 @@ export function useMapSync(store: MapStore, mapId: MaybeRefOrGetter<number>): vo
     const handleConnectionStateChange = createReconnectListener(() => coalescer.schedule(ALL_MAP_PROPS));
 
     onMounted(() => {
+        if (!reload) return;
         connection()?.bind('state_change', handleConnectionStateChange);
     });
 

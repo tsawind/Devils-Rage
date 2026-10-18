@@ -8,6 +8,7 @@ import SolarsystemConnectionHandle from '@/map/components/solarsystem/Solarsyste
 import SolarsystemDragHandle from '@/map/components/solarsystem/SolarsystemDragHandle.vue';
 import { ANCHOR_OFFSET, scalePoint } from '@/map/core/coords';
 import { useNodeMeasurement } from '@/map/interactions/measure';
+import { POPOUT_MAP } from '@/map/popoutMap';
 import { useMapStore } from '@/map/store/mapStore';
 import { wayBackBookmark } from '@/map/holeBookmark';
 import { visibleBookmarkName } from '@/lib/bookmark';
@@ -17,7 +18,7 @@ import { show } from '@/routes/maps';
 import { AppPageProps } from '@/types';
 import { TCharacter } from '@/types/models';
 import { Link, usePage } from '@inertiajs/vue3';
-import { computed, onBeforeUnmount, useTemplateRef, watch } from 'vue';
+import { computed, inject, onBeforeUnmount, useTemplateRef, watch } from 'vue';
 
 /**
  * Store-connected wrapper for one node: resolves the entity, position, and all
@@ -52,6 +53,16 @@ const wrapperStyle = computed(() => {
 
 const isSelected = computed(() => store.isSelected(id));
 const isHovered = computed(() => store.isHovered(id));
+
+// Patch 42c: in the pop-out, a click shows the system's signatures there (the main window keeps its selection).
+const popoutMap = inject(POPOUT_MAP, null);
+function handlePopoutClick(event: MouseEvent): void {
+    if (!popoutMap || !system.value) return;
+    if (event.target instanceof Element && event.target.closest('[data-drag-handle],[data-connect-handle],button,input')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    popoutMap.pick(system.value.solarsystem_id);
+}
 
 function handlePointerEnter(): void {
     store.hoveredSolarsystemId.value = id;
@@ -204,7 +215,7 @@ onBeforeUnmount(() => {
         class="pointer-events-none absolute hover:z-20 data-[active=true]:z-10"
         :data-active="isActive"
     >
-        <div class="pointer-events-auto origin-top-left" @pointerenter="handlePointerEnter" @pointerleave="handlePointerLeave">
+        <div class="pointer-events-auto origin-top-left" @pointerenter="handlePointerEnter" @pointerleave="handlePointerLeave" @click.capture="handlePopoutClick">
             <div
                 class="group relative origin-top-left"
                 :style="{

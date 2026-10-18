@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useLayout } from '@/composables/useLayout';
 import { TMapBackgroundMode, useMapBackground } from '@/composables/useMapBackground';
 import { updateMapUserSettings } from '@/map/actions/updateMapUserSettings';
+import { popoutMapScale } from '@/map/popoutMap';
 import { useMapStore } from '@/map/store/mapStore';
 import { router } from '@inertiajs/vue3';
 import { CircleDashed, ImageUp, Loader2, Trash2, Volume1, Volume2, VolumeX, Waypoints, Workflow } from 'lucide-vue-next';
@@ -31,6 +32,9 @@ import { toast } from 'vue-sonner';
  */
 type TMapLayoutMode = 'manual' | 'tree';
 
+/** Patch 42c: in the pop-out: the buttons only (menus would open in the main window), its own zoom. */
+const { popout = false } = defineProps<{ popout?: boolean }>();
+
 const store = useMapStore();
 
 const { layout, setLayout } = useLayout();
@@ -39,7 +43,12 @@ const scale = computed(() => store.scale.value);
 
 function setScale(newScale: number) {
     const roundedScale = Math.round(newScale * 10) / 10;
-    if (roundedScale < 0.5 || roundedScale > 2) return;
+    if (roundedScale < 0.3 || roundedScale > 2) return;
+    if (popout) {
+        popoutMapScale.value = roundedScale;
+        return;
+    }
+    if (roundedScale < 0.5) return;
     setLayout({
         ...layout.value,
         scale: roundedScale,
@@ -228,7 +237,65 @@ function onDrop(event: DragEvent) {
 </script>
 
 <template>
-    <div class="absolute right-3 bottom-3 z-30 flex items-center gap-0.5 rounded-full bg-white/60 px-1 dark:bg-neutral-800/60">
+    <div v-if="popout" class="absolute right-2 bottom-2 z-30 flex items-center gap-0.5 rounded-full bg-white/60 px-1 dark:bg-neutral-800/60">
+        <template v-if="allowLayoutOverride">
+            <Button
+                v-for="mode in layoutModes"
+                :key="mode.value"
+                variant="ghost"
+                size="icon"
+                class="h-7 w-7 rounded-full"
+                :class="effective_layout === mode.value ? 'bg-white text-foreground shadow-sm dark:bg-neutral-700' : 'text-neutral-600 dark:text-neutral-400'"
+                :title="mode.label"
+                @click="setPlacement(mode.value)"
+            >
+                <component :is="mode.icon" class="size-3.5" />
+            </Button>
+            <span class="mx-0.5 h-4 w-px bg-neutral-300/70 dark:bg-neutral-600/70" />
+        </template>
+        <Button
+            v-if="effective_layout === 'tree'"
+            variant="ghost"
+            size="icon"
+            class="h-7 w-7 rounded-full"
+            :class="store.showPlaceholders.value ? 'bg-white text-foreground shadow-sm dark:bg-neutral-700' : 'text-neutral-600 dark:text-neutral-400'"
+            :title="`${store.showPlaceholders.value ? 'Hide' : 'Show'} unjumped holes`"
+            @click="store.setShowPlaceholders(!store.showPlaceholders.value)"
+        >
+            <CircleDashed class="size-3.5" />
+        </Button>
+        <Button
+            v-if="effective_layout === 'tree'"
+            variant="ghost"
+            size="icon"
+            class="h-7 w-7 rounded-full"
+            :class="store.homeLayout.value ? 'bg-white text-foreground shadow-sm dark:bg-neutral-700' : 'text-neutral-600 dark:text-neutral-400'"
+            :title="`Hub layout: ${store.homeLayout.value ? 'on' : 'off'}`"
+            @click="store.setHomeLayout(!store.homeLayout.value)"
+        >
+            <HubLayoutIcon class="size-3.5" />
+        </Button>
+        <Button
+            variant="ghost"
+            size="icon"
+            class="h-7 w-7 rounded-full text-neutral-600 dark:text-neutral-400"
+            :title="effects.sounds ? 'Sounds on (click to mute)' : 'Sounds off (click to turn on)'"
+            @click="effects.sounds = !effects.sounds"
+        >
+            <Volume2 v-if="effects.sounds" class="size-3.5" />
+            <VolumeX v-else class="size-3.5" />
+        </Button>
+        <button class="w-10 text-center text-xs text-neutral-600 dark:text-neutral-400" title="Back to 70%" @click="setScale(0.7)">
+            {{ (scale * 100).toFixed(0) + '%' }}
+        </button>
+        <Button variant="ghost" size="icon" class="h-7 w-7 rounded-full text-neutral-600 dark:text-neutral-400" @click="setScale(scale - 0.1)">
+            <MinusIcon />
+        </Button>
+        <Button variant="ghost" size="icon" class="h-7 w-7 rounded-full text-neutral-600 dark:text-neutral-400" @click="setScale(scale + 0.1)">
+            <PlusIcon />
+        </Button>
+    </div>
+    <div v-else class="absolute right-3 bottom-3 z-30 flex items-center gap-0.5 rounded-full bg-white/60 px-1 dark:bg-neutral-800/60">
         <template v-if="allowLayoutOverride">
             <Tooltip v-for="mode in layoutModes" :key="mode.value" :delay-duration="300">
                 <TooltipTrigger as-child>
