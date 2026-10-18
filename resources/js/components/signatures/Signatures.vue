@@ -378,6 +378,10 @@ async function handlePasted(pasted: TRawSignature[]): Promise<void> {
     // Patch 14: when the return signature is in the paste, the better way back is copied
     // (and the held one dropped); otherwise the held one waits for a click on its red area.
     await handlePastedScan(pasted);
+    // Patch 42g: no better way back came out of this paste (the return hole was already
+    // linked, or nothing matched): the paste still copies the held one, and the popup goes.
+    const held = heldWayBack.value;
+    if (held && !held.alt && !return_dialog_open.value) await copyHeldWayBack();
 }
 
 // The way-back popup's green area: paste, same as the paste button.
@@ -441,6 +445,25 @@ async function handlePastedScan(pasted: TRawSignature[]): Promise<void> {
                     (connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === system.id),
             ),
     );
+
+    // Patch 42g: the return hole is already linked: this paste copies its way back (the better one).
+    if (return_known && jump && heldWayBack.value && !heldWayBack.value.alt) {
+        const known = connections.value.find(
+            (connection) =>
+                connection.target.solarsystem_id === jump.fromSolarsystemId && (connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === system.id),
+        );
+        const returnSignature = known ? system.signatures.find((signature) => signature.map_connection_id === known.id) : undefined;
+        const name = known && returnSignature ? returnBookmarkName(returnSignature, known) : null;
+        if (name) {
+            const copying = clipboardAllowed();
+            if (copying) void autoCopy(name);
+            clearHeldWayBack();
+            toast.success('Your way back', {
+                description: copying ? `Copied ${visibleBookmarkName(name)}` : visibleBookmarkName(name),
+                ...(copying ? {} : { cancel: copyButton(name) }),
+            });
+        }
+    }
 
     const open = connections.value.filter(
         (connection) =>
@@ -516,20 +539,11 @@ function hereThrough(connectionId: number): string | null {
     }
 }
 
-/** Link the return hole, copy its return bookmark, and offer Undo. */
-function linkReturnHole(signature: TSignature, connection: TProcessedConnection, automatic: boolean): void {
+/** The bookmark name of the way back through this signature (null when it can't be named). */
+function returnBookmarkName(signature: TSignature, connection: TProcessedConnection): string | null {
     const system = props.map_solarsystem;
-    if (!system) return;
-
-    const previousTypeId = signature.signature_type_id;
-    // A hole not categorised yet becomes a wormhole when it is linked.
-    const wormholeCategoryId = signatureCategories.find((category) => category.code === 'wormhole')?.id ?? null;
-    updateSignature(signature, {
-        map_connection_id: connection.id,
-        ...(!signature.signature_category_id && wormholeCategoryId !== null ? { signature_category_id: wormholeCategoryId } : {}),
-    });
-
-    const name = formatBookmarkName(
+    if (!system) return null;
+    return formatBookmarkName(
         connection.target,
         {
             signatureId: signature.signature_id,
@@ -548,6 +562,22 @@ function linkReturnHole(signature: TSignature, connection: TProcessedConnection,
         map_system.value?.combat_color ?? null,
         Boolean(map_system.value?.combat_home),
     );
+}
+
+/** Link the return hole, copy its return bookmark, and offer Undo. */
+function linkReturnHole(signature: TSignature, connection: TProcessedConnection, automatic: boolean): void {
+    const system = props.map_solarsystem;
+    if (!system) return;
+
+    const previousTypeId = signature.signature_type_id;
+    // A hole not categorised yet becomes a wormhole when it is linked.
+    const wormholeCategoryId = signatureCategories.find((category) => category.code === 'wormhole')?.id ?? null;
+    updateSignature(signature, {
+        map_connection_id: connection.id,
+        ...(!signature.signature_category_id && wormholeCategoryId !== null ? { signature_category_id: wormholeCategoryId } : {}),
+    });
+
+    const name = returnBookmarkName(signature, connection);
     const copying = Boolean(name) && clipboardAllowed();
     if (name) {
         if (copying) void autoCopy(name);
