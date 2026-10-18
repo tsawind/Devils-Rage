@@ -56,7 +56,17 @@ export async function openPopOut(characterId: number, name: string, color: strin
             return true;
         }
     })();
-    const opened = await pip.requestWindow({ width: mapOpen ? 880 : 410, height: 440 });
+    // Patch 42f: the signature panel's width follows its zoom.
+    const zoom = (() => {
+        try {
+            const stored = Number(window.localStorage.getItem('popout-signatures-zoom'));
+            return stored >= 0.5 && stored <= 1.2 ? stored : 0.8;
+        } catch {
+            return 0.8;
+        }
+    })();
+    const signatures = Math.round(490 * zoom) + 18;
+    const opened = await pip.requestWindow({ width: mapOpen ? signatures + 488 : signatures, height: 440 });
     copyStyles(opened);
     opened.document.title = `${name} · scanner`;
     opened.addEventListener('pagehide', () => {

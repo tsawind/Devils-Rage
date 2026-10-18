@@ -83,9 +83,20 @@ const shownMapSystem = computed(() => map_solarsystems.value.find((system) => sy
 const hereStatic = computed(() => (hereId.value ? resolveSolarsystem(hereId.value) : null));
 const mapOpen = useLocalStorage('popout-map-open', true);
 
-/** The signature panel is drawn at this width and shown at 80%, the same whatever the window's size. */
+/** The signature panel is drawn at this width and shown at its zoom (80% to start), the same whatever the window's size. */
 const SIGNATURES_WIDTH = 490;
-const SIGNATURES_ZOOM = 0.8;
+/** Patch 42f: − / + bottom right of the signatures (50%–120%); the window grows or shrinks with it. */
+const signaturesZoom = useLocalStorage('popout-signatures-zoom', 0.8);
+function zoomSignatures(next: number): void {
+    const zoom = Math.round(Math.min(1.2, Math.max(0.5, next)) * 100) / 100;
+    const change = Math.round(SIGNATURES_WIDTH * (zoom - signaturesZoom.value));
+    signaturesZoom.value = zoom;
+    try {
+        if (change) popOutWindow.value?.resizeBy(change, 0);
+    } catch {
+        // The browser didn't allow it: the map gives up the room.
+    }
+}
 const mapPane = ref<HTMLElement | null>(null);
 const foldedMapWidth = useLocalStorage('popout-map-width', 480);
 
@@ -218,14 +229,19 @@ onBeforeUnmount(() => closePopOut());
                 </button>
 
                 <!-- The signature panel, as on the main mapper: always the same size (80%), whatever the window's size -->
-                <div class="flex min-h-0 shrink-0 flex-col" :style="{ width: `${SIGNATURES_WIDTH * SIGNATURES_ZOOM}px` }">
+                <div class="flex min-h-0 shrink-0 flex-col" :style="{ width: `${SIGNATURES_WIDTH * signaturesZoom}px` }">
                     <div v-if="viewing" class="flex items-center gap-2 border-b border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300">
                         Showing {{ displayAlias(shownMapSystem?.alias) || resolved?.solarsystem.name }}
                         <button type="button" class="ml-auto underline" @click="viewing = null">back to {{ popOut.name }}</button>
                     </div>
-                    <div class="min-h-0 flex-1 overflow-hidden">
-                        <div :style="{ width: `${SIGNATURES_WIDTH}px`, height: `${100 / SIGNATURES_ZOOM}%`, zoom: SIGNATURES_ZOOM }">
+                    <div class="relative min-h-0 flex-1 overflow-hidden">
+                        <div :style="{ width: `${SIGNATURES_WIDTH}px`, height: `${100 / signaturesZoom}%`, zoom: signaturesZoom }">
                             <Signatures :map_solarsystem="resolved" :popout="popoutOptions" />
+                        </div>
+                        <div class="absolute right-2 bottom-2 z-30 flex items-center gap-0.5 rounded-full bg-neutral-800/70 px-1 text-xs text-neutral-300">
+                            <button type="button" class="flex size-6 items-center justify-center rounded-full hover:bg-neutral-700" title="Smaller signatures" @click="zoomSignatures(signaturesZoom - 0.1)">−</button>
+                            <button type="button" class="w-9 text-center hover:text-white" title="Back to 80%" @click="zoomSignatures(0.8)">{{ Math.round(signaturesZoom * 100) }}%</button>
+                            <button type="button" class="flex size-6 items-center justify-center rounded-full hover:bg-neutral-700" title="Bigger signatures" @click="zoomSignatures(signaturesZoom + 0.1)">+</button>
                         </div>
                     </div>
                     <div v-if="note" class="truncate border-t border-border px-2 py-0.5 text-[11px] text-emerald-400">{{ note }}</div>
