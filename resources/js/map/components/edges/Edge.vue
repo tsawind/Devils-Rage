@@ -395,6 +395,7 @@ function getDashArray(): string | undefined {
 
 /** Patch 37: the map's pill layer (above every pipe); not there in tests or the drag ghost. */
 const pillLayer = inject<Readonly<Ref<SVGGElement | null>> | null>('edgePillLayer', null);
+const pillTarget = computed(() => pillLayer?.value ?? null);
 </script>
 
 <template>
@@ -523,7 +524,7 @@ const pillLayer = inject<Readonly<Ref<SVGGElement | null>> | null>('edgePillLaye
         <!-- Patch 37: drawn after the wide click path, so clicks on the pill (and its copy chip) reach it -->
         <!-- Connection status indicators -->
         <!-- Patch 37: pills sit on their own layer above every pipe (a later pipe never covers one) -->
-        <Teleport defer :to="pillLayer?.value ?? 'body'" :disabled="!pillLayer?.value">
+        <Teleport defer :to="pillTarget ?? 'body'" :disabled="!pillTarget">
             <g class="text-stone-600 dark:text-neutral-700" :opacity="fromMemory ? 0.4 : undefined">
                 <EdgeBadges
                     :indicators="indicators"
