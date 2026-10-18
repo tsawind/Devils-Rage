@@ -430,6 +430,9 @@ async function handlePastedScan(pasted: TRawSignature[]): Promise<void> {
                 absorbSignature(row.id, match.id, () =>
                     toast.success(`${match.signature_id} is the hole typed from the map`, { description: 'Its ID was filled in; no second row.' }),
                 );
+                // Patch 42g: that row was the way back: copy it with its signature now.
+                const back = row === wayBackRow || !jump ? connections.value.find((connection) => connection.id === row.map_connection_id) : undefined;
+                if (back) copyKnownWayBack(match, back);
                 return;
             }
         }
@@ -453,16 +456,7 @@ async function handlePastedScan(pasted: TRawSignature[]): Promise<void> {
                 connection.target.solarsystem_id === jump.fromSolarsystemId && (connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === system.id),
         );
         const returnSignature = known ? system.signatures.find((signature) => signature.map_connection_id === known.id) : undefined;
-        const name = known && returnSignature ? returnBookmarkName(returnSignature, known) : null;
-        if (name) {
-            const copying = clipboardAllowed();
-            if (copying) void autoCopy(name);
-            clearHeldWayBack();
-            toast.success('Your way back', {
-                description: copying ? `Copied ${visibleBookmarkName(name)}` : visibleBookmarkName(name),
-                ...(copying ? {} : { cancel: copyButton(name) }),
-            });
-        }
+        if (known && returnSignature) copyKnownWayBack(returnSignature, known);
     }
 
     const open = connections.value.filter(
@@ -562,6 +556,20 @@ function returnBookmarkName(signature: TSignature, connection: TProcessedConnect
         map_system.value?.combat_color ?? null,
         Boolean(map_system.value?.combat_home),
     );
+}
+
+/** Patch 42g: the way back is known (linked already): copy it and drop the held one. */
+function copyKnownWayBack(signature: TSignature, connection: TProcessedConnection): void {
+    if (!heldWayBack.value || heldWayBack.value.alt) return;
+    const name = returnBookmarkName(signature, connection);
+    if (!name) return;
+    const copying = clipboardAllowed();
+    if (copying) void autoCopy(name);
+    clearHeldWayBack();
+    toast.success('Your way back', {
+        description: copying ? `Copied ${visibleBookmarkName(name)}` : visibleBookmarkName(name),
+        ...(copying ? {} : { cancel: copyButton(name) }),
+    });
 }
 
 /** Link the return hole, copy its return bookmark, and offer Undo. */
