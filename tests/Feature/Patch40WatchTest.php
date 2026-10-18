@@ -21,7 +21,7 @@ use function Pest\Laravel\post;
 function p40Member(Map $map): User
 {
     $user = User::factory()
-        ->has(Character::factory(['name' => 'WatchPilot'])->has(MapAccess::factory(['permission' => Permission::Member])->for($map)))
+        ->has(Character::factory(['name' => 'WatchPilot'])->has(MapAccess::factory(['permission' => Permission::Member, 'is_owner' => true])->for($map)))
         ->create();
     $user->update(['preferred_character_id' => $user->characters()->value('id')]);
 
