@@ -85,6 +85,7 @@ final readonly class MapSettingsFeature implements ProvidesInertiaProperties
             $settings = $this->user->mapUserSettings()->firstOrCreate([
                 'map_id' => $this->map_id,
             ]);
+            $this->useNewestLayout($settings);
 
             Session::put($sessionKey, $settings->attributesToArray());
 
@@ -102,6 +103,34 @@ final readonly class MapSettingsFeature implements ProvidesInertiaProperties
         Session::put($sessionKey, $defaults);
 
         return $this->hydrateFromSession($defaults);
+    }
+
+    /**
+     * Patch 41c: one card layout per person: this map takes the layout saved last on any of
+     * their maps (so flipping map tabs never changes the cards).
+     */
+    private function useNewestLayout(MapUserSetting $settings): void
+    {
+        if (! $this->user instanceof User) {
+            return;
+        }
+
+        $newest = $this->user->mapUserSettings()
+            ->whereNotNull('layout_saved_at')
+            ->latest('layout_saved_at')
+            ->first();
+        if (! $newest instanceof MapUserSetting || $newest->getKey() === $settings->getKey()) {
+            return;
+        }
+        if ($settings->layout_saved_at !== null && $newest->layout_saved_at !== null && $settings->layout_saved_at->greaterThanOrEqualTo($newest->layout_saved_at)) {
+            return;
+        }
+
+        $settings->forceFill([
+            'layout_breakpoints' => $newest->layout_breakpoints,
+            'hidden_cards' => $newest->hidden_cards,
+            'layout_saved_at' => $newest->layout_saved_at,
+        ])->save();
     }
 
     /**

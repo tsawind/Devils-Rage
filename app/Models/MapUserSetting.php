@@ -43,6 +43,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $combat_color
  * @property array|null $layout_breakpoints
  * @property array|null $hidden_cards
+ * @property \Carbon\CarbonImmutable|null $layout_saved_at Patch 41c: when this layout was saved (the newest one is used on every map)
  * @property bool $show_threat_level
  * @property bool $show_statics_first
  * @property bool $compact_signature_list
@@ -123,6 +124,7 @@ final class MapUserSetting extends Model
             'clipboard_enabled' => 'boolean',
             'layout_breakpoints' => 'array',
             'hidden_cards' => 'array',
+            'layout_saved_at' => 'immutable_datetime',
             'show_threat_level' => 'boolean',
             'show_statics_first' => 'boolean',
             'compact_signature_list' => 'boolean',

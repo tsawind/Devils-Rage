@@ -32,6 +32,14 @@ final class MapUserSettingController extends Controller
                 $settings = $user->mapUserSettings()->firstOrCreate(['map_id' => $map->id]);
                 $settings->update($validated);
 
+                // Patch 41c: one card layout for every map tab: a saved layout goes to all your maps.
+                $layout = array_intersect_key($validated, array_flip(['layout_breakpoints', 'hidden_cards']));
+                if ($layout !== []) {
+                    $settings->forceFill(['layout_saved_at' => now()])->save();
+                    $user->mapUserSettings()->whereKeyNot($settings->getKey())->get()
+                        ->each(fn (MapUserSetting $other) => $other->forceFill([...$layout, 'layout_saved_at' => now()])->save());
+                }
+
                 broadcast(new CharacterStatusUpdatedEvent($map->id))->toOthers();
 
                 return $settings->fresh();
