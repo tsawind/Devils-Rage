@@ -23,7 +23,7 @@ beforeEach(function () {
 });
 
 it('saves whose home a system is', function () {
-    $system = MapSolarsystem::factory()->for($this->map)->create();
+    $system = MapSolarsystem::factory()->for($this->map)->create(['solarsystem_id' => makeSolarsystem(31009101, -1.0, 'eve')]);
 
     $this->put(route('map-solarsystems.update', $system), ['home_of' => 'Hard Knocks', 'occupier_alias' => 'HK'])->assertRedirect();
 
@@ -34,7 +34,7 @@ it('saves whose home a system is', function () {
 it('pings once when a marked home is connected', function () {
     Event::fake([KnownHomeConnectedEvent::class]);
     Cache::flush();
-    $system = MapSolarsystem::factory()->for($this->map)->create();
+    $system = MapSolarsystem::factory()->for($this->map)->create(['solarsystem_id' => makeSolarsystem(31009101, -1.0, 'eve')]);
     $system->details->update(['home_of' => 'Hard Knocks']);
 
     (new AnnounceKnownHomeJob($system->id))->handle(app(App\Services\Discord\ChainWayDescriber::class), app(App\Services\Discord\DiscordHttp::class));
@@ -45,7 +45,7 @@ it('pings once when a marked home is connected', function () {
 
 it('does not ping for a system nobody calls home', function () {
     Event::fake([KnownHomeConnectedEvent::class]);
-    $system = MapSolarsystem::factory()->for($this->map)->create();
+    $system = MapSolarsystem::factory()->for($this->map)->create(['solarsystem_id' => makeSolarsystem(31009101, -1.0, 'eve')]);
 
     (new AnnounceKnownHomeJob($system->id))->handle(app(App\Services\Discord\ChainWayDescriber::class), app(App\Services\Discord\DiscordHttp::class));
 
