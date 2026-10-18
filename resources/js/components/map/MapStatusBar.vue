@@ -303,7 +303,7 @@ const settingsUrl = computed(() => {
             <!-- Search: just the icon (Ctrl K still works) -->
             <Tooltip>
                 <TooltipTrigger as-child>
-                    <button type="button" class="flex h-7 w-8 items-center justify-center rounded-md border border-border/60 bg-background text-muted-foreground hover:text-foreground" @click="openPalette">
+                    <button type="button" aria-label="Search" data-test="bar-search" class="flex h-7 w-8 items-center justify-center rounded-md border border-border/60 bg-background text-muted-foreground hover:text-foreground" @click="openPalette">
                         <Search class="size-3.5" />
                     </button>
                 </TooltipTrigger>

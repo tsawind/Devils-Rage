@@ -59,7 +59,7 @@ it('adds a system to the map via the command palette', function () {
     expect(MapSolarsystem::where('map_id', $map->id)->count())->toBe(0);
 
     visit(route('maps.show', $map))
-        ->click('Search...')
+        ->click('[data-test="bar-search"]')
         ->type('[data-slot="command-input"]', 'Jita')
         ->click('Jita')
         ->assertSeeIn('.bg-grid', 'Jita');
