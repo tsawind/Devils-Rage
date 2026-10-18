@@ -39,8 +39,15 @@ final class User extends Authenticatable
 
     private const string SESSION_ACTIVE_CHARACTER_ID = 'active_character_id';
 
+    /** Patch 39: this window's main for this request (X-Map-Driver), without touching the session. */
+    private ?Character $windowDriver = null;
+
     public ?Character $active_character = null {
         get {
+            if ($this->windowDriver instanceof Character) {
+                return $this->windowDriver;
+            }
+
             if ($this->active_character instanceof Character) {
                 return $this->active_character;
             }
@@ -79,6 +86,7 @@ final class User extends Authenticatable
             return $character;
         }
         set {
+            $this->windowDriver = null;
             if ($value instanceof Character) {
                 Session::put(self::SESSION_ACTIVE_CHARACTER_ID, $value->id);
                 $this->active_character = $value;
@@ -88,6 +96,15 @@ final class User extends Authenticatable
                 $this->active_character = null;
             }
         }
+    }
+
+    /**
+     * Patch 39: every browser window or tab has its own main. This request acts as $character
+     * (one of the user's own), while the login's session main stays what it was.
+     */
+    public function driveAs(Character $character): void
+    {
+        $this->windowDriver = $character;
     }
 
     /**

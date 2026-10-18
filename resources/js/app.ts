@@ -6,6 +6,7 @@ import { isPWA } from './composables/useOnClient';
 import { initializeRouting } from './composables/useRoutingWorker';
 import { preloadSovereigntyData } from './composables/useSovereigntyData';
 import { preloadStaticData } from './composables/useStaticData';
+import { driverHeaders, initDriver } from './lib/windowDriver';
 
 configureEcho({
     broadcaster: 'reverb',
@@ -13,6 +14,21 @@ configureEcho({
 
 router.on('finish', () => {
     router.flushAll();
+});
+
+// Patch 39: this window's own main goes with every request (X-Map-Driver).
+function loginMain(): number | null {
+    try {
+        const page = JSON.parse(document.getElementById('app')?.dataset.page ?? '{}') as { props?: { auth?: { user?: { active_character?: { id?: number } } | null } } };
+        return page.props?.auth?.user?.active_character?.id ?? null;
+    } catch {
+        return null;
+    }
+}
+const login = loginMain();
+const driver = login === null ? null : initDriver(login);
+router.on('before', (event) => {
+    Object.assign(event.detail.visit.headers, driverHeaders());
 });
 
 void preloadStaticData();
@@ -33,5 +49,13 @@ createInertiaApp({
         delay: 1_000,
     },
 });
+
+// A refresh of a tab whose main differs from the login's: load it again as this tab's main.
+if (driver !== null && driver !== login) {
+    const stop = router.on('navigate', () => {
+        stop();
+        router.reload();
+    });
+}
 
 initializeTheme();

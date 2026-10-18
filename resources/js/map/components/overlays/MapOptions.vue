@@ -424,7 +424,15 @@ function onDrop(event: DragEvent) {
                 </div>
             </PopoverContent>
         </Popover>
-        <span class="flex h-8 items-center px-1 text-neutral-600 dark:text-neutral-400">{{ (scale * 100).toFixed(0) + '%' }}</span>
+        <!-- Patch 39: click the zoom % to go back to 100% -->
+        <button
+            type="button"
+            class="flex h-8 items-center rounded px-1 text-neutral-600 hover:bg-muted dark:text-neutral-400"
+            title="Back to 100%"
+            @click="setScale(1)"
+        >
+            {{ (scale * 100).toFixed(0) + '%' }}
+        </button>
         <Button variant="ghost" size="icon" class="h-8 w-8 rounded-full text-neutral-600 dark:text-neutral-400" @click="setScale(scale - 0.1)">
             <MinusIcon />
         </Button>

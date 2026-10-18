@@ -4,6 +4,7 @@ import {
     ContextMenu,
     ContextMenuCheckboxItem,
     ContextMenuContent,
+    ContextMenuItem,
     ContextMenuLabel,
     ContextMenuSeparator,
     ContextMenuSub,
@@ -19,7 +20,9 @@ import useUser from '@/composables/useUser';
 import type { AppPageProps } from '@/types';
 import type { TCharacter } from '@/types/models';
 import { usePage } from '@inertiajs/vue3';
-import { Users } from 'lucide-vue-next';
+import { AppWindow, ExternalLink, Users } from 'lucide-vue-next';
+import { soloTab, urlAs } from '@/lib/windowDriver';
+import { drivenElsewhere, others, windowName } from '@/lib/windowRegistry';
 import { computed } from 'vue';
 
 /**
@@ -43,6 +46,24 @@ const quick = computed(() => new Set(myQuick.value));
 const locationOf = (id: number) => page.props.map_characters?.find((character) => character.id === id)?.status?.solarsystem_id ?? null;
 const location = computed(() => (alt.value ? locationOf(alt.value.id) : null));
 
+/**
+ * Patch 39: open an alt as the main of its own window or tab (a full mapper). That window
+ * maps the alt from then on; here its row says "own window ↗" (click brings it up).
+ */
+function openAs(characterId: number, mode: 'window' | 'tab'): void {
+    const url = urlAs(window.location.href, characterId, mode === 'tab');
+    const features = mode === 'window' ? 'popup=yes,width=1400,height=900' : undefined;
+    window.open(url, windowName(characterId), features);
+}
+function focusWindow(characterId: number): void {
+    // Opening the same window name again brings the existing window up (it isn't reloaded).
+    window.open('', windowName(characterId));
+}
+const elsewhere = computed(() => {
+    void others.value;
+    return new Set(alts.value.filter((candidate) => drivenElsewhere(mapSlug.value, candidate.id)).map((candidate) => candidate.id));
+});
+
 /** Picking the pill's alt tracks it on this map (and stops tracking the one it replaces). */
 function pick(id: number | null): void {
     const previous = alt.value?.id ?? null;
@@ -54,7 +75,7 @@ function pick(id: number | null): void {
 </script>
 
 <template>
-    <ContextMenu v-if="user && alts.length">
+    <ContextMenu v-if="user && alts.length && !soloTab">
         <ContextMenuTrigger as-child>
             <div class="flex flex-col items-end gap-0.5 rounded-lg border border-border/60 bg-card/90 px-2 py-1 shadow-sm backdrop-blur" title="Right-click for options">
                 <div class="flex items-center gap-1 text-[10px] leading-none">
@@ -76,6 +97,15 @@ function pick(id: number | null): void {
                         <DropdownMenuItem v-for="candidate in pickable" :key="candidate.id" class="flex items-center gap-2 text-xs" @select="pick(candidate.id)">
                             <CharacterImage :character_id="candidate.id" :character_name="candidate.name" class="size-5 rounded" />
                             <span class="truncate" :class="candidate.id === alt?.id ? 'font-semibold text-amber-400' : ''">{{ candidate.name }}</span>
+                            <button
+                                v-if="elsewhere.has(candidate.id)"
+                                type="button"
+                                class="ml-auto shrink-0 text-[10px] text-sky-400 hover:underline"
+                                title="Mapped in its own window, as that window's main. Click to bring it up."
+                                @click.stop="focusWindow(candidate.id)"
+                            >
+                                own window ↗
+                            </button>
                         </DropdownMenuItem>
                         <template v-if="alt">
                             <DropdownMenuSeparator />
@@ -104,6 +134,27 @@ function pick(id: number | null): void {
                         >
                             {{ candidate.name }}
                         </ContextMenuCheckboxItem>
+                    </ContextMenuSubContent>
+                </ContextMenuSub>
+                <ContextMenuSeparator />
+            </template>
+            <template v-if="mapSlug">
+                <ContextMenuSub>
+                    <ContextMenuSubTrigger class="text-xs"><AppWindow class="mr-1 size-3.5" /> Open as a window</ContextMenuSubTrigger>
+                    <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">
+                        <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">A separate full mapper window with this alt as its main</ContextMenuLabel>
+                        <ContextMenuItem v-for="candidate in quickList('alt', alts)" :key="candidate.id" class="text-xs" @select="openAs(candidate.id, 'window')">
+                            {{ candidate.name }}
+                        </ContextMenuItem>
+                    </ContextMenuSubContent>
+                </ContextMenuSub>
+                <ContextMenuSub>
+                    <ContextMenuSubTrigger class="text-xs"><ExternalLink class="mr-1 size-3.5" /> Open in a full tab</ContextMenuSubTrigger>
+                    <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">
+                        <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">A browser tab with this alt as its only main</ContextMenuLabel>
+                        <ContextMenuItem v-for="candidate in quickList('alt', alts)" :key="candidate.id" class="text-xs" @select="openAs(candidate.id, 'tab')">
+                            {{ candidate.name }}
+                        </ContextMenuItem>
                     </ContextMenuSubContent>
                 </ContextMenuSub>
                 <ContextMenuSeparator />

@@ -10,6 +10,7 @@ import UserCharacters from '@/routes/user-characters';
 import type { User } from '@/types';
 import { Link, router } from '@inertiajs/vue3';
 import { LogOut, Settings } from 'lucide-vue-next';
+import { switchDriver } from '@/lib/windowDriver';
 
 interface Props {
     user: User;
@@ -31,7 +32,7 @@ defineProps<Props>();
     <DropdownMenuSeparator />
     <DropdownMenuGroup>
         <DropdownMenuItem v-for="character in user.characters" :key="character.id" as-child>
-            <Link class="block w-full" :href="UserCharacters.update(character.id)" as="button" method="put">
+            <Link class="block w-full" :href="UserCharacters.update(character.id)" as="button" method="put" @click="switchDriver(character.id)">
                 <CharacterImage :character_id="character.id" :character_name="character.name" class="mr-2 h-4 w-4" />
                 {{ character.name }}
             </Link>

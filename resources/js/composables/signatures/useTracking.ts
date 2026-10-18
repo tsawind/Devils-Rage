@@ -8,6 +8,8 @@ import { useStaticData } from '@/composables/useStaticData';
 import { useCharacterPills } from '@/composables/useCharacterPills';
 import { useTrackedAlts } from '@/composables/useTrackedAlts';
 import { useTrackingSystems } from '@/composables/useTrackingSystems';
+import { announce, joinWindows, mapsAltHere, mapsMainHere } from '@/lib/windowRegistry';
+import { soloTab } from '@/lib/windowDriver';
 import { useCombat } from '@/composables/combat/useCombat';
 import { offerWayBack } from '@/composables/signatures/wayBack';
 import useUser from '@/composables/useUser';
@@ -240,6 +242,8 @@ export function useTracking() {
             // the active character is switched the watched system id also changes,
             // but that must not create a connection between the two characters' systems.
             if (new_character_id !== old_character_id) return;
+            // Patch 39: an older window on this map with the same main maps it.
+            if (!mapsMainHere(page.props.map?.slug ?? null, new_character_id ?? null)) return;
 
             enqueueJump({ from: old_solarsystem_id, to: new_solarsystem_id, byMain: true, name: null });
         },
@@ -249,11 +253,22 @@ export function useTracking() {
     const { trackedIds } = useTrackedAlts();
     // Patch 25: alts' jumps can skip the clipboard and the "which signature?" prompt.
     const { altClipboard, altPrompts } = useCharacterPills();
+    // Patch 39: windows tell each other their map and main; each character is mapped by one window.
+    joinWindows();
+    watch(
+        () => [page.props.map?.slug ?? null, character.value?.id ?? null] as const,
+        ([slug, driver]) => announce(slug, driver),
+        { immediate: true },
+    );
     const tracked_alt_locations = computed(() => {
         const tracked = trackedIds(page.props.map?.slug);
+        const slug = page.props.map?.slug ?? null;
         const locations = new Map<number, { solarsystem_id: number | null; name: string }>();
+        // A full tab maps its one main only.
+        if (soloTab.value) return locations;
         for (const mapped of page.props.map_characters ?? []) {
             if (!tracked.has(mapped.id) || mapped.id === character.value?.id) continue;
+            if (!mapsAltHere(slug, mapped.id)) continue;
             locations.set(mapped.id, { solarsystem_id: mapped.status?.solarsystem_id ?? null, name: mapped.name });
         }
         return locations;

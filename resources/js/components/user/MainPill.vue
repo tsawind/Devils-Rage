@@ -24,6 +24,7 @@ import type { TCharacter } from '@/types/models';
 import { Link, router, usePage } from '@inertiajs/vue3';
 import { LogOut, Minus, Plus, Settings } from 'lucide-vue-next';
 import { computed } from 'vue';
+import { switchDriver } from '@/lib/windowDriver';
 
 /**
  * Patch 25: your main as a pill: where you are (click copies the route there) and "Main" on
@@ -40,6 +41,15 @@ const location = computed(() => page.props.map_characters?.find((character) => c
 const switchable = computed(() => quickList('main', user.value?.characters ?? []).filter((character) => character.id !== main.value?.id));
 const myQuick = computed(() => quickIds.main.value);
 const quick = computed(() => new Set(myQuick.value));
+
+/**
+ * Patch 39: switching main changes THIS window's main only (other windows and tabs keep
+ * theirs); new windows start from it. Tracked-alt ticks are never cleared.
+ */
+function switchMain(characterId: number): void {
+    switchDriver(characterId);
+    router.put(UserCharacters.update(characterId).url, {}, { preserveScroll: true });
+}
 </script>
 
 <template>
@@ -60,10 +70,10 @@ const quick = computed(() => new Set(myQuick.value));
                     <DropdownMenuContent align="end" class="max-h-[60vh] w-56 overflow-y-auto">
                         <DropdownMenuLabel class="text-xs">Switch to</DropdownMenuLabel>
                         <DropdownMenuItem v-for="character in switchable" :key="character.id" as-child>
-                            <Link class="flex w-full items-center gap-2 text-xs" :href="UserCharacters.update(character.id)" as="button" method="put">
+                            <button type="button" class="flex w-full items-center gap-2 text-xs" @click="switchMain(character.id)">
                                 <CharacterImage :character_id="character.id" :character_name="character.name" class="size-5 rounded" />
                                 {{ character.name }}
-                            </Link>
+                            </button>
                         </DropdownMenuItem>
                         <p v-if="myQuick.length === 0" class="px-2 py-1 text-[11px] text-muted-foreground">Right-click this pill → Quick list to shorten this list.</p>
                     </DropdownMenuContent>
