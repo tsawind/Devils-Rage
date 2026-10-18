@@ -7,6 +7,7 @@ import LayoutEditorToolbar from '@/components/layout/LayoutEditorToolbar.vue';
 import MapKillmails from '@/components/map-killmails/MapKillmails.vue';
 import MapSkyhooks from '@/components/map-skyhooks/MapSkyhooks.vue';
 import CommandPalette from '@/components/map/CommandPalette.vue';
+import MapFloatingBar from '@/components/map/MapFloatingBar.vue';
 import MapIntroduction from '@/components/map/MapIntroduction.vue';
 import MapStatusBar from '@/components/map/MapStatusBar.vue';
 import ShipHistory from '@/components/ship-history/ShipHistory.vue';
@@ -288,6 +289,7 @@ const handleResizeEnd = () => {
             <GridItem v-bind="getLayoutItem('map').value" @resize="handleResizeStart" @resized="handleResizeEnd">
                 <div class="relative h-full w-full">
                     <MapRoot :map="resolvedMap" :config="config" />
+                    <MapFloatingBar />
                 </div>
             </GridItem>
 

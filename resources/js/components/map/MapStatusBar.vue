@@ -74,8 +74,6 @@ import { useCommandPalette } from '@/composables/useCommandPalette';
 import useUser from '@/composables/useUser';
 import { characterColor } from '@/lib/characterColor';
 import { addCharacterTab } from '@/lib/characterTabs';
-import AltPill from '@/components/user/AltPill.vue';
-import MainPill from '@/components/user/MainPill.vue';
 import { openPopOut } from '@/lib/popOut';
 import { driverId, soloTab, urlAs } from '@/lib/windowDriver';
 import { home, logout } from '@/routes';
@@ -467,11 +465,6 @@ const settingsUrl = computed(() => {
 
             <!-- EVE time and players online -->
             <div class="hidden pl-1 lg:block"><ServerStatus /></div>
-            <!-- Patch 41b: your main and alt, as before (not in an ALT WINDOW: that window is one character) -->
-            <div v-if="$page.props.auth.user && !soloTab" class="flex origin-right scale-[0.9] items-center gap-1.5 pl-1">
-                <AltPill />
-                <MainPill />
-            </div>
         </div>
     </div>
 
