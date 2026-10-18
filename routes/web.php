@@ -17,6 +17,7 @@ use App\Http\Controllers\EveSearchController;
 use App\Http\Controllers\HoleCheckedController;
 use App\Http\Controllers\GuestNameController;
 use App\Http\Controllers\HomeSystemController;
+use App\Http\Controllers\PopOutController;
 use App\Http\Controllers\IgnoreListController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\LoginController;
@@ -89,6 +90,8 @@ Route::middleware('auth')->group(function () {
     Route::get('settings', [SettingsController::class, 'show'])->name('settings.show');
     // Patch 39: a guest's name in the mapper.
     Route::put('guest-name', [GuestNameController::class, 'update'])->name('guest-name.update');
+    // Patch 39: the scanner pop-out's system and signatures.
+    Route::get('map-solarsystems/{mapSolarsystem}/pop-out', [PopOutController::class, 'system'])->name('map-solarsystems.pop-out');
     Route::get('discord/connect', [DiscordAccountController::class, 'redirect'])->name('discord.connect');
     Route::get('discord/callback', [DiscordAccountController::class, 'callback'])->name('discord.callback');
     Route::get('discord/link/{token}', [DiscordAccountController::class, 'link'])->name('discord.link');

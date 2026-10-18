@@ -3,6 +3,7 @@ import { CharacterImage } from '@/components/images';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TCharacter } from '@/types/models';
 import { usePilotNames } from '@/composables/usePilotNames';
+import { isPoppedOut, POP_OUT_COLOR } from '@/lib/popOut';
 
 defineProps<{
     pilots: TCharacter[];
@@ -11,6 +12,7 @@ defineProps<{
 // Patch 37: the hover list shows each pilot's main (from SeAT).
 // Patch 39: the card keeps the character's name, the person after it in grey ("LuigiSquirrel · Tsa").
 const { after } = usePilotNames();
+// Patch 39: your pop-out's character gets a pin in the pop-out's colour.
 </script>
 
 <template>
@@ -19,7 +21,8 @@ const { after } = usePilotNames();
             <span
                 class="flex h-[20px] items-center gap-1 truncate border-t border-b-neutral-300 px-2 pt-0.5 text-[11px] leading-0 dark:border-neutral-700"
             >
-                <span class="size-1 animate-pulse rounded-full bg-green-500"></span>{{ pilots.at(0)?.name
+                <span class="size-1 animate-pulse rounded-full bg-green-500"></span
+                ><span v-if="pilots.some((pilot) => isPoppedOut(pilot.id))" :style="{ color: POP_OUT_COLOR }" title="Scanning in your pop-out">◉</span>{{ pilots.at(0)?.name
                 }}<span v-if="pilots.at(0) && after(pilots.at(0)!.name)" class="text-muted-foreground"> · {{ after(pilots.at(0)!.name) }}</span>
                 <span v-if="pilots.length > 1">and {{ pilots.length - 1 }} more</span>
             </span>

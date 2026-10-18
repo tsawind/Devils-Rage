@@ -100,9 +100,9 @@ final class User extends Authenticatable
 
     /**
      * Patch 39: every browser window or tab has its own main. This request acts as $character
-     * (one of the user's own), while the login's session main stays what it was.
+     * (one of the user's own), while the login's session main stays what it was. Null: the login's main.
      */
-    public function driveAs(Character $character): void
+    public function driveAs(?Character $character): void
     {
         $this->windowDriver = $character;
     }

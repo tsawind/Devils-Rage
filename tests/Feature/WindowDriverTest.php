@@ -55,3 +55,21 @@ it('ignores a character that is not the user\'s', function () {
     withHeaders(['X-Map-Driver' => (string) $stranger->id])->getJson('/_test/driver')
         ->assertJson(['active' => $main->id]);
 });
+
+it('gives the pop-out its system and signatures, members only', function () {
+    $map = App\Models\Map::factory()->create();
+    $system = placeMapSolarsystem($map, 31000401);
+    App\Models\Signature::factory()->create(['map_solarsystem_id' => $system->id, 'signature_id' => 'POP-401']);
+    $member = User::factory()
+        ->has(Character::factory()->has(App\Models\MapAccess::factory(['permission' => App\Enums\Permission::Member])->for($map)))
+        ->create();
+
+    actingAs($member)->getJson(route('map-solarsystems.pop-out', $system))
+        ->assertOk()
+        ->assertJsonPath('id', $system->id)
+        ->assertJsonPath('signatures.0.signature_id', 'POP-401');
+
+    actingAs(User::factory()->has(Character::factory())->create())
+        ->getJson(route('map-solarsystems.pop-out', $system))
+        ->assertForbidden();
+});

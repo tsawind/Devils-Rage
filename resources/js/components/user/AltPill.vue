@@ -20,9 +20,10 @@ import useUser from '@/composables/useUser';
 import type { AppPageProps } from '@/types';
 import type { TCharacter } from '@/types/models';
 import { usePage } from '@inertiajs/vue3';
-import { AppWindow, ExternalLink, Users } from 'lucide-vue-next';
+import { AppWindow, ExternalLink, PictureInPicture2, Users } from 'lucide-vue-next';
 import { soloTab, urlAs } from '@/lib/windowDriver';
 import { drivenElsewhere, others, windowName } from '@/lib/windowRegistry';
+import { canPopOut, openPopOut } from '@/lib/popOut';
 import { computed } from 'vue';
 
 /**
@@ -55,6 +56,11 @@ function openAs(characterId: number, mode: 'window' | 'tab'): void {
     const features = mode === 'window' ? 'popup=yes,width=1400,height=900' : undefined;
     window.open(url, windowName(characterId), features);
 }
+/** Patch 39: the always-on-top scanner pop-out (Chrome / Edge); elsewhere the character's own window. */
+async function popOutCharacter(characterId: number, name: string): Promise<void> {
+    if (!(await openPopOut(characterId, name).catch(() => false))) openAs(characterId, 'window');
+}
+const popOutLabel = canPopOut() ? 'Pop out (always on top)' : 'Pop out (opens a window: Chrome / Edge only)';
 function focusWindow(characterId: number): void {
     // Opening the same window name again brings the existing window up (it isn't reloaded).
     window.open('', windowName(characterId));
@@ -139,6 +145,15 @@ function pick(id: number | null): void {
                 <ContextMenuSeparator />
             </template>
             <template v-if="mapSlug">
+                <ContextMenuSub>
+                    <ContextMenuSubTrigger class="text-xs"><PictureInPicture2 class="mr-1 size-3.5" /> {{ popOutLabel }}</ContextMenuSubTrigger>
+                    <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">
+                        <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">A small scanner window over EVE: where it is, its way back, its signatures (Ctrl+V)</ContextMenuLabel>
+                        <ContextMenuItem v-for="candidate in user.characters" :key="candidate.id" class="text-xs" @select="popOutCharacter(candidate.id, candidate.name)">
+                            {{ candidate.name }}
+                        </ContextMenuItem>
+                    </ContextMenuSubContent>
+                </ContextMenuSub>
                 <ContextMenuSub>
                     <ContextMenuSubTrigger class="text-xs"><AppWindow class="mr-1 size-3.5" /> Open as a window</ContextMenuSubTrigger>
                     <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">

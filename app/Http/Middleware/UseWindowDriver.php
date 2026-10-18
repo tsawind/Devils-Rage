@@ -27,11 +27,8 @@ final class UseWindowDriver
         $user = $request->user();
         $driver = $request->header(self::HEADER) ?? $request->query('as');
 
-        if ($user instanceof User && is_numeric($driver)) {
-            $character = $user->characters->firstWhere('id', (int) $driver);
-            if ($character !== null) {
-                $user->driveAs($character);
-            }
+        if ($user instanceof User) {
+            $user->driveAs(is_numeric($driver) ? $user->characters->firstWhere('id', (int) $driver) : null);
         }
 
         return $next($request);

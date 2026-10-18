@@ -13,6 +13,7 @@ import MapStatusBar from '@/components/map/MapStatusBar.vue';
 import ShipHistory from '@/components/ship-history/ShipHistory.vue';
 import FleetWindow from '@/components/fleet/FleetWindow.vue';
 import GuestNameDialog from '@/components/map/GuestNameDialog.vue';
+import PopOutWindow from '@/components/popout/PopOutWindow.vue';
 import Signatures from '@/components/signatures/Signatures.vue';
 import SignaturesEmptyState from '@/components/signatures/SignaturesEmptyState.vue';
 import SolarsystemDetails from '@/components/solarsystem/SolarsystemDetails.vue';
@@ -410,5 +411,7 @@ const handleResizeEnd = () => {
         <LayoutEditorToolbar :layout="layout" />
         <!-- Patch 39: a guest names themselves once -->
         <GuestNameDialog />
+        <!-- Patch 39: the scanner pop-out (drawn into its always-on-top window) -->
+        <PopOutWindow />
     </AppLayout>
 </template>
