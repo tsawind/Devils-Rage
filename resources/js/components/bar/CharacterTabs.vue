@@ -27,11 +27,14 @@ import UserCharacters from '@/routes/user-characters';
 import type { AppPageProps } from '@/types';
 import type { TCharacter, TStringedSolarsystemClass } from '@/types/models';
 import { router, usePage } from '@inertiajs/vue3';
-import { useLocalStorage } from '@vueuse/core';
 import { AppWindow, ChevronDown, ExternalLink, Eye, PictureInPicture2, Plus } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { addCharacterTab, characterTabIds, removeCharacterTab } from '@/lib/characterTabs';
+import { computed, ref } from 'vue';
 
 /**
+ * Patch 41b: only the characters you add get a tab (+ ▾ adds one; a pop-out or its own window
+ * adds it too); your main and alt stay in the Main / Alt pills.
+ *
  * Patch 41: your characters as tabs. Click one and the whole window looks through its eyes
  * (Follow, Center, prompts, the signature panel all switch); the others can keep being
  * mapped in the background. Each has its colour (everyone sees it: its pin on the map, its
@@ -51,23 +54,25 @@ const { altClipboard, altPrompts, setAltClipboard, setAltPrompts } = useCharacte
 /** One tab takes this many pixels. */
 const TAB_WIDTH = 136;
 
-/** Your order of the tabs (first = leftmost); characters you moved to the list are at the end. */
-const order = useLocalStorage<number[]>('character-tab-order', []);
-const listed = useLocalStorage<number[]>('character-tab-listed', []);
-
+/** The characters you added as tabs, in the order you added them. */
 const characters = computed<TCharacter[]>(() => {
-    const all = [...(user.value?.characters ?? [])];
-    const rank = (id: number) => {
-        if (listed.value.includes(id)) return 10_000 + listed.value.indexOf(id);
-        const at = order.value.indexOf(id);
-        return at === -1 ? 5_000 : at;
-    };
-    return all.sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name));
+    const all = user.value?.characters ?? [];
+    return characterTabIds.value.map((id) => all.find((character) => character.id === id)).filter((character): character is TCharacter => Boolean(character));
+});
+
+/** Characters you can add (not already a tab), by name; the search box narrows it. */
+const search = ref('');
+const addable = computed(() => {
+    const needle = search.value.trim().toLowerCase();
+    return (user.value?.characters ?? [])
+        .filter((character) => !characterTabIds.value.includes(character.id))
+        .filter((character) => !needle || character.name.toLowerCase().includes(needle))
+        .sort((a, b) => a.name.localeCompare(b.name));
 });
 
 const split = computed(() => {
     const fit = tabsThatFit(characters.value.length, width, TAB_WIDTH);
-    const shown = characters.value.filter((character) => !listed.value.includes(character.id) || character.id === driverId.value).slice(0, fit);
+    const shown = characters.value.slice(0, fit);
     const driver = characters.value.find((character) => character.id === driverId.value);
     if (driver && !shown.some((character) => character.id === driver.id) && shown.length) shown[shown.length - 1] = driver;
     const ids = new Set(shown.map((character) => character.id));
@@ -93,15 +98,13 @@ function where(character: TCharacter): { klass: string | null; color: string | n
 
 function lookThrough(character: TCharacter): void {
     if (character.id === driverId.value) return;
-    // Picked from the list: it gets a tab again, up front.
-    listed.value = listed.value.filter((id) => id !== character.id);
-    order.value = [character.id, ...order.value.filter((id) => id !== character.id)];
     switchDriver(character.id);
     router.put(UserCharacters.update(character.id).url, {}, { preserveScroll: true });
 }
 
-function moveToList(character: TCharacter): void {
-    listed.value = [...listed.value.filter((id) => id !== character.id), character.id];
+function addTab(character: TCharacter): void {
+    addCharacterTab(character.id);
+    search.value = '';
 }
 
 function setColor(character: TCharacter, color: string | null): void {
@@ -110,11 +113,13 @@ function setColor(character: TCharacter, color: string | null): void {
 }
 
 function openAs(character: TCharacter, mode: 'window' | 'tab'): void {
+    addCharacterTab(character.id);
     const url = urlAs(window.location.href, character.id, true);
     window.open(url, windowName(character.id), mode === 'window' ? 'popup=yes,width=1400,height=900' : undefined);
 }
 
 async function popOut(character: TCharacter): Promise<void> {
+    addCharacterTab(character.id);
     if (!(await openPopOut(character.id, character.name, characterColor(character)).catch(() => false))) openAs(character, 'window');
 }
 </script>
@@ -203,31 +208,51 @@ async function popOut(character: TCharacter): Promise<void> {
                     "Which signature?" on background jumps
                 </ContextMenuCheckboxItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem class="text-xs text-muted-foreground" :disabled="character.id === driverId" @select="moveToList(character)">Move to the list</ContextMenuItem>
+                <ContextMenuItem class="text-xs text-muted-foreground" @select="removeCharacterTab(character.id)">Remove the tab</ContextMenuItem>
             </ContextMenuContent>
         </ContextMenu>
 
-        <DropdownMenu v-if="split.rest.length || user">
+        <DropdownMenu v-if="user" @update:open="(open: boolean) => open || (search = '')">
             <DropdownMenuTrigger as-child>
-                <button type="button" class="flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-dashed border-border px-1.5 text-[11px] text-muted-foreground hover:text-foreground">
+                <button
+                    type="button"
+                    class="flex h-7 shrink-0 items-center gap-0.5 rounded-md border border-dashed border-border px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                    :title="split.rest.length ? 'More tabs, or add a character tab' : 'Add a character tab'"
+                >
                     <template v-if="split.rest.length">+{{ split.rest.length }}</template><Plus v-else class="size-3" /><ChevronDown class="size-3" />
                 </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" class="max-h-[60vh] w-60 overflow-y-auto">
-                <DropdownMenuLabel v-if="split.rest.length" class="text-xs">More characters</DropdownMenuLabel>
-                <DropdownMenuItem v-for="character in split.rest" :key="character.id" class="gap-2 text-xs" @select="lookThrough(character)">
-                    <span class="relative shrink-0">
+            <DropdownMenuContent align="start" class="w-60">
+                <template v-if="split.rest.length">
+                    <DropdownMenuLabel class="text-xs">More tabs</DropdownMenuLabel>
+                    <DropdownMenuItem v-for="character in split.rest" :key="character.id" class="gap-2 text-xs" @select="lookThrough(character)">
+                        <span class="size-2 shrink-0 rounded-full" :style="{ background: characterColor(character) }" />
+                        <span class="flex-1 truncate">{{ character.name }}</span>
+                        <span class="text-[10px] text-muted-foreground">{{ where(character) ? where(character)!.name : 'offline' }}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                </template>
+                <DropdownMenuLabel class="text-xs">Add a tab</DropdownMenuLabel>
+                <div class="px-2 pb-1">
+                    <input
+                        v-model="search"
+                        type="text"
+                        placeholder="Find a character…"
+                        class="h-7 w-full rounded border border-border bg-background px-2 text-xs"
+                        @keydown.stop
+                    />
+                </div>
+                <div class="max-h-64 overflow-y-auto">
+                    <DropdownMenuItem v-for="character in addable" :key="character.id" class="gap-2 text-xs" @select="addTab(character)">
                         <CharacterImage :character_id="character.id" :character_name="character.name" class="size-5 rounded" />
-                        <span class="absolute -right-1 -bottom-1 size-2.5 rounded-full border-2 border-background" :style="{ background: characterColor(character) }" />
-                    </span>
-                    <span class="flex min-w-0 flex-col leading-tight">
-                        <span class="truncate font-medium">{{ character.name }}</span>
-                        <span class="truncate text-[10px] text-muted-foreground">{{ where(character) ? `${where(character)!.klass ?? ''} ${where(character)!.name}` : 'offline' }}</span>
-                    </span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator v-if="split.rest.length" />
+                        <span class="flex-1 truncate">{{ character.name }}</span>
+                        <span class="text-[10px] text-muted-foreground">{{ where(character) ? where(character)!.name : 'offline' }}</span>
+                    </DropdownMenuItem>
+                    <p v-if="!addable.length" class="px-2 py-1 text-xs text-muted-foreground">No other characters.</p>
+                </div>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem as-child class="text-xs">
-                    <a :href="auth({ query: { add_to_account: true } }).url" class="flex w-full items-center gap-2"><Plus class="size-3.5" /> Add a character</a>
+                    <a :href="auth({ query: { add_to_account: true } }).url" class="flex w-full items-center gap-2"><Plus class="size-3.5" /> Add a character to your account</a>
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

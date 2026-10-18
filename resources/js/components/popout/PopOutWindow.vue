@@ -40,6 +40,34 @@ const shownMapSystem = computed(() => map_solarsystems.value.find((system) => sy
 const hereStatic = computed(() => (hereId.value ? resolveSolarsystem(hereId.value) : null));
 const mapOpen = useLocalStorage('popout-map-open', true);
 
+/** The signature panel is drawn at this width and shown at 80%, the same whatever the window's size. */
+const SIGNATURES_WIDTH = 490;
+const SIGNATURES_ZOOM = 0.8;
+const mapPane = ref<HTMLElement | null>(null);
+const foldedMapWidth = useLocalStorage('popout-map-width', 480);
+
+/** ◂: the map goes and the window shrinks by its width (the signatures stay as they are). */
+function foldMap(): void {
+    const width = mapPane.value?.getBoundingClientRect().width ?? 0;
+    if (width > 0) foldedMapWidth.value = Math.round(width);
+    mapOpen.value = false;
+    try {
+        popOutWindow.value?.resizeBy(-Math.round(width) + 16, 0);
+    } catch {
+        // The browser didn't allow it: the window keeps its size.
+    }
+}
+
+/** ▸: the map comes back and the window grows by its width again. */
+function openMap(): void {
+    mapOpen.value = true;
+    try {
+        popOutWindow.value?.resizeBy(foldedMapWidth.value - 16, 0);
+    } catch {
+        // The browser didn't allow it: the map takes what room there is.
+    }
+}
+
 // A jump goes back to the character's own system.
 watch(hereId, () => (viewing.value = null));
 
@@ -123,14 +151,14 @@ onBeforeUnmount(() => closePopOut());
             </div>
 
             <div class="flex min-h-0 flex-1">
-                <!-- The map around the character -->
-                <div v-if="mapOpen" class="relative min-w-0 flex-1 border-r border-border">
+                <!-- The map around the character: ◂ folds it away and the window shrinks by its width -->
+                <div v-if="mapOpen" ref="mapPane" class="relative min-w-0 flex-1 border-r border-border">
                     <PopOutMap :map-solarsystem-id="hereMapSystem?.id ?? null" :color="popOut.color" @select="pick" />
                     <button
                         type="button"
                         class="absolute top-1 right-1 rounded bg-neutral-800/80 px-1.5 text-xs text-neutral-300 hover:bg-neutral-700"
-                        title="Fold the map away"
-                        @click="mapOpen = false"
+                        title="Fold the map away (the window gets narrower)"
+                        @click="foldMap"
                     >
                         ◂
                     </button>
@@ -139,20 +167,22 @@ onBeforeUnmount(() => closePopOut());
                     v-else
                     type="button"
                     class="w-4 shrink-0 border-r border-border bg-neutral-900 text-xs text-neutral-400 hover:bg-neutral-800"
-                    title="Show the map"
-                    @click="mapOpen = true"
+                    title="Show the map (the window gets wider)"
+                    @click="openMap"
                 >
                     ▸
                 </button>
 
-                <!-- The signature panel, as on the main mapper -->
-                <div class="flex min-h-0 flex-col" :class="mapOpen ? 'w-[440px] shrink-0' : 'min-w-0 flex-1'">
+                <!-- The signature panel, as on the main mapper: always the same size (80%), whatever the window's size -->
+                <div class="flex min-h-0 shrink-0 flex-col" :style="{ width: `${SIGNATURES_WIDTH * SIGNATURES_ZOOM}px` }">
                     <div v-if="viewing" class="flex items-center gap-2 border-b border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-300">
                         Showing {{ displayAlias(shownMapSystem?.alias) || resolved?.solarsystem.name }}
                         <button type="button" class="ml-auto underline" @click="viewing = null">back to {{ popOut.name }}</button>
                     </div>
                     <div class="min-h-0 flex-1 overflow-hidden">
-                        <Signatures :map_solarsystem="resolved" :popout="popoutOptions" />
+                        <div :style="{ width: `${SIGNATURES_WIDTH}px`, height: `${100 / SIGNATURES_ZOOM}%`, zoom: SIGNATURES_ZOOM }">
+                            <Signatures :map_solarsystem="resolved" :popout="popoutOptions" />
+                        </div>
                     </div>
                     <div v-if="note" class="truncate border-t border-border px-2 py-0.5 text-[11px] text-emerald-400">{{ note }}</div>
                 </div>

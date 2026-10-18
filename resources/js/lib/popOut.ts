@@ -48,7 +48,15 @@ export async function openPopOut(characterId: number, name: string, color: strin
     if (popOutWindow.value && !popOutWindow.value.closed) return true;
 
     const pip = (window as unknown as { documentPictureInPicture: TDocumentPip }).documentPictureInPicture;
-    const opened = await pip.requestWindow({ width: 900, height: 440 });
+    // The signature panel is 392 px; the map takes the rest (or none when it was folded away last time).
+    const mapOpen = (() => {
+        try {
+            return window.localStorage.getItem('popout-map-open') !== 'false';
+        } catch {
+            return true;
+        }
+    })();
+    const opened = await pip.requestWindow({ width: mapOpen ? 880 : 410, height: 440 });
     copyStyles(opened);
     opened.document.title = `${name} · scanner`;
     opened.addEventListener('pagehide', () => {

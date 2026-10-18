@@ -52,7 +52,7 @@ import { createSignature, TProcessedConnection, updateMapUserSettings, updateSig
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TSignature } from '@/types/models';
 import { useEventListener, useLocalStorage, useNow } from '@vueuse/core';
-import { ArrowDown, ArrowUp, CircleHelp, Cloud, Database, Fan, Flag, Gem, Landmark, Radar, Rows2, Rows3, Shield, Swords } from 'lucide-vue-next';
+import { ArrowDown, ArrowUp, CircleHelp, Cloud, Database, Fan, Flag, Gem, Landmark, ListFilter, Radar, Rows2, Rows3, Shield, Swords } from 'lucide-vue-next';
 import { type Component, computed, nextTick, ref, watch } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
 
@@ -62,6 +62,8 @@ const props = defineProps<{
     popout?: { target: () => EventTarget | null | undefined; locationSystemId: () => number | null | undefined } | null;
 }>();
 
+/** Patch 41: the pop-out's filter row (folded behind one button). */
+const showFilters = ref(false);
 const { connections } = useSignatures(props.popout ? () => props.map_solarsystem : undefined);
 
 const { canEdit: can_write } = usePermission();
@@ -681,12 +683,13 @@ function createNewSignature() {
 
     <!-- Signatures list when system is selected -->
     <MapPanel v-if="map_solarsystem" class="@container/sigheader overflow-x-hidden">
-        <MapPanelHeader class="h-auto min-h-9 flex-wrap gap-y-1 py-1">
+        <MapPanelHeader :class="popout ? 'relative h-9 flex-nowrap' : 'h-auto min-h-9 flex-wrap gap-y-1 py-1'">
             <CombatControls class="mr-2" />
             Signatures
             <span v-if="filteredSignatures.length" class="ml-1 text-amber-400">{{ filteredSignatures.length }}</span>
             <span v-if="hiddenSignaturesCount > 0" class="ml-1 text-muted-foreground/70">{{ hiddenSignaturesCount }} hidden</span>
-            <Tooltip v-if="greenSites">
+            <!-- Patch 41: the pop-out keeps the header to one row (the site values show on hover there) -->
+            <Tooltip v-if="greenSites && !popout">
                 <TooltipTrigger as-child>
                     <span class="ml-2 cursor-help font-mono text-green-400 normal-case">{{ isk(greenSites.recon) }} / {{ isk(greenSites.dread) }}m</span>
                 </TooltipTrigger>
@@ -722,7 +725,24 @@ function createNewSignature() {
                 </Tooltip>
                 <!-- Patch 37: JUMPING HOT / COLD (next to rage scanning) -->
                 <JumpingHotToggle size="icon" />
-                <ToggleGroup v-model="activeCategoryFilters" type="multiple" size="sm" variant="outline">
+                <!-- Patch 41: in the pop-out the category filters fold into one button (one row header) -->
+                <MapPanelHeaderActionButton
+                    v-if="popout"
+                    size="icon"
+                    :class="showFilters ? 'bg-muted text-foreground' : ''"
+                    :title="`Filters (${activeCategoryFilters.length} on)${greenSites ? ` · combat sites ${isk(greenSites.recon)} / ${isk(greenSites.dread)}m` : ''}`"
+                    @click="showFilters = !showFilters"
+                >
+                    <ListFilter class="size-3.5" />
+                </MapPanelHeaderActionButton>
+                <ToggleGroup
+                    v-if="!popout || showFilters"
+                    v-model="activeCategoryFilters"
+                    type="multiple"
+                    size="sm"
+                    variant="outline"
+                    :class="popout ? 'absolute top-full right-1 z-30 mt-1 flex-wrap rounded-md border border-border bg-popover p-1 shadow-lg' : ''"
+                >
                     <Tooltip v-for="option in categoryFilterOptions" :key="option.value">
                         <TooltipTrigger as-child>
                             <ToggleGroupItem :value="option.value" :aria-label="option.label">

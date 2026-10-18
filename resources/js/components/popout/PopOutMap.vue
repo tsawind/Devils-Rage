@@ -3,6 +3,7 @@ import { classMeta } from '@/const/solarsystemClasses';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import { displayAlias } from '@/lib/alias';
 import { DEFAULT_NODE, nearbySystems, viewBoxAround, type TPopNode } from '@/lib/popOutMap';
+import { ANCHOR_OFFSET } from '@/map/core/coords';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import type { TStringedSolarsystemClass } from '@/types/models';
 import { computed } from 'vue';
@@ -21,11 +22,12 @@ const { resolveSolarsystem } = useStaticSolarsystems();
 
 const edges = computed(() => [...(store.value?.connections.values() ?? [])].map((connection) => ({ from: connection.from_map_solarsystem_id, to: connection.to_map_solarsystem_id, connection })));
 
+/** Where the main map draws a system (tree layout included), as a box from its top-left corner. */
 function nodeOf(id: number): TPopNode | null {
-    const position = store.value?.positions.get(id);
-    if (!position) return null;
+    const anchor = store.value?.renderPosition(id);
+    if (!anchor) return null;
     const size = store.value?.nodeSizes.get(id);
-    return { id, x: position.x, y: position.y, w: size?.width ?? DEFAULT_NODE.w, h: size?.height ?? DEFAULT_NODE.h };
+    return { id, x: anchor.x - ANCHOR_OFFSET.x, y: anchor.y - ANCHOR_OFFSET.y, w: size?.width ?? DEFAULT_NODE.w, h: size?.height ?? DEFAULT_NODE.h };
 }
 
 const shown = computed(() => {

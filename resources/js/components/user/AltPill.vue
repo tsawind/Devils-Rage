@@ -24,6 +24,7 @@ import { AppWindow, ExternalLink, PictureInPicture2, Users } from 'lucide-vue-ne
 import { soloTab, urlAs } from '@/lib/windowDriver';
 import { drivenElsewhere, others, windowName } from '@/lib/windowRegistry';
 import { canPopOut, openPopOut } from '@/lib/popOut';
+import { addCharacterTab } from '@/lib/characterTabs';
 import { computed } from 'vue';
 
 /**
@@ -52,12 +53,15 @@ const location = computed(() => (alt.value ? locationOf(alt.value.id) : null));
  * maps the alt from then on; here its row says "own window ↗" (click brings it up).
  */
 function openAs(characterId: number, mode: 'window' | 'tab'): void {
-    const url = urlAs(window.location.href, characterId, mode === 'tab');
+    // Patch 41b: a character in its own window or the pop-out gets a tab on the bar.
+    addCharacterTab(characterId);
+    const url = urlAs(window.location.href, characterId, true);
     const features = mode === 'window' ? 'popup=yes,width=1400,height=900' : undefined;
     window.open(url, windowName(characterId), features);
 }
 /** Patch 39: the always-on-top scanner pop-out (Chrome / Edge); elsewhere the character's own window. */
 async function popOutCharacter(characterId: number, name: string): Promise<void> {
+    addCharacterTab(characterId);
     if (!(await openPopOut(characterId, name).catch(() => false))) openAs(characterId, 'window');
 }
 const popOutLabel = canPopOut() ? 'Pop out (always on top)' : 'Pop out (opens a window: Chrome / Edge only)';

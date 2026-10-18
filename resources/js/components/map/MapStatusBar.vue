@@ -73,6 +73,9 @@ import { useAppearance } from '@/composables/useAppearance';
 import { useCommandPalette } from '@/composables/useCommandPalette';
 import useUser from '@/composables/useUser';
 import { characterColor } from '@/lib/characterColor';
+import { addCharacterTab } from '@/lib/characterTabs';
+import AltPill from '@/components/user/AltPill.vue';
+import MainPill from '@/components/user/MainPill.vue';
 import { openPopOut } from '@/lib/popOut';
 import { driverId, soloTab, urlAs } from '@/lib/windowDriver';
 import { home, logout } from '@/routes';
@@ -125,17 +128,7 @@ async function popOutDriver(): Promise<void> {
 }
 /** Close this window; the character is a tab in the main window again (the tab list is shared by this browser). */
 function backToTab(): void {
-    const id = driverId.value;
-    if (id !== null) {
-        try {
-            const listed = JSON.parse(window.localStorage.getItem('character-tab-listed') ?? '[]') as number[];
-            window.localStorage.setItem('character-tab-listed', JSON.stringify(listed.filter((other) => other !== id)));
-            const order = JSON.parse(window.localStorage.getItem('character-tab-order') ?? '[]') as number[];
-            window.localStorage.setItem('character-tab-order', JSON.stringify([id, ...order.filter((other) => other !== id)]));
-        } catch {
-            // Storage unavailable: the tab is still there in its old place.
-        }
-    }
+    if (driverId.value !== null) addCharacterTab(driverId.value);
     window.close();
 }
 
@@ -474,6 +467,11 @@ const settingsUrl = computed(() => {
 
             <!-- EVE time and players online -->
             <div class="hidden pl-1 lg:block"><ServerStatus /></div>
+            <!-- Patch 41b: your main and alt, as before (not in an ALT WINDOW: that window is one character) -->
+            <div v-if="$page.props.auth.user && !soloTab" class="flex origin-right scale-[0.9] items-center gap-1.5 pl-1">
+                <AltPill />
+                <MainPill />
+            </div>
         </div>
     </div>
 
