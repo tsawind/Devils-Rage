@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePortalTarget } from '@/lib/portalTarget'
 import type { HTMLAttributes } from 'vue'
 import { reactiveOmit } from '@vueuse/core'
 import {
@@ -16,10 +17,11 @@ const emits = defineEmits<ContextMenuContentEmits>()
 const delegatedProps = reactiveOmit(props, 'class')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const portalTo = usePortalTarget()
 </script>
 
 <template>
-  <ContextMenuPortal>
+  <ContextMenuPortal :to="portalTo">
     <ContextMenuContent
       data-slot="context-menu-content"
       v-bind="forwarded"

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusedClipboard } from '@/lib/popOut';
 import MassPlanSteps from '@/components/fleet/MassPlanSteps.vue';
 import { fleetShips, inScope } from '@/composables/useFleet';
 import { homeSideOf } from '@/composables/useMassSessions';
@@ -88,7 +89,7 @@ async function copy(): Promise<void> {
     if (!plan.value || !target.value) return;
     const text = massPlanText(plan.value.plan, target.value.label);
     try {
-        await navigator.clipboard.writeText(text);
+        await focusedClipboard().writeText(text);
         toast.success('Plan copied');
     } catch {
         toast.message('Plan', { description: text });

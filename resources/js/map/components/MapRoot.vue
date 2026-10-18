@@ -60,7 +60,9 @@ import { computed, ref, useTemplateRef, watch, watchEffect } from 'vue';
  *
  * Patch 42c: `popout` draws a second copy in the scanner pop-out: its own zoom, always
  * centred on `followSolarsystemId` (the pop-out's character), the zoom / sound / layout
- * buttons only (no menus, dialogs, Jumping hot or watcher: those stay in the main window).
+ * buttons (no Jumping hot or watcher). Right-click menus and the pipe popover open in the
+ * pop-out (Patch 42d); the prompts stay the main window's, drawn into the pop-out while
+ * you're working there.
  */
 const {
     map,
@@ -227,7 +229,6 @@ function handleConnectionContextMenu(_event: MouseEvent, connection: TMapConnect
 }
 
 function handleConnectionClick(event: MouseEvent, connection: TMapConnection): void {
-    if (popout) return;
     connectionPopoverOpen.value = true;
     // Store the click in viewport coordinates.
     connectionPopoverPosition.value = { x: event.clientX, y: event.clientY };
@@ -320,7 +321,7 @@ whenever(Delete, () => {
         />
         <MapNode v-for="id in systemIds" :id="id" :key="id" />
         <WatchLayer v-if="!popout" />
-        <template v-if="!popout" #context-menu>
+        <template #context-menu>
             <MapContextMenu v-if="contextMenuType === 'map' && canWrite" :position="contextMenuBasePoint" />
             <MapSolarsystemContextMenu v-else-if="contextMenuType === 'node' && contextMenuSystem" :map_solarsystem="contextMenuSystem" />
             <PlaceholderContextMenu v-else-if="contextMenuType === 'placeholder' && contextMenuPlaceholder" :placeholder="contextMenuPlaceholder" />
@@ -343,7 +344,6 @@ whenever(Delete, () => {
             </div>
         </template>
     </MapViewport>
-    <template v-if="!popout">
     <ConnectionPopover
         v-if="selectedConnection"
         :key="selectedConnection.id"
@@ -351,6 +351,7 @@ whenever(Delete, () => {
         :connection="selectedConnection"
         :reference="connectionPopoverReference"
     />
+    <template v-if="!popout">
     <PlaceholderDetailsPopover />
     <MapAddConnectionDialog />
     <AddNoteDialog />

@@ -1,3 +1,4 @@
+import { focusedClipboard } from '@/lib/popOut';
 import { useRoutingSetup } from '@/composables/routing/useRoutingSetup';
 import { fleetForHold } from '@/composables/useFleet';
 import { useNavigationSystems } from '@/composables/useNavigationSystems';
@@ -285,7 +286,7 @@ export function useRouteCopy() {
 
     async function writeOut(title: string, text: string): Promise<void> {
         try {
-            await navigator.clipboard.writeText(text);
+            await focusedClipboard().writeText(text);
             toast.success(`${title} copied (${text.length}/${FLEET_RULES.maxCopyLength})`, { description: text, duration: 8000 });
         } catch {
             toast.info(title, { description: text, duration: 15_000 });

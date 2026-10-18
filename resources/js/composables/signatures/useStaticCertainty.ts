@@ -1,3 +1,4 @@
+import { focusedClipboard } from '@/lib/popOut';
 import { useCombat } from '@/composables/combat/useCombat';
 import { useClipboardSetting } from '@/composables/useClipboardSetting';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
@@ -219,12 +220,12 @@ export function useStaticCertainty(store: MapStore): void {
                         // Patch 18b: the bookmark as it will be once marked (the static's type, class and size).
                         const copy = hole ? pendingHoleBookmark(store, system, asStaticHole(system, hole, staticName), slot, true) : '';
                         const quiet = choice === 'rename-quiet' || !clipboardAllowed();
-                        if (copy && !quiet) navigator.clipboard.writeText(copy).catch(() => undefined);
+                        if (copy && !quiet) focusedClipboard().writeText(copy).catch(() => undefined);
                         toast.success(`${staticName} is ${where}'s static · renamed to ${displayAlias(slot)}`, {
                             description: copy ? (quiet ? `New name ${visibleBookmarkName(copy)}` : `Copied ${visibleBookmarkName(copy)}`) : undefined,
                             action: undoAction(signatureId, setType, hole?.alias ?? null),
                             // Patch 20: renamed without copying: copy it from the toast if you want it after all.
-                            ...(copy && quiet ? { cancel: { label: '⧉ Copy', onClick: () => navigator.clipboard.writeText(copy).catch(() => undefined) } } : {}),
+                            ...(copy && quiet ? { cancel: { label: '⧉ Copy', onClick: () => focusedClipboard().writeText(copy).catch(() => undefined) } } : {}),
                             ...(copy && quiet ? { duration: 15_000 } : {}),
                         });
                         return;

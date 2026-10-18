@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePortalTarget } from '@/lib/portalTarget'
 import type { HTMLAttributes } from 'vue';
 import { cn } from '@/lib/utils';
 import { reactiveOmit } from '@vueuse/core';
@@ -23,10 +24,11 @@ const emits = defineEmits<TooltipContentEmits>();
 
 const delegatedProps = reactiveOmit(props, 'class');
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
+const portalTo = usePortalTarget()
 </script>
 
 <template>
-    <TooltipPortal>
+    <TooltipPortal :to="portalTo">
         <TooltipContent
             data-slot="tooltip-content"
             v-bind="{ ...forwarded, ...$attrs }"

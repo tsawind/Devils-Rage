@@ -7,6 +7,7 @@ import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import { displayAlias } from '@/lib/alias';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { jsonFetch } from '@/lib/jsonFetch';
+import { providePortalTarget, workingInPopOut } from '@/lib/portalTarget';
 import { closePopOut, focusedClipboard, popOut, popOutWindow } from '@/lib/popOut';
 import { driverId } from '@/lib/windowDriver';
 import { useMapSolarsystems } from '@/map/api';
@@ -17,7 +18,7 @@ import type { AppPageProps } from '@/types';
 import type { TMapConfig } from '@/types/map';
 import type { TCharacter } from '@/types/models';
 import { usePage } from '@inertiajs/vue3';
-import { useIntervalFn, useLocalStorage } from '@vueuse/core';
+import { useEventListener, useIntervalFn, useLocalStorage } from '@vueuse/core';
 import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
 
 /**
@@ -37,6 +38,19 @@ const { map_solarsystems } = useMapSolarsystems();
 const { resolveSolarsystem } = useStaticSolarsystems();
 
 const target = computed(() => popOutWindow.value?.document.body ?? null);
+
+// Patch 42d: menus, selects and popovers in the pop-out open in the pop-out; prompts the main
+// window draws (rename, add a note, …) open there too while you're working in the pop-out.
+providePortalTarget(target);
+useEventListener(() => popOutWindow.value?.document ?? null, 'pointerdown', () => (workingInPopOut.value = target.value), { capture: true });
+for (const type of ['pointerdown', 'pointerover'] as const) {
+    useEventListener(document, type, () => {
+        if (workingInPopOut.value) workingInPopOut.value = null;
+    }, { capture: true, passive: true });
+}
+watch(target, (body) => {
+    if (!body) workingInPopOut.value = null;
+});
 const character = computed(() => (popOut.value ? ((page.props.map_characters ?? []).find((candidate) => candidate.id === popOut.value!.characterId) ?? null) : null));
 const hereId = computed(() => character.value?.status?.solarsystem_id ?? null);
 const viewing = ref<number | null>(null);

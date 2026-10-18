@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePortalTarget } from '@/lib/portalTarget'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenuContent,
@@ -24,10 +25,11 @@ const delegatedProps = computed(() => {
 })
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const portalTo = usePortalTarget()
 </script>
 
 <template>
-  <DropdownMenuPortal>
+  <DropdownMenuPortal :to="portalTo">
     <DropdownMenuContent
       data-slot="dropdown-menu-content"
       v-bind="forwarded"

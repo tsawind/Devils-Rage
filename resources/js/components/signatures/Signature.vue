@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusedClipboard } from '@/lib/popOut';
 import { usePilotNames } from '@/composables/usePilotNames';
 import { recordSignatureDelete, recordSignatureEdit } from '@/composables/signatures/signatureUndo';
 import TrashIcon from '@/components/icons/TrashIcon.vue';
@@ -956,7 +957,7 @@ const armed_label = computed(() => {
 });
 
 function copyBookmark() {
-    navigator.clipboard.writeText(bookmark_name.value);
+    focusedClipboard().writeText(bookmark_name.value);
     // Patch 39: changes to this hole in the next 20 s copy its updated name.
     noteHoleCopy(holeKey(signature.id), bookmark_name.value, () => bookmark_name.value);
 

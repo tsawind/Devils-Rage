@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusedClipboard } from '@/lib/popOut';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useClosestSystemsCalculator } from '@/composables/useClosestSystemsCalculator';
 import { useShowMap } from '@/composables/useShowMap';
@@ -61,7 +62,7 @@ function copyRoute(): void {
         return;
     }
 
-    navigator.clipboard.writeText(routeText.value).catch(() => undefined);
+    focusedClipboard().writeText(routeText.value).catch(() => undefined);
     toast.success('Copied nearest highsec', { description: routeText.value });
 }
 </script>

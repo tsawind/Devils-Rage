@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePortalTarget } from '@/lib/portalTarget'
 import type { ComboboxContentEmits, ComboboxContentProps } from 'reka-ui'
 import type { HTMLAttributes } from 'vue'
 import { reactiveOmit } from '@vueuse/core'
@@ -14,10 +15,11 @@ const emits = defineEmits<ComboboxContentEmits>()
 
 const delegatedProps = reactiveOmit(props, 'class')
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const portalTo = usePortalTarget()
 </script>
 
 <template>
-  <ComboboxPortal>
+  <ComboboxPortal :to="portalTo">
     <ComboboxContent
       data-slot="combobox-list"
       v-bind="forwarded"

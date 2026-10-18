@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePortalTarget } from '@/lib/portalTarget'
 import type { HTMLAttributes } from 'vue'
 import { reactiveOmit } from '@vueuse/core'
 import {
@@ -26,10 +27,11 @@ const emits = defineEmits<PopoverContentEmits>()
 const delegatedProps = reactiveOmit(props, 'class')
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const portalTo = usePortalTarget()
 </script>
 
 <template>
-  <PopoverPortal>
+  <PopoverPortal :to="portalTo">
     <PopoverContent
       data-slot="popover-content"
       v-bind="{ ...forwarded, ...$attrs }"

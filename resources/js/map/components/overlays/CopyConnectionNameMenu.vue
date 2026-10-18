@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusedClipboard } from '@/lib/popOut';
 import { ContextMenuItem, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger } from '@/components/ui/context-menu';
 import { formatBookmarkName, visibleBookmarkName } from '@/lib/bookmark';
 import { connectionFlag } from '@/lib/chainNumbering';
@@ -73,7 +74,7 @@ const target_name = computed(() =>
 );
 
 function copyNameToClipboard(value: string) {
-    navigator.clipboard.writeText(value);
+    focusedClipboard().writeText(value);
     toast.success('Copied to clipboard', { description: 'You successfully copied the name to your clipboard.' });
 }
 </script>

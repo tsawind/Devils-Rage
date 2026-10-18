@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusedClipboard } from '@/lib/popOut';
 import { Button } from '@/components/ui/button';
 import usePermission from '@/composables/usePermission';
 import { clipboardAllowed } from '@/composables/useClipboardSetting';
@@ -72,7 +73,7 @@ function copy(name: string): void {
         toast.info('Bookmark name', { description: visibleBookmarkName(name) });
         return;
     }
-    navigator.clipboard
+    focusedClipboard()
         .writeText(name)
         .then(() => toast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(name) }))
         .catch(() => toast.error('Could not copy: click the mapper first.'));

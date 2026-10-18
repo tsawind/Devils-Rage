@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusedClipboard } from '@/lib/popOut';
 import { usePilotNames } from '@/composables/usePilotNames';
 import { fleetMembers } from '@/composables/useFleet';
 import { massState, sessionWindow, useMassSessions, type TMassSession, type TObservationRow, type TRollingCrew } from '@/composables/useMassSessions';
@@ -177,7 +178,7 @@ async function copy(): Promise<void> {
     if (!preview.value || !target.value) return;
     const text = massPlanText(preview.value, target.value.label);
     try {
-        await navigator.clipboard.writeText(text);
+        await focusedClipboard().writeText(text);
         toast.success('Plan copied');
     } catch {
         toast.message('Plan', { description: text });

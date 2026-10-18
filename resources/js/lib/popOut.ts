@@ -85,7 +85,8 @@ export function isPoppedOut(characterId: number): boolean {
 export function focusedClipboard(): Clipboard {
     const pop = popOutWindow.value;
     try {
-        if (pop && !pop.closed && pop.document.hasFocus()) return pop.navigator.clipboard;
+        // Patch 42d: the pop-out's whenever this window hasn't got focus (its own hasFocus can say no while you're in it).
+        if (pop && !pop.closed && (pop.document.hasFocus() || !document.hasFocus())) return pop.navigator.clipboard;
     } catch {
         // Pop-out gone: use this window.
     }

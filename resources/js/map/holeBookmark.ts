@@ -1,3 +1,4 @@
+import { focusedClipboard } from '@/lib/popOut';
 import { aliasesBelow, suggestAlias } from '@/lib/alias';
 import { buildSignatureBookmark, formatBookmarkName, isFrigateOnly, visibleBookmarkName } from '@/lib/bookmark';
 import { returnFlag, staticNames } from '@/lib/chainNumbering';
@@ -299,7 +300,7 @@ export function copyPlaceholderBookmark(store: MapStore, placeholder: TPlacehold
     const claim = claimFor(store, parent, hole, placeholder.alias);
     const name = pendingHoleBookmark(store, parent, hole, claim);
     if (!name) return;
-    navigator.clipboard.writeText(name).catch(() => undefined);
+    focusedClipboard().writeText(name).catch(() => undefined);
     // Patch 39: changes to this hole in the next 20 s copy its updated name.
     const parentId = parent.id;
     noteHoleCopy(holeKey(placeholder.signatureId), name, () => {
@@ -334,6 +335,6 @@ export function copyForwardBookmark(store: MapStore, connection: TMapConnection)
     if (!sides?.pasted) return;
     const name = linkedForwardBookmark(store, sides.near, sides.far.id, sides.far.alias ?? '');
     if (!name) return;
-    navigator.clipboard.writeText(name).catch(() => undefined);
+    focusedClipboard().writeText(name).catch(() => undefined);
     signatureToast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(name) });
 }

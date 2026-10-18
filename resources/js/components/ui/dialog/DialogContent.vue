@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { usePortalTarget } from '@/lib/portalTarget'
 import { cn } from '@/lib/utils'
 import { X } from 'lucide-vue-next'
 import {
@@ -22,10 +23,11 @@ const delegatedProps = computed(() => {
 })
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const portalTo = usePortalTarget()
 </script>
 
 <template>
-  <DialogPortal>
+  <DialogPortal :to="portalTo">
     <DialogOverlay />
     <DialogContent
       data-slot="dialog-content"

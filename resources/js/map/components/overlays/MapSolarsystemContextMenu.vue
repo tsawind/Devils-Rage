@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusedClipboard } from '@/lib/popOut';
 import { CharacterImage } from '@/components/images';
 import SolarsystemStatusIcon from '@/components/map/SolarsystemStatusIcon.vue';
 import SolarsystemExternalLinks from '@/components/solarsystem/SolarsystemExternalLinks.vue';
@@ -94,7 +95,7 @@ function handleStatusChange(status: AcceptableValue) {
 /** "Red route 1121 → highsec exit (Amarr, Domain)" for fleet chat. */
 function handleCopyRoute() {
     const text = describeChainRoute(map_solarsystem);
-    navigator.clipboard.writeText(text).catch(() => undefined);
+    focusedClipboard().writeText(text).catch(() => undefined);
     toast.success('Copied route', { description: text });
 }
 

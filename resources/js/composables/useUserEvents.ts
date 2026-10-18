@@ -1,3 +1,4 @@
+import { focusedClipboard } from '@/lib/popOut';
 import { useOnClient } from '@/composables/useOnClient';
 import useUser from '@/composables/useUser';
 import { getUserChannelName } from '@/const/channels';
@@ -72,7 +73,7 @@ function copyHoleBookmark(signatureId: number): void {
         if (!hole) continue;
         const name = pendingHoleBookmark(store, system, hole, hole.alias);
         if (!name) return;
-        navigator.clipboard.writeText(name).catch(() => undefined);
+        focusedClipboard().writeText(name).catch(() => undefined);
         toast.success('Copied bookmark to clipboard', { description: visibleBookmarkName(name) });
         return;
     }

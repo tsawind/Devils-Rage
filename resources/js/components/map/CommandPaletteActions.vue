@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusedClipboard } from '@/lib/popOut';
 import JumpInController from '@/actions/App/Http/Controllers/JumpInController';
 import { useNavigationSystems } from '@/composables/useNavigationSystems';
 import { useRouteCopy } from '@/composables/useRouteCopy';
@@ -94,7 +95,7 @@ async function copyPlan(exit: TExit, kind: TKind): Promise<void> {
     const into = landing.id === target.id ? target.name : `${landing.name} (${landing.gates} ${landing.gates === 1 ? 'gate' : 'gates'} from ${target.name}, no cyno in ${target.name})`;
     const text = `${kind.label} to ${into}: ${exitLine(exit, kind)}`;
     try {
-        await navigator.clipboard.writeText(text);
+        await focusedClipboard().writeText(text);
         toast.success('Jump plan copied', { description: text });
     } catch {
         toast.message('Jump plan', { description: text });

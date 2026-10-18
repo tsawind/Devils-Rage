@@ -1,3 +1,4 @@
+import { focusedClipboard } from '@/lib/popOut';
 import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
 import { useOnClient } from '@/composables/useOnClient';
 import { useShowMap } from '@/composables/useShowMap';
@@ -146,11 +147,11 @@ export function usePasteSignatures(
 
     async function getSignaturesFromClipboard() {
         // ask for permission to read clipboard
-        if (!navigator.clipboard || !navigator.clipboard.readText) {
+        if (!focusedClipboard()?.readText) {
             toast.error('Clipboard access is not supported in this browser or permission is denied.');
             return false;
         }
-        const clipboardText = await navigator.clipboard.readText();
+        const clipboardText = await focusedClipboard().readText();
         return signatureParser.parseSignatures(clipboardText);
     }
 

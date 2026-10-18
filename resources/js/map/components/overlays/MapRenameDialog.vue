@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusedClipboard } from '@/lib/popOut';
 import RenameHoleDialog from '@/components/signatures/RenameHoleDialog.vue';
 import { clipboardAllowed } from '@/composables/useClipboardSetting';
 import { mapRenameRequest } from '@/composables/useMapRename';
@@ -81,7 +82,7 @@ function rename(name: string, copy: boolean, mode: TRenameMode, next: string | n
     if (!current) return;
     const bookmark = bookmarks(name).thisSide;
     const copying = copy && clipboardAllowed() && Boolean(parent.value);
-    if (copying) navigator.clipboard.writeText(bookmark).catch(() => undefined);
+    if (copying) focusedClipboard().writeText(bookmark).catch(() => undefined);
     const done = () =>
         toast.success(`Renamed to ${displayAlias(name)}`, { description: copying ? `Copied ${visibleBookmarkName(bookmark)}` : visibleBookmarkName(bookmark) });
 

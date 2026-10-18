@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { focusedClipboard } from '@/lib/popOut';
 import FloatingNameTags from '@/map/components/nodes/FloatingNameTags.vue';
 import { requestMapRename } from '@/composables/useMapRename';
 import { useMinuteClock } from '@/composables/combat/useMinuteClock';
@@ -147,7 +148,7 @@ function copyWayBack(): void {
     if (!current || !parent) return;
     const name = wayBackBookmark(store, current, parent);
     if (!name) return;
-    navigator.clipboard
+    focusedClipboard()
         .writeText(name)
         .then(() => toast.success('Copied your way back', { description: visibleBookmarkName(name) }))
         .catch(() => undefined);
