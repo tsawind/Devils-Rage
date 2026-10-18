@@ -15,6 +15,7 @@ import { driverId } from '@/lib/windowDriver';
 import { pasteSignatures } from '@/map/actions/pasteSignatures';
 import { useMapSolarsystems } from '@/map/api';
 import type { TMap } from '@/pages/maps';
+import type { AppPageProps } from '@/types';
 import type { TCharacter, TSignature } from '@/types/models';
 import { usePage } from '@inertiajs/vue3';
 import { useIntervalFn } from '@vueuse/core';
@@ -29,7 +30,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
  */
 type TPopSystem = { id: number; map_id: number; solarsystem_id: number; alias: string | null; signatures: TSignature[] };
 
-const page = usePage<{ map: TMap; map_characters?: TCharacter[] | null }>();
+const page = usePage<AppPageProps<{ map: TMap; map_characters?: TCharacter[] | null }>>();
 const { map_solarsystems } = useMapSolarsystems();
 const { resolveSolarsystem } = useStaticSolarsystems();
 

@@ -34,10 +34,10 @@ it('acts as the window\'s main without changing the login\'s main', function () 
     [$user, $main, $alt] = driverUser();
     actingAs($user);
 
+    get('/_test/driver')->assertJson(['active' => $main->id]);
+
     withHeaders(['X-Map-Driver' => (string) $alt->id])->getJson('/_test/driver')
         ->assertJson(['active' => $alt->id, 'session' => null]);
-
-    get('/_test/driver')->assertJson(['active' => $main->id]);
 });
 
 it('takes ?as= on a page load', function () {
