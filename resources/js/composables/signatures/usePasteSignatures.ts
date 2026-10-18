@@ -19,6 +19,11 @@ export function usePasteSignatures(
     map_solarsystem: MaybeRefOrGetter<TSelectedMapSolarsystem | null>,
     /** Runs once the pasted signatures are saved and the page has the fresh list. */
     onPasted?: (signatures: TRawSignature[]) => void,
+    /**
+     * Patch 39: the scanner pop-out listens for Ctrl+V in its own window, and checks the
+     * pasted system against its own character's location (not this window's main).
+     */
+    options: { target?: () => EventTarget | null | undefined; locationSystemId?: () => number | null | undefined } = {},
 ) {
     const is_using_input = useIsUsingInput();
     const character = useActiveMapCharacter();
@@ -76,7 +81,8 @@ export function usePasteSignatures(
         }),
     );
 
-    useEventListener('paste', (event) => {
+    useEventListener(() => (options.target ? (options.target() ?? undefined) : window), 'paste', (raw: Event) => {
+        const event = raw as ClipboardEvent;
         if (is_using_input.value || !toValue(map_solarsystem)) {
             return;
         }
@@ -165,7 +171,7 @@ export function usePasteSignatures(
 
         // Patch 37: right after an alt's jump, its paste goes into the alt's system (no warning:
         // the alt is there), the main's system stays in view, and the way back is copied.
-        const alt = heldWayBack.value?.alt ?? null;
+        const alt = options.locationSystemId ? null : (heldWayBack.value?.alt ?? null);
         const altSystem = alt && store ? [...store.systems.values()].find((candidate) => candidate.solarsystem_id === alt.solarsystemId) : null;
         if (alt && altSystem && altSystem.id !== system.id) {
             const name = displayAlias(altSystem.alias) || altSystem.solarsystem.name;
@@ -175,7 +181,8 @@ export function usePasteSignatures(
         }
 
         // Check if character's current location matches the target system
-        if (!skipWarning && character.value?.status?.solarsystem_id && character.value.status.solarsystem_id !== system.solarsystem_id) {
+        const here = options.locationSystemId ? options.locationSystemId() : character.value?.status?.solarsystem_id;
+        if (!skipWarning && here && here !== system.solarsystem_id) {
             pending_signatures.value = signatures;
             show_system_mismatch_warning.value = true;
             return;

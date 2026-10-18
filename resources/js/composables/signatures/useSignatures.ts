@@ -1,11 +1,13 @@
 import { useSelectedMapSolarsystem } from '@/composables/useSelectedMapSolarsystem';
 import type { TProcessedConnection } from '@/map/api';
 import { useMapSolarsystems } from '@/map/api';
-import { TMapSolarsystem } from '@/pages/maps';
+import { TMapSolarsystem, type TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import { computed } from 'vue';
 
-export function useSignatures() {
-    const selected_map_solarsystem = useSelectedMapSolarsystem();
+/** Patch 39: `source` = the system the panel shows (the pop-out's), else the selected one. */
+export function useSignatures(source?: () => TResolvedSelectedMapSolarsystem | null) {
+    const page_selected = useSelectedMapSolarsystem();
+    const selected_map_solarsystem = computed(() => (source ? source() : page_selected.value));
     const { map_solarsystems: live_map_solarsystems } = useMapSolarsystems();
 
     const solarsystem_class = computed(() => selected_map_solarsystem.value?.solarsystem.class);

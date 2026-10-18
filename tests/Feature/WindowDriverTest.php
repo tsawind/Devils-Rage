@@ -66,8 +66,8 @@ it('gives the pop-out its system and signatures, members only', function () {
 
     actingAs($member)->getJson(route('map-solarsystems.pop-out', $system))
         ->assertOk()
-        ->assertJsonPath('id', $system->id)
-        ->assertJsonPath('signatures.0.signature_id', 'POP-401');
+        ->assertJsonPath('data.id', $system->id)
+        ->assertJsonPath('data.signatures.0.signature_id', 'POP-401');
 
     actingAs(User::factory()->has(Character::factory())->create())
         ->getJson(route('map-solarsystems.pop-out', $system))

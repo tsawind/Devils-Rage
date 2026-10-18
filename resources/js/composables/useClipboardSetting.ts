@@ -1,3 +1,4 @@
+import { focusedClipboard } from '@/lib/popOut';
 import { usePage } from '@inertiajs/vue3';
 
 /**
@@ -27,7 +28,7 @@ export async function autoCopy(text: string | null | undefined): Promise<boolean
     if (!text || !clipboardAllowed()) return false;
     onAnyCopy?.(text);
     try {
-        await navigator.clipboard.writeText(text);
+        await focusedClipboard().writeText(text);
         return true;
     } catch {
         return false;
@@ -36,7 +37,7 @@ export async function autoCopy(text: string | null | undefined): Promise<boolean
 
 /** A toast button that copies `text` when pressed (used when the mapper didn't copy it itself). */
 export function copyButton(text: string): { label: string; onClick: () => void } {
-    return { label: '⧉ Copy', onClick: () => void navigator.clipboard.writeText(text).catch(() => undefined) };
+    return { label: '⧉ Copy', onClick: () => void focusedClipboard().writeText(text).catch(() => undefined) };
 }
 
 export function useClipboardSetting() {

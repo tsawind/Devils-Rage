@@ -1,4 +1,5 @@
 import { visibleBookmarkName } from '@/lib/bookmark';
+import { anyWindowFocused, focusedClipboard } from '@/lib/popOut';
 import { ref } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
 import { clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
@@ -23,7 +24,7 @@ export const heldWayBack = ref<THeldWayBack | null>(null);
 
 async function write(name: string): Promise<boolean> {
     try {
-        await navigator.clipboard.writeText(name);
+        await focusedClipboard().writeText(name);
         return true;
     } catch {
         return false;
@@ -39,7 +40,7 @@ export async function offerWayBack(name: string, label = 'way back', alt: THeldW
         return;
     }
     // Patch 37: an alt's way back is held until its signatures are pasted (they go into the alt's system).
-    if (!alt && typeof document !== 'undefined' && document.hasFocus() && (await write(name))) {
+    if (!alt && typeof document !== 'undefined' && anyWindowFocused() && (await write(name))) {
         heldWayBack.value = null;
         toast.success('Copied your way back', { description: visibleBookmarkName(name) });
         return;

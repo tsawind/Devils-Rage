@@ -58,9 +58,11 @@ import { signatureToast as toast } from '@/lib/signatureToast';
 
 const props = defineProps<{
     map_solarsystem: TResolvedSelectedMapSolarsystem | null;
+    /** Patch 39: drawn in the scanner pop-out: Ctrl+V there, checked against the pop-out's character. */
+    popout?: { target: () => EventTarget | null | undefined; locationSystemId: () => number | null | undefined } | null;
 }>();
 
-const { connections } = useSignatures();
+const { connections } = useSignatures(props.popout ? () => props.map_solarsystem : undefined);
 
 const { canEdit: can_write } = usePermission();
 
@@ -90,7 +92,7 @@ const {
     show_system_mismatch_warning,
     confirmPasteInDifferentSystem,
     cancelPaste,
-} = usePasteSignatures(() => props.map_solarsystem, handlePasted);
+} = usePasteSignatures(() => props.map_solarsystem, handlePasted, props.popout ? { target: props.popout.target, locationSystemId: props.popout.locationSystemId } : {});
 
 const { map_solarsystems } = useMapSolarsystems();
 
@@ -378,7 +380,7 @@ async function handlePasted(pasted: TRawSignature[]): Promise<void> {
 
 // The way-back popup's green area: paste, same as the paste button.
 useEventListener(window, PASTE_SIGNATURES_EVENT, () => {
-    if (can_write.value) pasteSignatures();
+    if (can_write.value && !props.popout) pasteSignatures();
 });
 
 async function handlePastedScan(pasted: TRawSignature[]): Promise<void> {
