@@ -1,8 +1,10 @@
-import { focusedClipboard } from '@/lib/popOut';
 import { useOnClient } from '@/composables/useOnClient';
 import useUser from '@/composables/useUser';
 import { getUserChannelName } from '@/const/channels';
-import { CombatModeTurnedOffEvent, MapNoticeEvent, UserCharacterStatusUpdatedEvent } from '@/const/events';
+import { CombatModeTurnedOffEvent, MapNoticeEvent, UserCharacterStatusUpdatedEvent, WindowSwitchRequestedEvent } from '@/const/events';
+import { characterColor } from '@/lib/characterColor';
+import { focusedClipboard, popOut } from '@/lib/popOut';
+import { driverId, soloTab, switchDriver } from '@/lib/windowDriver';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { noteMapNotice } from '@/lib/mapTabs';
 import { pendingHoleBookmark } from '@/map/holeBookmark';
@@ -26,6 +28,17 @@ export function useUserEvents() {
         if (!userId) {
             return;
         }
+
+        // Patch 45d: the main window asked this one (its own character's window) to switch.
+        useEcho<{ from_character_id: number; to_character_id: number; to_name: string }>(getUserChannelName(userId), WindowSwitchRequestedEvent, (event) => {
+            if (!soloTab.value || driverId.value !== event.from_character_id) return;
+            switchDriver(event.to_character_id);
+            const to = (user.value?.characters ?? []).find((candidate) => candidate.id === event.to_character_id);
+            if (popOut.value?.characterId === event.from_character_id) {
+                popOut.value = { characterId: event.to_character_id, name: event.to_name, color: characterColor(to ?? { id: event.to_character_id }) };
+            }
+            router.reload();
+        });
 
         useEcho(getUserChannelName(userId), UserCharacterStatusUpdatedEvent, () => {
             router.reload({ only: ['auth'] });

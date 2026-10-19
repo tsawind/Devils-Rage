@@ -1,9 +1,11 @@
+import WindowSwitchController from '@/actions/App/Http/Controllers/WindowSwitchController';
 import { characterColor } from '@/lib/characterColor';
 import { addCharacterTab } from '@/lib/characterTabs';
 import { canPopOut, focusedClipboard, openPopOut } from '@/lib/popOut';
 import { signatureToast as toast } from '@/lib/signatureToast';
 import { urlAs } from '@/lib/windowDriver';
 import { windowName } from '@/lib/windowRegistry';
+import { router } from '@inertiajs/vue3';
 
 /**
  * Patch 44: the three ways to open one character for scanning, the same from the Alt pill,
@@ -78,4 +80,22 @@ export async function copyLinkForBrowser(character: TOpenable): Promise<void> {
     } catch {
         toast.error('Could not copy the link.');
     }
+}
+
+/**
+ * Patch 45d: switch the window showing `from` on its own (in any browser, e.g. Edge next to
+ * Chrome) to `to`; its pop-out follows.
+ */
+export function switchOtherWindow(from: TOpenable, to: TOpenable): void {
+    router.post(
+        WindowSwitchController.store().url,
+        { from_character_id: from.id, to_character_id: to.id },
+        {
+            preserveScroll: true,
+            preserveState: true,
+            only: [],
+            onSuccess: () => toast.success(`${from.name}'s window switches to ${to.name}`, { description: 'In whichever browser it is open.' }),
+            onError: (errors) => toast.error(Object.values(errors)[0] ?? 'Could not switch it.'),
+        },
+    );
 }

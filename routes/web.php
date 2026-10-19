@@ -76,6 +76,7 @@ use App\Http\Controllers\TokenManagementController;
 use App\Http\Controllers\TrackingController;
 use App\Http\Controllers\UserCharacterController;
 use App\Http\Controllers\WaypointController;
+use App\Http\Controllers\WindowSwitchController;
 use App\Http\Middleware\SetMapShareToken;
 use Illuminate\Support\Facades\Route;
 
@@ -93,6 +94,7 @@ Route::middleware('auth')->group(function () {
     Route::put('guest-name', [GuestNameController::class, 'update'])->name('guest-name.update');
     // Patch 41: a character's colour (tab, map pin, its window, pop-out).
     Route::put('characters/{character}/color', [CharacterColorController::class, 'update'])->name('characters.color.update');
+    Route::post('window-switch', [WindowSwitchController::class, 'store'])->name('window-switch.store');
     // Patch 39: the scanner pop-out's system and signatures.
     Route::get('map-solarsystems/{mapSolarsystem}/pop-out', [PopOutController::class, 'system'])->name('map-solarsystems.pop-out');
     Route::get('discord/connect', [DiscordAccountController::class, 'redirect'])->name('discord.connect');

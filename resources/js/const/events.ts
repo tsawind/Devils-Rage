@@ -23,6 +23,7 @@ export const SignaturesChangedEvent = getEventName('Signatures', 'SignaturesChan
 
 export const CharacterStatusUpdatedEvent = getEventName('Characters', 'CharacterStatusUpdatedEvent');
 export const UserCharacterStatusUpdatedEvent = getEventName('Characters', 'UserCharacterStatusUpdatedEvent');
+export const WindowSwitchRequestedEvent = getEventName('Characters', 'WindowSwitchRequestedEvent');
 export const SignatureUpdatedEvent = getEventName('Signatures', 'SignatureUpdatedEvent');
 export const SignatureCreatedEvent = getEventName('Signatures', 'SignatureCreatedEvent');
 export const SignatureDeletedEvent = getEventName('Signatures', 'SignatureDeletedEvent');

@@ -12,7 +12,17 @@ import {
     ContextMenuSubTrigger,
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import PillLocation from '@/components/user/PillLocation.vue';
 import { useCharacterPills } from '@/composables/useCharacterPills';
 import { useTrackedAlts } from '@/composables/useTrackedAlts';
@@ -20,11 +30,11 @@ import useUser from '@/composables/useUser';
 import type { AppPageProps } from '@/types';
 import type { TCharacter } from '@/types/models';
 import { usePage } from '@inertiajs/vue3';
-import { AppWindow, ChevronDown, ExternalLink, Link2, PictureInPicture2, Users } from 'lucide-vue-next';
+import { AppWindow, ChevronDown, ExternalLink, Link2, PictureInPicture2, Repeat, Users } from 'lucide-vue-next';
 import { soloTab } from '@/lib/windowDriver';
 import { drivenElsewhere, others, windowName } from '@/lib/windowRegistry';
 import { canPopOut } from '@/lib/popOut';
-import { copyLinkForBrowser, OPEN_LABELS, openCharacter, type TOpenHow } from '@/lib/openCharacter';
+import { copyLinkForBrowser, OPEN_LABELS, openCharacter, switchOtherWindow, type TOpenHow } from '@/lib/openCharacter';
 import { computed, ref } from 'vue';
 
 /**
@@ -62,12 +72,8 @@ function popOutCharacter(characterId: number): void {
 }
 const popOutLabel = canPopOut() ? 'Pop out (on top of EVE)' : 'Pop out (opens a window: Chrome / Edge only)';
 
-/** Patch 44: clicking the alt pops it out; the ▾ picks another alt (and has the other ways to open it). */
+/** Patch 45d: the alt and the ▾ both open the menu (pick another alt, or open this one). */
 const pickerOpen = ref(false);
-function clickAlt(): void {
-    if (alt.value) popOutCharacter(alt.value.id);
-    else pickerOpen.value = true;
-}
 function focusWindow(characterId: number): void {
     // Opening the same window name again brings the existing window up (it isn't reloaded).
     window.open('', windowName(characterId));
@@ -102,13 +108,12 @@ function pick(id: number | null): void {
                         <button
                             type="button"
                             class="flex items-center gap-2 rounded px-0.5 text-xs font-medium hover:bg-muted"
-                            :title="alt ? `Pop out ${alt.name} (on top of EVE)` : 'Pick an alt'"
-                            @click="clickAlt"
+                            :title="alt ? `${alt.name}: pick another alt, or open this one` : 'Pick an alt'"
+                            @click="pickerOpen = true"
                         >
                             <CharacterImage v-if="alt" :character_id="alt.id" :character_name="alt.name" class="size-6 rounded" />
                             <Users v-else class="size-5 text-muted-foreground" />
                             <span class="max-w-32 truncate" :class="alt ? '' : 'text-muted-foreground'">{{ alt?.name ?? 'Pick an alt' }}</span>
-                            <PictureInPicture2 v-if="alt" class="size-3 text-muted-foreground" />
                         </button>
                         <DropdownMenuTrigger as-child>
                             <button type="button" class="rounded px-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Pick another alt, or open this one">
@@ -123,6 +128,15 @@ function pick(id: number | null): void {
                             <DropdownMenuItem class="text-xs" :title="OPEN_LABELS.window.hint" @select="openAs(alt.id, 'window')"><AppWindow class="size-3.5" /> Own window (no address bar)</DropdownMenuItem>
                             <DropdownMenuItem class="text-xs" :title="OPEN_LABELS.tab.hint" @select="openAs(alt.id, 'tab')"><ExternalLink class="size-3.5" /> Browser tab</DropdownMenuItem>
                             <DropdownMenuItem class="text-xs" title="For a second pop-out: paste it into another browser (Edge next to Chrome)" @select="copyLinkForBrowser(alt)"><Link2 class="size-3.5" /> Copy link for another browser</DropdownMenuItem>
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger class="text-xs"><Repeat class="mr-1 size-3.5" /> Switch its window to…</DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">
+                                    <DropdownMenuLabel class="text-[11px] font-normal text-muted-foreground">The window (and pop-out) showing {{ alt.name }}, in any browser</DropdownMenuLabel>
+                                    <DropdownMenuItem v-for="other in alts.filter((candidate) => candidate.id !== alt?.id)" :key="other.id" class="text-xs" @select="switchOtherWindow(alt, other)">
+                                        {{ other.name }}
+                                    </DropdownMenuItem>
+                                </DropdownMenuSubContent>
+                            </DropdownMenuSub>
                             <DropdownMenuSeparator />
                         </template>
                         <DropdownMenuLabel class="text-xs">{{ mapSlug ? 'Alt to show and track' : 'Alt to show' }}</DropdownMenuLabel>
