@@ -85,9 +85,10 @@ const onlyDetails = computed(() => unchanged.value && detailsChanged.value);
 
 function rename(copy: boolean): void {
     if (!canRename.value && !onlyDetails.value) return;
-    open.value = false;
+    // Patch 45f: tell the parent first; closing clears what it's renaming (Save did nothing).
     if (detailsChanged.value) emit('details', occupier.value.trim(), homeOf.value.trim());
     if (canRename.value) emit('rename', trimmed.value, copy, holder.value ? mode.value : 'plain', holder.value?.next ?? null);
+    open.value = false;
 }
 </script>
 
