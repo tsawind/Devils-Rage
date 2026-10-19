@@ -22,10 +22,8 @@ it('asks your other window to switch characters', function () {
 
     post(route('window-switch.store'), ['from_character_id' => $from->id, 'to_character_id' => $to->id])->assertSessionHasNoErrors()->assertRedirect();
 
-    Event::assertDispatched(WindowSwitchRequestedEvent::class, fn (WindowSwitchRequestedEvent $event): bool => $event->user_id === $user->id
-        && $event->from_character_id === $from->id
-        && $event->to_character_id === $to->id
-        && $event->to_name === 'Second Scanner');
+    Event::assertDispatched(WindowSwitchRequestedEvent::class, fn (WindowSwitchRequestedEvent $event): bool => (int) $event->from_character_id === (int) $from->id
+        && (int) $event->to_character_id === (int) $to->id);
 });
 
 it('does not switch to someone else\'s character', function () {

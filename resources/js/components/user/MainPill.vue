@@ -49,7 +49,7 @@ const quick = computed(() => new Set(myQuick.value));
  */
 /** Patch 44: pop out / own window / browser tab. */
 const OPEN_WAYS: { value: TOpenHow; label: string; icon: Component }[] = [
-    { value: 'popout', label: 'Pop out (on top of EVE)', icon: PictureInPicture2 },
+    { value: 'popout', label: 'Pop out another…', icon: PictureInPicture2 },
     { value: 'window', label: 'Own window (no address bar)', icon: AppWindow },
     { value: 'tab', label: 'Browser tab', icon: ExternalLink },
 ];
@@ -121,6 +121,10 @@ function switchMain(characterId: number): void {
             </ContextMenuSub>
             <template v-if="onMap">
                 <ContextMenuSeparator />
+                <!-- Patch 45e: one click pops your main out -->
+                <ContextMenuItem class="text-xs" :title="OPEN_LABELS.popout.hint" @select="openWith(main, 'popout')">
+                    <PictureInPicture2 class="size-3.5" /> Pop out {{ main.name }}
+                </ContextMenuItem>
                 <ContextMenuSub v-for="how in OPEN_WAYS" :key="how.value">
                     <ContextMenuSubTrigger class="text-xs"><component :is="how.icon" class="mr-1 size-3.5" /> {{ how.label }}</ContextMenuSubTrigger>
                     <ContextMenuSubContent class="max-h-[60vh] w-56 overflow-y-auto">

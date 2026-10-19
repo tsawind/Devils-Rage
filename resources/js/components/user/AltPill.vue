@@ -143,10 +143,19 @@ function pick(id: number | null): void {
                         <DropdownMenuItem v-for="candidate in pickable" :key="candidate.id" class="flex items-center gap-2 text-xs" @select="pick(candidate.id)">
                             <CharacterImage :character_id="candidate.id" :character_name="candidate.name" class="size-5 rounded" />
                             <span class="truncate" :class="candidate.id === alt?.id ? 'font-semibold text-amber-400' : ''">{{ candidate.name }}</span>
+                            <!-- Patch 45e: pop this one out (the pop-out switches to it) -->
+                            <button
+                                type="button"
+                                class="ml-auto shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                                :title="`Pop out ${candidate.name} (the pop-out switches to it)`"
+                                @click.stop="popOutCharacter(candidate.id)"
+                            >
+                                <PictureInPicture2 class="size-3.5" />
+                            </button>
                             <button
                                 v-if="elsewhere.has(candidate.id)"
                                 type="button"
-                                class="ml-auto shrink-0 text-[10px] text-sky-400 hover:underline"
+                                class="shrink-0 text-[10px] text-sky-400 hover:underline"
                                 title="Mapped in its own window, as that window's main. Click to bring it up."
                                 @click.stop="focusWindow(candidate.id)"
                             >
