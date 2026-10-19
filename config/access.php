@@ -40,4 +40,22 @@ return [
         static fn (string $id): int => (int) mb_trim($id),
         explode(',', (string) env('MAP_CREATOR_AFFILIATION_IDS', '')),
     ))),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Desktop App Admins (Patch 46)
+    |--------------------------------------------------------------------------
+    |
+    | EVE character IDs whose accounts may change the desktop app's settings for
+    | everyone (message of the day, minimum version, feature switches) on the
+    | App admin page. Comma separated, e.g. APP_ADMIN_CHARACTER_IDS=2112345678.
+    |
+    | Leave empty and nobody can (the default).
+    |
+    */
+
+    'app_admin_character_ids' => array_values(array_filter(array_map(
+        static fn (string $id): int => (int) mb_trim($id),
+        explode(',', (string) env('APP_ADMIN_CHARACTER_IDS', '')),
+    ))),
 ];

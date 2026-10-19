@@ -50,20 +50,18 @@ final readonly class ReportAppLocationAction
             'event_queued_at' => now(),
         ]);
 
-        if ($previous_solarsystem_id !== null) {
-            try {
-                $this->recordJumpAction->handle(
-                    $character->id,
-                    $previous_solarsystem_id,
-                    $solarsystem->id,
-                    $status->ship_type_id,
-                    $status->ship_name,
-                );
-            } catch (Throwable $exception) {
-                Log::warning(sprintf('Failed to record app-reported jump for character %d', $character->id), [
-                    'exception' => $exception,
-                ]);
-            }
+        try {
+            $this->recordJumpAction->handle(
+                $character->id,
+                $previous_solarsystem_id,
+                $solarsystem->id,
+                $status->ship_type_id,
+                $status->ship_name,
+            );
+        } catch (Throwable $exception) {
+            Log::warning(sprintf('Failed to record app-reported jump for character %d', $character->id), [
+                'exception' => $exception,
+            ]);
         }
 
         return true;

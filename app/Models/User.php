@@ -166,6 +166,17 @@ final class User extends Authenticatable
         return $this->hasMany(Character::class, 'user_id');
     }
 
+    /**
+     * Patch 46: may change the desktop app's settings for everyone (access.app_admin_character_ids).
+     */
+    public function isAppAdmin(): bool
+    {
+        /** @var list<int> $admins */
+        $admins = config('access.app_admin_character_ids', []);
+
+        return $admins !== [] && $this->characters()->whereIn('id', $admins)->exists();
+    }
+
     /** @return HasOne<DiscordAccount, $this> */
     public function discordAccount(): HasOne
     {
