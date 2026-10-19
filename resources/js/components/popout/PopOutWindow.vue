@@ -8,7 +8,7 @@ import { displayAlias } from '@/lib/alias';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { jsonFetch } from '@/lib/jsonFetch';
 import { providePortalTarget, workingInPopOut } from '@/lib/portalTarget';
-import { closePopOut, focusedClipboard, popOut, popOutWindow } from '@/lib/popOut';
+import { closePopOut, dropFromPopOut, focusedClipboard, popOut, popOutCharacters, popOutWindow, switchPopOut } from '@/lib/popOut';
 import { driverId } from '@/lib/windowDriver';
 import { useMapSolarsystems } from '@/map/api';
 import MapRoot from '@/map/components/MapRoot.vue';
@@ -176,6 +176,37 @@ function pick(solarsystemId: number): void {
 }
 provide(POPOUT_MAP, { pick });
 
+// Patch 45b: the pop-out's other characters (chips at the top). One that moved since you last
+// looked at it gets a dot, so a jump on a scanner you aren't looking at isn't missed.
+const lastSeenAt = ref<Record<number, number | null>>({});
+const movedIds = ref<Set<number>>(new Set());
+watch(
+    () => (page.props.map_characters ?? []).map((candidate) => [candidate.id, candidate.status?.solarsystem_id ?? null] as const),
+    (now) => {
+        const next = new Set(movedIds.value);
+        for (const [id, at] of now) {
+            if (!popOutCharacters.value.some((entry) => entry.characterId === id)) continue;
+            if (id === popOut.value?.characterId) {
+                lastSeenAt.value = { ...lastSeenAt.value, [id]: at };
+                next.delete(id);
+            } else if (id in lastSeenAt.value && lastSeenAt.value[id] !== at) {
+                next.add(id);
+            } else if (!(id in lastSeenAt.value)) {
+                lastSeenAt.value = { ...lastSeenAt.value, [id]: at };
+            }
+        }
+        movedIds.value = next;
+    },
+    { immediate: true },
+);
+function showCharacter(characterId: number): void {
+    switchPopOut(characterId);
+    const next = new Set(movedIds.value);
+    next.delete(characterId);
+    movedIds.value = next;
+    lastSeenAt.value = { ...lastSeenAt.value, [characterId]: (page.props.map_characters ?? []).find((candidate) => candidate.id === characterId)?.status?.solarsystem_id ?? null };
+}
+
 onBeforeUnmount(() => closePopOut());
 </script>
 
@@ -203,6 +234,24 @@ onBeforeUnmount(() => closePopOut());
                     ⧉ {{ visibleBookmarkName(wayBack.name) }}
                 </button>
                 <button type="button" class="ml-auto rounded px-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Close the pop-out" @click="closePopOut()">✕</button>
+            </div>
+
+            <!-- Patch 45b: more than one character in the pop-out: one chip each (a dot when it moved) -->
+            <div v-if="popOutCharacters.length > 1" class="flex items-center gap-1 overflow-x-auto border-b border-border px-2 py-0.5">
+                <span
+                    v-for="entry in popOutCharacters"
+                    :key="entry.characterId"
+                    class="group flex shrink-0 cursor-pointer items-center gap-1 rounded border px-1.5 py-px text-[11px]"
+                    :class="entry.characterId === popOut.characterId ? 'font-semibold text-foreground' : 'text-muted-foreground hover:text-foreground'"
+                    :style="{ borderColor: entry.characterId === popOut.characterId ? entry.color : 'transparent', background: entry.characterId === popOut.characterId ? `color-mix(in srgb, ${entry.color} 18%, transparent)` : undefined }"
+                    :title="`Show ${entry.name}`"
+                    @click="showCharacter(entry.characterId)"
+                >
+                    <span class="size-2 rounded-full" :style="{ background: entry.color }" />
+                    {{ entry.name }}
+                    <span v-if="movedIds.has(entry.characterId)" class="size-1.5 animate-pulse rounded-full bg-red-500" title="Moved since you last looked" />
+                    <button type="button" class="hidden text-muted-foreground group-hover:inline hover:text-foreground" :title="`Take ${entry.name} out of the pop-out`" @click.stop="dropFromPopOut(entry.characterId)">✕</button>
+                </span>
             </div>
 
             <div class="flex min-h-0 flex-1">

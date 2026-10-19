@@ -40,7 +40,8 @@ export function resolveDriver(urlDriver: number | null, stored: string | null, l
 export const soloTab = ref(false);
 const SOLO_KEY = 'map-solo-tab';
 
-export function initDriver(loginMain: number | null): number | null {
+/** Patch 45b: whether this tab shows one character (checked on its own, before anything else). */
+export function initSolo(): void {
     try {
         // Patch 44: a window opened for one character is named after it (dr-map-<id>), so it stays one even if ?solo= is lost.
         const solo =
@@ -50,6 +51,10 @@ export function initDriver(loginMain: number | null): number | null {
     } catch {
         soloTab.value = false;
     }
+}
+
+export function initDriver(loginMain: number | null): number | null {
+    initSolo();
     const id = resolveDriver(typeof window === 'undefined' ? null : driverFromUrl(window.location.href), storage()?.getItem(KEY) ?? null, loginMain);
     setDriver(id);
     return id;

@@ -6,7 +6,7 @@ import { isPWA } from './composables/useOnClient';
 import { initializeRouting } from './composables/useRoutingWorker';
 import { preloadSovereigntyData } from './composables/useSovereigntyData';
 import { preloadStaticData } from './composables/useStaticData';
-import { driverHeaders, initDriver } from './lib/windowDriver';
+import { driverFromUrl, driverHeaders, initDriver, initSolo } from './lib/windowDriver';
 
 configureEcho({
     broadcaster: 'reverb',
@@ -19,14 +19,18 @@ router.on('finish', () => {
 // Patch 39: this window's own main goes with every request (X-Map-Driver).
 function loginMain(): number | null {
     try {
-        const page = JSON.parse(document.getElementById('app')?.dataset.page ?? '{}') as { props?: { auth?: { user?: { active_character?: { id?: number } } | null } } };
+        // The first page is on #app's data-page, or (newer Inertia) in a <script data-page> element.
+        const raw = document.getElementById('app')?.dataset.page ?? document.querySelector('script[data-page]')?.textContent ?? '{}';
+        const page = JSON.parse(raw) as { props?: { auth?: { user?: { active_character?: { id?: number } } | null } } };
         return page.props?.auth?.user?.active_character?.id ?? null;
     } catch {
         return null;
     }
 }
 const login = loginMain();
-const driver = login === null ? null : initDriver(login);
+// Patch 45b: a one-character tab is one even when the first page couldn't be read.
+initSolo();
+const driver = login === null ? (driverFromUrl(window.location.href) === null ? null : initDriver(null)) : initDriver(login);
 router.on('before', (event) => {
     Object.assign(event.detail.visit.headers, driverHeaders());
 });

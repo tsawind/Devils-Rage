@@ -1,6 +1,6 @@
 import { characterColor } from '@/lib/characterColor';
 import { addCharacterTab } from '@/lib/characterTabs';
-import { canPopOut, openPopOut, popOut, popOutWindow } from '@/lib/popOut';
+import { canPopOut, openPopOut } from '@/lib/popOut';
 import { urlAs } from '@/lib/windowDriver';
 import { windowName } from '@/lib/windowRegistry';
 
@@ -8,9 +8,8 @@ import { windowName } from '@/lib/windowRegistry';
  * Patch 44: the three ways to open one character for scanning, the same from the Alt pill,
  * the Main pill and the character tabs.
  *
- * - Pop out: a small always-on-top scanner over EVE (Chrome / Edge). A browser allows one
- *   per mapper tab, so a second pop-out opens that character in a browser tab, which pops
- *   it out with one click there and then goes back to the tab you were on (keep it open).
+ * - Pop out: a small always-on-top scanner over EVE (Chrome / Edge). Chrome keeps only one
+ *   open at a time, so another character joins the same pop-out (chips at its top switch).
  * - Own window: a separate mapper window with no address bar, for another screen.
  * - Browser tab: a new tab next to this one.
  *
@@ -37,10 +36,8 @@ export async function openCharacter(character: TOpenable, how: TOpenHow): Promis
         openWindow(character, how);
         return;
     }
-    const busy = popOutWindow.value && !popOutWindow.value.closed && popOut.value?.characterId !== character.id;
-    if (!canPopOut() || busy) {
-        // One pop-out per tab: this one goes from the character's own browser tab.
-        openWindow(character, canPopOut() ? 'tab' : 'window', canPopOut());
+    if (!canPopOut()) {
+        openWindow(character, 'window');
         return;
     }
     if (!(await openPopOut(character.id, character.name, characterColor(character)).catch(() => false))) openWindow(character, 'window');
