@@ -165,6 +165,7 @@ Route::middleware('auth')->group(function () {
     Route::post('map-connections/{mapConnection}/fresh', [HoleCheckedController::class, 'fresh'])->name('map-connections.fresh');
     Route::post('map-connections/{mapConnection}/checked', [HoleCheckedController::class, 'connection'])->name('map-connections.checked');
     Route::post('signatures/{signature}/checked', [HoleCheckedController::class, 'signature'])->name('signatures.checked');
+    Route::post('signatures/{signature}/watched', [HoleCheckedController::class, 'watchSignature'])->name('signatures.watched');
     Route::post('map-connections/{mapConnection}/hole-type', [ConnectionHoleTypeController::class, 'store'])->name('map-connections.hole-type.store');
     Route::post('map-connections/{mapConnection}/relink', [ConnectionHoleTypeController::class, 'relink'])->name('map-connections.relink');
     Route::post('signatures/{signature}/absorb', [ConnectionHoleTypeController::class, 'absorb'])->name('signatures.absorb');

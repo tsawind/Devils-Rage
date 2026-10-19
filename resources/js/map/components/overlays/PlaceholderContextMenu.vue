@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { markSignatureChecked } from '@/map/actions/holeChecked';
+import { markSignatureChecked, setSignatureWatched } from '@/map/actions/holeChecked';
 import { usePilotNames } from '@/composables/usePilotNames';
 import { k162Hint, offersK162 } from '@/lib/k162';
 import { oftenSeenCounts, typeSections } from '@/lib/typeOrdering';
@@ -36,7 +36,7 @@ import type { TSignature } from '@/types/models';
 import { formatDateToISO } from '@/lib/utils';
 import { UTCDate } from '@date-fns/utc';
 import { router } from '@inertiajs/vue3';
-import { Check, ClipboardCopy, Crosshair, Fan, Hourglass, ListTree, Scale, Star, Trash2 } from 'lucide-vue-next';
+import { Check, ClipboardCopy, Crosshair, Eye, Fan, Hourglass, ListTree, Scale, Star, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
 
@@ -391,6 +391,16 @@ function removeSignature(): void {
         <ContextMenuItem v-if="canEdit" @select="markSignatureChecked(placeholder.signatureId)">
             <Check class="size-4" />
             Checked in game
+        </ContextMenuItem>
+        <!-- Patch 45: watch a hole before anyone jumps it (its pipe is watched once it's jumped) -->
+        <ContextMenuItem
+            v-if="canEdit && hole"
+            :title="hole.mass_watched_at ? `Watched by ${hole.mass_watched_by_name ?? 'someone'}: click to stop` : 'Its pipe gets the 👁 and the watcher as soon as someone jumps it'"
+            @select="setSignatureWatched(placeholder.signatureId, !hole.mass_watched_at)"
+        >
+            <Eye class="size-4" />
+            Watching
+            <Check v-if="hole.mass_watched_at" class="ml-auto size-4" />
         </ContextMenuItem>
         <ContextMenuItem @select="openInList">
             <ListTree class="size-4" />

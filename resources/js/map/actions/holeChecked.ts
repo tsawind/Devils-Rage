@@ -37,6 +37,17 @@ export function setConnectionWatched(connectionId: number, on: boolean): void {
     });
 }
 
+/** Patch 45: 👁 Watching on a hole nobody has jumped yet (a dotted pipe). */
+export function setSignatureWatched(signatureId: number, on: boolean): void {
+    router.post(HoleCheckedController.watchSignature(signatureId).url, { on }, {
+        preserveScroll: true,
+        preserveState: true,
+        only: ['map', 'selected_map_solarsystem'],
+        onSuccess: () => toast.success(on ? 'Watching: its pipe is watched once someone jumps it' : 'Stopped watching'),
+        onError: () => toast.error('Could not change watching.'),
+    });
+}
+
 const quiet = { preserveScroll: true, preserveState: true, only: ['map'] };
 
 /**

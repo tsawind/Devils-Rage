@@ -158,7 +158,7 @@ describe('patch 20: grouped K162s', () => {
         expect(k162Hint(range('C4/5'), '3')).toBe('dangerous');
         expect(k162Hint(range('C2/3'), '4')).toBe('unknown · large');
         expect(k162Hint(plain('4'), '5')).toBe('dangerous · large');
-        expect(k162Hint(plain('5'), '6')).toBe('dangerous · very large');
+        expect(k162Hint(plain('5'), '6')).toBe('dangerous · extra large');
         expect(k162Hint(plain('1'), '3')).toBe('unknown · medium');
         expect(k162Hint(plain('6'), '2')).toBe('deadly');
     });

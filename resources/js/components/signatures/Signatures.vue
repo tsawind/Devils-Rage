@@ -523,6 +523,47 @@ async function handlePastedScan(pasted: TRawSignature[]): Promise<void> {
     return_dialog_open.value = true;
 }
 
+/**
+ * Patch 45: what the map knows here that has no signature yet, as faint rows at the end of
+ * the list: the statics the system must have (green, "B0 · N766 → C2") and pipes jumped
+ * without a signature on this side. A paste fills them in.
+ */
+type TGhostRow = { key: string; name: string; type: string; target: string; isStatic: boolean; title: string };
+const ghost_rows = computed<TGhostRow[]>(() => {
+    const system = props.map_solarsystem;
+    if (!system) return [];
+    const rows: TGhostRow[] = [];
+    try {
+        for (const placeholder of useMapStore().allPlaceholders.value) {
+            if (placeholder.parentId !== system.id || !placeholder.expected) continue;
+            rows.push({
+                key: `static-${placeholder.nodeId}`,
+                name: displayAlias(placeholder.alias) || placeholder.label,
+                type: placeholder.wormhole ?? 'Static',
+                target: placeholder.destination ?? '?',
+                isStatic: true,
+                title: `${placeholder.wormhole ?? 'A'} static this system must have: not scanned yet`,
+            });
+        }
+    } catch {
+        // No map here: no expected statics.
+    }
+    for (const connection of connections.value) {
+        if (connection.type === 'stargate') continue;
+        if ((connection.signatures ?? []).some((signature) => signature.map_solarsystem_id === system.id)) continue;
+        const other = connection.target;
+        rows.push({
+            key: `pipe-${connection.id}`,
+            name: displayAlias(other.alias) || other.solarsystem.name,
+            type: 'Wormhole',
+            target: aliasedSolarsystemLabel(other.alias, other.solarsystem.name),
+            isStatic: false,
+            title: `Jumped to ${aliasedSolarsystemLabel(other.alias, other.solarsystem.name)}: its signature on this side isn't scanned yet`,
+        });
+    }
+    return rows;
+});
+
 /** Patch 39: this system's name as seen through a pipe (a loop's own number), or null when unknown. */
 function hereThrough(connectionId: number): string | null {
     try {
@@ -934,7 +975,20 @@ function createNewSignature() {
                     @disarm="disarmRow(signature)"
                 />
             </template>
-            <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-4">
+            <!-- Patch 45: the map's statics and jumped pipes with no signature here yet -->
+            <div
+                v-for="row in ghost_rows"
+                :key="row.key"
+                class="grid grid-cols-[minmax(3.5rem,auto)_5rem_1fr_auto] items-center gap-3 border-b border-border/30 px-3 py-1 font-mono text-xs"
+                :class="row.isStatic ? 'bg-emerald-500/10 text-emerald-200/90' : 'bg-sky-500/10 text-sky-200/90'"
+                :title="row.title"
+            >
+                <span class="truncate font-semibold">{{ row.name }}</span>
+                <span class="text-muted-foreground">???-???</span>
+                <span class="truncate">{{ row.type }}<span v-if="row.isStatic" class="ml-1 rounded bg-emerald-600/70 px-1 font-sans text-[9px] text-white">static</span></span>
+                <span class="truncate text-muted-foreground">→ {{ row.target }}</span>
+            </div>
+            <div v-if="!sorted.length && !ghost_rows.length" class="flex h-full flex-col items-center justify-center gap-2 p-4">
                 <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">
                     {{ hiddenSignaturesCount > 0 ? `${hiddenSignaturesCount} hidden by filters` : 'No signatures' }}
                 </p>

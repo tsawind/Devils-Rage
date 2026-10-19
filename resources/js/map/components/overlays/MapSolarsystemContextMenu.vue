@@ -30,7 +30,11 @@ import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { useAddConnectionDialog } from '@/map/interactions/useAddConnectionDialog';
 import { TMapSolarsystem } from '@/pages/maps';
 import { TMapSolarsystemStatus } from '@/types/models';
-import { Brush, ClipboardCopy, Compass, Eraser, Flag, Home, Map, MapPin, Navigation, NotebookPen, Pin, Route, Scissors, Trash2, Users, Waypoints } from 'lucide-vue-next';
+import { Brush, Check, ClipboardCopy, Compass, Eraser, Eye, Flag, Home, Map, MapPin, Navigation, NotebookPen, Pin, Route, Scissors, Trash2, Users, Volume2, VolumeX, Waypoints } from 'lucide-vue-next';
+import { isSystemMuted, setSystemMuted } from '@/lib/mutedSystems';
+import { setConnectionWatched } from '@/map/actions/holeChecked';
+import { chainParents } from '@/map/store/derived';
+import { tryUseMapStore } from '@/map/store/mapStore';
 import { addNoteTarget } from '@/map/components/overlays/AddNoteDialog.vue';
 import { chainBeyondTarget } from '@/map/components/overlays/ChainBeyondDialog.vue';
 import { displayAlias } from '@/lib/alias';
@@ -114,6 +118,28 @@ function handleClearCombatChain() {
 }
 
 const options: TMapSolarsystemStatus[] = ['unknown', 'friendly', 'hostile', 'active', 'unscanned', 'empty'];
+
+// Patch 45: mute this system's kill sounds (just you; back to normal when it leaves the map).
+const muted = computed(() => isSystemMuted(map_solarsystem.id));
+
+// Patch 45: watch the hole leading into this system (the pipe from its parent, toward home).
+const store = tryUseMapStore();
+const inbound = computed(() => {
+    if (!store) return null;
+    const systems = [...store.systems.values()];
+    const connections = [...store.connections.values()];
+    const homeId = systems.find((system) => system.solarsystem_id === store.meta.value?.home_solarsystem_id)?.id ?? null;
+    const parentId = chainParents(systems, connections, homeId).get(map_solarsystem.id);
+    if (parentId === undefined) return null;
+    return (
+        connections.find(
+            (connection) =>
+                connection.type !== 'stargate' &&
+                ((connection.from_map_solarsystem_id === parentId && connection.to_map_solarsystem_id === map_solarsystem.id) ||
+                    (connection.to_map_solarsystem_id === parentId && connection.from_map_solarsystem_id === map_solarsystem.id)),
+        ) ?? null
+    );
+});
 </script>
 
 <template>
@@ -146,6 +172,20 @@ const options: TMapSolarsystemStatus[] = ['unknown', 'friendly', 'hostile', 'act
             </ContextMenuSubContent>
         </ContextMenuSub>
 
+        <ContextMenuItem
+            v-if="can_write && inbound"
+            :title="inbound.mass_watched_at ? `Watched by ${inbound.mass_watched_by_name ?? 'someone'}: click to stop` : 'Watch the hole into this system: the 👁 on its pill and the watcher'"
+            @select="setConnectionWatched(inbound.id, !inbound.mass_watched_at)"
+        >
+            <Eye class="size-4" />
+            Watching the hole in
+            <Check v-if="inbound.mass_watched_at" class="ml-auto size-4" />
+        </ContextMenuItem>
+        <ContextMenuItem :title="muted ? 'Kill sounds here are muted (just you)' : 'No kill sounds from this system (just you) until it leaves the map'" @select="setSystemMuted(map_solarsystem.id, !muted)">
+            <VolumeX v-if="!muted" class="size-4" />
+            <Volume2 v-else class="size-4" />
+            {{ muted ? 'Unmute kill sounds' : 'Mute kill sounds' }}
+        </ContextMenuItem>
         <ContextMenuItem @select="handleCopyRoute">
             <ClipboardCopy class="size-4" />
             Copy route

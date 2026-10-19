@@ -19,6 +19,7 @@ import { pillSizes, setPillSize, usePillSpots } from '@/map/store/pillLayout';
 import { holeFacts } from '@/map/placeholderFacts';
 import { useTreeGeometries } from '@/map/store/treeGeometries';
 import useUser from '@/composables/useUser';
+import { usePilotNames } from '@/composables/usePilotNames';
 import { useMapStore } from '@/map/store/mapStore';
 import { show } from '@/routes/maps';
 import { Link } from '@inertiajs/vue3';
@@ -31,6 +32,7 @@ import { computed, watch } from 'vue';
  * signature list; right-click has its own menu (see PlaceholderContextMenu).
  */
 const store = useMapStore();
+const { detail: pilotDetail } = usePilotNames();
 const user = useUser();
 const routed = useTreeGeometries(store);
 const pillSpots = usePillSpots(store);
@@ -77,6 +79,16 @@ function pillParts(placeholder: TPlaceholder, facts: ReturnType<typeof holeFacts
 }
 
 const minuteNow = useMinuteNow();
+
+/** Patch 45: who watches a dotted pipe's hole (the 👁 on its pill), by placeholder node id. */
+const watchers = computed(() => {
+    const result = new Map<number, string>();
+    for (const placeholder of store.placeholders.value) {
+        const hole = store.systems.get(placeholder.parentId)?.pending_holes?.find((candidate) => candidate.id === placeholder.signatureId);
+        if (hole?.mass_watched_at) result.set(placeholder.nodeId, pilotDetail(hole.mass_watched_by_name) || 'someone');
+    }
+    return result;
+});
 
 /** Patch 21: every dotted pipe's pill parts, by placeholder node id (kept apart from the drawing, which moves with zoom). */
 const pills = computed(() => {
@@ -367,6 +379,7 @@ const chips = computed(() => {
                         :scale="store.scale.value"
                         clickable
                         title="Click for details"
+                        :watcher="watchers.get(item.nodeId) ?? null"
                         @open="(event) => openDetails(event, item.nodeId)"
                         @copy="() => copyBookmark(item)"
                     />

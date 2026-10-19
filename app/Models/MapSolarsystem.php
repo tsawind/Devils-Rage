@@ -221,6 +221,9 @@ final class MapSolarsystem extends Model
                 'imminent_since' => $signature->imminent_since?->toISOString(),
                 'checked_by_name' => $signature->checked_by_name,
                 'checked_note' => $signature->checked_note,
+                // Patch 45: watched before anyone jumped it.
+                'mass_watched_at' => $signature->mass_watched_at?->toISOString(),
+                'mass_watched_by_name' => $signature->mass_watched_by_name,
             ])
             ->values()
             ->all();

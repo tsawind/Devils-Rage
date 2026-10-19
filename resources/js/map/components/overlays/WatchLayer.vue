@@ -60,6 +60,18 @@ function toggleShrunk(id: number): void {
     shrunk.value = { ...shrunk.value, [String(id)]: !shrunk.value[String(id)] };
 }
 
+/**
+ * Patch 45: where a watcher sits: above its system, or below it when above would be off the
+ * top of the map (a system in the top row), so its top line can always be grabbed.
+ */
+function spotOf(item: { left: number; top: number; connection: { id: number } }, height: number): Record<string, string> {
+    const offset = offsetOf(item.connection.id);
+    const above = item.top - 6 + offset.dy;
+    if (above - height >= 0) return { left: `${item.left + offset.dx}px`, top: `${above}px`, transform: 'translateY(-100%)' };
+    const below = item.top + 64 * store.scale.value + offset.dy;
+    return { left: `${item.left + offset.dx}px`, top: `${Math.max(0, below)}px` };
+}
+
 /** Drag a watcher by its top line; it keeps that spot next to its system. */
 function startDrag(event: PointerEvent, id: number): void {
     if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
@@ -256,7 +268,7 @@ const mass = (kg: number) => formatMass(kg);
             <div
                 v-if="shrunk[String(item.connection.id)]"
                 class="pointer-events-auto absolute z-20 flex cursor-move items-center gap-1 rounded-full border border-sky-600/70 bg-neutral-950/95 px-2 py-px text-[11px] text-sky-200 shadow select-none"
-                :style="{ left: `${item.left + offsetOf(item.connection.id).dx}px`, top: `${item.top - 6 + offsetOf(item.connection.id).dy}px`, transform: 'translateY(-100%)' }"
+                :style="spotOf(item, 24)"
                 :title="`Watching ${item.nearName} → ${item.farName} · ${pilotName(item.connection.mass_watched_by_name)}. Double-click to open; drag to move.`"
                 @click.stop
                 @pointerdown.stop="(event) => startDrag(event, item.connection.id)"
@@ -269,7 +281,7 @@ const mass = (kg: number) => formatMass(kg);
             <div
                 v-else
                 class="pointer-events-auto absolute z-20 w-[262px] rounded-md border border-sky-600/60 bg-neutral-950/95 p-1.5 text-[11px] text-neutral-200 shadow-lg"
-                :style="{ left: `${item.left + offsetOf(item.connection.id).dx}px`, top: `${item.top - 6 + offsetOf(item.connection.id).dy}px`, transform: 'translateY(-100%)' }"
+                :style="spotOf(item, 230)"
                 @click.stop
                 @contextmenu.prevent
             >

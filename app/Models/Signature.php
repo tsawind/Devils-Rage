@@ -48,6 +48,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $eol_since Patch 37: first marked End of life
  * @property CarbonImmutable|null $critical_since Patch 37: first marked Critical
  * @property CarbonImmutable|null $imminent_since Patch 37: turned "closure imminent"
+ * @property CarbonImmutable|null $mass_watched_at Patch 45: watched before anyone jumped it (the new pipe is watched)
+ * @property string|null $mass_watched_by_name
  * @property CarbonImmutable|null $checked_at Patch 37: last looked at in game (status picked or ✓ Checked)
  * @property string|null $checked_by_name
  * @property string|null $checked_note
@@ -72,6 +74,7 @@ final class Signature extends Model
         'lifetime_updated_at' => 'immutable_datetime',
         'type_set_at' => 'immutable_datetime',
         'checked_at' => 'immutable_datetime',
+        'mass_watched_at' => 'immutable_datetime',
         'eol_since' => 'immutable_datetime',
         'critical_since' => 'immutable_datetime',
         'imminent_since' => 'immutable_datetime',
@@ -107,6 +110,18 @@ final class Signature extends Model
                 $signature->checked_by_name = $actor;
                 $signature->checked_note = self::checkNote($signature->isDirty('mass_status') ? $signature->getAttributes()['mass_status'] ?? null : null, $signature->isDirty('lifetime') ? $signature->getAttributes()['lifetime'] ?? null : null);
             }
+        });
+        // Patch 45: a hole watched before anyone jumped it: its new pipe is watched.
+        self::saved(function (Signature $signature): void {
+            if ($signature->mass_watched_at === null || $signature->map_connection_id === null || ! $signature->wasChanged('map_connection_id')) {
+                return;
+            }
+            MapConnection::query()->whereKey($signature->map_connection_id)->whereNull('mass_watched_at')->update([
+                'mass_watched_at' => $signature->mass_watched_at,
+                'mass_watched_by_name' => $signature->mass_watched_by_name,
+                'mass_watch_open' => true,
+                'mass_watch_touched_at' => now(),
+            ]);
         });
         // Patch 39: a hole number handed out is remembered by its system (numbers only count up).
         self::saved(function (Signature $signature): void {

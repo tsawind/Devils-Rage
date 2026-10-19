@@ -162,6 +162,9 @@ export type TPendingHole = {
     checked_at?: string | null;
     checked_by_name?: string | null;
     checked_note?: string | null;
+    /** Patch 45: watched before anyone jumped it (its pipe is watched when it's jumped). */
+    mass_watched_at?: string | null;
+    mass_watched_by_name?: string | null;
 };
 
 export type TMapSolarsystem = TMapSolarsystemBase & {

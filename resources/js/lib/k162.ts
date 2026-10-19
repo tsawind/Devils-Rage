@@ -12,7 +12,7 @@ import type { TShipSize } from '@/types/models';
  * - in a C1 every hole says "medium": unknown = K162 C1/2/3;
  * - in a C2–C6, unknown + medium = a C1, unknown + large = K162 C2/C3;
  * - in a C1–C4, dangerous = K162 C4/C5;
- * - in a C5–C6, dangerous + large = a C4, + very large = a C5;
+ * - in a C5–C6, dangerous + large = a C4, + extra large = a C5;
  * - deadly = C6 anywhere.
  * Plus one "K162 frigate" option (frigate-thin, class unknown).
  *
@@ -89,7 +89,7 @@ export function k162Hint(type: TTypeLike, standingClass: string | number | null 
     if (here === null) return null;
     if (target === '1' && here >= 2) return 'unknown · medium';
     if (target === '4' && here >= 5) return 'dangerous · large';
-    if (target === '5' && here >= 5) return 'dangerous · very large';
+    if (target === '5' && here >= 5) return 'dangerous · extra large';
     return null;
 }
 

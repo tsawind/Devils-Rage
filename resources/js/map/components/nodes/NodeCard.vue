@@ -24,7 +24,8 @@ import { TMapSolarsystem } from '@/pages/maps';
 import MapSolarsystems from '@/routes/map-solarsystems';
 import { TCharacter, TThreatLevel } from '@/types/models';
 import { useForm } from '@inertiajs/vue3';
-import { Aperture, Flag as FlagIcon, Home as HomeIcon } from 'lucide-vue-next';
+import { Aperture, Flag as FlagIcon, Home as HomeIcon, VolumeX } from 'lucide-vue-next';
+import { isSystemMuted } from '@/lib/mutedSystems';
 import { computed, ref, useTemplateRef } from 'vue';
 
 /**
@@ -274,6 +275,8 @@ function handleSubmit() {
                     </TooltipTrigger>
                     <TooltipContent>{{ system.status.charAt(0).toUpperCase() + system.status.slice(1) }}</TooltipContent>
                 </Tooltip>
+                <!-- Patch 45: you muted its kill sounds -->
+                <span v-if="isSystemMuted(system.id)" title="Kill sounds muted here (just you)"><VolumeX class="size-[13px] text-neutral-500" /></span>
                 <Tooltip v-if="isHome" :delay-duration="500">
                     <TooltipTrigger>
                         <HomeIcon class="size-[14px] text-amber-400" />

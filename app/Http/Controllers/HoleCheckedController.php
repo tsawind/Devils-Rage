@@ -136,6 +136,25 @@ final class HoleCheckedController extends Controller
             ->get());
     }
 
+    /**
+     * Patch 45: 👁 Watching on a hole nobody has jumped yet (a dotted pipe). The pipe it becomes
+     * when it's jumped is watched.
+     */
+    public function watchSignature(Request $request, Signature $signature): RedirectResponse
+    {
+        Gate::authorize('update', $signature);
+
+        $on = $request->boolean('on');
+        $signature->forceFill([
+            'mass_watched_at' => $on ? now() : null,
+            'mass_watched_by_name' => $on ? Actor::name() : null,
+        ])->save();
+
+        $this->mapBroadcaster->signaturesChanged($signature->mapSolarsystem);
+
+        return back();
+    }
+
     public function signature(Signature $signature): RedirectResponse
     {
         Gate::authorize('update', $signature);

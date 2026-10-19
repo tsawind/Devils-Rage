@@ -27,6 +27,8 @@ import { useMapEffects } from '@/composables/useMapEffects';
 import { getMapChannelName } from '@/const/channels';
 import { KillmailReceivedEvent, KnownHomeConnectedEvent } from '@/const/events';
 import { playTargetAcquired } from '@/lib/rageSound';
+import { forgetMutedSystems, isSystemMuted } from '@/lib/mutedSystems';
+import { tryUseMapStore } from '@/map/store/mapStore';
 import { toast } from 'vue-sonner';
 import { useMapLayout } from '@/composables/useMapLayout';
 import { useOnClient } from '@/composables/useOnClient';
@@ -42,7 +44,7 @@ import { TMap, TResolvedMapNavigation, TResolvedSelectedMapSolarsystem, TShowMap
 import { router, usePage } from '@inertiajs/vue3';
 import { echo, useConnectionStatus, useEcho } from '@laravel/echo-vue';
 import { GridItem, GridLayout } from 'grid-layout-plus';
-import { computed, onBeforeUnmount, provide, ref } from 'vue';
+import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
 
 const {
     map,
@@ -187,10 +189,26 @@ useOnClient(() =>
                     event.killmail.solarsystem_id,
                     Date.now(),
                     { ship: event.killmail.ship_name, capital: event.killmail.is_capital, value: event.killmail.value },
-                    event.killmail.highsec ? { sound: false } : {},
+                    event.killmail.highsec || killMuted(event.killmail.solarsystem_id) ? { sound: false } : {},
                 );
         },
     ),
+);
+
+// Patch 45: kill sounds muted on a system (right-click → Mute kill sounds); unmuted when it leaves the map.
+function killMuted(solarsystemId: number): boolean {
+    const store = tryUseMapStore();
+    if (!store) return false;
+    for (const system of store.systems.values()) if (system.solarsystem_id === solarsystemId) return isSystemMuted(system.id);
+    return false;
+}
+watch(
+    () => [...(tryUseMapStore()?.systems.keys() ?? [])],
+    (now, before) => {
+        if (!before?.length || !now.length) return;
+        const still = new Set(now);
+        forgetMutedSystems(before.filter((id) => !still.has(id)));
+    },
 );
 
 // Patch 43: a system marked as someone's home was connected: a notice that stays, and a sound.
