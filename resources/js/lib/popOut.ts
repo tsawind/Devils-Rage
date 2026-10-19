@@ -9,11 +9,6 @@ import { ref, shallowRef } from 'vue';
 export type TPopOut = { characterId: number; name: string; color: string };
 
 export const popOut = ref<TPopOut | null>(null);
-/**
- * Patch 45b: the characters in the pop-out. Chrome keeps only one always-on-top window open
- * at a time, so a second character joins the same pop-out (a chip at its top switches).
- */
-export const popOutCharacters = ref<TPopOut[]>([]);
 export const popOutWindow = shallowRef<Window | null>(null);
 
 /** Edge colour of the pop-out (and its pin on the main map). */
@@ -50,7 +45,6 @@ export async function openPopOut(characterId: number, name: string, color: strin
     if (!canPopOut()) return false;
     // Patch 41: the pop-out wears its character's colour.
     popOut.value = { characterId, name, color };
-    popOutCharacters.value = [...popOutCharacters.value.filter((entry) => entry.characterId !== characterId), { characterId, name, color }];
     if (popOutWindow.value && !popOutWindow.value.closed) return true;
 
     const pip = (window as unknown as { documentPictureInPicture: TDocumentPip }).documentPictureInPicture;
@@ -78,7 +72,6 @@ export async function openPopOut(characterId: number, name: string, color: strin
     opened.addEventListener('pagehide', () => {
         popOutWindow.value = null;
         popOut.value = null;
-        popOutCharacters.value = [];
     });
     popOutWindow.value = opened;
     return true;
@@ -88,29 +81,11 @@ export function closePopOut(): void {
     popOutWindow.value?.close();
     popOutWindow.value = null;
     popOut.value = null;
-    popOutCharacters.value = [];
-}
-
-/** Patch 45b: show another of the pop-out's characters. */
-export function switchPopOut(characterId: number): void {
-    const entry = popOutCharacters.value.find((candidate) => candidate.characterId === characterId);
-    if (entry) popOut.value = { ...entry };
-}
-
-/** Patch 45b: take a character out of the pop-out (the last one closes it). */
-export function dropFromPopOut(characterId: number): void {
-    const rest = popOutCharacters.value.filter((entry) => entry.characterId !== characterId);
-    if (!rest.length) {
-        closePopOut();
-        return;
-    }
-    popOutCharacters.value = rest;
-    if (popOut.value?.characterId === characterId) popOut.value = { ...rest[rest.length - 1] };
 }
 
 /** Whether a character is the one in the pop-out (the main map shows a pin for it). */
 export function isPoppedOut(characterId: number): boolean {
-    return popOutWindow.value !== null && popOutCharacters.value.some((entry) => entry.characterId === characterId);
+    return popOut.value?.characterId === characterId && popOutWindow.value !== null;
 }
 
 /**

@@ -18,7 +18,7 @@ import useUser from '@/composables/useUser';
 import { classMeta } from '@/const/solarsystemClasses';
 import { displayAlias } from '@/lib/alias';
 import { CHARACTER_COLORS, characterColor, rememberColor, tabsThatFit } from '@/lib/characterColor';
-import { OPEN_LABELS, openCharacter, type TOpenHow } from '@/lib/openCharacter';
+import { copyLinkForBrowser, OPEN_LABELS, openCharacter, type TOpenHow } from '@/lib/openCharacter';
 import { isPoppedOut } from '@/lib/popOut';
 import { driverId, switchDriver } from '@/lib/windowDriver';
 import { drivenElsewhere, others } from '@/lib/windowRegistry';
@@ -28,7 +28,7 @@ import UserCharacters from '@/routes/user-characters';
 import type { AppPageProps } from '@/types';
 import type { TCharacter, TStringedSolarsystemClass } from '@/types/models';
 import { router, usePage } from '@inertiajs/vue3';
-import { AppWindow, ChevronDown, ExternalLink, Eye, PictureInPicture2, Plus } from 'lucide-vue-next';
+import { AppWindow, ChevronDown, ExternalLink, Eye, Link2, PictureInPicture2, Plus } from 'lucide-vue-next';
 import { addCharacterTab, characterTabIds, removeCharacterTab } from '@/lib/characterTabs';
 import { computed, ref } from 'vue';
 
@@ -195,6 +195,7 @@ function openAs(character: TCharacter, how: TOpenHow): void {
                 <ContextMenuItem class="text-xs" :title="OPEN_LABELS.popout.hint" @select="openAs(character, 'popout')"><PictureInPicture2 class="size-3.5" /> Pop out (on top of EVE)</ContextMenuItem>
                 <ContextMenuItem class="text-xs" :title="OPEN_LABELS.window.hint" @select="openAs(character, 'window')"><AppWindow class="size-3.5" /> Own window (no address bar)</ContextMenuItem>
                 <ContextMenuItem class="text-xs" :title="OPEN_LABELS.tab.hint" @select="openAs(character, 'tab')"><ExternalLink class="size-3.5" /> Browser tab</ContextMenuItem>
+                <ContextMenuItem class="text-xs" title="For a second pop-out: paste it into another browser (Edge next to Chrome)" @select="copyLinkForBrowser(character)"><Link2 class="size-3.5" /> Copy link for another browser</ContextMenuItem>
                 <ContextMenuSeparator />
                 <ContextMenuCheckboxItem class="text-xs" :model-value="altClipboard" @update:model-value="(value: boolean | 'indeterminate') => setAltClipboard(value === true)" @select.prevent>
                     Clipboard on background jumps

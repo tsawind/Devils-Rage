@@ -1,6 +1,7 @@
 import { characterColor } from '@/lib/characterColor';
 import { addCharacterTab } from '@/lib/characterTabs';
-import { canPopOut, openPopOut } from '@/lib/popOut';
+import { canPopOut, focusedClipboard, openPopOut } from '@/lib/popOut';
+import { signatureToast as toast } from '@/lib/signatureToast';
 import { urlAs } from '@/lib/windowDriver';
 import { windowName } from '@/lib/windowRegistry';
 
@@ -8,8 +9,9 @@ import { windowName } from '@/lib/windowRegistry';
  * Patch 44: the three ways to open one character for scanning, the same from the Alt pill,
  * the Main pill and the character tabs.
  *
- * - Pop out: a small always-on-top scanner over EVE (Chrome / Edge). Chrome keeps only one
- *   open at a time, so another character joins the same pop-out (chips at its top switch).
+ * - Pop out: a small always-on-top scanner over EVE (Chrome / Edge). A browser keeps only
+ *   one open at a time: for a second one, use another browser (Edge next to Chrome) with
+ *   "Copy link for another browser".
  * - Own window: a separate mapper window with no address bar, for another screen.
  * - Browser tab: a new tab next to this one.
  *
@@ -60,5 +62,20 @@ export function forgetPopOutHere(): void {
         window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     } catch {
         // Nothing to drop.
+    }
+}
+
+/**
+ * Patch 45c: a link that opens this character on its own in another browser (Edge next to
+ * Chrome: each browser gets its own pop-out). Log in there once; the first click pops it out.
+ */
+export async function copyLinkForBrowser(character: TOpenable): Promise<void> {
+    const url = new URL(urlAs(window.location.href, character.id, true), window.location.origin);
+    url.searchParams.set('popout', '1');
+    try {
+        await focusedClipboard().writeText(url.toString());
+        toast.success(`Copied ${character.name}'s link`, { description: 'Paste it into another browser (Edge, Firefox…): click once there and it pops out.' });
+    } catch {
+        toast.error('Could not copy the link.');
     }
 }

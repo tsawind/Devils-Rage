@@ -22,9 +22,9 @@ import UserCharacters from '@/routes/user-characters';
 import type { AppPageProps } from '@/types';
 import type { TCharacter } from '@/types/models';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { AppWindow, ExternalLink, LogOut, Minus, PictureInPicture2, Plus, Settings } from 'lucide-vue-next';
+import { AppWindow, ExternalLink, Link2, LogOut, Minus, PictureInPicture2, Plus, Settings } from 'lucide-vue-next';
 import { computed, type Component } from 'vue';
-import { OPEN_LABELS, openCharacter, type TOpenHow } from '@/lib/openCharacter';
+import { copyLinkForBrowser, OPEN_LABELS, openCharacter, type TOpenHow } from '@/lib/openCharacter';
 import { switchDriver } from '@/lib/windowDriver';
 
 /**
@@ -85,6 +85,7 @@ function switchMain(characterId: number): void {
                             <DropdownMenuItem class="text-xs" :title="OPEN_LABELS.popout.hint" @select="openWith(main, 'popout')"><PictureInPicture2 class="size-3.5" /> Pop out (on top of EVE)</DropdownMenuItem>
                             <DropdownMenuItem class="text-xs" :title="OPEN_LABELS.window.hint" @select="openWith(main, 'window')"><AppWindow class="size-3.5" /> Own window (no address bar)</DropdownMenuItem>
                             <DropdownMenuItem class="text-xs" :title="OPEN_LABELS.tab.hint" @select="openWith(main, 'tab')"><ExternalLink class="size-3.5" /> Browser tab</DropdownMenuItem>
+                            <DropdownMenuItem class="text-xs" title="For a second pop-out: paste it into another browser (Edge next to Chrome)" @select="copyLinkForBrowser(main)"><Link2 class="size-3.5" /> Copy link for another browser</DropdownMenuItem>
                             <DropdownMenuSeparator />
                         </template>
                         <DropdownMenuLabel class="text-xs">Switch to</DropdownMenuLabel>
