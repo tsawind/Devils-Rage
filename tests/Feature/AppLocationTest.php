@@ -3,8 +3,11 @@
 declare(strict_types=1);
 
 use App\Jobs\Characters\UpdateCharacterLocation;
+use App\Models\Category;
 use App\Models\Character;
 use App\Models\CharacterStatus;
+use App\Models\Group;
+use App\Models\Type;
 use App\Models\User;
 use NicolasKion\Esi\DTO\EsiResult;
 use NicolasKion\Esi\DTO\Location;
@@ -22,6 +25,9 @@ use function Pest\Laravel\postJson;
 function appLocationSetup(int $from = 31000401): array
 {
     makeSolarsystem($from);
+    Category::query()->firstOrCreate(['id' => 6], ['name' => 'Ship']);
+    Group::query()->firstOrCreate(['id' => 25], ['name' => 'Frigate', 'category_id' => 6]);
+    Type::query()->firstOrCreate(['id' => 587], ['name' => 'Rifter', 'group_id' => 25, 'mass' => 1_067_000]);
     $user = User::factory()->create();
     $character = Character::factory()->create(['user_id' => $user->id]);
     $status = CharacterStatus::query()->create([
