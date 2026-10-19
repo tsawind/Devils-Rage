@@ -90,7 +90,8 @@ Route::get('eve', [EveController::class, 'show'])->name('eve.show');
 Route::get('eve/callback', [EveController::class, 'store'])->name('eve.store');
 
 // Patch 46: the desktop app's settings for everyone (no login: nothing in it is secret).
-Route::get('app/config', [AppConfigController::class, 'show'])->middleware('throttle:60,1')->name('app.config.show');
+// Not under /app: that path belongs to Reverb (websockets) in front of the mapper.
+Route::get('desktop-app/config', [AppConfigController::class, 'show'])->middleware('throttle:60,1')->name('app.config.show');
 
 Route::middleware('auth')->group(function () {
 
@@ -101,9 +102,9 @@ Route::middleware('auth')->group(function () {
     Route::put('characters/{character}/color', [CharacterColorController::class, 'update'])->name('characters.color.update');
     Route::post('window-switch', [WindowSwitchController::class, 'store'])->name('window-switch.store');
     // Patch 46: the desktop app's instant location (EVE's Local chat log).
-    Route::post('app/location', [AppLocationController::class, 'store'])->middleware('throttle:240,1')->name('app.location.store');
-    Route::get('app/admin', [AppConfigController::class, 'edit'])->name('app.admin.edit');
-    Route::put('app/admin', [AppConfigController::class, 'update'])->name('app.admin.update');
+    Route::post('desktop-app/location', [AppLocationController::class, 'store'])->middleware('throttle:240,1')->name('app.location.store');
+    Route::get('desktop-app/admin', [AppConfigController::class, 'edit'])->name('app.admin.edit');
+    Route::put('desktop-app/admin', [AppConfigController::class, 'update'])->name('app.admin.update');
     // Patch 39: the scanner pop-out's system and signatures.
     Route::get('map-solarsystems/{mapSolarsystem}/pop-out', [PopOutController::class, 'system'])->name('map-solarsystems.pop-out');
     Route::get('discord/connect', [DiscordAccountController::class, 'redirect'])->name('discord.connect');

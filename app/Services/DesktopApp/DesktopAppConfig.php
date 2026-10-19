@@ -7,7 +7,7 @@ namespace App\Services\DesktopApp;
 use App\Models\AppSetting;
 
 /**
- * Patch 46: what every copy of the desktop app reads from the mapper (app/config) at start
+ * Patch 46: what every copy of the desktop app reads from the mapper (desktop-app/config) at start
  * and every half hour. Nothing in it is secret: it is served without a login.
  *
  * - motd: shown on the app's start screen
