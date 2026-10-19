@@ -20,7 +20,7 @@ it('asks your other window to switch characters', function () {
     $to = Character::factory()->create(['user_id' => $user->id, 'name' => 'Second Scanner']);
     actingAs($user);
 
-    post(route('window-switch.store'), ['from_character_id' => $from->id, 'to_character_id' => $to->id])->assertRedirect();
+    post(route('window-switch.store'), ['from_character_id' => $from->id, 'to_character_id' => $to->id])->assertSessionHasNoErrors()->assertRedirect();
 
     Event::assertDispatched(WindowSwitchRequestedEvent::class, fn (WindowSwitchRequestedEvent $event): bool => $event->user_id === $user->id
         && $event->from_character_id === $from->id
