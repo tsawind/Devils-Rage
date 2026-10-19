@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Http\Controllers\AppLocationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BulkMapConnectionController;
 use App\Http\Controllers\BulkSignatureController;
@@ -95,6 +96,8 @@ Route::middleware('auth')->group(function () {
     // Patch 41: a character's colour (tab, map pin, its window, pop-out).
     Route::put('characters/{character}/color', [CharacterColorController::class, 'update'])->name('characters.color.update');
     Route::post('window-switch', [WindowSwitchController::class, 'store'])->name('window-switch.store');
+    // Patch 46: the desktop app's instant location (EVE's Local chat log).
+    Route::post('app/location', [AppLocationController::class, 'store'])->middleware('throttle:240,1')->name('app.location.store');
     // Patch 39: the scanner pop-out's system and signatures.
     Route::get('map-solarsystems/{mapSolarsystem}/pop-out', [PopOutController::class, 'system'])->name('map-solarsystems.pop-out');
     Route::get('discord/connect', [DiscordAccountController::class, 'redirect'])->name('discord.connect');

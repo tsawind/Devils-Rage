@@ -2,6 +2,7 @@
 import AnnouncementBanner from '@/components/announcement/AnnouncementBanner.vue';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import Notifications from '@/components/user/Notifications.vue';
+import { useDesktopAppLocation } from '@/composables/useDesktopAppLocation';
 import AppContent from '@/layouts/AppContent.vue';
 import AppHeader from '@/layouts/AppHeader.vue';
 import type { BreadcrumbItemType } from '@/types';
@@ -16,6 +17,9 @@ withDefaults(defineProps<Props>(), {
     breadcrumbs: () => [],
     hideHeader: false,
 });
+
+// Patch 46: instant location from the desktop app's chat-log reader.
+useDesktopAppLocation();
 </script>
 
 <template>

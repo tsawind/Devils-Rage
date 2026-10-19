@@ -26,6 +26,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $last_online_at
  * @property CarbonImmutable|null $online_last_checked_at
  * @property CarbonImmutable|null $location_last_checked_at
+ * @property CarbonImmutable|null $app_location_at
  * @property-read CarbonImmutable $created_at
  * @property-read CarbonImmutable $updated_at
  * @property-read Character $character
@@ -81,6 +82,7 @@ final class CharacterStatus extends Model
             'last_online_at' => 'immutable_datetime',
             'online_last_checked_at' => 'immutable_datetime',
             'location_last_checked_at' => 'immutable_datetime',
+            'app_location_at' => 'immutable_datetime',
         ];
     }
 }

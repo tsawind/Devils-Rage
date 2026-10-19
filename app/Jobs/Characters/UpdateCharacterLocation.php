@@ -6,6 +6,7 @@ namespace App\Jobs\Characters;
 
 use App\Actions\MapConnections\RecordMapConnectionJumpAction;
 use App\Actions\ShipHistories\UpdateShipHistoryAction;
+use App\Actions\Tracking\ReportAppLocationAction;
 use App\Models\CharacterStatus;
 use Illuminate\Bus\Batchable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -62,6 +63,14 @@ final class UpdateCharacterLocation implements ShouldQueue
 
         $location = $location_request->data;
         $ship = $ship_request->data;
+
+        // Patch 46: the desktop app just saw a jump in the chat log; ESI can still show the
+        // old system for a few seconds. Don't move the character back meanwhile.
+        $appSaysOtherwise = $characterStatus->app_location_at?->gt(now()->subSeconds(ReportAppLocationAction::TRUSTED_FOR_SECONDS))
+            && $location->solar_system_id !== $characterStatus->solarsystem_id;
+        if ($appSaysOtherwise) {
+            return;
+        }
 
         $previous_solarsystem_id = $characterStatus->solarsystem_id;
 
