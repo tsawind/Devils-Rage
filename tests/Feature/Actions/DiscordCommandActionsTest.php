@@ -89,14 +89,15 @@ it('lists empty and populated personal bot alerts', function () {
     expect($action->handle($account))->toBe('You have no proximity alerts.');
 
     $target = discordAlertTarget(30009601, 'Jita');
-    $alert = discordDmAlert($account, $map, $target);
+    // A fixed range: the factory's random 1 would read "1 jump" and fail now and then.
+    $alert = discordDmAlert($account, $map, $target, ['max_jumps' => 5]);
     MapAlert::factory()->webhook()->create([
         'map_id' => $map->id,
         'map_webhook_id' => MapWebhook::factory()->for($map),
         'target_solarsystem_id' => $target->id,
     ]);
 
-    expect($action->handle($account))->toBe("`{$alert->id}` System near chain: Jita within {$alert->max_jumps} jumps · DM · Home Chain");
+    expect($action->handle($account))->toBe("`{$alert->id}` System near chain: Jita within 5 jumps · DM · Home Chain");
 });
 
 it('lists only shared map alerts for members and includes private alerts for managers', function () {
