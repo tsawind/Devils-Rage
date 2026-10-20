@@ -38,6 +38,23 @@ case "$ACTION" in
     deploy-mapper-offline)
         bash "$REPO/devilsrage/mapper/deploy.sh" --offline
         ;;
+    seat-errors|mapper-errors)
+        # The newest errors' first lines only (no stack traces, no request data); anything
+        # that looks like a key or token is masked, because this log is public.
+        if [ "$ACTION" = seat-errors ]; then
+            cd "$HOME/seat-docker"
+            logs=$(docker compose exec -T front sh -c 'ls -t storage/logs/*.log 2>/dev/null | head -2 | xargs -r tail -n 3000' || true)
+        else
+            cd "$STACK"
+            logs=$("${C[@]}" exec -T app sh -c 'ls -t storage/logs/*.log 2>/dev/null | head -2 | xargs -r tail -n 3000' || true)
+        fi
+        echo "== Newest errors (first line each)"
+        printf '%s\n' "$logs" \
+            | grep -E '^\[[0-9-]+ [0-9:]+\] [a-z]+\.(ERROR|CRITICAL|EMERGENCY)' \
+            | tail -n 8 \
+            | sed -E 's/[A-Za-z0-9_+\/=-]{32,}/[masked]/g; s/(password|secret|token|key)=[^ &"]*/\1=[masked]/gi' \
+            | cut -c1-400 || echo "(none)"
+        ;;
     deploy-seat)
         bash "$REPO/devilsrage/seat/deploy.sh"
         ;;
@@ -51,7 +68,7 @@ case "$ACTION" in
         ;;
     *)
         echo "!! Unknown action: $ACTION"
-        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper"
+        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors"
         exit 2
         ;;
 esac
