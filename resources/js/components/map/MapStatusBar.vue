@@ -42,6 +42,7 @@ import {
     Undo2,
     UserCog,
 } from 'lucide-vue-next';
+import { inDesktopApp } from '@/lib/desktopApp';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { canRedo, canUndo, handleUndoKeydown, redoLabel, redoLast, undoLabel, undoLast } from '@/composables/signatures/signatureUndo';
 import { displayAlias } from '@/lib/alias';
@@ -142,6 +143,11 @@ async function popOutDriver(): Promise<void> {
 // Patch 44: this window was opened to pop its character out (one pop-out per window): the
 // first click anywhere here pops it out (a browser only opens one from a click).
 const waitingToPopOut = ref(soloTab.value && wantsPopOutHere());
+// Patch 51: in the desktop app this window is hidden (it only hosts the pop-out) and the app
+// needs no click to open one: pop out straight away.
+onMounted(() => {
+    if (waitingToPopOut.value && inDesktopApp()) void popOutDriver();
+});
 useEventListener(
     document,
     'pointerdown',

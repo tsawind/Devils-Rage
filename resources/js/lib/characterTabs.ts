@@ -14,3 +14,14 @@ export function addCharacterTab(characterId: number): void {
 export function removeCharacterTab(characterId: number): void {
     characterTabIds.value = characterTabIds.value.filter((id) => id !== characterId);
 }
+
+/** Patch 51: a tab dragged onto another one takes its place (the others shift along). */
+export function moveCharacterTab(characterId: number, ontoId: number): void {
+    const ids = [...characterTabIds.value];
+    const from = ids.indexOf(characterId);
+    const to = ids.indexOf(ontoId);
+    if (from < 0 || to < 0 || from === to) return;
+    ids.splice(from, 1);
+    ids.splice(to, 0, characterId);
+    characterTabIds.value = ids;
+}

@@ -31,8 +31,8 @@ import UserCharacters from '@/routes/user-characters';
 import type { AppPageProps } from '@/types';
 import type { TCharacter, TStringedSolarsystemClass } from '@/types/models';
 import { router, usePage } from '@inertiajs/vue3';
-import { AppWindow, ChevronDown, ExternalLink, Eye, Link2, PictureInPicture2, Plus, Repeat } from 'lucide-vue-next';
-import { addCharacterTab, characterTabIds, removeCharacterTab } from '@/lib/characterTabs';
+import { AppWindow, ChevronDown, ExternalLink, Eye, Link2, PictureInPicture2, Plus, Repeat, X } from 'lucide-vue-next';
+import { addCharacterTab, characterTabIds, moveCharacterTab, removeCharacterTab } from '@/lib/characterTabs';
 import { computed, ref } from 'vue';
 
 /**
@@ -116,6 +116,31 @@ function setColor(character: TCharacter, color: string | null): void {
     router.put(CharacterColorController.update(character.id).url, { color }, { preserveScroll: true, preserveState: true, only: ['auth', 'map_characters'] });
 }
 
+// Patch 51: drag a tab onto another to move it there; × on a tab closes it.
+const dragging = ref<number | null>(null);
+const dropOn = ref<number | null>(null);
+function onDragStart(event: DragEvent, character: TCharacter): void {
+    dragging.value = character.id;
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(character.id));
+    }
+}
+function onDragOver(event: DragEvent, character: TCharacter): void {
+    if (dragging.value === null || dragging.value === character.id) return;
+    event.preventDefault();
+    dropOn.value = character.id;
+}
+function onDrop(character: TCharacter): void {
+    if (dragging.value !== null) moveCharacterTab(dragging.value, character.id);
+    dragging.value = null;
+    dropOn.value = null;
+}
+function onDragEnd(): void {
+    dragging.value = null;
+    dropOn.value = null;
+}
+
 // Patch 44: the same three ways to open a character as the Alt and Main pills.
 function openAs(character: TCharacter, how: TOpenHow): void {
     void openCharacter(character, how);
@@ -128,15 +153,25 @@ function openAs(character: TCharacter, how: TOpenHow): void {
             <ContextMenuTrigger as-child>
                 <button
                     type="button"
-                    class="relative flex h-[30px] shrink-0 items-center gap-1.5 rounded-md border pr-1.5 pl-2 text-left"
-                    :class="character.id === driverId ? 'text-foreground' : 'border-transparent text-muted-foreground hover:bg-muted/60'"
+                    class="group relative flex h-[30px] shrink-0 items-center gap-1.5 rounded-md border pr-1.5 pl-2 text-left"
+                    :class="[
+                        character.id === driverId ? 'text-foreground' : 'border-transparent text-muted-foreground hover:bg-muted/60',
+                        dropOn === character.id ? 'ring-1 ring-primary' : '',
+                        dragging === character.id ? 'opacity-50' : '',
+                    ]"
+                    draggable="true"
+                    @dragstart="onDragStart($event, character)"
+                    @dragover="onDragOver($event, character)"
+                    @dragleave="dropOn === character.id && (dropOn = null)"
+                    @drop.prevent="onDrop(character)"
+                    @dragend="onDragEnd"
                     :style="{
                         width: `${TAB_WIDTH - 2}px`,
                         ...(character.id === driverId
                             ? { background: `color-mix(in srgb, ${characterColor(character)} 14%, var(--color-muted))`, borderColor: `color-mix(in srgb, ${characterColor(character)} 45%, transparent)` }
                             : {}),
                     }"
-                    :title="`${character.name}${elsewhere.has(character.id) ? ' · in its own window' : ''}${isPoppedOut(character.id) ? ' · in the pop-out' : ''}${tracked.has(character.id) && character.id !== driverId ? ' · its jumps are mapped in the background' : ''}\nClick: see through ${character.name} · right-click: more`"
+                    :title="`${character.name}${elsewhere.has(character.id) ? ' · in its own window' : ''}${isPoppedOut(character.id) ? ' · in the pop-out' : ''}${tracked.has(character.id) && character.id !== driverId ? ' · its jumps are mapped in the background' : ''}\nClick: see through ${character.name} · drag: move the tab · ×: close it · right-click: more`"
                     @click="lookThrough(character)"
                 >
                     <span class="absolute top-[5px] bottom-[5px] left-0 w-[3px] rounded" :style="{ background: characterColor(character) }" />
@@ -163,6 +198,15 @@ function openAs(character: TCharacter, how: TOpenHow): void {
                         </span>
                     </span>
                     <span v-if="character.id === driverId" class="absolute right-1.5 -bottom-[6px] left-1.5 h-0.5 rounded" :style="{ background: characterColor(character) }" />
+                    <span
+                        role="button"
+                        class="absolute top-0.5 right-0.5 hidden size-4 items-center justify-center rounded text-muted-foreground group-hover:flex hover:bg-muted hover:text-foreground"
+                        :title="`Close ${character.name}'s tab (the character stays logged in)`"
+                        @click.stop="removeCharacterTab(character.id)"
+                        @pointerdown.stop
+                    >
+                        <X class="size-3" />
+                    </span>
                 </button>
             </ContextMenuTrigger>
             <ContextMenuContent class="w-64">

@@ -1,7 +1,8 @@
 import WindowSwitchController from '@/actions/App/Http/Controllers/WindowSwitchController';
 import { characterColor } from '@/lib/characterColor';
 import { addCharacterTab } from '@/lib/characterTabs';
-import { canPopOut, focusedClipboard, openPopOut } from '@/lib/popOut';
+import { inDesktopApp } from '@/lib/desktopApp';
+import { canPopOut, focusedClipboard, openPopOut, popOut, popOutWindow } from '@/lib/popOut';
 import { signatureToast as toast } from '@/lib/signatureToast';
 import { urlAs } from '@/lib/windowDriver';
 import { windowName } from '@/lib/windowRegistry';
@@ -42,6 +43,14 @@ export async function openCharacter(character: TOpenable, how: TOpenHow): Promis
     }
     if (!canPopOut()) {
         openWindow(character, 'window');
+        return;
+    }
+    // Patch 51: in the desktop app every character can have its own pop-out. A window holds
+    // one, so the second and later ones get a hidden window of their own (the app keeps it
+    // out of sight and closes it with its pop-out).
+    const open = popOutWindow.value && !popOutWindow.value.closed ? popOut.value : null;
+    if (inDesktopApp() && open && open.characterId !== character.id) {
+        openWindow(character, 'window', true);
         return;
     }
     if (!(await openPopOut(character.id, character.name, characterColor(character)).catch(() => false))) openWindow(character, 'window');
