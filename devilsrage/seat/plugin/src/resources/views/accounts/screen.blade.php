@@ -120,6 +120,14 @@
   .newacct { display: none; gap: 6px; margin-top: 6px; }
   .newacct.show { display: flex; }
   .newacct input { background: #101014; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; width: 120px; }
+  .pills { grid-column: 3 / -1; display: flex; flex-wrap: wrap; gap: 4px; margin-top: -2px; }
+  .pills label { cursor: pointer; margin: 0; }
+  .pills input { display: none; }
+  .pills span { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #1c1a2a; color: #77708f; border: 1px solid transparent; }
+  .pills input:checked + span { background: #2a2340; color: #b9a8ff; border-color: #5a4a9a; }
+  .groups { margin-top: 14px; padding-top: 10px; border-top: 1px solid #222228; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+  .groups .g { background: #2a2340; color: #b9a8ff; border-radius: 999px; padding: 1px 4px 1px 9px; display: inline-flex; align-items: center; gap: 2px; }
+  .groups input { background: #101014; border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; width: 170px; }
   .confirm { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 50; }
   .confirm.show { display: flex; }
   .confirm .box { background: var(--card2); border: 1px solid #3a3a44; border-radius: 10px; padding: 16px 18px; max-width: 420px; }
@@ -275,6 +283,17 @@
                   @csrf
                   <button class="x" type="submit" title="Take out of this account">✕</button>
                 </form>
+                @if($ownGroups->isNotEmpty())
+                  @php
+                    $ticked = $link->launchGroups->pluck('id')->all();
+                  @endphp
+                  <form class="pills" method="post" action="{{ route('devilsrage.accounts.characters.groups', $link) }}" title="Your own launch groups (only you see them)">
+                    @csrf
+                    @foreach($ownGroups as $group)
+                      <label><input type="checkbox" name="groups[]" value="{{ $group->id }}" @checked(in_array($group->id, $ticked, true)) onchange="this.form.submit()"><span>{{ $group->name }}</span></label>
+                    @endforeach
+                  </form>
+                @endif
               </div>
             @endforeach
             @for($slot = count($card['rows']); $slot < $maxCharacters; $slot++)
@@ -319,6 +338,21 @@
             </form>
           </div>
           <div class="steps" id="steps-{{ $account->id }}"></div>
+
+          <div class="groups">
+            <span class="muted" title="Only you see these, e.g. a 7-pilot DST launch. Tick them on characters above; the same groups as in SeAT.">Your launch groups:</span>
+            @foreach($ownGroups as $group)
+              <form method="post" action="{{ route('devilsrage.groups.delete', $group) }}" class="ask g" data-ask="Delete your launch group {{ $group->name }}? Characters stay where they are.">
+                @csrf
+                <span>{{ $group->name }}</span><button class="x" type="submit" title="Delete this group">✕</button>
+              </form>
+            @endforeach
+            <form method="post" action="{{ route('devilsrage.groups.store') }}" style="display: flex; gap: 4px">
+              @csrf
+              <input name="name" maxlength="40" placeholder="New group, e.g. DST launch" required aria-label="New launch group">
+              <button class="btn sm" type="submit">Add</button>
+            </form>
+          </div>
         </div>
       @endforeach
     </div>

@@ -221,6 +221,7 @@ class AccountsController extends Controller
             'accounts' => $accounts,
             'unassigned' => $characters->except($assigned)->values(),
             'corpGroups' => LaunchGroup::forUser($user->id)->where('locked', true)->values(),
+            'ownGroups' => LaunchGroup::forUser($user->id)->where('locked', false)->values(),
             'omega' => app(OmegaStatus::class)->forAccounts($accounts),
             'seatStatus' => $seatStatus,
             'mapperStatus' => $mapperStatus,
