@@ -1,0 +1,69 @@
+name: Server
+
+# Runs one of a few fixed actions on the VPS over SSH (devilsrage/remote/gate.sh decides
+# what's allowed; the key can't do anything else). Actions tab -> Server -> Run workflow.
+# Deploys only run when the commit's tests passed.
+#
+# Secrets: DEPLOY_SSH_KEY (private key), DEPLOY_HOST, DEPLOY_USER, DEPLOY_KNOWN_HOSTS
+# (the server's host key line), optional DEPLOY_PORT.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'What to do on the server'
+        type: choice
+        options: [status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper]
+        default: status
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: server
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Only deploy code whose tests passed
+        if: startsWith(inputs.action, 'deploy-mapper')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          result=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}" \
+            --jq '[.workflow_runs[] | select(.name=="tests")][0].conclusion // "none"')
+          echo "tests on ${GITHUB_SHA::7}: $result"
+          if [ "$result" != "success" ]; then
+            echo "::error::Not deploying: the tests on ${GITHUB_SHA::7} are '$result' (they must pass first)."
+            exit 1
+          fi
+
+      - name: ${{ inputs.action }}
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USERNAME: ${{ secrets.DEPLOY_USER }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          set -o pipefail
+          ssh -i ~/.ssh/deploy -p "${PORT:-22}" -o BatchMode=yes -o ServerAliveInterval=30 \
+            "$USERNAME@$HOST" "${{ inputs.action }}" 2>&1 | tee out.txt
+          status=$?
+          exit $status
+
+      - name: Summary
+        if: always()
+        run: |
+          [ -f out.txt ] || exit 0
+          { echo '```'; tail -60 out.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          # The last lines as annotations, readable without the full log.
+          tail -12 out.txt | while IFS= read -r line; do
+            [ -n "$line" ] && echo "::notice::$line"
+          done

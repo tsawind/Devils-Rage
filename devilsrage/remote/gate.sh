@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Devil's Rage: the only thing the GitHub "Server" workflow's SSH key may run.
+#
+# The key's line in ~/.ssh/authorized_keys starts with
+#   command="bash /home/ubuntu/wormholesystems-containers/wormhole-systems/devilsrage/remote/gate.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty
+# so whatever the workflow asks for arrives here as $SSH_ORIGINAL_COMMAND, and only the
+# actions below run. No shell, no other commands. One action at a time.
+#
+# Its output ends up in the workflow log, which is public (the repo is public): nothing
+# here may print secrets.
+set -euo pipefail
+
+STACK="$HOME/wormholesystems-containers"
+REPO="$STACK/wormhole-systems"
+C=(docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.discord.yml)
+ACTION="${SSH_ORIGINAL_COMMAND:-status}"
+
+exec 9>"$HOME/.devilsrage-gate.lock"
+if ! flock -n 9; then
+    echo "!! Another server action is still running. Try again when it's done."
+    exit 1
+fi
+
+echo "== $(date -u '+%Y-%m-%d %H:%M UTC') · $ACTION"
+case "$ACTION" in
+    status)
+        echo "== Mapper code on the server"
+        git -C "$REPO" log -1 --format='%h %s (%cr)'
+        echo "== Containers"
+        docker ps --format 'table {{.Names}}\t{{.Status}}'
+        echo "== Disk and memory"
+        df -h / | tail -1
+        free -h | head -2
+        ;;
+    deploy-mapper)
+        bash "$REPO/devilsrage/mapper/deploy.sh"
+        ;;
+    deploy-mapper-offline)
+        bash "$REPO/devilsrage/mapper/deploy.sh" --offline
+        ;;
+    deploy-seat)
+        bash "$REPO/devilsrage/seat/deploy.sh"
+        ;;
+    app-admins)
+        echo "== APP_ADMIN_CHARACTER_IDS as the mapper sees it"
+        cd "$STACK" && "${C[@]}" exec -T app php artisan tinker --execute="echo json_encode(config('access.app_admin_character_ids')), PHP_EOL;"
+        echo "== Lines in .env (count): $(grep -c '^APP_ADMIN_CHARACTER_IDS=' "$STACK/.env" || true)"
+        ;;
+    restart-mapper)
+        cd "$STACK" && "${C[@]}" up -d --force-recreate app scheduler
+        ;;
+    *)
+        echo "!! Unknown action: $ACTION"
+        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper"
+        exit 2
+        ;;
+esac
+echo "== Done"
