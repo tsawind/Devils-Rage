@@ -22,7 +22,7 @@ import { classMeta } from '@/const/solarsystemClasses';
 import { displayAlias } from '@/lib/alias';
 import { CHARACTER_COLORS, characterColor, rememberColor, tabsThatFit } from '@/lib/characterColor';
 import { copyLinkForBrowser, OPEN_LABELS, openCharacter, switchOtherWindow, type TOpenHow } from '@/lib/openCharacter';
-import { isPoppedOut } from '@/lib/popOut';
+import { closeCharacterPopOut, focusCharacterPopOut, isPoppedOut } from '@/lib/popOut';
 import { driverId, switchDriver } from '@/lib/windowDriver';
 import { drivenElsewhere, others } from '@/lib/windowRegistry';
 import { useMapSolarsystems } from '@/map/api';
@@ -32,7 +32,7 @@ import type { AppPageProps } from '@/types';
 import type { TCharacter, TStringedSolarsystemClass } from '@/types/models';
 import { router, usePage } from '@inertiajs/vue3';
 import { AppWindow, ChevronDown, ExternalLink, Eye, Link2, PictureInPicture2, Plus, Repeat, X } from 'lucide-vue-next';
-import { addCharacterTab, characterTabIds, moveCharacterTab, removeCharacterTab } from '@/lib/characterTabs';
+import { addCharacterTab, characterTabIds, draggedCharacter, isCharacterDrag, placeCharacterTab, removeCharacterTab, startCharacterDrag } from '@/lib/characterTabs';
 import { computed, ref } from 'vue';
 
 /**
@@ -116,29 +116,33 @@ function setColor(character: TCharacter, color: string | null): void {
     router.put(CharacterColorController.update(character.id).url, { color }, { preserveScroll: true, preserveState: true, only: ['auth', 'map_characters'] });
 }
 
-// Patch 51: drag a tab onto another to move it there; × on a tab closes it.
+// Patch 51b: drag a tab onto another to move it there, or drag a character in from the Main /
+// Alt pills (or their lists) to add its tab there; × closes the tab and its pop-out.
 const dragging = ref<number | null>(null);
-const dropOn = ref<number | null>(null);
+const dropOn = ref<number | 'end' | null>(null);
 function onDragStart(event: DragEvent, character: TCharacter): void {
     dragging.value = character.id;
-    if (event.dataTransfer) {
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', String(character.id));
-    }
+    startCharacterDrag(event, character.id);
 }
-function onDragOver(event: DragEvent, character: TCharacter): void {
-    if (dragging.value === null || dragging.value === character.id) return;
+function onDragOver(event: DragEvent, target: number | 'end'): void {
+    if (!isCharacterDrag(event) || dragging.value === target) return;
     event.preventDefault();
-    dropOn.value = character.id;
+    if (event.dataTransfer) event.dataTransfer.dropEffect = dragging.value === null ? 'copy' : 'move';
+    dropOn.value = target;
 }
-function onDrop(character: TCharacter): void {
-    if (dragging.value !== null) moveCharacterTab(dragging.value, character.id);
+function onDrop(event: DragEvent, target: number | 'end'): void {
+    const id = draggedCharacter(event) ?? dragging.value;
+    if (id !== null && id !== target) placeCharacterTab(id, target === 'end' ? null : target);
     dragging.value = null;
     dropOn.value = null;
 }
 function onDragEnd(): void {
     dragging.value = null;
     dropOn.value = null;
+}
+function closeTab(character: TCharacter): void {
+    if (isPoppedOut(character.id)) closeCharacterPopOut(character.id);
+    removeCharacterTab(character.id);
 }
 
 // Patch 44: the same three ways to open a character as the Alt and Main pills.
@@ -148,7 +152,14 @@ function openAs(character: TCharacter, how: TOpenHow): void {
 </script>
 
 <template>
-    <div class="flex shrink-0 items-center gap-0.5 overflow-hidden" :style="{ maxWidth: `${width}px` }">
+    <div
+        class="flex shrink-0 items-center gap-0.5 overflow-hidden rounded-md"
+        :class="dropOn === 'end' ? 'ring-1 ring-primary' : ''"
+        :style="{ maxWidth: `${width}px`, minWidth: '60px' }"
+        @dragover="onDragOver($event, 'end')"
+        @dragleave.self="dropOn === 'end' && (dropOn = null)"
+        @drop.prevent="onDrop($event, 'end')"
+    >
         <ContextMenu v-for="character in split.shown" :key="character.id">
             <ContextMenuTrigger as-child>
                 <button
@@ -161,9 +172,9 @@ function openAs(character: TCharacter, how: TOpenHow): void {
                     ]"
                     draggable="true"
                     @dragstart="onDragStart($event, character)"
-                    @dragover="onDragOver($event, character)"
+                    @dragover.stop="onDragOver($event, character.id)"
                     @dragleave="dropOn === character.id && (dropOn = null)"
-                    @drop.prevent="onDrop(character)"
+                    @drop.prevent.stop="onDrop($event, character.id)"
                     @dragend="onDragEnd"
                     :style="{
                         width: `${TAB_WIDTH - 2}px`,
@@ -187,7 +198,15 @@ function openAs(character: TCharacter, how: TOpenHow): void {
                         <span class="truncate text-[11px] font-semibold">
                             {{ character.name }}
                             <span v-if="elsewhere.has(character.id)" :style="{ color: characterColor(character) }">↗</span>
-                            <span v-if="isPoppedOut(character.id)" :style="{ color: characterColor(character) }">◉</span>
+                            <span
+                                v-if="isPoppedOut(character.id)"
+                                role="button"
+                                class="hover:brightness-150"
+                                :style="{ color: characterColor(character) }"
+                                :title="`${character.name}'s pop-out: click to bring it to the front`"
+                                @click.stop="focusCharacterPopOut(character.id)"
+                                >◉</span
+                            >
                         </span>
                         <span class="truncate text-[9.5px] text-muted-foreground">
                             <template v-if="where(character)">
@@ -201,8 +220,8 @@ function openAs(character: TCharacter, how: TOpenHow): void {
                     <span
                         role="button"
                         class="absolute top-0.5 right-0.5 hidden size-4 items-center justify-center rounded text-muted-foreground group-hover:flex hover:bg-muted hover:text-foreground"
-                        :title="`Close ${character.name}'s tab (the character stays logged in)`"
-                        @click.stop="removeCharacterTab(character.id)"
+                        :title="isPoppedOut(character.id) ? `Close ${character.name}'s tab and pop-out` : `Close ${character.name}'s tab (the character stays logged in)`"
+                        @click.stop="closeTab(character)"
                         @pointerdown.stop
                     >
                         <X class="size-3" />
@@ -266,7 +285,9 @@ function openAs(character: TCharacter, how: TOpenHow): void {
                     "Which signature?" on background jumps
                 </ContextMenuCheckboxItem>
                 <ContextMenuSeparator />
-                <ContextMenuItem class="text-xs text-muted-foreground" @select="removeCharacterTab(character.id)">Remove the tab</ContextMenuItem>
+                <ContextMenuItem v-if="isPoppedOut(character.id)" class="text-xs" @select="focusCharacterPopOut(character.id)"><PictureInPicture2 class="size-3.5" /> Bring its pop-out to the front</ContextMenuItem>
+                <ContextMenuItem v-if="isPoppedOut(character.id)" class="text-xs" @select="closeCharacterPopOut(character.id)">Close its pop-out</ContextMenuItem>
+                <ContextMenuItem class="text-xs text-muted-foreground" @select="closeTab(character)">{{ isPoppedOut(character.id) ? 'Close the tab and its pop-out' : 'Remove the tab' }}</ContextMenuItem>
             </ContextMenuContent>
         </ContextMenu>
 
@@ -301,7 +322,7 @@ function openAs(character: TCharacter, how: TOpenHow): void {
                     />
                 </div>
                 <div class="max-h-64 overflow-y-auto">
-                    <DropdownMenuItem v-for="character in addable" :key="character.id" class="gap-2 text-xs" @select="addTab(character)">
+                    <DropdownMenuItem v-for="character in addable" :key="character.id" class="gap-2 text-xs" draggable="true" @dragstart="startCharacterDrag($event, character.id)" @select="addTab(character)">
                         <CharacterImage :character_id="character.id" :character_name="character.name" class="size-5 rounded" />
                         <span class="flex-1 truncate">{{ character.name }}</span>
                         <span class="text-[10px] text-muted-foreground">{{ where(character) ? where(character)!.name : 'offline' }}</span>

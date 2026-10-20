@@ -15,6 +15,20 @@ export function inDesktopApp(): boolean {
     return desktopApp() !== null;
 }
 
+import { ref } from 'vue';
+
+/**
+ * Patch 51b: characters whose pop-out lives in a window of its own (one pop-out per character
+ * in the app). The app tells the main page whenever one opens or closes.
+ */
+export const appPopOutIds = ref<number[]>([]);
+if (typeof window !== 'undefined') {
+    window.addEventListener('devils-rage-app:popouts', (event: Event) => {
+        const ids = (event as CustomEvent<{ characters?: number[] }>).detail?.characters;
+        if (Array.isArray(ids)) appPopOutIds.value = ids.map(Number).filter((id) => id > 0);
+    });
+}
+
 /**
  * Patch 47: pages ask the app for things by opening a fake address (https://dr-app.invalid/...):
  * the app catches it and opens nothing, so the mapper never gets access to the app itself.

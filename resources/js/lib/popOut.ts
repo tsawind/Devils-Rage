@@ -1,4 +1,4 @@
-import { appWriteClipboard, inDesktopApp } from '@/lib/desktopApp';
+import { appPopOutIds, appSignal, appWriteClipboard, inDesktopApp } from '@/lib/desktopApp';
 import { ref, shallowRef } from 'vue';
 
 /**
@@ -86,7 +86,27 @@ export function closePopOut(): void {
 
 /** Whether a character is the one in the pop-out (the main map shows a pin for it). */
 export function isPoppedOut(characterId: number): boolean {
-    return popOut.value?.characterId === characterId && popOutWindow.value !== null;
+    return (popOut.value?.characterId === characterId && popOutWindow.value !== null) || appPopOutIds.value.includes(characterId);
+}
+
+/** Patch 51b: closes a character's pop-out, this window's or (in the app) its own window's. */
+export function closeCharacterPopOut(characterId: number): void {
+    if (popOut.value?.characterId === characterId && popOutWindow.value) closePopOut();
+    if (appPopOutIds.value.includes(characterId)) appSignal(`popout-close?character=${characterId}`);
+}
+
+/** Patch 51b: brings a character's pop-out to the front. */
+export function focusCharacterPopOut(characterId: number): void {
+    if (popOut.value?.characterId === characterId && popOutWindow.value) {
+        try {
+            popOutWindow.value.focus();
+        } catch {
+            // Gone already.
+        }
+        if (inDesktopApp()) appSignal('popout-focus?own=1');
+        return;
+    }
+    if (appPopOutIds.value.includes(characterId)) appSignal(`popout-focus?character=${characterId}`);
 }
 
 const appClipboard = {

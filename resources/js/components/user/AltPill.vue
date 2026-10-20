@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { startCharacterDrag } from '@/lib/characterTabs';
 import { CharacterImage } from '@/components/images';
 import {
     ContextMenu,
@@ -108,7 +109,9 @@ function pick(id: number | null): void {
                         <button
                             type="button"
                             class="flex items-center gap-2 rounded px-0.5 text-xs font-medium hover:bg-muted"
-                            :title="alt ? `${alt.name}: pick another alt, or open this one` : 'Pick an alt'"
+                            :title="alt ? `${alt.name}: pick another alt, or open this one · drag onto the character tabs to add a tab` : 'Pick an alt'"
+                            :draggable="alt ? 'true' : 'false'"
+                            @dragstart="alt && startCharacterDrag($event, alt.id)"
                             @click="pickerOpen = true"
                         >
                             <CharacterImage v-if="alt" :character_id="alt.id" :character_name="alt.name" class="size-6 rounded" />
@@ -140,7 +143,14 @@ function pick(id: number | null): void {
                             <DropdownMenuSeparator />
                         </template>
                         <DropdownMenuLabel class="text-xs">{{ mapSlug ? 'Alt to show and track' : 'Alt to show' }}</DropdownMenuLabel>
-                        <DropdownMenuItem v-for="candidate in pickable" :key="candidate.id" class="flex items-center gap-2 text-xs" @select="pick(candidate.id)">
+                        <DropdownMenuItem
+                            v-for="candidate in pickable"
+                            :key="candidate.id"
+                            class="flex items-center gap-2 text-xs"
+                            draggable="true"
+                            @dragstart="startCharacterDrag($event, candidate.id)"
+                            @select="pick(candidate.id)"
+                        >
                             <CharacterImage :character_id="candidate.id" :character_name="candidate.name" class="size-5 rounded" />
                             <span class="truncate" :class="candidate.id === alt?.id ? 'font-semibold text-amber-400' : ''">{{ candidate.name }}</span>
                             <!-- Patch 45e: pop this one out (the pop-out switches to it) -->

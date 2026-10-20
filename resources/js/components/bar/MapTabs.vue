@@ -6,9 +6,9 @@ import { updateMapUserSettings } from '@/map/api';
 import { show } from '@/routes/maps';
 import type { AppPageProps } from '@/types';
 import { router, usePage } from '@inertiajs/vue3';
-import { useIntervalFn } from '@vueuse/core';
+import { useIntervalFn, useStorage } from '@vueuse/core';
 import { ChevronDown, Pin, X } from 'lucide-vue-next';
-import { computed, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 /**
  * Patch 41: map tabs, like a browser's. The maps you opened (kept per person: they're the
@@ -27,10 +27,42 @@ const page = usePage<AppPageProps>();
 /** One tab takes this many pixels (fixed, so the count is easy to work out). */
 const TAB_WIDTH = 92;
 
+/** Patch 51b: the order you dragged the tabs into (this browser); new tabs go last. */
+const tabOrder = useStorage<number[]>('map-tab-order', []);
+
 const tabs = computed<TMapTab[]>(() => {
     const pinned = page.props.pinned_maps ?? [];
-    return pinned.some((tab) => tab.id === map.id) ? pinned : [{ id: map.id, name: map.name, slug: map.slug }, ...pinned];
+    const all = pinned.some((tab) => tab.id === map.id) ? pinned : [{ id: map.id, name: map.name, slug: map.slug }, ...pinned];
+    const rank = (id: number): number => {
+        const at = tabOrder.value.indexOf(id);
+        return at < 0 ? Number.MAX_SAFE_INTEGER : at;
+    };
+    return [...all].sort((a, b) => rank(a.id) - rank(b.id));
 });
+
+const draggingTab = ref<number | null>(null);
+const dropOnTab = ref<number | null>(null);
+function onTabDragStart(event: DragEvent, tab: TMapTab): void {
+    draggingTab.value = tab.id;
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('application/x-dr-map', String(tab.id));
+    }
+}
+function onTabDragOver(event: DragEvent, tab: TMapTab): void {
+    if (draggingTab.value === null || draggingTab.value === tab.id) return;
+    event.preventDefault();
+    dropOnTab.value = tab.id;
+}
+function onTabDrop(tab: TMapTab): void {
+    const moving = draggingTab.value;
+    draggingTab.value = null;
+    dropOnTab.value = null;
+    if (moving === null || moving === tab.id) return;
+    const ids = tabs.value.map((candidate) => candidate.id).filter((id) => id !== moving);
+    ids.splice(ids.indexOf(tab.id), 0, moving);
+    tabOrder.value = ids;
+}
 
 /** The ones on the bar (the current map always is), and the rest for the dropdown. */
 const split = computed(() => {
@@ -106,8 +138,14 @@ function close(tab: TMapTab): void {
                       ? 'border-border bg-muted text-foreground'
                       : 'border-dashed border-muted-foreground/60 bg-muted text-foreground'
             "
-            :style="{ width: `${TAB_WIDTH - 2}px` }"
-            :title="[tab.name, tab.id === map.id && !kept ? '(passing tab: pin it to keep it)' : '', describeAlerts(alertsOf(tab))].filter(Boolean).join('\n')"
+            :style="{ width: `${TAB_WIDTH - 2}px`, ...(dropOnTab === tab.id ? { boxShadow: 'inset 2px 0 0 var(--color-primary)' } : {}), ...(draggingTab === tab.id ? { opacity: 0.5 } : {}) }"
+            :title="[tab.name, tab.id === map.id && !kept ? '(passing tab: pin it to keep it)' : '', describeAlerts(alertsOf(tab)), 'Drag to move the tab'].filter(Boolean).join('\n')"
+            draggable="true"
+            @dragstart="onTabDragStart($event, tab)"
+            @dragover="onTabDragOver($event, tab)"
+            @dragleave="dropOnTab === tab.id && (dropOnTab = null)"
+            @drop.prevent="onTabDrop(tab)"
+            @dragend="draggingTab = null; dropOnTab = null"
             @click="open(tab)"
         >
             <span class="min-w-0 flex-1 truncate text-left" :class="tab.id === map.id && !kept ? 'italic' : ''">{{ tab.name }}</span>

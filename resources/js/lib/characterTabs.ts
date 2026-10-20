@@ -15,6 +15,35 @@ export function removeCharacterTab(characterId: number): void {
     characterTabIds.value = characterTabIds.value.filter((id) => id !== characterId);
 }
 
+/** Patch 51b: what a dragged character carries (tabs, the Main / Alt pills and their lists). */
+export const CHARACTER_DRAG = 'application/x-dr-character';
+
+export function startCharacterDrag(event: DragEvent, characterId: number): void {
+    if (!event.dataTransfer) return;
+    event.dataTransfer.effectAllowed = 'copyMove';
+    event.dataTransfer.setData(CHARACTER_DRAG, String(characterId));
+    event.dataTransfer.setData('text/plain', String(characterId));
+}
+
+export function draggedCharacter(event: DragEvent): number | null {
+    const raw = event.dataTransfer?.getData(CHARACTER_DRAG) || '';
+    const id = Number(raw);
+    return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+export function isCharacterDrag(event: DragEvent): boolean {
+    return Boolean(event.dataTransfer?.types?.includes(CHARACTER_DRAG));
+}
+
+/** Puts a character's tab before `beforeId` (or last): adds it when it isn't a tab yet. */
+export function placeCharacterTab(characterId: number, beforeId: number | null): void {
+    const ids = characterTabIds.value.filter((id) => id !== characterId);
+    const at = beforeId === null ? -1 : ids.indexOf(beforeId);
+    if (at < 0) ids.push(characterId);
+    else ids.splice(at, 0, characterId);
+    characterTabIds.value = ids;
+}
+
 /** Patch 51: a tab dragged onto another one takes its place (the others shift along). */
 export function moveCharacterTab(characterId: number, ontoId: number): void {
     const ids = [...characterTabIds.value];

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { startCharacterDrag } from '@/lib/characterTabs';
 import SettingsController from '@/actions/App/Http/Controllers/SettingsController';
 import { CharacterImage } from '@/components/images';
 import {
@@ -73,7 +74,13 @@ function switchMain(characterId: number): void {
                 </div>
                 <DropdownMenu>
                     <DropdownMenuTrigger as-child>
-                        <button type="button" class="flex items-center gap-2 rounded px-0.5 text-xs font-medium hover:bg-muted">
+                        <button
+                            type="button"
+                            class="flex items-center gap-2 rounded px-0.5 text-xs font-medium hover:bg-muted"
+                            draggable="true"
+                            title="Click: switch or open · drag onto the character tabs to add a tab"
+                            @dragstart="startCharacterDrag($event, main.id)"
+                        >
                             <CharacterImage :character_id="main.id" :character_name="main.name" class="size-6 rounded" />
                             <span class="max-w-32 truncate">{{ main.name }}</span>
                         </button>
@@ -90,7 +97,7 @@ function switchMain(characterId: number): void {
                         </template>
                         <DropdownMenuLabel class="text-xs">Switch to</DropdownMenuLabel>
                         <DropdownMenuItem v-for="character in switchable" :key="character.id" as-child>
-                            <button type="button" class="flex w-full items-center gap-2 text-xs" @click="switchMain(character.id)">
+                            <button type="button" class="flex w-full items-center gap-2 text-xs" draggable="true" @dragstart="startCharacterDrag($event, character.id)" @click="switchMain(character.id)">
                                 <CharacterImage :character_id="character.id" :character_name="character.name" class="size-5 rounded" />
                                 {{ character.name }}
                             </button>
