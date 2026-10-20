@@ -16,10 +16,10 @@ use Throwable;
  */
 final class LoginReturn
 {
-    /** Session key: the My accounts login in progress, {account: int|null}. */
+    /** Session key: the My accounts login in progress, {account: int|null, public: bool}. */
     public const PENDING = 'devilsrage.login';
 
-    /** Session key: the character that just logged in, {character_id: int, account: int|null}. */
+    /** Session key: the character that just logged in, {character_id: int, account: int|null, public: bool}. */
     public const DONE = 'devilsrage.login_done';
 
     public static function listen(): void
@@ -52,7 +52,11 @@ final class LoginReturn
         }
 
         $account = is_array($pending) && isset($pending['account']) ? (int) $pending['account'] : null;
-        $session->put(self::DONE, ['character_id' => (int) $token->character_id, 'account' => $account]);
+        $session->put(self::DONE, [
+            'character_id' => (int) $token->character_id,
+            'account' => $account,
+            'public' => is_array($pending) && ! empty($pending['public']),
+        ]);
         if ($signedIn && ! $session->has('url.intended')) {
             $session->put('url.intended', route('devilsrage.accounts.index'));
         }

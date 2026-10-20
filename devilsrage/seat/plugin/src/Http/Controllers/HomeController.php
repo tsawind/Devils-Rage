@@ -40,7 +40,7 @@ class HomeController extends Controller
         $user = auth()->user();
         $characterIds = array_map('intval', $user->associatedCharacterIds());
         $names = CharacterInfo::query()->whereIn('character_id', $characterIds)->pluck('name', 'character_id');
-        $accounts = Account::query()->where('user_id', $user->id)->with('characters')->orderBy('nickname')->get();
+        $accounts = Account::query()->where('user_id', $user->id)->with('characters')->ordered()->get();
         $status = $omega->forAccounts($accounts);
         $held = $holdings->characters($characterIds);
 

@@ -19,15 +19,18 @@ final class LoginStatus
     public const EXPIRED = 'expired';
     public const SCOPES = 'scopes';
     public const MISSING = 'missing';
+    /** Patch 49b: logged in on purpose with public data only. Counts as fine. */
+    public const PUBLIC = 'public';
 
     /**
      * SeAT login state per character id: ok, expired (log in again), scopes (permissions missing:
      * log in again to add them) or missing (never logged in to SeAT).
      *
      * @param  list<int>  $characterIds
+     * @param  list<int>  $publicOnly  characters the pilot logged in with public data only
      * @return array<int, string>
      */
-    public function seat(array $characterIds): array
+    public function seat(array $characterIds, array $publicOnly = []): array
     {
         $tokens = RefreshToken::withTrashed()
             ->whereIn('character_id', $characterIds)
@@ -42,6 +45,8 @@ final class LoginStatus
                 $status[$id] = self::MISSING;
             } elseif ($token->trashed()) {
                 $status[$id] = self::EXPIRED;
+            } elseif (in_array($id, $publicOnly, true)) {
+                $status[$id] = self::PUBLIC;
             } elseif (array_diff($required, (array) $token->scopes) !== []) {
                 $status[$id] = self::SCOPES;
             } else {
@@ -57,9 +62,10 @@ final class LoginStatus
      * be asked (not set up, or down).
      *
      * @param  list<int>  $characterIds
+     * @param  list<int>  $publicOnly  for these, any mapper login counts (no tracking wanted)
      * @return array<int, bool>|null
      */
-    public function mapper(array $characterIds): ?array
+    public function mapper(array $characterIds, array $publicOnly = []): ?array
     {
         $key = (string) config('devilsrage.bot_api_key', '');
         $url = rtrim((string) config('devilsrage.mapper_url', ''), '/');
@@ -78,6 +84,7 @@ final class LoginStatus
                 return null;
             }
             $answer = (array) $response->json('characters', []);
+            $known = (array) $response->json('known', []);
         } catch (Throwable $e) {
             Log::warning('devilsrage: could not ask the mapper about logins: '.$e->getMessage());
 
@@ -86,7 +93,9 @@ final class LoginStatus
 
         $status = [];
         foreach ($characterIds as $id) {
-            $status[$id] = (bool) ($answer[(string) $id] ?? false);
+            $status[$id] = in_array($id, $publicOnly, true)
+                ? (bool) ($known[(string) $id] ?? $answer[(string) $id] ?? false)
+                : (bool) ($answer[(string) $id] ?? false);
         }
 
         return $status;

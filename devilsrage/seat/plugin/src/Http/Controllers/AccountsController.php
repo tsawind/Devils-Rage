@@ -18,6 +18,7 @@ use DevilsRage\Seat\Services\OmegaStatus;
 use DevilsRage\Seat\Services\PersonName;
 use DevilsRage\Seat\Services\PublicCharacter;
 use DevilsRage\Seat\Services\ViewMode;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -52,7 +53,7 @@ class AccountsController extends Controller
         $accounts = Account::query()
             ->where('user_id', $user->id)
             ->with(['characters.launchGroups', 'characters.character'])
-            ->orderBy('nickname')
+            ->ordered()
             ->get();
 
         $groups = LaunchGroup::forUser($user->id);
@@ -61,12 +62,7 @@ class AccountsController extends Controller
         $holdings = app(Holdings::class);
 
         // Patch 49: whether each character's SeAT and mapper logins work.
-        $ids = array_values(array_unique(array_merge(
-            array_map('intval', $characters->keys()->all()),
-            $accounts->flatMap(fn (Account $account) => $account->characters->where('external', false)->pluck('character_id'))->map(fn ($id): int => (int) $id)->all(),
-        )));
-        $seatStatus = $logins->seat($ids);
-        $mapperStatus = $logins->mapper($ids);
+        [$seatStatus, $mapperStatus] = $this->loginData($logins, $accounts, $characters);
 
         return view('devilsrage::accounts.index', [
             'seatStatus' => $seatStatus,
@@ -98,17 +94,33 @@ class AccountsController extends Controller
 
     /**
      * Patch 49: "Log in this account" / "Log in a character": EVE's login, then back to this
-     * account on My accounts (a new character goes into its empty slot).
+     * account (a new character goes into its empty slot).
+     * Patch 49b: ?public=1 asks EVE for public data only (proves the character is yours, shares
+     * nothing else; for alts whose other group doesn't allow sharing). ?screen=1 = started from
+     * the app's Your accounts screen, which opened the login in a small window: it comes back
+     * there and that window closes itself.
      */
-    public function login(?Account $account = null): RedirectResponse
+    public function login(Request $request, ?Account $account = null): RedirectResponse
     {
         if ($account !== null) {
             $this->authorizeOwner($account);
         }
-        session()->put(LoginReturn::PENDING, ['account' => $account?->id]);
-        session()->put('url.intended', route('devilsrage.accounts.index').($account ? '#acct-'.$account->id : ''));
+        $public = $request->boolean('public');
+        session()->put(LoginReturn::PENDING, ['account' => $account?->id, 'public' => $public]);
+        session()->put('url.intended', $request->boolean('screen')
+            ? route('devilsrage.your-accounts', ['done' => 1])
+            : route('devilsrage.accounts.index').($account ? '#acct-'.$account->id : ''));
 
-        return redirect()->route('seatcore::auth.eve');
+        if (! $public) {
+            return redirect()->route('seatcore::auth.eve');
+        }
+
+        // SeAT's own login always copies the main's permissions to a new character; a
+        // public-only login goes to EVE directly with publicData and comes back the same way.
+        session()->put('scopes', ['publicData']);
+        session()->put('scopes_profile_id', 0);
+
+        return \Laravel\Socialite\Facades\Socialite::driver('eveonline')->scopes(['publicData'])->redirect();
     }
 
     /**
@@ -129,7 +141,7 @@ class AccountsController extends Controller
      * Patch 49: the character that just logged in (if any): put it in the account it was logged
      * in for when it isn't in one yet, and say what's next.
      *
-     * @return array{character_id: int, name: string, placed: string|null}|null
+     * @return array{character_id: int, name: string, placed: string|null, public: bool}|null
      */
     private function justLoggedIn(User $user): ?array
     {
@@ -143,21 +155,116 @@ class AccountsController extends Controller
         }
 
         $placed = null;
+        $public = ! empty($done['public']);
         $account = isset($done['account']) ? Account::query()->where('user_id', $user->id)->find((int) $done['account']) : null;
         $already = AccountCharacter::query()->where('character_id', $characterId)->first();
         if ($already !== null) {
             $placed = $already->account?->nickname;
+            // A full login upgrades a public-only character; a public one marks it.
+            $already->update(['public_only' => $public, 'external' => false]);
         } elseif ($account !== null && $account->characters()->count() < Account::MAX_CHARACTERS) {
             $account->characters()->create([
                 'character_id' => $characterId,
                 'position' => (int) $account->characters()->max('position') + 1,
+                'public_only' => $public,
             ]);
             $placed = $account->nickname;
         }
 
         $name = CharacterInfo::query()->where('character_id', $characterId)->value('name') ?? 'Your character';
 
-        return ['character_id' => $characterId, 'name' => (string) $name, 'placed' => $placed];
+        return ['character_id' => $characterId, 'name' => (string) $name, 'placed' => $placed, 'public' => $public];
+    }
+
+    /**
+     * Patch 49: SeAT and mapper login state for every character on the page.
+     *
+     * @param  Collection<int, Account>  $accounts
+     * @param  Collection<int|string, CharacterInfo>  $characters
+     * @return array{0: array<int, string>, 1: array<int, bool>|null}
+     */
+    private function loginData(LoginStatus $logins, Collection $accounts, Collection $characters): array
+    {
+        $links = $accounts->flatMap(fn (Account $account) => $account->characters->where('external', false));
+        $ids = array_values(array_unique(array_merge(
+            array_map('intval', $characters->keys()->all()),
+            $links->pluck('character_id')->map(fn ($id): int => (int) $id)->all(),
+        )));
+        $public = $links->where('public_only', true)->pluck('character_id')->map(fn ($id): int => (int) $id)->values()->all();
+
+        return [$logins->seat($ids, $public), $logins->mapper($ids, $public)];
+    }
+
+    /**
+     * Patch 49b: the app's "Your accounts" screen (also works in a browser): every account
+     * like the EVE launcher, logins fixed one EVE account at a time, accounts and characters
+     * dragged into order. The same data as My accounts.
+     */
+    public function screen(LoginStatus $logins): View
+    {
+        $user = auth()->user();
+        $justLoggedIn = $this->justLoggedIn($user);
+        $characters = CharacterInfo::query()
+            ->whereIn('character_id', $user->associatedCharacterIds())
+            ->orderBy('name')
+            ->get()
+            ->keyBy('character_id');
+        $accounts = Account::query()
+            ->where('user_id', $user->id)
+            ->with(['characters.launchGroups', 'characters.character'])
+            ->ordered()
+            ->get();
+        $assigned = $accounts->flatMap(fn (Account $account) => $account->characters->pluck('character_id'))->all();
+        [$seatStatus, $mapperStatus] = $this->loginData($logins, $accounts, $characters);
+
+        return view('devilsrage::accounts.screen', [
+            'accounts' => $accounts,
+            'unassigned' => $characters->except($assigned)->values(),
+            'corpGroups' => LaunchGroup::forUser($user->id)->where('locked', true)->values(),
+            'omega' => app(OmegaStatus::class)->forAccounts($accounts),
+            'seatStatus' => $seatStatus,
+            'mapperStatus' => $mapperStatus,
+            'mainStatus' => $seatStatus[(int) $user->main_character_id] ?? null,
+            'justLoggedIn' => $justLoggedIn,
+            'mapperUrl' => rtrim((string) config('devilsrage.mapper_url', ''), '/'),
+            'maxCharacters' => Account::MAX_CHARACTERS,
+            'done' => request()->boolean('done'),
+        ]);
+    }
+
+    /**
+     * Patch 49b: the order of your accounts, as dragged (account ids, first to last).
+     */
+    public function orderAccounts(Request $request): JsonResponse
+    {
+        $data = $request->validate(['ids' => ['required', 'array', 'max:200'], 'ids.*' => ['integer']]);
+        $mine = Account::query()->where('user_id', auth()->id())->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        $position = 0;
+        foreach ($data['ids'] as $id) {
+            if (in_array((int) $id, $mine, true)) {
+                Account::query()->whereKey((int) $id)->update(['position' => ++$position]);
+            }
+        }
+
+        return response()->json(['saved' => $position]);
+    }
+
+    /**
+     * Patch 49b: the order of one account's characters, as dragged (account character ids).
+     */
+    public function orderCharacters(Request $request, Account $account): JsonResponse
+    {
+        $this->authorizeOwner($account);
+        $data = $request->validate(['ids' => ['required', 'array', 'max:'.Account::MAX_CHARACTERS], 'ids.*' => ['integer']]);
+        $mine = $account->characters()->pluck('id')->map(fn ($id): int => (int) $id)->all();
+        $position = 0;
+        foreach ($data['ids'] as $id) {
+            if (in_array((int) $id, $mine, true)) {
+                AccountCharacter::query()->whereKey((int) $id)->update(['position' => ++$position]);
+            }
+        }
+
+        return response()->json(['saved' => $position]);
     }
 
     public function storeAccount(Request $request): RedirectResponse
@@ -509,7 +616,7 @@ class AccountsController extends Controller
             ->when(ViewMode::ownOnly(), fn ($query) => $query->where('user_id', auth()->id()))
             // Pilots' own launch groups are private: the corp view only shows Main / Second / Third.
             ->with(['characters.character', 'characters.launchGroups' => fn ($query) => $query->whereNull('devilsrage_launch_groups.user_id')])
-            ->orderBy('nickname')
+            ->ordered()
             ->get()
             ->groupBy('user_id');
 

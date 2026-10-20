@@ -89,7 +89,7 @@ class SpFarmController extends Controller
         $mctMonth = $prices->mctPlexEach(24) * $plex;
 
         // Accounts at a glance (and characters that aren't in an account yet).
-        $accounts = Account::query()->where('user_id', $user->id)->with('characters')->orderBy('nickname')->get();
+        $accounts = Account::query()->where('user_id', $user->id)->with('characters')->ordered()->get();
         $omegaStatus = $omega->forAccounts($accounts);
         $details = $overview->characters($characterIds, $matrix['jita']['instant']['profit']);
         $held = $holdings->characters($characterIds);

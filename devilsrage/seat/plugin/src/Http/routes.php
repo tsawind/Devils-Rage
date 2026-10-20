@@ -27,6 +27,10 @@ Route::group([
     // Patch 49: log a character in from My accounts (and come back here).
     Route::get('accounts/login/{account?}', [AccountsController::class, 'login'])->name('devilsrage.accounts.login');
     Route::get('accounts/login-main', [AccountsController::class, 'loginMain'])->name('devilsrage.accounts.login-main');
+    // Patch 49b: the app's Your accounts screen, and dragging accounts / characters into order.
+    Route::get('your-accounts', [AccountsController::class, 'screen'])->name('devilsrage.your-accounts');
+    Route::post('accounts/order', [AccountsController::class, 'orderAccounts'])->name('devilsrage.accounts.order');
+    Route::post('accounts/{account}/characters/order', [AccountsController::class, 'orderCharacters'])->name('devilsrage.accounts.characters.order');
     Route::post('accounts', [AccountsController::class, 'storeAccount'])->name('devilsrage.accounts.store');
     Route::post('accounts/share', [AccountsController::class, 'share'])->name('devilsrage.accounts.share');
     Route::post('accounts/name', [AccountsController::class, 'saveName'])->name('devilsrage.accounts.name');

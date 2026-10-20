@@ -17,6 +17,7 @@ use Seat\Eveapi\Models\Character\CharacterInfo;
  * @property int $character_id
  * @property int $position
  * @property bool $external
+ * @property bool $public_only
  * @property string|null $external_name
  * @property string|null $external_corporation
  * @property string|null $external_alliance
@@ -27,10 +28,10 @@ class AccountCharacter extends Model
 
     public const EXTERNAL_FITS = 'devilsrage_external_fits';
 
-    protected $fillable = ['account_id', 'character_id', 'position', 'external', 'external_name', 'external_corporation', 'external_alliance'];
+    protected $fillable = ['account_id', 'character_id', 'position', 'external', 'public_only', 'external_name', 'external_corporation', 'external_alliance'];
 
     /** @var array<string, string> */
-    protected $casts = ['character_id' => 'integer', 'account_id' => 'integer', 'position' => 'integer', 'external' => 'boolean'];
+    protected $casts = ['character_id' => 'integer', 'account_id' => 'integer', 'position' => 'integer', 'external' => 'boolean', 'public_only' => 'boolean'];
 
     /**
      * Name for display: SeAT's character, or the public name of an external one.

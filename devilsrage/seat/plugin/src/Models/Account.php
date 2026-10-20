@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $id
  * @property int $user_id
  * @property string $nickname
+ * @property int $position
  * @property \Illuminate\Support\Carbon|null $omega_until
  * @property int|null $omega_reminded
  * @property bool $omega_auto
@@ -27,7 +28,7 @@ class Account extends Model
 
     protected $table = 'devilsrage_accounts';
 
-    protected $fillable = ['user_id', 'nickname', 'omega_until', 'omega_reminded', 'omega_auto', 'mct_slots', 'mct_until', 'mct_auto', 'mct_reminded', 'plex_vault', 'plex_vault_at'];
+    protected $fillable = ['user_id', 'nickname', 'position', 'omega_until', 'omega_reminded', 'omega_auto', 'mct_slots', 'mct_until', 'mct_auto', 'mct_reminded', 'plex_vault', 'plex_vault_at'];
 
     /** @var array<string, string> */
     protected $casts = [
@@ -35,12 +36,24 @@ class Account extends Model
         'omega_reminded' => 'integer',
         'omega_auto' => 'boolean',
         'mct_slots' => 'integer',
+        'position' => 'integer',
         'mct_until' => 'date',
         'mct_auto' => 'boolean',
         'mct_reminded' => 'integer',
         'plex_vault' => 'integer',
         'plex_vault_at' => 'datetime',
     ];
+
+    /**
+     * Patch 49b: the pilot's own order (dragged on Your accounts), then by nickname.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<self>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<self>
+     */
+    public function scopeOrdered($query)
+    {
+        return $query->orderBy('position')->orderBy('nickname');
+    }
 
     public function characters(): HasMany
     {

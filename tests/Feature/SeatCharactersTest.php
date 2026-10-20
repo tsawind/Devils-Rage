@@ -41,7 +41,10 @@ it('tells SeAT which characters have a working mapper login', function () {
 
     getJson(route('seat-api.characters', ['ids' => "{$in->id},{$lost->id},999,abc"]), ['X-DR-Key' => SEAT_TEST_KEY])
         ->assertSuccessful()
-        ->assertExactJson(['characters' => [(string) $in->id => true, (string) $lost->id => false, '999' => false]]);
+        ->assertExactJson([
+            'characters' => [(string) $in->id => true, (string) $lost->id => false, '999' => false],
+            'known' => [(string) $in->id => true, (string) $lost->id => true, '999' => false],
+        ]);
 });
 
 it('answers SeAT only with the shared key', function () {
@@ -58,6 +61,13 @@ it('adds a character and goes back to the SeAT page it came from', function () {
     get(route('characters.add-from-seat', ['return' => 'https://seat.example.test/devilsrage/accounts#acct-3']))
         ->assertRedirect(route('eve.show', ['add_to_account' => 1]))
         ->assertSessionHas('redirect_to', 'https://seat.example.test/devilsrage/accounts#acct-3');
+});
+
+it('adds a public-only character without asking EVE for permissions', function () {
+    actingAs(User::factory()->create());
+
+    get(route('characters.add-from-seat', ['public' => 1]))
+        ->assertRedirect(route('eve.show', ['add_to_account' => 1, 'without_scopes' => 1]));
 });
 
 it('never sends you back anywhere but our SeAT', function (string $return) {

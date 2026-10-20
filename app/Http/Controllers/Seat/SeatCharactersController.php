@@ -37,15 +37,17 @@ final class SeatCharactersController extends Controller
             ->take(self::MAX_IDS)
             ->values();
 
-        $loggedIn = EsiToken::query()
+        $tokens = EsiToken::query()
             ->whereIn('character_id', $ids)
-            ->whereNotNull('refresh_token')
-            ->pluck('character_id')
-            ->map(fn ($id): int => (int) $id)
-            ->flip();
+            ->get(['character_id', 'refresh_token']);
+        $loggedIn = $tokens->whereNotNull('refresh_token')->pluck('character_id')->map(fn ($id): int => (int) $id)->flip();
+        $known = $tokens->pluck('character_id')->map(fn ($id): int => (int) $id)->flip();
 
         return response()->json([
+            // A working login (location tracking and the rest).
             'characters' => $ids->mapWithKeys(fn (int $id): array => [(string) $id => $loggedIn->has($id)])->all(),
+            // Patch 49b: logged in at all (a public-only character has no tracking login).
+            'known' => $ids->mapWithKeys(fn (int $id): array => [(string) $id => $known->has($id)])->all(),
         ]);
     }
 
@@ -60,7 +62,10 @@ final class SeatCharactersController extends Controller
             Session::put('redirect_to', $return);
         }
 
-        return to_route('eve.show', ['add_to_account' => 1]);
+        // Patch 49b: a public-only character asks EVE for no permissions.
+        $query = ['add_to_account' => 1] + ($request->boolean('public') ? ['without_scopes' => 1] : []);
+
+        return to_route('eve.show', $query);
     }
 
     private function isSeatAddress(string $url): bool
