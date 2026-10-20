@@ -120,6 +120,11 @@
   .newacct { display: none; gap: 6px; margin-top: 6px; }
   .newacct.show { display: flex; }
   .newacct input { background: #101014; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; width: 120px; }
+  .confirm { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 50; }
+  .confirm.show { display: flex; }
+  .confirm .box { background: var(--card2); border: 1px solid #3a3a44; border-radius: 10px; padding: 16px 18px; max-width: 420px; }
+  .confirm .box p { margin: 0 0 12px; }
+  .confirm .box div { display: flex; gap: 8px; justify-content: flex-end; }
   .errors { background: #3a1416; color: var(--bad); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .row { grid-template-columns: 18px 30px minmax(0,1fr) 90px 80px; } .row select, .row .x { display: none; } }
 </style>
@@ -266,7 +271,7 @@
                     @endforeach
                   </select>
                 </form>
-                <form method="post" action="{{ route('devilsrage.accounts.characters.remove', $link) }}" onsubmit="return confirm('Take {{ addslashes($link->displayName()) }} out of this account? It stays in SeAT.');">
+                <form method="post" action="{{ route('devilsrage.accounts.characters.remove', $link) }}" class="ask" data-ask="Take {{ $link->displayName() }} out of this account? It stays in SeAT and the mapper.">
                   @csrf
                   <button class="x" type="submit" title="Take out of this account">✕</button>
                 </form>
@@ -308,7 +313,7 @@
             @endif
             <span class="muted" style="font-size: 12px">EVE's login opens in a small window. Pick the character it names, Authorize; this screen updates by itself.</span>
             <span style="flex: 1"></span>
-            <form method="post" action="{{ route('devilsrage.accounts.delete', $account) }}" onsubmit="return confirm('Remove account {{ addslashes($account->nickname) }}? Its characters stay in SeAT.');">
+            <form method="post" action="{{ route('devilsrage.accounts.delete', $account) }}" class="ask" data-ask="Remove account {{ $account->nickname }}? Its characters stay in SeAT and the mapper.">
               @csrf
               <button class="x" type="submit" title="Remove this account (its characters stay in SeAT)">Remove account</button>
             </form>
@@ -320,7 +325,34 @@
   </div>
 </div>
 
+<div class="confirm" id="confirm" role="dialog" aria-modal="true">
+  <div class="box"><p id="confirm-text"></p><div><button class="btn" type="button" id="confirm-no">Cancel</button><button class="btn p" type="button" id="confirm-yes">Yes, remove</button></div></div>
+</div>
+
 <script>
+(() => {
+  // Removing asks first, on the page itself (the app has no browser pop-up dialogs).
+  const box = document.getElementById('confirm');
+  let pending = null;
+  document.querySelectorAll('form.ask').forEach((form) => form.addEventListener('submit', (e) => {
+    if (form.dataset.sure === '1') return;
+    e.preventDefault();
+    pending = form;
+    document.getElementById('confirm-text').textContent = form.dataset.ask;
+    box.classList.add('show');
+    document.getElementById('confirm-no').focus();
+  }));
+  const close = () => { box.classList.remove('show'); pending = null; };
+  document.getElementById('confirm-no').addEventListener('click', close);
+  box.addEventListener('click', (e) => { if (e.target === box) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  document.getElementById('confirm-yes').addEventListener('click', () => {
+    if (!pending) return;
+    pending.dataset.sure = '1';
+    pending.submit();
+  });
+})();
+
 (() => {
   const csrf = document.querySelector('meta[name="csrf-token"]').content;
   const store = {
@@ -390,7 +422,7 @@
   // EVE logins open in a small window; when it comes back here it closes and this screen reloads.
   let popup = null;
   const openLogin = (url) => {
-    popup = window.open(url, 'dr-login', 'popup=yes,width=560,height=760');
+    popup = window.open(url, 'dr-login', 'popup=yes,width=820,height=900');
     if (!popup) location.href = url;
   };
   window.addEventListener('message', (e) => {
