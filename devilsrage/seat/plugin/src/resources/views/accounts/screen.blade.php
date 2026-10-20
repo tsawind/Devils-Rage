@@ -128,6 +128,14 @@
   .groups { margin-top: 14px; padding-top: 10px; border-top: 1px solid #222228; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
   .groups .g { background: #2a2340; color: #b9a8ff; border-radius: 999px; padding: 1px 4px 1px 9px; display: inline-flex; align-items: center; gap: 2px; }
   .groups input { background: #101014; border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; width: 170px; }
+  .omega { display: none; background: #101014; border: 1px solid #3a3a44; border-radius: 8px; padding: 10px 12px; margin: 4px 0 10px; }
+  .omega.show { display: block; }
+  .omega .orow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; }
+  .omega .orow:last-child { margin-bottom: 0; }
+  .omega .orow > label:first-child { width: 7.5rem; color: var(--muted); }
+  .omega input[type=date], .omega input[type=number], .omega select { background: #0b0b0e; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; color-scheme: dark; }
+  .omega .chk { display: inline-flex; gap: 4px; align-items: center; color: var(--muted); }
+  .badge-light { background: #26262c; color: var(--text); }
   .confirm { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none; align-items: center; justify-content: center; z-index: 50; }
   .confirm.show { display: flex; }
   .confirm .box { background: var(--card2); border: 1px solid #3a3a44; border-radius: 10px; padding: 16px 18px; max-width: 420px; }
@@ -238,8 +246,41 @@
             </form>
             @include('devilsrage::partials.omega-badge', ['om' => $om])
             <span style="flex: 1"></span>
-            <a class="muted" style="font-size: 12px" href="{{ route('devilsrage.accounts.index') }}#acct-{{ $account->id }}">Omega, MCT, PLEX</a>
+            @include('devilsrage::partials.plex-badge', ['held' => $holdings[$account->id] ?? null])
+            <button class="btn sm" type="button" data-omega="{{ $account->id }}" title="Omega, MCT and PLEX for this account">Omega, MCT, PLEX</button>
           </div>
+          {{-- Omega / MCT / PLEX, the same as SeAT's My accounts (saves to the same place) --}}
+          <form class="omega" id="omega-{{ $account->id }}" method="post" action="{{ route('devilsrage.accounts.omega', $account) }}">
+            @csrf
+            <div class="orow">
+              <label for="om-until-{{ $account->id }}">Omega until</label>
+              <input id="om-until-{{ $account->id }}" type="date" name="omega_until" value="{{ $account->omega_until?->format('Y-m-d') }}" title="When Omega runs out (empty = unknown or Alpha)">
+              <label class="chk"><input type="checkbox" name="omega_auto" value="1" @checked($account->omega_auto)> renews by itself</label>
+            </div>
+            <div class="orow">
+              <label for="om-mct-{{ $account->id }}">MCT</label>
+              <select id="om-mct-{{ $account->id }}" name="mct_slots" title="Multiple Character Training slots">
+                @foreach([0 => 'none', 1 => '1 slot', 2 => '2 slots'] as $slots => $label)
+                  <option value="{{ $slots }}" @selected((int) $account->mct_slots === $slots)>{{ $label }}</option>
+                @endforeach
+              </select>
+              <span class="muted">until</span>
+              <input type="date" name="mct_until" value="{{ $account->mct_until?->format('Y-m-d') }}" aria-label="MCT until" title="When MCT runs out">
+              <label class="chk"><input type="checkbox" name="mct_auto" value="1" @checked($account->mct_auto)> renews by itself</label>
+            </div>
+            <div class="orow">
+              <label for="om-vault-{{ $account->id }}">PLEX in vault</label>
+              <input id="om-vault-{{ $account->id }}" type="number" min="0" step="1" name="plex_vault" value="{{ $account->plex_vault }}" style="width: 7rem" title="EVE doesn't share the PLEX vault with SeAT: type it here">
+              <span class="muted">+ {{ number_format($holdings[$account->id]['hangar'] ?? 0) }} in hangars (from SeAT)</span>
+            </div>
+            <div class="orow">
+              <span class="muted" style="font-size: 12px">Reminders go out by Discord DM 7 days and 1 day before an end date, unless it renews by itself.</span>
+              <span style="flex: 1"></span>
+              <button class="btn sm" type="button" data-omega="{{ $account->id }}">Cancel</button>
+              <button class="btn sm p" type="submit">Save</button>
+            </div>
+          </form>
+
           <div class="hint"><span>🔑 Login hint</span><input type="text" data-hint="{{ $account->id }}" maxlength="80" placeholder="e.g. tsawind10 / gmail"><span>saved on this PC only</span></div>
 
           <div class="chars" data-account="{{ $account->id }}">
@@ -442,6 +483,11 @@
     input.value = store.get(key) || '';
     input.addEventListener('input', () => store.set(key, input.value.trim()));
   });
+
+  // Omega / MCT / PLEX editor (opens in place; Save posts to the same place SeAT uses).
+  document.querySelectorAll('[data-omega]').forEach((b) => b.addEventListener('click', () => {
+    document.getElementById('omega-' + b.dataset.omega).classList.toggle('show');
+  }));
 
   // New account / add a character choice.
   document.getElementById('new-account-btn').addEventListener('click', () => {

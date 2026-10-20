@@ -223,6 +223,7 @@ class AccountsController extends Controller
             'corpGroups' => LaunchGroup::forUser($user->id)->where('locked', true)->values(),
             'ownGroups' => LaunchGroup::forUser($user->id)->where('locked', false)->values(),
             'omega' => app(OmegaStatus::class)->forAccounts($accounts),
+            'holdings' => app(Holdings::class)->accounts($accounts, app(Holdings::class)->characters(array_map('intval', $assigned))),
             'seatStatus' => $seatStatus,
             'mapperStatus' => $mapperStatus,
             'mainStatus' => $seatStatus[(int) $user->main_character_id] ?? null,
