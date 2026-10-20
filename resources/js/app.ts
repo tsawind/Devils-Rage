@@ -6,6 +6,7 @@ import { isPWA } from './composables/useOnClient';
 import { initializeRouting } from './composables/useRoutingWorker';
 import { preloadSovereigntyData } from './composables/useSovereigntyData';
 import { preloadStaticData } from './composables/useStaticData';
+import { initServerReconnect } from './lib/serverReconnect';
 import { driverFromUrl, driverHeaders, initDriver, initSolo } from './lib/windowDriver';
 
 configureEcho({
@@ -15,6 +16,9 @@ configureEcho({
 router.on('finish', () => {
     router.flushAll();
 });
+
+// Patch 48: while the mapper restarts, wait for it and reload instead of showing the proxy's error page.
+initServerReconnect();
 
 // Patch 39: this window's own main goes with every request (X-Map-Driver).
 function loginMain(): number | null {
