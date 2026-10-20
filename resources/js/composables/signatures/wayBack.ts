@@ -1,4 +1,5 @@
 import { visibleBookmarkName } from '@/lib/bookmark';
+import { inDesktopApp } from '@/lib/desktopApp';
 import { anyWindowFocused, focusedClipboard } from '@/lib/popOut';
 import { ref } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
@@ -18,9 +19,17 @@ export type THeldWayBack = {
     at: number;
     /** Patch 37: an alt jumped (the main's system stays in view): who, and the system they're in now. */
     alt?: { characterName: string; solarsystemId: number } | null;
+    /**
+     * Patch 47: the desktop app already put it on the clipboard. It is still held, so your next
+     * signature paste (which overwrites the clipboard in EVE) copies it again; no red popup.
+     */
+    copied?: boolean;
 };
 
 export const heldWayBack = ref<THeldWayBack | null>(null);
+
+/** Patch 47: how long a way back the app copied is re-copied by your next paste. */
+const COPIED_KEEP_MS = 15 * 60_000;
 
 async function write(name: string): Promise<boolean> {
     try {
@@ -39,6 +48,13 @@ export async function offerWayBack(name: string, label = 'way back', alt: THeldW
         toast.info(`Your ${label}`, { description: visibleBookmarkName(name), action: copyButton(name), duration: 30_000 });
         return;
     }
+    // Patch 47: in the desktop app the clipboard can be written while EVE has focus: copy it now
+    // and keep holding it, so the scan you copy next (pasted by the app) copies it back.
+    if (!alt && inDesktopApp() && (await write(name))) {
+        heldWayBack.value = { name, label, at: Date.now(), alt: null, copied: true };
+        toast.success('Copied your way back', { description: visibleBookmarkName(name) });
+        return;
+    }
     // Patch 37: an alt's way back is held until its signatures are pasted (they go into the alt's system).
     if (!alt && typeof document !== 'undefined' && anyWindowFocused() && (await write(name))) {
         heldWayBack.value = null;
@@ -52,6 +68,11 @@ export async function offerWayBack(name: string, label = 'way back', alt: THeldW
 export async function copyHeldWayBack(): Promise<boolean> {
     const held = heldWayBack.value;
     if (!held) return false;
+    // Patch 47: one the app copied already goes stale after a while (no popup shows it's still held).
+    if (held.copied && Date.now() - held.at > COPIED_KEEP_MS) {
+        heldWayBack.value = null;
+        return false;
+    }
     if (!(await write(held.name))) return false;
     if (heldWayBack.value === held) heldWayBack.value = null;
     toast.success('Copied your way back', { description: visibleBookmarkName(held.name) });

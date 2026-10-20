@@ -1,3 +1,4 @@
+import { appWriteClipboard, inDesktopApp } from '@/lib/desktopApp';
 import { ref, shallowRef } from 'vue';
 
 /**
@@ -88,11 +89,20 @@ export function isPoppedOut(characterId: number): boolean {
     return popOut.value?.characterId === characterId && popOutWindow.value !== null;
 }
 
+const appClipboard = {
+    writeText: async (text: string): Promise<void> => {
+        if (!appWriteClipboard(text)) throw new Error('The app could not write the clipboard.');
+    },
+    readText: (): Promise<string> => navigator.clipboard.readText(),
+} as unknown as Clipboard;
+
 /**
  * The clipboard to write to: the pop-out's while it has focus (a browser only lets the
  * focused window write the clipboard), else this window's.
  */
 export function focusedClipboard(): Clipboard {
+    // Patch 47: in the desktop app the app writes the clipboard (works while EVE has focus).
+    if (inDesktopApp()) return appClipboard;
     const pop = popOutWindow.value;
     try {
         // Patch 42d: the pop-out's whenever this window hasn't got focus (its own hasFocus can say no while you're in it).

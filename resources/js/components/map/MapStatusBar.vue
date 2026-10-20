@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCombat } from '@/composables/combat/useCombat';
 import { useTracking } from '@/composables/signatures/useTracking';
+import { useDesktopAppScans } from '@/composables/useDesktopAppScans';
 import { useActiveMapCharacter } from '@/composables/useActiveMapCharacter';
 import { UseMapLayoutReturn } from '@/composables/useMapLayout';
 import usePermission from '@/composables/usePermission';
@@ -194,6 +195,8 @@ const {
     static_owner_id,
     jumper_name,
 } = useTracking();
+// Patch 47: probe scans copied in EVE, pasted by the desktop app.
+useDesktopAppScans();
 
 // Patch 19: the Clipboard switch (on by default; off = names show with a Copy button instead).
 const clipboard_on = computed(() => map_user_settings.clipboard_enabled !== false);

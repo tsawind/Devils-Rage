@@ -17,7 +17,8 @@ import { computed } from 'vue';
  */
 const { is_combat } = useCombat();
 
-const shown = computed(() => Boolean(heldWayBack.value) && !is_combat.value);
+// Patch 47: not when the desktop app already copied it.
+const shown = computed(() => Boolean(heldWayBack.value) && !heldWayBack.value?.copied && !is_combat.value);
 
 /** Patch 37: an alt jumped: its name and the system its scan goes into. */
 const store = tryUseMapStore();

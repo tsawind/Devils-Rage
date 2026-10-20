@@ -15,6 +15,7 @@ import { signatureToast as toast } from '@/lib/signatureToast';
 import { copyHeldWayBack, heldWayBack } from '@/composables/signatures/wayBack';
 import { displayAlias } from '@/lib/alias';
 import { tryUseMapStore } from '@/map/store/mapStore';
+import { APP_SCAN_EVENT, pastedByAppJustNow, rememberAppScan, type TAppScan } from '@/lib/desktopApp';
 
 export function usePasteSignatures(
     map_solarsystem: MaybeRefOrGetter<TSelectedMapSolarsystem | null>,
@@ -99,7 +100,35 @@ export function usePasteSignatures(
             toast.error('Failed to parse signatures from clipboard.');
             return;
         }
+        // Patch 47: the desktop app already pasted this scan when it was copied in EVE.
+        if (pastedByAppJustNow(clipboardData)) {
+            toast.info('Already pasted', { description: 'The app pasted this scan when you copied it.' });
+            return;
+        }
         processSignatures(signatures);
+    });
+
+    /**
+     * Patch 47: a probe scan copied in EVE, handed over by the desktop app with the character whose
+     * EVE window it came from. The panel showing that character's system takes it, with everything
+     * a Ctrl+V here does (the return hole, the way back). Panels showing other systems leave it;
+     * useDesktopAppScans pastes it into the character's system when no panel shows it.
+     */
+    useEventListener(window, APP_SCAN_EVENT, (raw: Event) => {
+        const scan = (raw as CustomEvent<TAppScan>).detail;
+        const system = toValue(map_solarsystem);
+        if (!scan || scan.claimed || !system) return;
+        const where = page.props.map_characters?.find((candidate) => candidate.id === scan.character_id)?.status?.solarsystem_id;
+        if (!where || where !== system.solarsystem_id) return;
+        const signatures = signatureParser.parseSignatures(scan.text);
+        if (!signatures || !signatures.length) return;
+        scan.claimed = true;
+        rememberAppScan(scan.text);
+        pasted_signatures.value = signatures;
+        pasteSignatures(system.id, signatures, () => onPasted?.(signatures));
+        toast.success(`Pasted ${signatures.length} signature${signatures.length === 1 ? '' : 's'}`, { description: `${scan.character_name}'s scan, from the app` });
+        // An alt's way back waits for its scan (patch 37).
+        if (heldWayBack.value?.alt?.solarsystemId === where) void copyHeldWayBack();
     });
 
     function isSignatureDeleted(signature: Partial<TSignature>) {

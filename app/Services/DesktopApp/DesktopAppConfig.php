@@ -20,6 +20,8 @@ final class DesktopAppConfig
     public const array FEATURES = [
         'chat_log_location' => "Instant location from EVE's chat logs",
         'scanner_pop_out' => 'Scanner pop-out as an app window',
+        'clipboard_scans' => 'Paste probe scans copied in EVE automatically',
+        'jump_attention' => 'Keep the mapper on top of EVE while a jump prompt waits (no pop-out open)',
     ];
 
     /**

@@ -28,7 +28,7 @@ it('serves the app settings without a login, everything on by default', function
         ->assertJson([
             'motd' => null,
             'min_version' => null,
-            'features' => ['chat_log_location' => true, 'scanner_pop_out' => true],
+            'features' => ['chat_log_location' => true, 'scanner_pop_out' => true, 'clipboard_scans' => true, 'jump_attention' => true],
         ]);
 });
 

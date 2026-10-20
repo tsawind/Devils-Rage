@@ -16,12 +16,14 @@ import { isK162 } from '@/lib/chainNumbering';
 import { groupSignatureOptions } from '@/lib/signatureCompatibility';
 import { displayAlias, staticSlotFor } from '@/lib/alias';
 import { aliasedSolarsystemLabel } from '@/lib/solarsystem';
+import { inDesktopApp } from '@/lib/desktopApp';
+import { jumpChoice } from '@/lib/jumpChoice';
 import { updateMapUserSettings } from '@/map/api';
 import { TMapSolarsystem } from '@/pages/maps';
 import { TLifetimeStatus, TMassStatus, TShipSize, TSignature, TStringedSolarsystemClass } from '@/types/models';
 import { SearchIcon } from 'lucide-vue-next';
 import { AcceptableValue } from 'reka-ui';
-import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue';
 
 const props = defineProps<{
     originMapSolarsystem: TMapSolarsystem | null;
@@ -255,6 +257,54 @@ function setWandering(checked: boolean): void {
 function handleConfirm() {
     emit('selectSignature', buildSelection(selectedSignatureId.value));
 }
+
+// Patch 47: in the desktop app the likely holes are also offered in the scanner pop-out (on top
+// of EVE). Picking one there answers this prompt with what it would preselect for that hole.
+function chooseFromPopOut(signatureId: number | null): void {
+    if (!open.value) return;
+    if (signatureId === null) {
+        emit('selectSignature', buildSelection(null));
+        return;
+    }
+    selectedSignatureId.value = signatureId;
+    // The selection watcher fills in the hole's number, static, life and mass first.
+    void nextTick(() => {
+        if (open.value && selectedSignatureId.value === signatureId) handleConfirm();
+    });
+}
+
+function leadsTo(signature: TSignature): string {
+    const target = signature.signature_type?.target_class ?? null;
+    return target && target !== 'unknown' ? `→ ${String(target).toUpperCase()}` : '';
+}
+
+watch(
+    () => [open.value, groups.value.likely, props.originMapSolarsystem, props.targetSolarsystemName] as const,
+    ([isOpen, likely, origin, target]) => {
+        if (!inDesktopApp() || !isOpen || !origin || !target) {
+            jumpChoice.value = null;
+            return;
+        }
+        jumpChoice.value = {
+            characterName: props.characterName ?? null,
+            from: originSystemLabel.value,
+            to: target,
+            options: likely.slice(0, 8).map((signature) => ({
+                id: signature.id,
+                signature: signature.signature_id ?? '???',
+                label: holeName(signature) || signature.wormhole?.name || signature.signature_type?.name || 'Unknown',
+                detail: leadsTo(signature),
+            })),
+            choose: chooseFromPopOut,
+            openFull: () => window.focus(),
+        };
+    },
+    { immediate: true },
+);
+
+onBeforeUnmount(() => {
+    jumpChoice.value = null;
+});
 
 // Combat mode: nobody answered in time, so it was an unknown hole (no signature assumed).
 const { remaining: countdownRemaining, fraction: countdownFraction } = usePopupCountdown(

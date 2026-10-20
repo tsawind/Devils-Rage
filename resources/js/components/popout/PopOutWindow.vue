@@ -7,6 +7,7 @@ import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import { displayAlias } from '@/lib/alias';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { jsonFetch } from '@/lib/jsonFetch';
+import { jumpChoice } from '@/lib/jumpChoice';
 import { providePortalTarget, workingInPopOut } from '@/lib/portalTarget';
 import { closePopOut, focusedClipboard, popOut, popOutWindow } from '@/lib/popOut';
 import { driverId } from '@/lib/windowDriver';
@@ -28,6 +29,7 @@ import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
  * signature panel as the main mapper for the character's system (Ctrl+V pastes into it).
  * Clicking another system on the pop-out map shows its signatures until the next jump.
  * Questions the mapper asks (the jump prompt, renames) still open in the main window.
+ * Patch 47: in the desktop app the jump prompt's likely holes also show here, one click each.
  *
  * Patch 42c: the map is the real map (a second copy with its own zoom, always centred on
  * the character), not a drawing of the systems around it.
@@ -196,13 +198,39 @@ onBeforeUnmount(() => closePopOut());
                 <button
                     v-if="wayBack"
                     type="button"
-                    class="rounded bg-red-600/80 px-2 py-0.5 font-mono text-[11px] text-white hover:bg-red-500"
-                    title="Click to copy your way back"
+                    class="rounded px-2 py-0.5 font-mono text-[11px] text-white"
+                    :class="wayBack.copied ? 'bg-emerald-700/80 hover:bg-emerald-600' : 'bg-red-600/80 hover:bg-red-500'"
+                    :title="wayBack.copied ? 'On your clipboard (click to copy it again)' : 'Click to copy your way back'"
                     @click="copyWayBack"
                 >
                     ⧉ {{ visibleBookmarkName(wayBack.name) }}
                 </button>
                 <button type="button" class="ml-auto rounded px-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Close the pop-out" @click="closePopOut()">✕</button>
+            </div>
+
+            <!-- Patch 47: the jump prompt, answered from on top of EVE -->
+            <div v-if="jumpChoice" class="border-b border-amber-500/50 bg-amber-500/10 px-2 py-1.5">
+                <div class="mb-1 flex items-center gap-2 text-xs">
+                    <span class="font-semibold text-amber-300">Which hole did {{ jumpChoice.characterName ?? 'you' }} come through?</span>
+                    <span class="truncate text-muted-foreground">{{ jumpChoice.from }} → {{ jumpChoice.to }}</span>
+                </div>
+                <div class="flex flex-wrap gap-1">
+                    <button
+                        v-for="option in jumpChoice.options"
+                        :key="option.id"
+                        type="button"
+                        class="rounded border border-amber-500/40 bg-neutral-900 px-2 py-0.5 text-xs hover:border-amber-400 hover:bg-amber-500/20"
+                        :title="`Jumped through ${option.signature}`"
+                        @click="jumpChoice.choose(option.id)"
+                    >
+                        <span class="font-mono font-semibold">{{ option.signature }}</span>
+                        <span class="ml-1">{{ displayAlias(option.label) || option.label }}</span>
+                        <span v-if="option.detail" class="ml-1 text-muted-foreground">{{ option.detail }}</span>
+                    </button>
+                    <button type="button" class="rounded border border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted" title="Not one of these: map it as unknown" @click="jumpChoice.choose(null)">
+                        Unknown
+                    </button>
+                </div>
             </div>
 
             <div class="flex min-h-0 flex-1">
