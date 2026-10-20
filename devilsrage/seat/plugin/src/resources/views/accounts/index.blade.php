@@ -60,7 +60,9 @@
 
   {{-- Patch 49: what just happened, and the next step --}}
   @if($justLoggedIn)
-    @php($jl = $statusOf($justLoggedIn['character_id']))
+    @php
+      $jl = $statusOf($justLoggedIn['character_id']);
+    @endphp
     <div class="alert alert-success d-flex align-items-center flex-wrap" style="gap: .5rem;">
       <span><i class="fas fa-check"></i> <strong>{{ $justLoggedIn['name'] }}</strong> is logged in to SeAT{{ $justLoggedIn['placed'] ? ' · account '.$justLoggedIn['placed'] : '' }}.</span>
       @if($jl['mapper'] === false)
