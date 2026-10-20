@@ -11,6 +11,7 @@ use DevilsRage\Seat\Http\Middleware\StartPage;
 use DevilsRage\Seat\Seeders\ScheduleSeeder;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
+use DevilsRage\Seat\Services\LoginReturn;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
 use Seat\Services\AbstractSeatPlugin;
@@ -35,6 +36,9 @@ class DevilsRageServiceProvider extends AbstractSeatPlugin
             View::composer('web::includes.sidebar', FolderedSidebar::class);
         });
         $this->app['router']->pushMiddlewareToGroup('web', StartPage::class);
+
+        // Patch 49: a character logged in on SeAT comes back to My accounts.
+        LoginReturn::listen();
 
         if ($this->app->runningInConsole()) {
             $this->commands([ImportLibraryFits::class, RemindOmega::class]);

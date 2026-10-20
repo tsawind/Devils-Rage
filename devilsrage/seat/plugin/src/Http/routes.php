@@ -24,6 +24,9 @@ Route::group([
     Route::post('view-mode', [HomeController::class, 'viewMode'])->name('devilsrage.viewmode');
     Route::post('menu', [HomeController::class, 'saveMenu'])->name('devilsrage.menu.save');
     Route::get('accounts', [AccountsController::class, 'index'])->name('devilsrage.accounts.index');
+    // Patch 49: log a character in from My accounts (and come back here).
+    Route::get('accounts/login/{account?}', [AccountsController::class, 'login'])->name('devilsrage.accounts.login');
+    Route::get('accounts/login-main', [AccountsController::class, 'loginMain'])->name('devilsrage.accounts.login-main');
     Route::post('accounts', [AccountsController::class, 'storeAccount'])->name('devilsrage.accounts.store');
     Route::post('accounts/share', [AccountsController::class, 'share'])->name('devilsrage.accounts.share');
     Route::post('accounts/name', [AccountsController::class, 'saveName'])->name('devilsrage.accounts.name');

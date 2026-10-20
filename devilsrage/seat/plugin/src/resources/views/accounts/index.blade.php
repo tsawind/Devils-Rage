@@ -28,7 +28,78 @@
     .dr-gear .form-control { height: 26px; padding: 0 .3rem; font-size: .8rem; }
     .dr-gear .dr-row { display: flex; align-items: center; flex-wrap: wrap; gap: .3rem; }
     .dr-gear .dr-row > label:first-child { width: 2.8rem; margin: 0; font-weight: 600; }
+    /* Patch 49: logins */
+    .dr-acct.dr-needs { border-color: rgba(255,193,7,.75); }
+    .dr-acct:target { box-shadow: 0 0 0 2px #17a2b8; }
+    .dr-st { font-size: .7rem; padding: .05rem .3rem; border-radius: 4px; white-space: nowrap; text-decoration: none !important; }
+    .dr-st-ok { color: #28a745; }
+    .dr-st-bad { color: #fff; background: #dc3545; }
+    .dr-st-todo { color: #212529; background: #ffc107; }
+    .dr-st-unknown { color: #6c757d; }
+    .dr-hint { display: flex; align-items: center; gap: .3rem; padding: .2rem .6rem; font-size: .75rem; color: #6c757d; border-bottom: 1px dashed rgba(120,120,120,.15); }
+    .dr-hint input { border: 0; background: transparent; color: inherit; font-size: .75rem; flex: 1; min-width: 0; padding: 0; }
+    .dr-hint input:focus { outline: 1px solid rgba(120,120,120,.4); }
+    .dr-progress { height: 6px; background: rgba(120,120,120,.25); border-radius: 3px; flex: 1; min-width: 6rem; }
+    .dr-progress > div { height: 6px; background: #28a745; border-radius: 3px; }
+    body.dr-only-needs .dr-acct:not(.dr-needs) { display: none; }
   </style>
+
+  @php
+    $mapperAdd = fn (string $anchor = ''): string => $mapperUrl.'/characters/add-from-seat?return='.urlencode(route('devilsrage.accounts.index').$anchor);
+    $statusOf = function (int $id) use ($seatStatus, $mapperStatus): array {
+        $seat = $seatStatus[$id] ?? 'missing';
+        $mapper = $mapperStatus === null ? null : ($mapperStatus[$id] ?? false);
+        return ['seat' => $seat, 'mapper' => $mapper, 'ok' => $seat === 'ok' && $mapper !== false];
+    };
+    $loginCharacters = $accounts->flatMap(fn ($a) => $a->characters->where('external', false)->pluck('character_id'))
+        ->merge($unassigned->pluck('character_id'))->map(fn ($id) => (int) $id)->unique()->values();
+    $readyCount = $loginCharacters->filter(fn (int $id) => $statusOf($id)['ok'])->count();
+    $seatProblems = $loginCharacters->filter(fn (int $id) => $statusOf($id)['seat'] !== 'ok')->count();
+    $mapperMissing = $loginCharacters->filter(fn (int $id) => $statusOf($id)['mapper'] === false)->count();
+  @endphp
+
+  {{-- Patch 49: what just happened, and the next step --}}
+  @if($justLoggedIn)
+    @php($jl = $statusOf($justLoggedIn['character_id']))
+    <div class="alert alert-success d-flex align-items-center flex-wrap" style="gap: .5rem;">
+      <span><i class="fas fa-check"></i> <strong>{{ $justLoggedIn['name'] }}</strong> is logged in to SeAT{{ $justLoggedIn['placed'] ? ' · account '.$justLoggedIn['placed'] : '' }}.</span>
+      @if($jl['mapper'] === false)
+        <span>Next: add {{ $justLoggedIn['name'] }} to the mapper (EVE is still logged in to this account, so it's one click).</span>
+        <a class="btn btn-sm btn-primary" href="{{ $mapperAdd() }}"><i class="fas fa-map"></i> Add to the mapper</a>
+      @elseif(! $justLoggedIn['placed'])
+        <span>It isn't in an account yet: pick it in an empty slot below.</span>
+      @endif
+    </div>
+  @endif
+
+  @if($mainStatus === 'scopes' || $mainStatus === 'expired')
+    <div class="alert alert-warning d-flex align-items-center flex-wrap" style="gap: .5rem;">
+      <span><strong>Your main's SeAT login {{ $mainStatus === 'expired' ? 'has expired' : 'is missing permissions' }}.</strong>
+        SeAT gives every character you add the same permissions as your main, so fix the main first:
+        you'll be signed out of SeAT and log in with your main again (all permissions), then you're back here.</span>
+      <a class="btn btn-sm btn-warning" href="{{ route('devilsrage.accounts.login-main') }}"><i class="fas fa-sign-in-alt"></i> Log in my main again</a>
+    </div>
+  @endif
+
+  <div class="card">
+    <div class="card-body py-2 d-flex flex-wrap align-items-center" style="gap: .75rem;">
+      <strong>{{ $readyCount }} of {{ $loginCharacters->count() }} ready</strong>
+      <div class="dr-progress" title="Logged in to SeAT (all permissions) and the mapper">
+        <div style="width: {{ $loginCharacters->count() ? round(100 * $readyCount / $loginCharacters->count()) : 0 }}%;"></div>
+      </div>
+      @if($seatProblems)<span class="badge badge-danger">{{ $seatProblems }} SeAT login{{ $seatProblems === 1 ? '' : 's' }} to renew</span>@endif
+      @if($mapperMissing)<span class="badge badge-warning">{{ $mapperMissing }} not in the mapper</span>@endif
+      @if($mapperStatus === null)<span class="badge badge-light" title="The mapper didn't answer; its column shows ?">mapper status unknown</span>@endif
+      <label class="mb-0 small"><input type="checkbox" id="dr-only-needs"> Only show what needs me</label>
+      <a class="btn btn-sm btn-outline-secondary ml-auto" href="https://login.eveonline.com/account/logoff" target="_blank" rel="noopener"
+         title="Logs you out of EVE's login page, so the next login asks for the next account's username and password">
+        <i class="fas fa-sign-out-alt"></i> Next EVE account</a>
+    </div>
+    <div class="card-footer py-1 small text-muted">
+      Work one EVE account at a time: <strong>Log in this account</strong>, pick each character and Authorize (EVE skips the password while you stay logged in), then <strong>Next EVE account</strong>.
+      Every login comes back here.
+    </div>
+  </div>
 
   <div class="card">
     <div class="card-body py-2 d-flex flex-wrap align-items-center" style="gap: .75rem;">
@@ -50,14 +121,32 @@
 
   <div class="dr-accounts">
     @foreach($accounts as $account)
-      @php($om = $omega[$account->id] ?? null)
-      <div class="dr-acct">
+      @php
+        $om = $omega[$account->id] ?? null;
+        $own = $account->characters->where('external', false)->map(fn ($l) => $statusOf((int) $l->character_id));
+        $needsSeat = $own->contains(fn ($st) => $st['seat'] !== 'ok');
+        $needsMapper = $own->contains(fn ($st) => $st['mapper'] === false);
+        $allGood = $account->characters->isNotEmpty() && $own->every(fn ($st) => $st['ok']);
+        $anchor = '#acct-'.$account->id;
+      @endphp
+      <div class="dr-acct {{ $allGood ? '' : 'dr-needs' }}" id="acct-{{ $account->id }}">
         <div class="dr-acct-head">
           <i class="fas fa-user-astronaut text-muted"></i>
           <strong class="mr-auto">{{ $account->nickname }}</strong>
           @include('devilsrage::partials.omega-badge', ['om' => $om])
           @include('devilsrage::partials.plex-badge', ['held' => $holdings[$account->id] ?? null])
           <span class="text-muted small">{{ $account->characters->count() }}/{{ $maxCharacters }}</span>
+          @if($needsSeat)
+            <a class="btn btn-xs btn-primary" href="{{ route('devilsrage.accounts.login', $account) }}" title="EVE's login for this account: pick the character to renew, Authorize, and you're back here">Log in this account</a>
+          @elseif($needsMapper)
+            <a class="btn btn-xs btn-primary" href="{{ $mapperAdd($anchor) }}" title="Adds a character of this account to the mapper, then back here">Add to the mapper</a>
+          @elseif($allGood)
+            <span class="text-success small" title="SeAT and mapper logins all work"><i class="fas fa-check"></i></span>
+          @endif
+        </div>
+        <div class="dr-hint" title="Saved in this browser on this PC only, never sent to SeAT. Handy if you forget which login is which.">
+          <i class="fas fa-key"></i>
+          <input type="text" maxlength="80" data-hint="{{ $account->id }}" placeholder="login hint (this PC only), e.g. tsawind3 / outlook" aria-label="Login hint for {{ $account->nickname }}">
         </div>
 
         @foreach($account->characters as $link)
@@ -72,6 +161,23 @@
             <span class="dr-name" title="{{ $link->displayName() }}{{ $link->external ? ' · not on SeAT · '.($link->external_corporation ?? '?').($link->external_alliance ? ' / '.$link->external_alliance : '') : '' }}">{{ $link->displayName() }}</span>
             @if($link->external)<span class="badge badge-light" title="Not on our SeAT: public data only, fits ticked by hand">🔗</span>@endif
             @if($om && in_array($link->character_id, $om['alpha_characters'], true))<span class="badge badge-warning" title="Training at Alpha speed right now">α?</span>@endif
+            @unless($link->external)
+              @php($st = $statusOf((int) $link->character_id))
+              @if($st['seat'] === 'ok')
+                <span class="dr-st dr-st-ok" title="SeAT login works, all permissions">SeAT ✓</span>
+              @else
+                <a class="dr-st {{ $st['seat'] === 'scopes' ? 'dr-st-todo' : 'dr-st-bad' }}" href="{{ route('devilsrage.accounts.login', $account) }}"
+                   title="{{ ['expired' => 'SeAT login expired', 'scopes' => 'SeAT login is missing permissions', 'missing' => 'Not logged in to SeAT'][$st['seat']] ?? '' }}: click, pick {{ $link->displayName() }}, Authorize">
+                  SeAT {{ $st['seat'] === 'scopes' ? 'renew' : ($st['seat'] === 'expired' ? 'expired' : 'add') }}</a>
+              @endif
+              @if($st['mapper'] === true)
+                <span class="dr-st dr-st-ok" title="Logged in to the mapper">Map ✓</span>
+              @elseif($st['mapper'] === false)
+                <a class="dr-st dr-st-todo" href="{{ $mapperAdd($anchor) }}" title="Not in the mapper: click, pick {{ $link->displayName() }}, Authorize">Map add</a>
+              @else
+                <span class="dr-st dr-st-unknown" title="Couldn't ask the mapper">Map ?</span>
+              @endif
+            @endunless
             <form method="post" action="{{ route('devilsrage.accounts.characters.corpgroup', $link) }}" class="ml-auto">
               @csrf
               <select name="group" class="form-control form-control-sm" onchange="this.form.submit()" aria-label="Corp launch group">
@@ -98,18 +204,22 @@
         @for($slot = $account->characters->count(); $slot < $maxCharacters; $slot++)
           <div class="dr-char dr-empty">
             <i class="far fa-square"></i>
+            @if($slot === $account->characters->count())
+              <a class="btn btn-xs btn-outline-primary" href="{{ route('devilsrage.accounts.login', $account) }}" title="EVE's login: pick a character of this account you haven't added yet; it lands in this slot">
+                <i class="fas fa-plus"></i> Log in a character</a>
+            @endif
             @if($slot === $account->characters->count() && $unassigned->isNotEmpty())
               <form method="post" action="{{ route('devilsrage.accounts.characters.add', $account) }}" class="d-inline-flex" style="gap: .3rem;">
                 @csrf
                 <select name="character_id" class="form-control form-control-sm" aria-label="Character to add">
-                  <option value="">empty slot: add a character…</option>
+                  <option value="">or pick one already on SeAT…</option>
                   @foreach($unassigned as $character)
                     <option value="{{ $character->character_id }}">{{ $character->name }}</option>
                   @endforeach
                 </select>
                 <button type="submit" class="btn btn-xs btn-outline-primary">Add</button>
               </form>
-            @else
+            @elseif($slot !== $account->characters->count())
               empty slot
             @endif
           </div>
@@ -264,4 +374,27 @@
       </span>
     </div>
   </div>
+  <script>
+    (() => {
+      // Patch 49: "only show what needs me" and the login hints live in this browser only.
+      const store = {
+        get: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+        set: (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) {} },
+      };
+      const only = document.getElementById('dr-only-needs');
+      if (only) {
+        only.checked = store.get('dr-only-needs') === '1';
+        document.body.classList.toggle('dr-only-needs', only.checked);
+        only.addEventListener('change', () => {
+          document.body.classList.toggle('dr-only-needs', only.checked);
+          store.set('dr-only-needs', only.checked ? '1' : '');
+        });
+      }
+      document.querySelectorAll('input[data-hint]').forEach((input) => {
+        const key = 'dr-login-hint-' + input.dataset.hint;
+        input.value = store.get(key) || '';
+        input.addEventListener('input', () => store.set(key, input.value.trim()));
+      });
+    })();
+  </script>
 @stop

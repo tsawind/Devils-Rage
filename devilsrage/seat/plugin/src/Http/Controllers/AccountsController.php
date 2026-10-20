@@ -11,6 +11,8 @@ use DevilsRage\Seat\Models\AccountSetting;
 use DevilsRage\Seat\Models\LaunchGroup;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
+use DevilsRage\Seat\Services\LoginReturn;
+use DevilsRage\Seat\Services\LoginStatus;
 use DevilsRage\Seat\Services\Holdings;
 use DevilsRage\Seat\Services\OmegaStatus;
 use DevilsRage\Seat\Services\PersonName;
@@ -37,9 +39,10 @@ class AccountsController extends Controller
     /** How many groups of their own a pilot may make. */
     private const MAX_OWN_GROUPS = 20;
 
-    public function index(): View
+    public function index(LoginStatus $logins): View
     {
         $user = auth()->user();
+        $justLoggedIn = $this->justLoggedIn($user);
         $characters = CharacterInfo::query()
             ->whereIn('character_id', $user->associatedCharacterIds())
             ->orderBy('name')
@@ -57,7 +60,20 @@ class AccountsController extends Controller
         $assigned = $accounts->flatMap(fn (Account $account) => $account->characters->pluck('character_id'))->all();
         $holdings = app(Holdings::class);
 
+        // Patch 49: whether each character's SeAT and mapper logins work.
+        $ids = array_values(array_unique(array_merge(
+            array_map('intval', $characters->keys()->all()),
+            $accounts->flatMap(fn (Account $account) => $account->characters->where('external', false)->pluck('character_id'))->map(fn ($id): int => (int) $id)->all(),
+        )));
+        $seatStatus = $logins->seat($ids);
+        $mapperStatus = $logins->mapper($ids);
+
         return view('devilsrage::accounts.index', [
+            'seatStatus' => $seatStatus,
+            'mapperStatus' => $mapperStatus,
+            'mainStatus' => $seatStatus[(int) $user->main_character_id] ?? null,
+            'justLoggedIn' => $justLoggedIn,
+            'mapperUrl' => rtrim((string) config('devilsrage.mapper_url', ''), '/'),
             'accounts' => $accounts,
             'characters' => $characters,
             'corpGroups' => $groups->where('locked', true)->values(),
@@ -78,6 +94,70 @@ class AccountsController extends Controller
                 ->groupBy('account_character_id')
                 ->map(fn ($rows) => $rows->pluck('fitting_id')->map(fn ($id): int => (int) $id)->all()),
         ]);
+    }
+
+    /**
+     * Patch 49: "Log in this account" / "Log in a character": EVE's login, then back to this
+     * account on My accounts (a new character goes into its empty slot).
+     */
+    public function login(?Account $account = null): RedirectResponse
+    {
+        if ($account !== null) {
+            $this->authorizeOwner($account);
+        }
+        session()->put(LoginReturn::PENDING, ['account' => $account?->id]);
+        session()->put('url.intended', route('devilsrage.accounts.index').($account ? '#acct-'.$account->id : ''));
+
+        return redirect()->route('seatcore::auth.eve');
+    }
+
+    /**
+     * Patch 49: SeAT gives every newly added character the permissions your MAIN's login has.
+     * When the main's login misses some, it is renewed by logging in with the main afresh
+     * (signed out, so SeAT asks EVE for the full set), then you're back on My accounts.
+     */
+    public function loginMain(): RedirectResponse
+    {
+        auth()->logout();
+        session()->put(LoginReturn::PENDING, ['account' => null]);
+        session()->put('url.intended', route('devilsrage.accounts.index'));
+
+        return redirect()->route('seatcore::auth.eve');
+    }
+
+    /**
+     * Patch 49: the character that just logged in (if any): put it in the account it was logged
+     * in for when it isn't in one yet, and say what's next.
+     *
+     * @return array{character_id: int, name: string, placed: string|null}|null
+     */
+    private function justLoggedIn(User $user): ?array
+    {
+        $done = session()->pull(LoginReturn::DONE);
+        if (! is_array($done) || empty($done['character_id'])) {
+            return null;
+        }
+        $characterId = (int) $done['character_id'];
+        if (! in_array($characterId, array_map('intval', $user->associatedCharacterIds()), true)) {
+            return null;
+        }
+
+        $placed = null;
+        $account = isset($done['account']) ? Account::query()->where('user_id', $user->id)->find((int) $done['account']) : null;
+        $already = AccountCharacter::query()->where('character_id', $characterId)->first();
+        if ($already !== null) {
+            $placed = $already->account?->nickname;
+        } elseif ($account !== null && $account->characters()->count() < Account::MAX_CHARACTERS) {
+            $account->characters()->create([
+                'character_id' => $characterId,
+                'position' => (int) $account->characters()->max('position') + 1,
+            ]);
+            $placed = $account->nickname;
+        }
+
+        $name = CharacterInfo::query()->where('character_id', $characterId)->value('name') ?? 'Your character';
+
+        return ['character_id' => $characterId, 'name' => (string) $name, 'placed' => $placed];
     }
 
     public function storeAccount(Request $request): RedirectResponse

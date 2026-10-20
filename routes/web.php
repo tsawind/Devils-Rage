@@ -80,6 +80,7 @@ use App\Http\Controllers\UserCharacterController;
 use App\Http\Controllers\WaypointController;
 use App\Http\Controllers\WindowSwitchController;
 use App\Http\Middleware\SetMapShareToken;
+use App\Http\Controllers\Seat\SeatCharactersController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [LandingController::class, 'index'])->name('landing')->middleware('guest');
@@ -93,7 +94,12 @@ Route::get('eve/callback', [EveController::class, 'store'])->name('eve.store');
 // Not under /app: that path belongs to Reverb (websockets) in front of the mapper.
 Route::get('desktop-app/config', [AppConfigController::class, 'show'])->middleware('throttle:60,1')->name('app.config.show');
 
+// Patch 49: SeAT's My accounts asks which characters are logged in to the mapper (bot key only).
+Route::get('seat-api/characters', [SeatCharactersController::class, 'index'])->middleware('throttle:120,1')->name('seat-api.characters');
+
 Route::middleware('auth')->group(function () {
+    // Patch 49: "add to the mapper" from SeAT's My accounts, back to SeAT afterwards.
+    Route::get('characters/add-from-seat', [SeatCharactersController::class, 'create'])->name('characters.add-from-seat');
 
     Route::get('settings', [SettingsController::class, 'show'])->name('settings.show');
     // Patch 39: a guest's name in the mapper.

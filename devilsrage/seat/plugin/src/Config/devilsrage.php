@@ -16,6 +16,9 @@ declare(strict_types=1);
  *   DR_BOT_API_KEY=<64 random characters>
  *       Shared with the mapper (SEAT_API_KEY there) so its Discord bot can ask SeAT
  *       about a linked pilot's capitals, assets and fits. Empty = bot API switched off.
+ *   DR_MAPPER_URL=https://devilsrage.duckdns.org
+ *       The mapper. My accounts asks it (with DR_BOT_API_KEY) which characters are
+ *       logged in there, and its "add to the mapper" buttons go there.
  */
 
 return [
@@ -23,4 +26,5 @@ return [
     'fit_prefix' => env('DR_FIT_PREFIX', ''),
     'corporation_id' => env('DR_CORPORATION_ID', ''),
     'bot_api_key' => env('DR_BOT_API_KEY', ''),
+    'mapper_url' => env('DR_MAPPER_URL', 'https://devilsrage.duckdns.org'),
 ];

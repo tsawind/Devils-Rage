@@ -44,18 +44,18 @@ final class GettingStarted
             [
                 'key' => 'characters',
                 'label' => 'Add all your characters',
-                'hint' => 'Log in each alt with EVE SSO, so skills and assets show up.',
+                'hint' => 'My accounts: Log in a character in each empty slot, one EVE account at a time.',
                 'done' => count($characterIds) > 1,
                 'optional' => false,
-                'link' => Route::has('seatcore::profile.view') ? route('seatcore::profile.view') : null,
+                'link' => route('devilsrage.accounts.index'),
             ],
             [
                 'key' => 'logins',
                 'label' => 'Renew expired logins',
-                'hint' => $expired > 0 ? "{$expired} character login(s) expired: log them in again." : 'Every character login works.',
+                'hint' => $expired > 0 ? "{$expired} character login(s) expired: My accounts shows which, with a button to log them in again." : 'Every character login works.',
                 'done' => $expired === 0,
                 'optional' => false,
-                'link' => Route::has('seatcore::profile.view') ? route('seatcore::profile.view') : null,
+                'link' => route('devilsrage.accounts.index'),
             ],
             [
                 'key' => 'accounts',
