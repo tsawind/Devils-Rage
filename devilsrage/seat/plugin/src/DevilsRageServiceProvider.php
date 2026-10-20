@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace DevilsRage\Seat;
 
 use DevilsRage\Seat\Commands\ImportLibraryFits;
+use DevilsRage\Seat\Commands\PiHourly;
 use DevilsRage\Seat\Commands\RemindOmega;
 use DevilsRage\Seat\Http\Composers\FolderedSidebar;
 use DevilsRage\Seat\Http\Middleware\StartPage;
@@ -41,7 +42,7 @@ class DevilsRageServiceProvider extends AbstractSeatPlugin
         LoginReturn::listen();
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ImportLibraryFits::class, RemindOmega::class]);
+            $this->commands([ImportLibraryFits::class, RemindOmega::class, PiHourly::class]);
         }
     }
 

@@ -20,10 +20,10 @@ class AccountSetting extends Model
 
     protected $primaryKey = 'user_id';
 
-    protected $fillable = ['user_id', 'share', 'person_name', 'discord_style'];
+    protected $fillable = ['user_id', 'share', 'person_name', 'discord_style', 'pi_alerts', 'pi_alert_hour', 'pi_timezone', 'pi_alert_sent'];
 
     /** @var array<string, string> */
-    protected $casts = ['share' => 'boolean'];
+    protected $casts = ['share' => 'boolean', 'pi_alert_hour' => 'integer', 'pi_alert_sent' => 'date'];
 
     public static function sharesFor(int $userId): bool
     {

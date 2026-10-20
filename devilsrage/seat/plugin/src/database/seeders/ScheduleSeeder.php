@@ -23,6 +23,14 @@ class ScheduleSeeder extends AbstractScheduleSeeder
                 'ping_after' => null,
             ],
             [
+                'command' => 'devilsrage:pi:hourly',
+                'expression' => '23 * * * *',
+                'allow_overlap' => false,
+                'allow_maintenance' => false,
+                'ping_before' => null,
+                'ping_after' => null,
+            ],
+            [
                 'command' => 'devilsrage:fits:import',
                 'expression' => '41 * * * *',
                 'allow_overlap' => false,

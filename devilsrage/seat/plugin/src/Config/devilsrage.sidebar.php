@@ -24,6 +24,11 @@ return [
                 'route' => 'devilsrage.accounts.index',
             ],
             [
+                'name' => 'PI',
+                'icon' => 'fas fa-globe',
+                'route' => 'devilsrage.pi',
+            ],
+            [
                 'name' => 'Skill plans',
                 'icon' => 'fas fa-graduation-cap',
                 'route' => 'devilsrage.skillplans.index',

@@ -5,6 +5,7 @@ declare(strict_types=1);
 use DevilsRage\Seat\Http\Controllers\AccountsController;
 use DevilsRage\Seat\Http\Controllers\BotApiController;
 use DevilsRage\Seat\Http\Controllers\HomeController;
+use DevilsRage\Seat\Http\Controllers\PiController;
 use DevilsRage\Seat\Http\Controllers\PlannerController;
 use DevilsRage\Seat\Http\Controllers\RemindersController;
 use DevilsRage\Seat\Http\Controllers\SkillPlansController;
@@ -31,6 +32,10 @@ Route::group([
     Route::get('your-accounts', [AccountsController::class, 'screen'])->name('devilsrage.your-accounts');
     Route::post('accounts/order', [AccountsController::class, 'orderAccounts'])->name('devilsrage.accounts.order');
     Route::post('accounts/{account}/characters/order', [AccountsController::class, 'orderCharacters'])->name('devilsrage.accounts.characters.order');
+    // Patch 50: PI screen (the app's PI tab; works in a browser too) and its opt-in daily message.
+    Route::get('pi', [PiController::class, 'screen'])->name('devilsrage.pi');
+    Route::post('pi/alerts', [PiController::class, 'saveAlerts'])->name('devilsrage.pi.alerts');
+    Route::post('pi/alerts/test', [PiController::class, 'testAlert'])->name('devilsrage.pi.alerts.test');
     Route::post('accounts', [AccountsController::class, 'storeAccount'])->name('devilsrage.accounts.store');
     Route::post('accounts/share', [AccountsController::class, 'share'])->name('devilsrage.accounts.share');
     Route::post('accounts/name', [AccountsController::class, 'saveName'])->name('devilsrage.accounts.name');
