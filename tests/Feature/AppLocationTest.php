@@ -56,7 +56,7 @@ it('moves your character to the system the app read in the chat log', function (
     $status->refresh();
     expect($status->solarsystem_id)->toBe(31000402)
         ->and($status->app_location_at)->not->toBeNull()
-        ->and($status->is_online)->toBeTrue();
+        ->and((bool) $status->is_online)->toBeTrue();
 });
 
 it('tells the maps and the owner about an app jump straight away, without waiting for ESI', function () {

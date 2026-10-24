@@ -55,7 +55,7 @@ it('tells SeAT which characters have EVE\'s Log Chat to File off (Patch 54)', fu
 
     getJson(route('seat-api.characters', ['ids' => "{$off->id},{$on->id},{$unknown->id}"]), ['X-DR-Key' => SEAT_TEST_KEY])
         ->assertSuccessful()
-        ->assertJsonPath('chat_log_off', [$off->id]);
+        ->assertJsonPath('chat_log_off', [(int) $off->id]);
 });
 
 it('answers SeAT only with the shared key', function () {
