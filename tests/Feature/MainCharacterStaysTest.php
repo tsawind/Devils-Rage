@@ -51,7 +51,7 @@ function eveLoginReturns(Character $character): void
 
     $esi = Mockery::mock(Esi::class);
     $esi->shouldReceive('getAffiliations')->andReturn(new EsiResult(
-        data: [new CharacterAffiliation($character->id, $character->corporation_id, $character->alliance_id, null)],
+        data: [new CharacterAffiliation((int) $character->id, (int) $character->corporation_id, $character->alliance_id === null ? null : (int) $character->alliance_id, null)],
     ));
     app()->instance(Esi::class, $esi);
 }
@@ -62,7 +62,7 @@ it('saves the main you switch to for the next login', function (): void {
     actingAs($user);
     put(route('user-characters.update', $alt))->assertRedirect();
 
-    expect($user->fresh()->preferred_character_id)->toBe($alt->id);
+    expect($user->fresh()->preferred_character_id)->toEqual($alt->id);
 });
 
 it('keeps your main when you add a character', function (): void {
@@ -76,7 +76,7 @@ it('keeps your main when you add a character', function (): void {
         ->get(route('eve.store'))
         ->assertRedirect();
 
-    expect(session('active_character_id'))->toBe($main->id);
+    expect(session('active_character_id'))->toEqual($main->id);
 });
 
 it('starts a fresh login on your saved main, not the character you logged in with', function (): void {
@@ -86,7 +86,7 @@ it('starts a fresh login on your saved main, not the character you logged in wit
 
     get(route('eve.store'))->assertRedirect();
 
-    expect(session('active_character_id'))->toBe($main->id);
+    expect(session('active_character_id'))->toEqual($main->id);
 });
 
 it('uses the login character when no main was saved yet', function (): void {
@@ -95,7 +95,7 @@ it('uses the login character when no main was saved yet', function (): void {
 
     get(route('eve.store'))->assertRedirect();
 
-    expect(session('active_character_id'))->toBe($alt->id);
+    expect(session('active_character_id'))->toEqual($alt->id);
 });
 
 it('only moves your main when you remove the main itself', function (): void {
@@ -108,5 +108,5 @@ it('only moves your main when you remove the main itself', function (): void {
         ->delete(route('user-characters.delete', $alt))
         ->assertRedirect();
 
-    expect(session('active_character_id'))->toBe($main->id);
+    expect(session('active_character_id'))->toEqual($main->id);
 });

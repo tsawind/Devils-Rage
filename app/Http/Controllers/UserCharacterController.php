@@ -25,6 +25,8 @@ final class UserCharacterController extends Controller
             return to_route('home')->notify('Character not removed', message: 'You cannot remove your last character.', type: 'error');
         }
 
+        $wasMain = $this->user->active_character?->id === $character->id;
+
         $character->user()->disassociate();
         $character->save();
 
@@ -34,7 +36,7 @@ final class UserCharacterController extends Controller
             $this->user->update(['preferred_character_id' => $remainingCharacter->id]);
         }
 
-        if ($this->user->active_character?->id === $character->id) {
+        if ($wasMain) {
             $this->user->active_character = $this->user->characters()->find($this->user->preferred_character_id) ?? $remainingCharacter;
         }
 
