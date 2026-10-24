@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { usePortalTarget } from '@/lib/portalTarget'
+import { mirrorTargetFor, usePortalTarget } from '@/lib/portalTarget'
 import { cn } from '@/lib/utils'
 import { X } from 'lucide-vue-next'
 import {
@@ -9,9 +9,11 @@ import {
   type DialogContentProps,
   DialogOverlay,
   DialogPortal,
+  injectDialogRootContext,
   useForwardPropsEmits,
 } from 'reka-ui'
-import { computed, type HTMLAttributes } from 'vue'
+import { computed, ref, watch, type HTMLAttributes } from 'vue'
+import DialogMirror from './DialogMirror.vue'
 
 const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>()
 const emits = defineEmits<DialogContentEmits>()
@@ -24,10 +26,25 @@ const delegatedProps = computed(() => {
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
 const portalTo = usePortalTarget()
+
+// Patch 54: where it opens is settled when it opens (it doesn't hop windows while you answer),
+// and a copy shows in the other window (main window / pop-out), answerable from either.
+const root = injectDialogRootContext()
+const openedIn = ref<HTMLElement | undefined>(portalTo.value)
+const mirrorTo = ref<HTMLElement | undefined>(undefined)
+watch(
+  () => root.open.value,
+  (open) => {
+    if (!open) return
+    openedIn.value = portalTo.value
+    mirrorTo.value = mirrorTargetFor(portalTo.value)
+  },
+  { immediate: true, flush: 'sync' },
+)
 </script>
 
 <template>
-  <DialogPortal :to="portalTo">
+  <DialogPortal :to="openedIn">
     <DialogOverlay
       class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/80  data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
     >
@@ -48,6 +65,7 @@ const portalTo = usePortalTarget()
         }"
       >
         <slot />
+        <DialogMirror :to="mirrorTo" :class="props.class"><slot /></DialogMirror>
 
         <DialogClose
           class="absolute top-4 right-4 p-0.5 transition-colors rounded-md hover:bg-secondary"

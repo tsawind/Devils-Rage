@@ -39,3 +39,14 @@ export function usePortalTarget(): ComputedRef<HTMLElement | undefined> {
         return undefined;
     });
 }
+
+/**
+ * Patch 54: a dialog shows in both windows, the main window and the pop-out, so a question is
+ * seen and can be answered wherever you're looking. Given where a dialog opens, this is the other
+ * window's body (none while no pop-out is open).
+ */
+export function mirrorTargetFor(target: HTMLElement | undefined): HTMLElement | undefined {
+    const pop = openPopOutBody.value?.isConnected ? openPopOutBody.value : null;
+    if (!pop || typeof document === 'undefined') return undefined;
+    return target && target.ownerDocument !== document ? document.body : pop;
+}
