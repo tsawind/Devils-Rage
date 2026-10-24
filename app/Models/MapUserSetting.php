@@ -28,7 +28,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $route_use_frigate_holes
  * @property bool $jumping_hot
  * @property bool $jumping_thread
- * @property array<string, array{hot?: bool, thread?: bool}>|null $jumping_by_character Patch 53: a pop-out's own switches for its character
+ * @property array<int|string, array<string, bool>>|null $jumping_by_character Patch 53: a pop-out's own switches for its character
  * @property string|MassStatus $route_allow_mass_status
  * @property string|RoutePreference $route_preference
  * @property int $security_penalty
@@ -144,7 +144,8 @@ final class MapUserSetting extends Model
      */
     public function jumpingFor(int $characterId): array
     {
-        $own = ($this->jumping_by_character ?? [])[(string) $characterId] ?? [];
+        $all = $this->jumping_by_character ?? [];
+        $own = array_key_exists($characterId, $all) ? $all[$characterId] : [];
 
         return [
             'hot' => (bool) ($own['hot'] ?? $this->jumping_hot),

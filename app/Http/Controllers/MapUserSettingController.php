@@ -38,8 +38,8 @@ final class MapUserSettingController extends Controller
                 }
                 if (is_array($jumpingFor)) {
                     $all = $settings->jumping_by_character ?? [];
-                    $key = (string) (int) $jumpingFor['character_id'];
-                    $all[$key] = [...($all[$key] ?? []), ...array_intersect_key($jumpingFor, array_flip(['hot', 'thread']))];
+                    $key = (int) $jumpingFor['character_id'];
+                    $all[$key] = [...(array_key_exists($key, $all) ? $all[$key] : []), ...array_intersect_key($jumpingFor, array_flip(['hot', 'thread']))];
                     $validated['jumping_by_character'] = $all;
                 }
                 $settings->update($validated);
