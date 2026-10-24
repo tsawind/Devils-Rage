@@ -15,7 +15,7 @@ import { signatureToast as toast } from '@/lib/signatureToast';
 import { copyHeldWayBack, heldWayBack } from '@/composables/signatures/wayBack';
 import { displayAlias } from '@/lib/alias';
 import { tryUseMapStore } from '@/map/store/mapStore';
-import { APP_SCAN_EVENT, pastedByAppJustNow, rememberAppScan, type TAppScan } from '@/lib/desktopApp';
+import { APP_SCAN_EVENT, pastedByAppJustNow, rememberAppScan, scanCharacter, type TAppScan } from '@/lib/desktopApp';
 
 export function usePasteSignatures(
     map_solarsystem: MaybeRefOrGetter<TSelectedMapSolarsystem | null>,
@@ -118,7 +118,7 @@ export function usePasteSignatures(
         const scan = (raw as CustomEvent<TAppScan>).detail;
         const system = toValue(map_solarsystem);
         if (!scan || scan.claimed || !system) return;
-        const where = page.props.map_characters?.find((candidate) => candidate.id === scan.character_id)?.status?.solarsystem_id;
+        const where = scanCharacter(scan, page.props.map_characters)?.status?.solarsystem_id;
         if (!where || where !== system.solarsystem_id) return;
         const signatures = signatureParser.parseSignatures(scan.text);
         if (!signatures || !signatures.length) return;

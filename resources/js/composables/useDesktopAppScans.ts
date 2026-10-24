@@ -1,7 +1,7 @@
 import { copyHeldWayBack, heldWayBack } from '@/composables/signatures/wayBack';
 import { useShowMap } from '@/composables/useShowMap';
 import { displayAlias } from '@/lib/alias';
-import { APP_SCAN_EVENT, inDesktopApp, rememberAppScan, type TAppScan } from '@/lib/desktopApp';
+import { APP_SCAN_EVENT, inDesktopApp, rememberAppScan, scanCharacter, type TAppScan } from '@/lib/desktopApp';
 import { signatureParser } from '@/lib/SignatureParser';
 import { signatureToast as toast } from '@/lib/signatureToast';
 import { pasteSignatures } from '@/map/api';
@@ -25,7 +25,7 @@ export function useDesktopAppScans(): void {
             if (!scan || scan.claimed) return;
             const signatures = signatureParser.parseSignatures(scan.text);
             if (!signatures || !signatures.length) return;
-            const where = page.props.map_characters?.find((candidate) => candidate.id === scan.character_id)?.status?.solarsystem_id;
+            const where = scanCharacter(scan, page.props.map_characters)?.status?.solarsystem_id;
             const system = where && store ? [...store.systems.values()].find((candidate) => candidate.solarsystem_id === where) : null;
             if (!system) {
                 toast.info(`${scan.character_name}'s scan wasn't pasted`, {

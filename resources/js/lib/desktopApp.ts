@@ -62,8 +62,21 @@ export function appAttention(on: boolean): void {
  * Patch 47: the app saw a probe scan copied in EVE ("devils-rage-app:scan"). The character is the
  * one whose EVE window had focus, matched to a character id through the chat logs.
  */
-export type TAppScan = { character_id: number; character_name: string; text: string; claimed?: boolean };
+export type TAppScan = { character_id: number | null; character_name: string; text: string; claimed?: boolean };
 export const APP_SCAN_EVENT = 'devils-rage-app:scan';
+
+/**
+ * Patch 52: who copied the scan, among the characters on this map. By id when the app knows it
+ * (chat logs), otherwise by the EVE window's name, so pilots with chat logs off get it too.
+ */
+export function scanCharacter<C extends { id: number; name: string }>(scan: TAppScan, characters: C[] | null | undefined): C | undefined {
+    const list = characters ?? [];
+    const name = scan.character_name.trim().toLowerCase();
+    return (
+        (scan.character_id ? list.find((candidate) => candidate.id === scan.character_id) : undefined) ??
+        list.find((candidate) => candidate.name.trim().toLowerCase() === name)
+    );
+}
 
 /** The last scan the app pasted, so a Ctrl+V of the same text right after doesn't paste it twice. */
 let lastAppScan: { text: string; at: number } | null = null;
