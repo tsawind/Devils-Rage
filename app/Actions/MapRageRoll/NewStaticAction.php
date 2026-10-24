@@ -69,6 +69,16 @@ final readonly class NewStaticAction
         $result = DB::transaction(function () use ($rolling, $old, $new): array {
             $old_system = $this->farSide($rolling, $old);
             $base = mb_strtoupper(mb_trim((string) ($old->alias ?? $old_system->alias ?? '')));
+            // The old static's pipe wasn't tied to its signature (jumped as "Unknown", or the
+            // scan pasted later): its system still carries the name, so find it by name, or the
+            // new hole would become a second Alpha next to the old one.
+            if ($old_system === null && $base !== '' && ! str_contains($base, ChainMemory::STAMP)) {
+                $old_system = MapSolarsystem::query()
+                    ->where('map_id', $rolling->map_id)
+                    ->whereKeyNot($rolling->id)
+                    ->whereRaw('UPPER(alias) = ?', [$base])
+                    ->first();
+            }
             $stamped = 0;
             $stamp = null;
 
