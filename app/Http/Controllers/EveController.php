@@ -42,7 +42,11 @@ final class EveController extends Controller
         }
 
         Auth::login($user, remember: true);
-        $user->active_character = $character;
+
+        // Adding a character keeps the main you picked; a fresh login starts on your saved main.
+        if (! $account_id) {
+            $user->active_character = $user->characters->firstWhere('id', $user->preferred_character_id) ?? $character;
+        }
 
         if ($account_id) {
             if ($redirect = Session::pull('redirect_to')) {

@@ -245,7 +245,6 @@
                   @endforeach
                 </select>
                 <input type="date" name="mct_until" value="{{ $account->mct_until?->format('Y-m-d') }}" class="form-control" aria-label="MCT until" title="When MCT runs out">
-                <label class="mb-0"><input type="checkbox" name="mct_auto" value="1" @checked($account->mct_auto)> auto</label>
               </div>
               <div class="dr-row">
                 <label for="dr-vault-{{ $account->id }}">PLEX</label>

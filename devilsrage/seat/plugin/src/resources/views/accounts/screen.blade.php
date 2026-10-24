@@ -266,7 +266,6 @@
               </select>
               <span class="muted">until</span>
               <input type="date" name="mct_until" value="{{ $account->mct_until?->format('Y-m-d') }}" aria-label="MCT until" title="When MCT runs out">
-              <label class="chk"><input type="checkbox" name="mct_auto" value="1" @checked($account->mct_auto)> renews by itself</label>
             </div>
             <div class="orow">
               <label for="om-vault-{{ $account->id }}">PLEX in vault</label>

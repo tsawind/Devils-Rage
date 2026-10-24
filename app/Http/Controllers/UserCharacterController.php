@@ -34,7 +34,9 @@ final class UserCharacterController extends Controller
             $this->user->update(['preferred_character_id' => $remainingCharacter->id]);
         }
 
-        $this->user->active_character = $remainingCharacter;
+        if ($this->user->active_character?->id === $character->id) {
+            $this->user->active_character = $this->user->characters()->find($this->user->preferred_character_id) ?? $remainingCharacter;
+        }
 
         return back()->notify('Character removed', message: 'You have successfully removed the character from your account.');
     }
@@ -44,6 +46,8 @@ final class UserCharacterController extends Controller
         abort_if($character->user()->isNot($request->user()), 403);
 
         $request->user()->active_character = $character;
+        // The main you pick stays your main (next login too) until you pick another.
+        $request->user()->update(['preferred_character_id' => $character->id]);
 
         return back()->notify('Character changed', message: sprintf('You are now acting as %s', $character->name));
     }

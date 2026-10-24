@@ -51,10 +51,9 @@ final class OmegaStatus
                 'mct_slots' => (int) $account->mct_slots,
                 'mct_until' => $account->mct_until,
                 'mct_days_left' => $mctDays,
-                'mct_auto' => (bool) $account->mct_auto,
+                'mct_auto' => false,
                 'mct_state' => match (true) {
                     (int) $account->mct_slots === 0 => 'none',
-                    (bool) $account->mct_auto => 'auto',
                     $mctDays === null => 'unknown',
                     $mctDays < 0 => 'expired',
                     $mctDays <= self::SOON_DAYS => 'soon',

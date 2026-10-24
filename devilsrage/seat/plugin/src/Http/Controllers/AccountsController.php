@@ -318,7 +318,6 @@ class AccountsController extends Controller
             'omega_auto' => ['boolean'],
             'mct_slots' => ['required', 'integer', 'between:0,2'],
             'mct_until' => ['nullable', 'date', 'after:2003-01-01', 'before:+5 years'],
-            'mct_auto' => ['boolean'],
             'plex_vault' => ['nullable', 'integer', 'between:0,100000000'],
         ], [
             'omega_until.before' => 'That date is too far ahead; use the date Omega runs out.',
@@ -333,7 +332,7 @@ class AccountsController extends Controller
             'omega_auto' => $request->boolean('omega_auto'),
             'mct_slots' => (int) $data['mct_slots'],
             'mct_until' => $mctUntil,
-            'mct_auto' => (int) $data['mct_slots'] > 0 && $request->boolean('mct_auto'),
+            'mct_auto' => false,
             'plex_vault' => $vault,
             'plex_vault_at' => $vault === $account->plex_vault ? $account->plex_vault_at : now(),
             // A new date starts the reminders over.

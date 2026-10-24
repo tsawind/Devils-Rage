@@ -51,12 +51,17 @@ case "$ACTION" in
         echo "== Newest errors (first line each)"
         printf '%s\n' "$logs" \
             | grep -E '^\[[0-9-]+ [0-9:]+\] [a-z]+\.(ERROR|CRITICAL|EMERGENCY)' \
-            | tail -n 8 \
+            | grep -vE '/markets/[0-9]+/history|404 Not Found' \
+            | tail -n 12 \
             | sed -E 's/[A-Za-z0-9_+\/=-]{32,}/[masked]/g; s/(password|secret|token|key)=[^ &"]*/\1=[masked]/gi' \
             | cut -c1-400 || echo "(none)"
         ;;
     deploy-seat)
         bash "$REPO/devilsrage/seat/deploy.sh"
+        ;;
+    seat-sde)
+        # Adds missing ships/items to SeAT's static data (character sheets 500 "Undefined array key").
+        bash "$REPO/devilsrage/seat/sde-add-missing.sh" --apply
         ;;
     app-admins)
         echo "== APP_ADMIN_CHARACTER_IDS as the mapper sees it"
@@ -68,7 +73,7 @@ case "$ACTION" in
         ;;
     *)
         echo "!! Unknown action: $ACTION"
-        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors"
+        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, seat-sde"
         exit 2
         ;;
 esac
