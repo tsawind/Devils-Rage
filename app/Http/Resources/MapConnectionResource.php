@@ -58,6 +58,12 @@ final class MapConnectionResource extends JsonResource
             // Patch 40c: "every jump logged" (only when it's on, and only when the sum was loaded with the map).
             'mass_counting_since' => $this->mass_counting_since?->toISOString(),
             'jumps_mass_since_counting' => $this->whenHas('jumps_mass_since_counting', fn (int|string|null $mass): int => (int) $mass, 0),
+            // Patch 52: the hole size a mass session pinned down (left = size − every logged jump).
+            'kept_size_low' => $this->kept_size_low,
+            'kept_size_high' => $this->kept_size_high,
+            'kept_size_from' => $this->kept_size_from,
+            'kept_size_at' => $this->kept_size_at?->toISOString(),
+            'kept_ack_at' => $this->kept_ack_at?->toISOString(),
             'mass_session' => MassSessions::forConnection((int) $this->map_id, (int) $this->id),
             'jumps_count' => $this->whenHas('jumps_count', fn (int|string|null $count): int => (int) $count, 0),
             'jumps' => $this->whenLoaded('jumps', fn () => $this->jumps->toResourceCollection(MapConnectionJumpResource::class)),

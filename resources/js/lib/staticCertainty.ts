@@ -45,6 +45,11 @@ export type TCertaintyInput = {
     holes: TCertaintyHole[];
     /** Signatures not categorised yet (any kind). */
     uncategorized: number;
+    /**
+     * Patch 53: their ids, when the signature list is known. Then they don't block the check: a
+     * static always exists, so when one of them is the only place a static can be, it's that.
+     */
+    uncategorizedIds?: number[];
     wayBack: TCertaintyWayBack | null;
     /** Connections from this system (not the way back) whose hole here was never pasted: where they lead. */
     unpastedLeadsTo?: string[];
@@ -52,7 +57,8 @@ export type TCertaintyInput = {
     scanned?: boolean;
 };
 
-export type TCertaintyMark = { signatureId: number; staticName: string; setType: boolean };
+/** `categorize`: the signature wasn't categorised yet (it becomes a wormhole). */
+export type TCertaintyMark = { signatureId: number; staticName: string; setType: boolean; categorize?: boolean };
 
 export type TCertaintyResult = {
     /** Mark this signature as the static (setType: also save the static's type on it). The first of `marks`. */
@@ -123,8 +129,14 @@ export function decideStatic(input: TCertaintyInput): TCertaintyResult {
     if (input.scanned === false) return result;
     // Patch 18b: every signature must be categorised; untyped wormholes now count as candidates
     // (a static always exists, so the only untyped hole left is it), instead of blocking the check.
-    if (input.uncategorized !== 0) return result;
-    const allTyped = input.holes.every((hole) => hole.linked || Boolean(hole.typeName));
+    const unknownIds = input.uncategorized !== 0 && input.uncategorizedIds?.length === input.uncategorized ? input.uncategorizedIds : null;
+    if (input.uncategorized !== 0 && !unknownIds) return result;
+    // Patch 53: a signature not categorised yet could be any hole (or no hole at all).
+    const holes: TCertaintyHole[] = [
+        ...input.holes,
+        ...(unknownIds ?? []).map((signatureId) => ({ signatureId, typeName: null, isStatic: false, linked: false, leadsTo: null })),
+    ];
+    const allTyped = holes.every((hole) => hole.linked || Boolean(hole.typeName));
 
     const wayBackId = input.wayBack?.signatureId ?? null;
     // Holes already marked (or just marked for another static) can't be this one.
@@ -138,7 +150,7 @@ export function decideStatic(input: TCertaintyInput): TCertaintyResult {
         progress = false;
         for (const staticHole of [...remaining]) {
             const name = staticHole.name.toUpperCase();
-            const candidates = input.holes
+            const candidates = holes
                 .filter((hole) => free(hole.signatureId))
                 .filter((hole) =>
                     hole.typeName
@@ -148,7 +160,7 @@ export function decideStatic(input: TCertaintyInput): TCertaintyResult {
                 )
                 .map((hole) => hole.signatureId);
             // Patch 18b: an unjumped hole with no type could be it, unless it's known to lead elsewhere.
-            for (const hole of input.holes) {
+            for (const hole of holes) {
                 if (!free(hole.signatureId)) continue;
                 if (!hole.linked && !hole.typeName && (!hole.leadsTo || hole.leadsTo === staticHole.leadsTo)) candidates.push(hole.signatureId);
             }
@@ -160,8 +172,8 @@ export function decideStatic(input: TCertaintyInput): TCertaintyResult {
 
             if (candidates.length === 1 && candidates[0] !== -1) {
                 const signatureId = candidates[0];
-                const hole = input.holes.find((candidate) => candidate.signatureId === signatureId);
-                result.marks.push({ signatureId, staticName: staticHole.name, setType: !hole?.typeName });
+                const hole = holes.find((candidate) => candidate.signatureId === signatureId);
+                result.marks.push({ signatureId, staticName: staticHole.name, setType: !hole?.typeName, ...(unknownIds?.includes(signatureId) ? { categorize: true } : {}) });
                 used.add(signatureId);
                 remaining.splice(remaining.indexOf(staticHole), 1);
                 progress = true;

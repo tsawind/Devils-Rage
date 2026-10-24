@@ -68,6 +68,7 @@ final class MassSessionController extends Controller
         $validated = $request->validate([
             'map_connection_id' => ['required', 'integer', Rule::exists('map_connections', 'id')->where('map_id', $map->id)],
             'home_map_solarsystem_id' => ['nullable', 'integer'],
+            'nominal' => ['nullable', 'integer', 'min:1'],
         ]);
 
         $session = MassSession::query()->where('map_connection_id', $validated['map_connection_id'])->whereNull('ended_at')->first()
@@ -78,6 +79,7 @@ final class MassSessionController extends Controller
                 'started_by_name' => Actor::name() ?? $user->name,
                 'goal' => 'watch',
                 'home_map_solarsystem_id' => $validated['home_map_solarsystem_id'] ?? null,
+                'nominal_mass' => $validated['nominal'] ?? null,
             ]);
 
         $this->broadcastConnection($session->map_connection_id);
@@ -103,24 +105,38 @@ final class MassSessionController extends Controller
             'plan.steps.*.mass' => ['required_with:plan.steps', 'integer', 'min:0'],
             'plan.steps.*.label' => ['nullable', 'string', 'max:80'],
             'plan.steps.*.name' => ['nullable', 'string', 'max:80'],
+            'nominal' => ['sometimes', 'nullable', 'integer', 'min:1'],
         ]);
 
-        $fill = collect($validated)->except('plan')->all();
+        $fill = collect($validated)->except(['plan', 'nominal'])->all();
+        if (($validated['nominal'] ?? null) !== null) {
+            $fill['nominal_mass'] = $validated['nominal'];
+        }
         if (array_key_exists('plan', $validated)) {
             $fill['plan'] = $validated['plan'] === null ? null : ['steps' => array_map(fn (array $step): array => [...$step, 'done' => false], $validated['plan']['steps'] ?? [])];
             $fill['plan_started_at'] = $validated['plan'] === null ? null : now();
         }
         $massSession->forceFill($fill)->save();
+        MassSessions::keepFromSession($massSession);
         $this->broadcastConnection($massSession->map_connection_id);
 
         return response()->json(['session' => $this->sessionPayload($massSession->fresh() ?? $massSession)]);
     }
 
-    public function destroy(Map $map, MassSession $massSession): JsonResponse
+    /**
+     * Patch 52: end it, keeping what it worked out: "top" (done massing), "watch" (done and
+     * watching) or "forget" (the old ✕).
+     */
+    public function destroy(Request $request, Map $map, MassSession $massSession): JsonResponse
     {
         Gate::authorize('update', $map);
         abort_unless($massSession->map_id === $map->id, 404);
+        $how = $request->validate(['keep' => ['sometimes', 'string', Rule::in(['top', 'watch', 'forget'])]])['keep'] ?? 'forget';
         $massSession->forceFill(['ended_at' => now()])->save();
+        $connection = MapConnection::query()->find($massSession->map_connection_id);
+        if ($connection instanceof MapConnection && ($how === 'forget' || $connection->kept_size_from === 'session')) {
+            MassSessions::endKept($connection, $how, Actor::name());
+        }
         $this->broadcastConnection($massSession->map_connection_id);
 
         return response()->json(['ok' => true]);
@@ -137,7 +153,11 @@ final class MassSessionController extends Controller
         $validated = $request->validate([
             'status' => ['required', 'string', Rule::in(['fresh', 'reduced', 'critical'])],
             'made_by_last_jump' => ['sometimes', 'boolean'],
+            'nominal' => ['sometimes', 'nullable', 'integer', 'min:1'],
         ]);
+        if (($validated['nominal'] ?? null) !== null) {
+            $massSession->forceFill(['nominal_mass' => $validated['nominal']])->save();
+        }
 
         $connection = MapConnection::query()->findOrFail($massSession->map_connection_id);
         $before = (int) MassObservation::query()->where('map_connection_id', $connection->id)->max('id');
@@ -155,6 +175,8 @@ final class MassSessionController extends Controller
                 ])->save();
             }
         }
+        MassSessions::keepFromSession($massSession);
+        $this->broadcastConnection($connection->id);
 
         return response()->json(['ok' => true]);
     }

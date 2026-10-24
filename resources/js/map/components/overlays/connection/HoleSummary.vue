@@ -34,7 +34,7 @@ export type THoleSummary = {
 };
 
 const { summary, now } = defineProps<{ summary: THoleSummary; now: number }>();
-const emit = defineEmits<{ checked: []; copy: []; jumps: [] }>();
+const emit = defineEmits<{ checked: []; copy: []; jumps: []; kept: [choice: 'keep' | 'trust'] }>();
 
 const { label } = usePilotNames();
 
@@ -67,6 +67,9 @@ const lastLookLine = computed(() => {
     if (!look) return null;
     return `${ago(now - look.at)} · ${label(look.by)} (${look.note})`;
 });
+/** Patch 52: the range a mass session worked out is in use (and whether the newest mark fits it). */
+const kept = computed(() => summary.estimate?.kept ?? null);
+
 const barColor = computed(() => (bar.value?.tone === 'critical' ? 'bg-red-600' : bar.value?.tone === 'reduced' ? 'bg-amber-600' : 'bg-green-700'));
 </script>
 
@@ -101,7 +104,15 @@ const barColor = computed(() => (bar.value?.tone === 'critical' ? 'bg-red-600' :
             <template v-if="summary.estimate">
                 <dt class="text-muted-foreground">Mass left</dt>
                 <dd v-if="goneByLog" class="font-semibold text-red-400">{{ goneByLog }}</dd>
-                <dd v-else class="font-mono font-semibold">{{ formatMass(summary.estimate.min) }} ↔ {{ formatMass(summary.estimate.max) }} kg</dd>
+                <dd v-else class="font-mono font-semibold">
+                    {{ formatMass(summary.estimate.min) }} ↔ {{ formatMass(summary.estimate.max) }} kg
+                    <span
+                        v-if="kept"
+                        class="ml-1 rounded bg-emerald-900/60 px-1.5 py-px font-sans text-[10px] font-normal text-emerald-200"
+                        :title="kept.from === 'session' ? 'From the mass session\'s marks (every jump logged): its size minus everything logged' : 'Kept from a mass session: its size minus everything logged since. A later mark only narrows it.'"
+                        >{{ kept.from === 'session' ? 'from the session' : 'kept from the session' }}</span
+                    >
+                </dd>
             </template>
         </dl>
         <div v-if="bar && summary.estimate">
@@ -127,6 +138,14 @@ const barColor = computed(() => (bar.value?.tone === 'critical' ? 'bg-red-600' :
             </div>
         </div>
         <div v-if="fromLine" class="text-muted-foreground">{{ fromLine }}</div>
+        <!-- Patch 52: a mark that says more is left than the session's range allows (mass never comes back) -->
+        <div v-if="kept?.conflict" class="grid gap-1 rounded-md bg-amber-100 px-2 py-1 text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            <span>Doesn't fit the kept range (at most {{ formatMass(kept.top) }}): a jump went unlogged or the mark is wrong.</span>
+            <div v-if="summary.canCheck" class="flex gap-1.5">
+                <button type="button" class="rounded border border-amber-600 px-2 py-0.5 hover:bg-amber-900/40" @click="emit('kept', 'keep')">Keep the range</button>
+                <button type="button" class="rounded border border-amber-600 px-2 py-0.5 hover:bg-amber-900/40" @click="emit('kept', 'trust')">Trust the mark</button>
+            </div>
+        </div>
         <div v-if="hint" class="rounded-md bg-amber-100 px-2 py-1 font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-200">? {{ hint }}</div>
         <div class="text-muted-foreground">
             Last checked: <span class="text-foreground">{{ lastLookLine ?? 'never' }}</span>

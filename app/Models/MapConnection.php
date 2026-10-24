@@ -44,6 +44,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $mass_counting_since Patch 40c: "every jump logged" on since then (only those jumps count)
  * @property CarbonImmutable|null $mass_watch_touched_at Patch 39: last click in the watch banner
  * @property CarbonImmutable|null $checked_at
+ * @property int|null $kept_size_low Patch 52: the size a mass session worked out (null: only the top is known)
+ * @property int|null $kept_size_high
+ * @property string|null $kept_size_from 'session' while one runs, 'kept' after it ended
+ * @property CarbonImmutable|null $kept_size_at
+ * @property CarbonImmutable|null $kept_ack_at Patch 52: "Keep the range" over a mark that didn't fit
  * @property CarbonImmutable|null $eol_since Patch 37: first marked End of life
  * @property CarbonImmutable|null $critical_since Patch 37: first marked Critical
  * @property CarbonImmutable|null $imminent_since Patch 37: turned "closure imminent"
@@ -88,6 +93,8 @@ final class MapConnection extends Model
         'mass_counting_since' => 'immutable_datetime',
         'mass_watch_touched_at' => 'immutable_datetime',
         'checked_at' => 'immutable_datetime',
+        'kept_size_at' => 'immutable_datetime',
+        'kept_ack_at' => 'immutable_datetime',
         'eol_since' => 'immutable_datetime',
         'critical_since' => 'immutable_datetime',
         'imminent_since' => 'immutable_datetime',

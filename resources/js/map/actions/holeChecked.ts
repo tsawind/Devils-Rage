@@ -80,3 +80,12 @@ export function setWatchOpen(connectionId: number, open: boolean): void {
 export function touchWatch(connectionId: number): void {
     router.post(HoleCheckedController.watch(connectionId).url, { touch: true }, quiet);
 }
+
+/** Patch 52: a mark that doesn't fit the range a mass session kept: keep the range, or trust the mark. */
+export function answerKeptRange(connectionId: number, choice: 'keep' | 'trust'): void {
+    router.post(HoleCheckedController.kept(connectionId).url, { choice }, {
+        ...quiet,
+        onSuccess: () => toast.success(choice === 'keep' ? 'Kept the range' : 'Using the mark (kept range dropped)'),
+        onError: () => toast.error('Could not change the kept range.'),
+    });
+}

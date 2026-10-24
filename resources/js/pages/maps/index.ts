@@ -317,6 +317,13 @@ export type TMapConnection = {
     jumps_mass_since_watch?: number;
     /** Patch 40c: "every jump logged" on since then (the watcher's switch): only jumps since count. */
     mass_counting_since?: string | null;
+    /** Patch 52: the hole size a mass session pinned down (left = size − every logged jump); low null: only the top. */
+    kept_size_low?: number | null;
+    kept_size_high?: number | null;
+    kept_size_from?: 'session' | 'kept' | null;
+    kept_size_at?: string | null;
+    /** Patch 52: "Keep the range" over a mark that didn't fit it. */
+    kept_ack_at?: string | null;
     jumps_mass_since_counting?: number;
     created_at: string;
     updated_at: string;

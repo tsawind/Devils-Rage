@@ -130,7 +130,10 @@ export async function startMassSession(store: MapStore, connection: TMapConnecti
 export function useMassSessions(mapSlug: string) {
     const session = (id: number) => ({ map: mapSlug, massSession: id });
 
-    async function patch(id: number, data: Partial<Omit<TMassSession, 'plan'>> & { plan?: { steps: Omit<TPlanStepRow, 'done'>[] } | null }): Promise<boolean> {
+    async function patch(
+        id: number,
+        data: Partial<Omit<TMassSession, 'plan'>> & { plan?: { steps: Omit<TPlanStepRow, 'done'>[] } | null; nominal?: number | null },
+    ): Promise<boolean> {
         const body = await jsonFetch<{ session: TMassSession }>(MassSessionController.update(session(id)).url, 'PATCH', data);
         if (!body) {
             toast.error("Couldn't save the session.");
@@ -140,13 +143,14 @@ export function useMassSessions(mapSlug: string) {
         return true;
     }
 
-    async function end(id: number): Promise<void> {
-        await jsonFetch(MassSessionController.destroy(session(id)).url, 'DELETE');
+    /** Patch 52: "top" done massing, "watch" done and watching, "forget" back to the status bands. */
+    async function end(id: number, keep: 'top' | 'watch' | 'forget' = 'forget'): Promise<void> {
+        await jsonFetch(MassSessionController.destroy(session(id)).url, 'DELETE', { keep });
         await loadMassSessions(mapSlug);
     }
 
-    async function observe(id: number, status: TObservationRow['status'], madeByLastJump: boolean): Promise<void> {
-        const body = await jsonFetch(MassSessionController.observe(session(id)).url, 'POST', { status, made_by_last_jump: madeByLastJump });
+    async function observe(id: number, status: TObservationRow['status'], madeByLastJump: boolean, nominal: number | null = null): Promise<void> {
+        const body = await jsonFetch(MassSessionController.observe(session(id)).url, 'POST', { status, made_by_last_jump: madeByLastJump, nominal });
         if (!body) toast.error("Couldn't mark the hole.");
         await loadMassSessions(mapSlug);
     }

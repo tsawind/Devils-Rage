@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Models\MapConnection;
 use App\Models\Signature;
 use App\Support\Actor;
+use App\Support\MassSessions;
 use App\Support\Broadcasting\MapBroadcaster;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -70,6 +71,7 @@ final class HoleCheckedController extends Controller
         // the jumps logged since it was turned on. Turning it on also starts watching.
         if ($request->has('counting')) {
             $counting = $request->boolean('counting');
+            $this->stopWatchingKept($mapConnection, $counting);
             $mapConnection->forceFill([
                 'mass_counting_since' => $counting ? now() : null,
                 ...($counting && $mapConnection->mass_watched_at === null ? ['mass_watched_at' => now(), 'mass_watched_by_name' => Actor::name()] : []),
@@ -83,6 +85,7 @@ final class HoleCheckedController extends Controller
 
         // Patch 40c: watching alone (the 👁 on the pill) doesn't change the mass math.
         $on = $request->boolean('on');
+        $this->stopWatchingKept($mapConnection, $on);
         $mapConnection->forceFill([
             'mass_watched_at' => $on ? now() : null,
             'mass_watched_by_name' => $on ? Actor::name() : null,
@@ -125,6 +128,33 @@ final class HoleCheckedController extends Controller
         $this->broadcast($mapConnection);
 
         return back();
+    }
+
+    /**
+     * Patch 52: a mark that doesn't fit the range a mass session kept: "Keep the range" (the mark
+     * is wrong or a jump went unlogged) or "Trust the mark" (drop the kept range).
+     */
+    public function kept(Request $request, MapConnection $mapConnection): RedirectResponse
+    {
+        Gate::authorize('update', $mapConnection);
+        $choice = $request->validate(['choice' => ['required', 'string', 'in:keep,trust']])['choice'];
+
+        if ($choice === 'trust') {
+            MassSessions::forgetKept($mapConnection);
+        } else {
+            $mapConnection->forceFill(['kept_ack_at' => now()])->save();
+        }
+        $this->broadcast($mapConnection);
+
+        return back();
+    }
+
+    /** Patch 52: done and watching, then watching off: back to "done massing" (only the top stays). */
+    private function stopWatchingKept(MapConnection $mapConnection, bool $on): void
+    {
+        if (! $on && $mapConnection->kept_size_from === 'kept' && $mapConnection->kept_size_low !== null) {
+            $mapConnection->kept_size_low = null;
+        }
     }
 
     private function broadcast(MapConnection $mapConnection): void

@@ -54,7 +54,7 @@ function nextAsk(): void {
  */
 export type TStaticConfirm = { signatureLabel: string; where: string; staticName: string; leadsTo: string; slot: string; confirm: () => void };
 export const staticConfirm = ref<TStaticConfirm | null>(null);
-let markHandler: ((mapSolarsystemId: number, mark: { signatureId: number; staticName: string; setType: boolean }, byHand: boolean) => void) | null = null;
+let markHandler: ((mapSolarsystemId: number, mark: { signatureId: number; staticName: string; setType: boolean; categorize?: boolean }, byHand: boolean) => void) | null = null;
 
 /** Patch 18b: mark a hole as the static by hand (after the warning). */
 export function markStaticByHand(mapSolarsystemId: number, signatureId: number, staticName: string, setType: boolean): void {
@@ -74,6 +74,18 @@ export function requestStaticCheck(mapSolarsystemId: number, current?: TMapSolar
     requested.set(mapSolarsystemId, { reference: current ?? undefined, at: Date.now() });
     requestedVersion.value++;
     notify?.();
+}
+
+/**
+ * Patch 53: the ids of a system's signatures not categorised yet, from the signature list that
+ * shows it (the map itself only has their count).
+ */
+const uncategorizedById = new Map<number, number[]>();
+export function rememberUncategorized(mapSolarsystemId: number, signatures: readonly { id: number; signature_category_id?: number | null }[]): void {
+    uncategorizedById.set(
+        mapSolarsystemId,
+        signatures.filter((signature) => !signature.signature_category_id).map((signature) => signature.id),
+    );
 }
 
 /** What the map knows about one system, as the certainty check needs it. */
@@ -127,7 +139,7 @@ export function certaintyInputFor(store: MapStore, system: TMapSolarsystem) {
     // Patch 37: someone pasted this system's signatures (anything with an id): until then, nothing is certain.
     const scanned = Boolean(system.scanned_at) || (system.signatures_count ?? 0) > unscannedSides;
 
-    return { statics, holes, uncategorized: system.uncategorized_signatures_count ?? 0, wayBack, unpastedLeadsTo, scanned };
+    return { statics, holes, uncategorized: system.uncategorized_signatures_count ?? 0, uncategorizedIds: uncategorizedById.get(system.id), wayBack, unpastedLeadsTo, scanned };
 }
 
 /** Mounted once with the map: runs the requested checks as the updates arrive. */
@@ -172,7 +184,7 @@ export function useStaticCertainty(store: MapStore): void {
         };
     }
 
-    function applyMark(system: TMapSolarsystem, mark: { signatureId: number; staticName: string; setType: boolean }, byHand: boolean): void {
+    function applyMark(system: TMapSolarsystem, mark: { signatureId: number; staticName: string; setType: boolean; categorize?: boolean }, byHand: boolean): void {
         {
             const { signatureId, staticName, setType } = mark;
             const type =
@@ -181,7 +193,13 @@ export function useStaticCertainty(store: MapStore): void {
                           (candidate) => candidate.signature === staticName && candidate.spawn_areas?.includes(system.solarsystem.class),
                       )
                     : undefined;
-            const payload = { is_static: true, is_wandering: false, ...(type ? { signature_type_id: type.id } : {}) };
+            const payload = {
+                is_static: true,
+                is_wandering: false,
+                // Patch 53: not categorised yet, but the only place this static can be: it's a wormhole.
+                ...(mark.categorize && wormholeCategoryId !== null ? { signature_category_id: wormholeCategoryId } : {}),
+                ...(type ? { signature_type_id: type.id } : {}),
+            };
             const where = displayAlias(system.alias) || system.solarsystem.name;
             const meta = store.meta.value;
             // Patch 20: each static has its own slot (B0 for the first, B1 for the second).
@@ -192,7 +210,7 @@ export function useStaticCertainty(store: MapStore): void {
             if (system.combat_color || is_combat.value || !name || name.toUpperCase() === slot.toUpperCase()) {
                 updateSignature({ id: signatureId } as TSignature, payload);
                 toast.success(`${staticName} is ${where}'s static`, {
-                    description: byHand ? 'Marked by hand.' : 'Every signature is scanned and nothing else can be it.',
+                    description: byHand ? 'Marked by hand.' : mark.categorize ? 'The only signature it can be (not scanned down yet).' : 'Every signature is scanned and nothing else can be it.',
                     action: undoAction(signatureId, setType, undefined),
                 });
                 return;

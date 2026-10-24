@@ -17,6 +17,11 @@ export type TMassEstimate = {
     min: number;
     /** At most this much is left. */
     max: number;
+    /**
+     * Patch 52: the range a mass session worked out was used ("session" while it runs, "kept"
+     * after). `conflict`: the newest mark says more is left than that range allows.
+     */
+    kept?: { from: 'session' | 'kept'; conflict: boolean; top: number };
 };
 
 /** The biggest hole in game is 5.5 B kg (+10%): that draws at the full width. */
@@ -198,17 +203,54 @@ export function estimateConnectionMass(
         jumps_mass_since_counting?: number | null;
         mass_counting_since?: string | null;
         mass_status?: string | null;
+        mass_status_updated_at?: string | null;
+        kept_size_low?: number | null;
+        kept_size_high?: number | null;
+        kept_size_from?: 'session' | 'kept' | null;
+        kept_ack_at?: string | null;
     },
     status: string | null | undefined = connection.mass_status,
 ): TMassEstimate | null {
     // Patch 40c: only "every jump logged" (the watcher's switch) changes the math; watching alone doesn't.
     const watched = Boolean(connection.mass_counting_since);
     const sinceWatch = connection.jumps_mass_since_counting ?? connection.jumps_mass_sum ?? 0;
-    return estimateMass({
+    const estimate = estimateMass({
         totalMass,
         jumped: watched ? sinceWatch : connection.jumps_mass_sum,
         jumpedSinceStatus: watched ? Math.min(sinceWatch, connection.jumps_mass_since_status ?? sinceWatch) : connection.jumps_mass_since_status,
         watched,
         status,
     });
+    return withKeptRange(estimate, connection);
+}
+
+/**
+ * Patch 52: a mass session's range (the hole's size it pinned down, minus every logged jump) is
+ * combined with the status band: the tighter end wins, so a later mark only ever narrows it.
+ * A mark that says more is left than the range allows doesn't raise it: it's flagged
+ * (`conflict`) until someone picks "Keep the range" (after that mark) or "Trust the mark".
+ */
+export function withKeptRange(
+    estimate: TMassEstimate | null,
+    connection: {
+        jumps_mass_sum?: number | null;
+        mass_status_updated_at?: string | null;
+        kept_size_low?: number | null;
+        kept_size_high?: number | null;
+        kept_size_from?: 'session' | 'kept' | null;
+        kept_ack_at?: string | null;
+    },
+): TMassEstimate | null {
+    if (!estimate || (connection.kept_size_high ?? null) === null) return estimate;
+    const logged = Math.max(0, connection.jumps_mass_sum ?? 0);
+    const top = Math.max(0, (connection.kept_size_high ?? 0) - logged);
+    const bottom = (connection.kept_size_low ?? null) === null ? 0 : Math.min(top, Math.max(0, (connection.kept_size_low ?? 0) - logged));
+    const from = connection.kept_size_from === 'session' ? 'session' : 'kept';
+    const min = Math.max(estimate.min, bottom);
+    const max = Math.min(estimate.max, top);
+    if (min <= max) return { ...estimate, min, max, kept: { from, conflict: false, top } };
+    // The mark says more is left: keep the range (it never goes up), and ask unless already answered.
+    const markedAt = connection.mass_status_updated_at ? Date.parse(connection.mass_status_updated_at) : 0;
+    const ackAt = connection.kept_ack_at ? Date.parse(connection.kept_ack_at) : 0;
+    return { ...estimate, min: bottom, max: top, kept: { from, conflict: !(ackAt >= markedAt), top } };
 }

@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $id
  * @property int $map_id
  * @property int $map_connection_id
+ * @property int|null $nominal_mass Patch 52: the hole type's size, for the kept range
  * @property int|null $user_id
  * @property string|null $started_by_name
  * @property string $goal watch | reduced | crit | roll | closer

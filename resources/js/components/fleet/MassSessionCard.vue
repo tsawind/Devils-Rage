@@ -151,11 +151,20 @@ const bar = computed(() => {
     };
 });
 
+/** Patch 52: the hole type's size, so the server can keep the range this session works out. */
+const nominal = (): number | null => (target.value?.hole.total ? Math.round(target.value.hole.total) : null);
+/** Patch 52: ending asks how (the old ✕ is "End, forget the range"). */
+const ending = ref(false);
+function finish(keep: 'top' | 'watch' | 'forget'): void {
+    ending.value = false;
+    void api.end(session.id, keep);
+}
+
 const madeByLast = ref(false);
 const busy = ref(false);
 async function mark(status: TObservationRow['status']): Promise<void> {
     busy.value = true;
-    await api.observe(session.id, status, madeByLast.value);
+    await api.observe(session.id, status, madeByLast.value, nominal());
     madeByLast.value = false;
     busy.value = false;
     showPreview.value = true;
@@ -198,7 +207,24 @@ const statusClass = (status: string) => (status === 'critical' ? 'text-red-400' 
             <span class="font-semibold">⚖ {{ target?.label ?? `Pipe #${session.map_connection_id}` }}</span>
             <span v-if="target" class="font-mono text-muted-foreground">{{ massText(target.hole.total) }}</span>
             <span v-if="left" class="ml-auto font-mono text-amber-400">left {{ rangeText(left) }}</span>
-            <button type="button" class="text-muted-foreground hover:text-foreground" title="End this session" @click="api.end(session.id)">✕</button>
+            <button type="button" class="text-muted-foreground hover:text-foreground" title="End this session" @click="ending = !ending">✕</button>
+        </div>
+        <!-- Patch 52: how to end it: keep what the session worked out, or forget it -->
+        <div v-if="ending" class="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-black/30 p-1.5">
+            <button type="button" class="rounded border border-border px-2 py-0.5 hover:bg-muted" title="Keep the most that can be left; every jump logged from now comes off it" @click="finish('top')">
+                ✓ Done massing
+            </button>
+            <button
+                type="button"
+                class="rounded border border-sky-600 px-2 py-0.5 text-sky-200 hover:bg-sky-950"
+                title="Keep the whole range and watch the hole (every jump logged): it keeps narrowing"
+                @click="finish('watch')"
+            >
+                👁 Done and watching
+            </button>
+            <button type="button" class="rounded px-2 py-0.5 text-muted-foreground hover:text-foreground" title="Back to the status bands" @click="finish('forget')">
+                End, forget the range
+            </button>
         </div>
         <p class="text-[11px] text-muted-foreground">
             <span :title="pilotDetail(session.started_by_name)">{{ session.started_by_name ? pilotName(session.started_by_name) : 'Someone' }}</span> started it {{ when(session.created_at) }}<template v-if="homeName"> · home side {{ homeName }}</template>
@@ -236,7 +262,7 @@ const statusClass = (status: string) => (status === 'critical' ? 'text-red-400' 
 
         <div class="flex flex-wrap gap-3">
             <label class="flex items-center gap-1.5" title="Every jump through this hole went through the log: what people saw narrows the window">
-                <input type="checkbox" :checked="session.only_our_jumps" @change="api.patch(session.id, { only_our_jumps: ($event.target as HTMLInputElement).checked })" />
+                <input type="checkbox" :checked="session.only_our_jumps" @change="api.patch(session.id, { only_our_jumps: ($event.target as HTMLInputElement).checked, nominal: nominal() })" />
                 Only our jumps
             </label>
             <label class="flex items-center gap-1.5" title="Expendable pilots may gamble (they may be left outside)">

@@ -6,6 +6,7 @@ namespace App\Support;
 
 use App\Models\Character;
 use App\Models\MapConnection;
+use App\Models\MassObservation;
 use App\Models\MassSession;
 use App\Models\Solarsystem;
 
@@ -101,5 +102,69 @@ final class MassSessions
         $name = Solarsystem::query()->whereKey($id)->value('name');
 
         return is_string($name) ? $name : null;
+    }
+
+    /**
+     * Patch 52: while a session runs with "only our jumps", the hole size its marks pin down is
+     * kept on the pipe (everyone's map and the details box use it). Marks that don't add up, or
+     * "only our jumps" off: the session's range is dropped (a kept one from before stays).
+     */
+    public static function keepFromSession(MassSession $session): void
+    {
+        $connection = MapConnection::query()->find($session->map_connection_id);
+        if (! $connection instanceof MapConnection) {
+            return;
+        }
+        $window = null;
+        if ($session->ended_at === null && $session->only_our_jumps && ($session->nominal_mass ?? 0) > 0) {
+            $observations = MassObservation::query()
+                ->where('map_connection_id', $connection->id)
+                ->orderBy('id')
+                ->get(['status', 'logged_mass', 'flip_mass'])
+                ->map(fn (MassObservation $row): array => ['status' => (string) $row->status, 'logged' => (int) $row->logged_mass, 'flip' => $row->flip_mass === null ? null : (int) $row->flip_mass]);
+            $window = $observations->isEmpty() ? null : HoleWindow::size((float) $session->nominal_mass, $observations);
+        }
+
+        if ($window !== null && $window['consistent']) {
+            $connection->forceFill([
+                'kept_size_low' => (int) floor($window['low']),
+                'kept_size_high' => (int) ceil($window['high']),
+                'kept_size_from' => 'session',
+                'kept_size_at' => now(),
+                'kept_ack_at' => null,
+            ])->save();
+        } elseif ($connection->kept_size_from === 'session') {
+            self::forgetKept($connection);
+        }
+    }
+
+    /**
+     * Patch 52: how a session ends. "top": done massing, only the most that can be left stays;
+     * "watch": done and watching, the whole range stays and every jump is logged from here;
+     * "forget": back to the status bands.
+     */
+    public static function endKept(MapConnection $connection, string $how, ?string $byName): void
+    {
+        if ($how === 'forget' || $connection->kept_size_high === null) {
+            self::forgetKept($connection);
+
+            return;
+        }
+        $connection->forceFill([
+            'kept_size_low' => $how === 'watch' ? $connection->kept_size_low : null,
+            'kept_size_from' => 'kept',
+            ...($how === 'watch' ? [
+                'mass_watched_at' => $connection->mass_watched_at ?? now(),
+                'mass_watched_by_name' => $connection->mass_watched_by_name ?? $byName,
+                'mass_watch_open' => true,
+                'mass_watch_touched_at' => now(),
+                'mass_counting_since' => $connection->mass_counting_since ?? now(),
+            ] : []),
+        ])->save();
+    }
+
+    public static function forgetKept(MapConnection $connection): void
+    {
+        $connection->forceFill(['kept_size_low' => null, 'kept_size_high' => null, 'kept_size_from' => null, 'kept_size_at' => null, 'kept_ack_at' => null])->save();
     }
 }

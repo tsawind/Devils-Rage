@@ -26,7 +26,7 @@ import { useCombat } from '@/composables/combat/useCombat';
 import { recentJump } from '@/composables/signatures/recentJump';
 import { armHole } from '@/composables/signatures/armHole';
 import { clearHeldWayBack, copyHeldWayBack, heldWayBack, PASTE_SIGNATURES_EVENT } from '@/composables/signatures/wayBack';
-import { requestStaticCheck } from '@/composables/signatures/useStaticCertainty';
+import { rememberUncategorized, requestStaticCheck } from '@/composables/signatures/useStaticCertainty';
 import { usePasteSignatures } from '@/composables/signatures/usePasteSignatures';
 import { useSignatures } from '@/composables/signatures/useSignatures';
 import { useSortableSignatures } from '@/composables/signatures/useSortedSignatures';
@@ -53,7 +53,7 @@ import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import type { TSignature } from '@/types/models';
 import { useEventListener, useLocalStorage, useNow } from '@vueuse/core';
 import { ArrowDown, ArrowUp, CircleHelp, Cloud, Database, Fan, Flag, Gem, Landmark, ListFilter, Radar, Rows2, Rows3, Shield, Swords } from 'lucide-vue-next';
-import { type Component, computed, nextTick, ref, watch } from 'vue';
+import { type Component, computed, nextTick, ref, watch, watchEffect } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
 
 const props = defineProps<{
@@ -73,6 +73,12 @@ const character = useActiveMapCharacter();
 const map_user_settings = useMapUserSettings();
 
 const page = useShowMap();
+
+// Patch 53: the static check may need to know which signatures aren't categorised yet.
+watchEffect(() => {
+    const system = props.map_solarsystem;
+    if (system?.signatures) rememberUncategorized(system.id, system.signatures);
+});
 
 const { popup_seconds, is_combat } = useCombat();
 

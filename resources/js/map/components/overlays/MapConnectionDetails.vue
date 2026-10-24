@@ -10,7 +10,7 @@ import { lastLook, lifeLine } from '@/lib/holeSummary';
 import { estimateConnectionMass, formatMass, massHints } from '@/lib/massEstimate';
 import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { lifetimeRange, wormholeLifetimeHours } from '@/lib/wormholeLifetime';
-import { markConnectionChecked, markConnectionFresh, setConnectionWatched, setCounting } from '@/map/actions/holeChecked';
+import { answerKeptRange, markConnectionChecked, markConnectionFresh, setConnectionWatched, setCounting } from '@/map/actions/holeChecked';
 import { copyForwardBookmark, forwardSides } from '@/map/holeBookmark';
 import { couldBeNames, guessHole, holeCandidates } from '@/map/holeGuess';
 import { isK162Frigate } from '@/lib/k162';
@@ -140,7 +140,13 @@ function copyBookmark(): void {
     -->
     <PopoverContent class="max-h-(--reka-popover-content-available-height) w-80 overflow-y-auto">
         <div class="space-y-3">
-            <HoleSummary v-if="summary" :summary="summary" :now="now" @checked="markConnectionChecked(connection.id)" @copy="copyBookmark" @jumps="showJumpLog = !showJumpLog" />
+            <HoleSummary
+                v-if="summary"
+                :summary="summary"
+                :now="now"
+                @checked="markConnectionChecked(connection.id)" @copy="copyBookmark" @jumps="showJumpLog = !showJumpLog"
+                @kept="(choice) => answerKeptRange(connection.id, choice)"
+            />
             <!-- Patch 40c: every jump logged (switched on in the watcher): only our logged jumps since then count -->
             <div v-if="summary && connection.mass_counting_since" class="flex items-center gap-2 rounded-md bg-emerald-950/50 px-2 py-1 text-xs text-emerald-200">
                 <span :title="'Jumps logged before stay in the log but no longer count'">
