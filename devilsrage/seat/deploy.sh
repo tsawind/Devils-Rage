@@ -19,7 +19,9 @@ if [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; then
 fi
 
 cd "$HOME/seat-docker"
-docker compose build
+# --pull: always start from SeAT's newest image (security fixes in PHP come with it).
+docker compose build --pull
 docker compose up -d
 docker image prune -f >/dev/null
+echo "== PHP in SeAT: $(docker compose exec -T front php -r 'echo PHP_VERSION;' 2>/dev/null || echo 'not up yet')"
 echo "== Done. Free disk: $(free_gb) GB. Give SeAT a minute to start."

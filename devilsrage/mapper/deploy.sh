@@ -25,6 +25,15 @@ echo "== Free disk before: $(free_gb) GB"
 cd "$REPO" && git pull --ff-only
 cp devilsrage/mapper/docker-compose.discord.yml "$STACK/"
 
+# php2shell (CVE-2026-109618 / -109619, Oct 2026): the fix is the patched PHP in the base image
+# (built with --pull below). On top, close the confirmed attack path in the php.ini every mapper
+# container mounts: session upload progress off (the mapper doesn't use PHP's own sessions).
+INI="$STACK/dockerfiles/common/frankenPHP/php.ini"
+if [ -f "$INI" ] && ! grep -q 'session.upload_progress.enabled' "$INI"; then
+    printf '\n; Devil'"'"'s Rage: php2shell hardening\nsession.upload_progress.enabled = Off\nexpose_php = Off\n' >> "$INI"
+    echo "== php.ini: upload progress off, expose_php off"
+fi
+
 echo "== Clearing old images and build cache"
 docker image prune -f >/dev/null
 docker builder prune -af >/dev/null
@@ -55,7 +64,8 @@ if [ "$OFFLINE" = 1 ]; then
     echo "== Free disk now: $(free_gb) GB"
 fi
 echo "== Building"
-"${C[@]}" build app
+# --pull: always start from the newest base image (security fixes in PHP come with it).
+"${C[@]}" build --pull app
 echo "== Starting"
 "${C[@]}" up -d
 echo "== Migrating"
@@ -63,4 +73,5 @@ echo "== Migrating"
 "${C[@]}" exec -T scheduler php artisan schedule:clear-cache
 
 docker image prune -f >/dev/null
+echo "== PHP in the mapper: $("${C[@]}" exec -T app php -r 'echo PHP_VERSION;' 2>/dev/null || echo unknown)"
 echo "== Done. Free disk: $(free_gb) GB"

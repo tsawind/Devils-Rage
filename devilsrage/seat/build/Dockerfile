@@ -84,3 +84,10 @@ RUN php /tmp/patch-own-only-mode.php \
         vendor/eveseat/web/src/resources/views/includes/header.blade.php \
  && php -l vendor/eveseat/web/src/Http/DataTables/Scopes/CharacterScope.php \
  && rm /tmp/patch-own-only-mode.php
+
+# php2shell (CVE-2026-109618 / -109619, Oct 2026): the real fix is the patched PHP in SeAT's base
+# image (deploy.sh builds with --pull). These close the confirmed attack path on top of that:
+# session upload progress off, and PHP doesn't announce itself.
+USER root
+RUN printf 'session.upload_progress.enabled = Off\nexpose_php = Off\n' > "$PHP_INI_DIR/conf.d/zz-devilsrage-security.ini"
+USER seat

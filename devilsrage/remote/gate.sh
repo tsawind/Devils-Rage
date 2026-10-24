@@ -31,6 +31,13 @@ case "$ACTION" in
         echo "== Disk and memory"
         df -h / | tail -1
         free -h | head -2
+        echo "== PHP versions (php2shell is fixed in 8.4.27 / 8.3.36 / 8.5.12 and newer)"
+        echo "mapper: $(cd "$STACK" && "${C[@]}" exec -T app php -r 'echo PHP_VERSION;' 2>/dev/null || echo unknown)"
+        echo "SeAT:   $(cd "$HOME/seat-docker" && docker compose exec -T front php -r 'echo PHP_VERSION;' 2>/dev/null || echo unknown)"
+        echo "== Nightly backups (names and sizes only)"
+        crontab -l 2>/dev/null | grep -q 'devilsrage/backup.sh' && echo "scheduled: yes ($(crontab -l | grep 'devilsrage/backup.sh' | cut -d' ' -f1-5))" || echo "scheduled: NO"
+        ls -lt --time-style=+%Y-%m-%dT%H:%M "$HOME/backups/nightly" 2>/dev/null | awk 'NR>1 && NR<=7 {print $6, $5, $7}' || echo "no backups folder"
+        tail -n 2 "$HOME/backups/nightly.log" 2>/dev/null || true
         ;;
     deploy-mapper)
         bash "$REPO/devilsrage/mapper/deploy.sh"
