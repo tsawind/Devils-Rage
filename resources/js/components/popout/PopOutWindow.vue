@@ -8,7 +8,7 @@ import { displayAlias } from '@/lib/alias';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { jsonFetch } from '@/lib/jsonFetch';
 import { jumpChoice } from '@/lib/jumpChoice';
-import { providePortalTarget, workingInPopOut } from '@/lib/portalTarget';
+import { openPopOutBody, providePortalTarget, workingInPopOut } from '@/lib/portalTarget';
 import { closePopOut, focusedClipboard, popOut, popOutWindow } from '@/lib/popOut';
 import { driverId } from '@/lib/windowDriver';
 import { useMapSolarsystems } from '@/map/api';
@@ -28,7 +28,7 @@ import { computed, onBeforeUnmount, provide, ref, watch } from 'vue';
  * ▸ brings it back; dragging the window wider gives the map the room) and the same
  * signature panel as the main mapper for the character's system (Ctrl+V pastes into it).
  * Clicking another system on the pop-out map shows its signatures until the next jump.
- * Questions the mapper asks (the jump prompt, renames) still open in the main window.
+ * Questions the mapper asks (the jump prompt, renames) open in the pop-out while the main window isn't in front (patch 53).
  * Patch 47: in the desktop app the jump prompt's likely holes also show here, one click each.
  *
  * Patch 42c: the map is the real map (a second copy with its own zoom, always centred on
@@ -73,9 +73,16 @@ for (const type of ['pointerdown', 'pointerover'] as const) {
         if (workingInPopOut.value) workingInPopOut.value = null;
     }, { capture: true, passive: true });
 }
-watch(target, (body) => {
-    if (!body) workingInPopOut.value = null;
-});
+watch(
+    target,
+    (body) => {
+        if (!body) workingInPopOut.value = null;
+        // Patch 53: questions the mapper asks open here while the main window isn't in front.
+        openPopOutBody.value = body;
+    },
+    { immediate: true },
+);
+onBeforeUnmount(() => (openPopOutBody.value = null));
 const character = computed(() => (popOut.value ? ((page.props.map_characters ?? []).find((candidate) => candidate.id === popOut.value!.characterId) ?? null) : null));
 const hereId = computed(() => character.value?.status?.solarsystem_id ?? null);
 const viewing = ref<number | null>(null);

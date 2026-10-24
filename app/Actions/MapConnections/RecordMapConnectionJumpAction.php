@@ -6,6 +6,7 @@ namespace App\Actions\MapConnections;
 
 use App\Enums\ConnectionType;
 use App\Models\Character;
+use App\Models\CharacterStatus;
 use App\Models\Map;
 use App\Models\MapConnection;
 use App\Models\MapConnectionJump;
@@ -67,6 +68,11 @@ final readonly class RecordMapConnectionJumpAction
         // Patch 37: a ship profile (its real fit) logs its cold or hot mass, by the pilot's JUMPING HOT switch.
         $user_id = Character::query()->whereKey($character_id)->value('user_id');
         $profile = $ship_type_id === null ? null : ShipProfile::query()->where('character_id', $character_id)->where('ship_type_id', $ship_type_id)->first();
+        // Patch 53: a fit read from another ship of this type (the old one was lost): the bare hull until it's read again.
+        $shipItemId = CharacterStatus::query()->where('character_id', $character_id)->value('ship_item_id');
+        if ($profile instanceof ShipProfile && ! $profile->fitsShip($shipItemId === null ? null : (int) $shipItemId)) {
+            $profile = null;
+        }
 
         foreach ($maps as $map) {
             $setting = $user_id === null ? null : MapUserSetting::query()->where('map_id', $map->id)->where('user_id', $user_id)->first(['jumping_hot', 'jumping_thread']);

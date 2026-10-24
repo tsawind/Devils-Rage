@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $id
  * @property int $character_id
  * @property int $ship_type_id
+ * @property int|null $ship_item_id Patch 53: the one ship this fit was read from (null: any of the type)
  * @property int $cold_mass
  * @property int $hot_mass
  * @property bool $higgs
@@ -50,6 +51,15 @@ final class ShipProfile extends Model
      * different prop is picked in the jump log as SEMI); with the 🧵 thread switch on,
      * entanglers count as on (the lightest).
      */
+    /**
+     * Patch 53: this fit is for the ship the pilot flies now (or isn't tied to one ship). A new hull
+     * of the same type (bought after a loss) has another item id: its fit isn't known yet.
+     */
+    public function fitsShip(?int $shipItemId): bool
+    {
+        return $this->ship_item_id === null || $shipItemId === null || $this->ship_item_id === $shipItemId;
+    }
+
     public function jumpMass(bool $hot, bool $thread = false): int
     {
         // Patch 37: 🧵 thread on = entanglers on (the lightest); off = entanglers off.

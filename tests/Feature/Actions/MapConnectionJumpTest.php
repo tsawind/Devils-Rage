@@ -332,3 +332,25 @@ it('deletes the jump log together with its connection', function () {
 
     expect(MapConnectionJump::query()->count())->toBe(0);
 });
+
+it('patch 53: a new ship of the same type logs its hull, not the old ship\'s fit', function () {
+    Event::fake([MapConnectionsUpsertedEvent::class]);
+
+    $character = createTrackedCharacter();
+    createJumpShipType();
+    createTrackedMapWithConnection($character, 31000101, 31000102);
+    App\Models\ShipProfile::query()->create([
+        'character_id' => $character->id,
+        'ship_type_id' => JUMP_SHIP_TYPE_ID,
+        'cold_mass' => 900_000_000,
+        'hot_mass' => 950_000_000,
+        'source' => 'seat',
+        'ship_item_id' => 1_000_000_001,
+    ]);
+    $status = App\Models\CharacterStatus::query()->where('character_id', $character->id)->first() ?? new App\Models\CharacterStatus();
+    $status->forceFill(['character_id' => $character->id, 'ship_type_id' => JUMP_SHIP_TYPE_ID, 'ship_item_id' => 1_000_000_002])->save();
+
+    recordJump($character, 31000101, 31000102);
+
+    expect(MapConnectionJump::query()->sole()->mass)->toBe(JUMP_SHIP_MASS);
+});

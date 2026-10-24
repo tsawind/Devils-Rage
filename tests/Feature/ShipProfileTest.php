@@ -103,3 +103,13 @@ it('patch 37: a ship with no prop gets one button in the jump log, not HOT and C
 
     expect(array_column(App\Support\JumpOptions::fromProfile($dread), 'kind'))->toBe(['cold']);
 });
+
+it('patch 53: a fit read from one ship is not used for another ship of the same type', function () {
+    $profile = new ShipProfile(['cold_mass' => 203_000_000, 'hot_mass' => 303_000_000, 'ship_item_id' => 1_000_000_001]);
+    $anyShip = new ShipProfile(['cold_mass' => 203_000_000, 'hot_mass' => 303_000_000]);
+
+    expect($profile->fitsShip(1_000_000_001))->toBeTrue()
+        ->and($profile->fitsShip(1_000_000_002))->toBeFalse()
+        ->and($profile->fitsShip(null))->toBeTrue()
+        ->and($anyShip->fitsShip(1_000_000_002))->toBeTrue();
+});

@@ -11,11 +11,31 @@ const PORTAL_TARGET: InjectionKey<Ref<HTMLElement | null>> = Symbol('portal-targ
 /** The pop-out's body while you're working in it (the last click was there). */
 export const workingInPopOut = shallowRef<HTMLElement | null>(null);
 
+/** Patch 53: the open pop-out's body (set by PopOutWindow), null when none is open. */
+export const openPopOutBody = shallowRef<HTMLElement | null>(null);
+
+/**
+ * Patch 53: whether this (main) window has the focus. While it doesn't (you're in EVE with the
+ * pop-out on top, or this is a hidden pop-out host in the app), questions the mapper asks open
+ * in the pop-out, where you can see them.
+ */
+export const mainWindowFocused = shallowRef(typeof document === 'undefined' ? true : document.hasFocus());
+if (typeof window !== 'undefined') {
+    window.addEventListener('focus', () => (mainWindowFocused.value = true));
+    window.addEventListener('blur', () => (mainWindowFocused.value = document.hasFocus()));
+}
+
 export function providePortalTarget(target: Ref<HTMLElement | null>): void {
     provide(PORTAL_TARGET, target);
 }
 
 export function usePortalTarget(): ComputedRef<HTMLElement | undefined> {
     const target = inject(PORTAL_TARGET, null);
-    return computed(() => target?.value ?? (workingInPopOut.value?.isConnected ? workingInPopOut.value : undefined));
+    return computed(() => {
+        if (target?.value) return target.value;
+        if (workingInPopOut.value?.isConnected) return workingInPopOut.value;
+        // Patch 53: not looking at the main window: the pop-out shows it.
+        if (!mainWindowFocused.value && openPopOutBody.value?.isConnected) return openPopOutBody.value;
+        return undefined;
+    });
 }

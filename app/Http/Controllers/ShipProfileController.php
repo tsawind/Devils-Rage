@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Models\Character;
+use App\Models\CharacterStatus;
 use App\Models\EsiToken;
 use App\Models\Map;
 use App\Models\ShipProfile;
@@ -71,6 +72,8 @@ final class ShipProfileController extends Controller
                 'note' => $note,
                 'source' => 'manual',
                 'options' => $options,
+                // Patch 53: made for the ship the pilot flies now.
+                'ship_item_id' => CharacterStatus::query()->where('character_id', $validated['character_id'])->where('ship_type_id', $validated['ship_type_id'])->value('ship_item_id'),
                 'updated_by_name' => Actor::name(),
             ],
         );
@@ -106,20 +109,25 @@ final class ShipProfileController extends Controller
             $shipTypeId = (int) $member['ship_type_id'];
             $ids[] = $characterId;
             $existing = ShipProfile::query()->where('character_id', $characterId)->where('ship_type_id', $shipTypeId)->first();
-            if ($existing instanceof ShipProfile && $existing->source === 'manual') {
+            // Patch 53: a hand-made profile stays, unless it was made for another ship of this type.
+            $flying = CharacterStatus::query()->where('character_id', $characterId)->where('ship_type_id', $shipTypeId)->value('ship_item_id');
+            $flying = $flying === null ? null : (int) $flying;
+            if ($existing instanceof ShipProfile && $existing->source === 'manual' && $existing->fitsShip($flying)) {
                 continue;
             }
             if (! Type::query()->whereKey($shipTypeId)->exists()) {
                 continue;
             }
 
-            Cache::remember(sprintf('ship-profile-read:v2:%d:%d', $characterId, $shipTypeId), now()->addHour(), function () use ($characterId, $shipTypeId, $seatFits, $esi, $pilotJumpSkills): bool {
-                $fit = $seatFits->fitFor($characterId, $shipTypeId, $this->shipItemId($characterId, $shipTypeId, $esi));
+            // Patch 53: read again for another ship of the same type (a new hull after a loss).
+            Cache::remember(sprintf('ship-profile-read:v3:%d:%d:%s', $characterId, $shipTypeId, $flying ?? '-'), now()->addHour(), function () use ($characterId, $shipTypeId, $flying, $seatFits, $esi, $pilotJumpSkills): bool {
+                $itemId = $this->shipItemId($characterId, $shipTypeId, $esi) ?? $flying;
+                $fit = $seatFits->fitFor($characterId, $shipTypeId, $itemId);
                 if ($fit === null) {
                     $masses = ShipMass::bareHull($shipTypeId);
                     ShipProfile::query()->updateOrCreate(
                         ['character_id' => $characterId, 'ship_type_id' => $shipTypeId],
-                        ['cold_mass' => $masses['cold'], 'hot_mass' => $masses['hot'], 'higgs' => false, 'plates' => 0, 'entanglers' => 0, 'prop_mass' => 0, 'modules' => null, 'options' => null, 'source' => 'hull', 'fitted_at' => null],
+                        ['cold_mass' => $masses['cold'], 'hot_mass' => $masses['hot'], 'higgs' => false, 'plates' => 0, 'entanglers' => 0, 'prop_mass' => 0, 'modules' => null, 'options' => null, 'source' => 'hull', 'fitted_at' => null, 'ship_item_id' => $itemId],
                     );
 
                     return true;
@@ -146,6 +154,7 @@ final class ShipProfileController extends Controller
                         'options' => $options,
                         'source' => 'seat',
                         'fitted_at' => now(),
+                        'ship_item_id' => $itemId,
                     ],
                 );
 
