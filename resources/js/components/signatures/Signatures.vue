@@ -580,6 +580,15 @@ function hereThrough(connectionId: number): string | null {
     }
 }
 
+/** Patch 53: one of two or more holes between the same two systems. */
+function parallelHole(connectionId: number): boolean {
+    try {
+        return useMapStore().parallelIndex.value.has(connectionId);
+    } catch {
+        return false;
+    }
+}
+
 /** The bookmark name of the way back through this signature (null when it can't be named). */
 function returnBookmarkName(signature: TSignature, connection: TProcessedConnection): string | null {
     const system = props.map_solarsystem;
@@ -602,6 +611,8 @@ function returnBookmarkName(signature: TSignature, connection: TProcessedConnect
         system.solarsystem.class,
         map_system.value?.combat_color ?? null,
         Boolean(map_system.value?.combat_home),
+        // Patch 53: one of two holes to the same system: " -LOOP".
+        { parallel: parallelHole(connection.id) },
     );
 }
 

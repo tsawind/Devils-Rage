@@ -871,6 +871,8 @@ const bookmark_name = computed(() =>
         formats: page.props.map,
         detectReturn: true,
         plannedAlias: planned_alias ?? claim_alias,
+        // Patch 53: one of two holes to the same system: " -LOOP".
+        parallel: Boolean(signature.map_connection_id && map_store?.parallelIndex.value.has(signature.map_connection_id)),
     }),
 );
 

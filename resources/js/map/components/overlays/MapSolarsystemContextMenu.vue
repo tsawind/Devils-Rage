@@ -30,7 +30,7 @@ import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { useAddConnectionDialog } from '@/map/interactions/useAddConnectionDialog';
 import { TMapSolarsystem } from '@/pages/maps';
 import { TMapSolarsystemStatus } from '@/types/models';
-import { Brush, Check, ClipboardCopy, Compass, Eraser, Eye, Flag, Home, Map, MapPin, Navigation, NotebookPen, Pin, Route, Scissors, Trash2, Users, Volume2, VolumeX, Waypoints } from 'lucide-vue-next';
+import { Brush, Check, Megaphone, ClipboardCopy, Compass, Eraser, Eye, Flag, Home, Map, MapPin, Navigation, NotebookPen, Pin, Route, Scissors, Trash2, Users, Volume2, VolumeX, Waypoints } from 'lucide-vue-next';
 import { isSystemMuted, setSystemMuted } from '@/lib/mutedSystems';
 import { setConnectionWatched } from '@/map/actions/holeChecked';
 import { chainParents } from '@/map/store/derived';
@@ -58,7 +58,7 @@ const displayName = computed(() => displayAlias(map_solarsystem.alias) || map_so
 const { canEdit: can_write } = usePermission();
 
 const { isHome, toggleHomeSystem } = useHomeSystem(() => map_solarsystem.solarsystem_id);
-const { isRally, toggleRallyPoint } = useRallyPoint(() => map_solarsystem.solarsystem_id);
+const { isRally, toggleRallyPoint, pingHere } = useRallyPoint(() => map_solarsystem.solarsystem_id);
 const { isRolling, openRageRoll, stopRageRoll } = useRageRoll();
 
 /** Patch 35: tick → the RAGE ROLL popup; untick (this system is rolling) → the roll ends for everyone. */
@@ -144,6 +144,11 @@ const inbound = computed(() => {
 
 <template>
     <ContextMenuContent>
+        <!-- Patch 53: PING first: rally here, the ping dialog with the message box ready (Enter sends) -->
+        <ContextMenuItem v-if="can_write" class="font-semibold text-pink-400" @select="pingHere()">
+            <Megaphone class="size-4" />
+            PING
+        </ContextMenuItem>
         <ContextMenuItem @select="handleTogglePin" v-if="can_write">
             <Pin class="size-4" />
             {{ map_solarsystem.pinned ? 'Unpin' : 'Pin' }}

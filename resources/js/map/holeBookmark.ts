@@ -234,6 +234,8 @@ export function linkedForwardBookmark(store: MapStore, system: TMapSolarsystem, 
         aliases: chainAliases([...store.systems.values()], system),
         formats: meta,
         detectReturn: true,
+        // Patch 53: one of two holes to the same system.
+        parallel: connection ? store.parallelIndex.value.has(connection.id) : false,
     });
 }
 
@@ -265,6 +267,8 @@ export function wayBackBookmark(store: MapStore, system: TMapSolarsystem, parent
         system.solarsystem.class,
         system.combat_color ?? null,
         Boolean(system.combat_home),
+        // Patch 53: one of two holes to the same system: " -LOOP".
+        { parallel: connection ? store.parallelIndex.value.has(connection.id) : false },
     );
 }
 

@@ -204,3 +204,16 @@ it('patch 30: the Discord settings page shows the ping log', function () {
     expect(array_keys($props))->toContain('rallyPings')
         ->and($props['rallyPings'][0]['title'] ?? null)->toBe('⚑ Form up at Daisy');
 });
+
+it('patch 53: the ping title has the class, the name and who lives there', function () {
+    $map = rallyMap();
+    App\Models\MapSolarsystemDetails::factory()->create(['map_id' => $map->id, 'solarsystem_id' => 31000005, 'occupier_alias' => '[ABC] Some Corp']);
+    $webhook = MapWebhook::factory()->for($map)->create();
+    actingAs(rallyPinger($map, Permission::Member));
+
+    $this->post(route('maps.rally-ping.store', $map), ['map_webhook_id' => $webhook->id, 'mention' => 'everyone', 'note' => 'Hostiles in A2'])
+        ->assertSessionHasNoErrors();
+
+    Http::assertSent(fn (Request $request): bool => $request['embeds'][0]['title'] === '⚑ Form up at HS Test System 31000005 · occupied by [ABC] Some Corp'
+        && $request['content'] === '@everyone');
+});

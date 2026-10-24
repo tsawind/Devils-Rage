@@ -313,7 +313,26 @@ export function formatBookmarkName(
     oppositeCombatColor?: string | null,
     oppositeCombatHome?: boolean | null,
     /** Patch 39: added to a forward bookmark into a system with another name ("loop=A2", "old=A1~1917"). */
-    extras: { forwardSuffix?: string | null } = {},
+    /** Patch 53: `parallel`: one of two or more holes between the same two systems: " -LOOP" at the end. */
+    extras: { forwardSuffix?: string | null; parallel?: boolean } = {},
+): string {
+    const name = formatBookmarkNameInner(system, context, formats, oppositeAlias, hereAlias, hereClass, oppositeCombatColor, oppositeCombatHome, extras);
+    return name && extras.parallel ? `${name} ${LOOP_TAG}` : name;
+}
+
+/** Patch 53: the end of a bookmark through one of two holes between the same two systems. */
+export const LOOP_TAG = '-LOOP';
+
+function formatBookmarkNameInner(
+    system: BookmarkSystem,
+    context: TBookmarkContext,
+    formats: TBookmarkFormats | null | undefined,
+    oppositeAlias: string | null | undefined,
+    hereAlias: string | null | undefined,
+    hereClass: TStringedSolarsystemClass | null | undefined,
+    oppositeCombatColor: string | null | undefined,
+    oppositeCombatHome: boolean | null | undefined,
+    extras: { forwardSuffix?: string | null },
 ): string {
     const ignoredAlias = formats?.bookmark_ignored_alias;
     const hereKnown = oppositeCombatColor !== undefined;
@@ -449,6 +468,8 @@ export function buildSignatureBookmark(params: {
     plannedAlias?: string | null;
     /** Patch 39: `{here}` of a way back: this system's name as seen from where the hole leads (`nameSeenThrough`). */
     hereName?: string | null;
+    /** Patch 53: one of two or more holes between the same two systems (" -LOOP"). */
+    parallel?: boolean;
 }): string {
     const { signature, currentSystem, connectionTarget, aliases, formats, detectReturn = false, plannedAlias } = params;
     const hereName = params.hereName !== undefined ? params.hereName : currentSystem.alias;
@@ -498,7 +519,7 @@ export function buildSignatureBookmark(params: {
             currentSystem.class,
             currentSystem.combatColor ?? null,
             currentSystem.combatHome ?? false,
-            { forwardSuffix: named.suffix },
+            { forwardSuffix: named.suffix, parallel: params.parallel },
         );
     }
 

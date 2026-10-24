@@ -7,10 +7,11 @@ import { useNavigationSystems } from '@/composables/useNavigationSystems';
 import usePermission from '@/composables/usePermission';
 import { useRallyRoute } from '@/composables/useRallyRoute';
 import { useRouteCopy } from '@/composables/useRouteCopy';
+import { pingRequest } from '@/composables/useRallyPoint';
 import { useStaticSolarsystem } from '@/composables/useStaticSolarsystems';
 import { displayAlias } from '@/lib/alias';
 import { ChevronDown, ClipboardCopy, Flag, Megaphone, Navigation, ShieldCheck, Zap } from 'lucide-vue-next';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 /**
  * Patch 31: the rally point lives in the map bar (the badge on the map covered the chain).
@@ -29,6 +30,17 @@ const rallyAlias = computed(() => displayAlias(map.value.map_solarsystems?.find(
 const jumpCount = computed(() => (rallyRoute.value.length < 2 ? null : rallyRoute.value.length - 1));
 const where = computed(() => (rallyAlias.value ? `${rallyAlias.value} (${rallySolarsystem.value?.name ?? ''})` : (rallySolarsystem.value?.name ?? 'the rally point')));
 const pingOpen = ref(false);
+/** Patch 53: right-click → PING opens the dialog in quick mode (message box first, Enter sends). */
+const quickNote = ref<string | null>(null);
+watch(pingRequest, (request) => {
+    if (!request || !canEdit.value) return;
+    quickNote.value = request.note;
+    pingOpen.value = true;
+    pingRequest.value = null;
+}, { immediate: true });
+watch(pingOpen, (open) => {
+    if (!open) quickNote.value = null;
+});
 </script>
 
 <template>
@@ -66,7 +78,14 @@ const pingOpen = ref(false);
                 </template>
             </DropdownMenuContent>
         </DropdownMenu>
-        <RallyPingDialog v-if="canEdit" v-model:open="pingOpen" :map-slug="map.slug" :rally-solarsystem-id="rallySolarsystem.id" :where="where" />
+        <RallyPingDialog
+            v-if="canEdit"
+            v-model:open="pingOpen"
+            :map-slug="map.slug"
+            :rally-solarsystem-id="rallySolarsystem.id"
+            :where="where"
+            :quick-note="quickNote"
+        />
     </template>
 </template>
 

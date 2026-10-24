@@ -17,6 +17,7 @@ import WormholeOption from '@/components/signatures/WormholeOption.vue';
 import { armHole } from '@/composables/signatures/armHole';
 import { markStaticByHand, requestStaticCheck, staticConfirm } from '@/composables/signatures/useStaticCertainty';
 import usePermission from '@/composables/usePermission';
+import { useRallyPoint } from '@/composables/useRallyPoint';
 import useUser from '@/composables/useUser';
 import { getTypesByCategory, signatureCategories } from '@/const/signatures';
 import { classSortWeight } from '@/const/solarsystemClasses';
@@ -36,7 +37,7 @@ import type { TSignature } from '@/types/models';
 import { formatDateToISO } from '@/lib/utils';
 import { UTCDate } from '@date-fns/utc';
 import { router } from '@inertiajs/vue3';
-import { Check, ClipboardCopy, Crosshair, Eye, Fan, Hourglass, ListTree, Scale, Star, Trash2 } from 'lucide-vue-next';
+import { Check, ClipboardCopy, Crosshair, Megaphone, Eye, Fan, Hourglass, ListTree, Scale, Star, Trash2 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
 import { signatureToast as toast } from '@/lib/signatureToast';
 
@@ -52,6 +53,17 @@ const { label: pilotName } = usePilotNames();
 
 const store = useMapStore();
 const { canEdit } = usePermission();
+
+/**
+ * Patch 53: PING works on dotted systems too: the rally point is the system the hole is in, and
+ * the message starts with which hole ("Through A2's H900 (A20, not jumped yet):").
+ */
+const { pingHere } = useRallyPoint(() => store.systems.get(placeholder.parentId)?.solarsystem_id ?? 0);
+function ping(): void {
+    const where = parent.value ? displayAlias(parent.value.alias) || parent.value.solarsystem.name : 'the chain';
+    const name = placeholder.label ? displayAlias(placeholder.label) : null;
+    pingHere(`Through ${where}'s ${hole.value?.wormhole ?? 'hole'}${name ? ` (${name}, not jumped yet)` : ' (not jumped yet)'}: `);
+}
 const user = useUser();
 const userId = computed<number | null>(() => user.value?.id ?? null);
 
@@ -282,6 +294,10 @@ function removeSignature(): void {
     <ContextMenuContent>
         <ContextMenuLabel class="font-mono text-xs text-muted-foreground">{{ placeholder.label || 'Not numbered yet' }} · {{ placeholder.detail }}</ContextMenuLabel>
         <ContextMenuSeparator />
+        <ContextMenuItem v-if="canEdit && parent" class="font-semibold text-pink-400" @select="ping()">
+            <Megaphone class="size-4" />
+            PING
+        </ContextMenuItem>
         <template v-if="canEdit">
             <ContextMenuItem v-if="armedByOther" disabled>
                 <Crosshair class="size-4 text-red-400" />

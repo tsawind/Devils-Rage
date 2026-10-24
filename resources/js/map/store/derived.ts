@@ -197,6 +197,30 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         return interpolate(state.from, state.to, state.t);
     });
 
+    /**
+     * Patch 53: two (or more) holes between the same two systems: the first (a static first, then
+     * the oldest) is the pipe (0), each other one gets its number (1, 2…) and is drawn beside it.
+     * Every hole in such a group is here (their bookmarks get "-LOOP").
+     */
+    const parallelIndex: ComputedRef<ReadonlyMap<number, number>> = computed(() => {
+        const index = new Map<number, number>();
+        const groups = new Map<string, TMapConnection[]>();
+        for (const connection of entities.connections.values()) {
+            if (connection.type === 'stargate') continue;
+            const a = Math.min(connection.from_map_solarsystem_id, connection.to_map_solarsystem_id);
+            const b = Math.max(connection.from_map_solarsystem_id, connection.to_map_solarsystem_id);
+            const key = `${a}:${b}`;
+            groups.set(key, [...(groups.get(key) ?? []), connection]);
+        }
+        for (const group of groups.values()) {
+            if (group.length < 2) continue;
+            const isStatic = (connection: TMapConnection) => ((connection.signatures ?? []).some((signature) => signature.is_static) ? 0 : 1);
+            group.sort((x, y) => isStatic(x) - isStatic(y) || x.id - y.id);
+            group.forEach((connection, position) => index.set(connection.id, position));
+        }
+        return index;
+    });
+
     /** Connections that aren't how either end was found: drawn as dashed loop lines (patch 12). */
     const loopConnectionIds: ComputedRef<ReadonlySet<number>> = computed(() => {
         const ids = new Set<number>();
@@ -205,6 +229,8 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         for (const connection of entities.connections.values()) {
             if (connection.type === 'stargate') continue;
             if (isLoopEdge(layout.parentOf, connection.from_map_solarsystem_id, connection.to_map_solarsystem_id)) ids.add(connection.id);
+            // Patch 53: a second hole to the same system is a loop too (the first one is how it was found).
+            else if ((parallelIndex.value.get(connection.id) ?? 0) > 0) ids.add(connection.id);
         }
         return ids;
     });
@@ -282,6 +308,7 @@ export function createDerivedState(entities: EntityState, view: ViewState, meta:
         busyHoleParents,
         numberingHubs,
         loopConnectionIds,
+        parallelIndex,
         staticDoubtSignatureIds,
         treePositions,
         renderPosition,

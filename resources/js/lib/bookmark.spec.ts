@@ -707,3 +707,28 @@ describe('patch 37: a static whose type is not set yet', () => {
         expect(classFromLeadsTo('???')).toBeNull();
     });
 });
+
+describe('patch 53: two holes between the same two systems', () => {
+    it('ends forward bookmarks with -LOOP', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature(),
+            currentSystem: { alias: 'HOME' },
+            connectionTarget: { alias: 'AC', occupier_alias: null, solarsystem: { class: 'h', name: 'Jita', region: { name: 'The Forge' } } },
+            aliases: [],
+            formats: { ...NUMERIC_FORMATS, bookmark_format_kspace: '{alias} {class} {name}' },
+            parallel: true,
+        });
+        expect(name).toBe('AC HS Jita -LOOP');
+    });
+
+    it('leaves a single hole alone', () => {
+        const name = buildSignatureBookmark({
+            signature: baseSignature(),
+            currentSystem: { alias: 'HOME' },
+            connectionTarget: { alias: 'AC', occupier_alias: null, solarsystem: { class: 'h', name: 'Jita', region: { name: 'The Forge' } } },
+            aliases: [],
+            formats: { ...NUMERIC_FORMATS, bookmark_format_kspace: '{alias} {class} {name}' },
+        });
+        expect(name).toBe('AC HS Jita');
+    });
+});

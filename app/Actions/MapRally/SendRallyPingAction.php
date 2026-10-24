@@ -7,6 +7,7 @@ namespace App\Actions\MapRally;
 use App\Models\Map;
 use App\Models\MapRallyPing;
 use App\Models\MapSolarsystem;
+use App\Models\MapSolarsystemDetails;
 use App\Models\MapWebhook;
 use App\Models\MapWebhookRole;
 use App\Models\Solarsystem;
@@ -99,6 +100,16 @@ final readonly class SendRallyPingAction
             ->value('alias');
         $name = $solarsystem->name ?? 'the rally point';
         $where = filled($alias) ? sprintf('%s (%s)', mb_trim((string) $alias), $name) : $name;
+        // Patch 53: the class first ("C4 A2 (J111404)") and who lives there.
+        $class = $solarsystem instanceof Solarsystem ? $this->classLabel($solarsystem) : null;
+        if ($class !== null) {
+            $where = sprintf('%s %s', $class, $where);
+        }
+        $details = MapSolarsystemDetails::query()->where('map_id', $map->id)->where('solarsystem_id', $map->rally_solarsystem_id)->first(['occupier_alias', 'home_of']);
+        $occupier = mb_trim((string) ($details->occupier_alias ?? $details->home_of ?? ''));
+        if ($occupier !== '') {
+            $where = sprintf('%s · occupied by %s', $where, $occupier);
+        }
 
         $fields = [];
         $length = 0;
@@ -169,5 +180,22 @@ final readonly class SendRallyPingAction
     private function cooldownKey(Map $map, string $kind): string
     {
         return sprintf('rally-ping:%d:%s', $map->id, $kind);
+    }
+
+    /** Patch 53: "C4", "HS", "LS", "NS" (null when not known). */
+    private function classLabel(Solarsystem $solarsystem): ?string
+    {
+        $wormholeClass = $solarsystem->wormholeSystem?->class;
+        if ($wormholeClass !== null) {
+            $value = $wormholeClass instanceof \BackedEnum ? (string) $wormholeClass->value : (string) $wormholeClass;
+
+            return ctype_digit($value) ? 'C'.$value : mb_strtoupper($value);
+        }
+
+        return match (true) {
+            $solarsystem->security >= 0.45 => 'HS',
+            $solarsystem->security > 0.0 => 'LS',
+            default => 'NS',
+        };
     }
 }

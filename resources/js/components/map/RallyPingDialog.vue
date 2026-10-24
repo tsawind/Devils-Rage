@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useRouteCopy } from '@/composables/useRouteCopy';
 import type { AppPageProps } from '@/types';
 import { Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 /**
  * Patch 29: "Form up at the rally point" to Discord. Pick the channel (a webhook from the
@@ -20,7 +20,13 @@ type TTarget = { id: number; name: string };
 type TTargets = { webhooks: TTarget[]; mentions: TTarget[] };
 
 const open = defineModel<boolean>('open', { default: false });
-const { mapSlug, rallySolarsystemId, where } = defineProps<{ mapSlug: string; rallySolarsystemId: number; where: string }>();
+const { mapSlug, rallySolarsystemId, where, quickNote = null } = defineProps<{
+    mapSlug: string;
+    rallySolarsystemId: number;
+    where: string;
+    /** Patch 53: opened from right-click → PING: the message box first (with this text), Enter sends. */
+    quickNote?: string | null;
+}>();
 
 const page = usePage<AppPageProps<{ rally_ping_targets?: TTargets }>>();
 const targets = computed<TTargets>(() => page.props.rally_ping_targets ?? { webhooks: [], mentions: [] });
@@ -106,10 +112,24 @@ watch(open, (isOpen) => {
             const webhooks = targets.value.webhooks;
             form.map_webhook_id = (webhooks.find((webhook) => /ping/i.test(webhook.name)) ?? webhooks[0])?.id ?? null;
             setKind('form_up');
+            // Patch 53: quick ping: the message box, ready to type.
+            if (quickNote !== null) {
+                form.note = quickNote;
+                void nextTick(() => document.getElementById('rally-note')?.focus());
+            }
         },
     });
+    // Patch 53: a quick ping always carries the shortest route.
+    if (quickNote !== null && !picked.value.has('shortest')) setPick('shortest', true);
     buildSections();
 });
+
+/** Patch 53: Enter sends (Shift+Enter: a new line). */
+function noteKey(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    if (!form.processing && !building.value && form.map_webhook_id) send();
+}
 
 function send(): void {
     form.sections = showRoutes.value ? sections.value : [];
@@ -200,8 +220,8 @@ function send(): void {
                 </div>
 
                 <div class="grid gap-1.5">
-                    <Label for="rally-note">Note</Label>
-                    <Textarea id="rally-note" v-model="form.note" maxlength="300" rows="2" :placeholder="form.kind === 'stand_down' ? 'Why, and what next…' : 'Doctrine, time, who brings what…'" />
+                    <Label for="rally-note">Message <span class="font-normal text-muted-foreground">(Enter sends)</span></Label>
+                    <Textarea id="rally-note" v-model="form.note" maxlength="300" rows="2" @keydown="noteKey" :placeholder="form.kind === 'stand_down' ? 'Why, and what next…' : 'Doctrine, time, who brings what…'" />
                 </div>
 
                 <InputError :message="form.errors.map_webhook_id ?? form.errors.mention ?? form.errors.note ?? form.errors.sections ?? form.errors.kind" />

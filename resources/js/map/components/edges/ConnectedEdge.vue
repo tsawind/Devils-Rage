@@ -39,7 +39,7 @@ function freeEndpoint(mapSolarsystemId: number): Rect | Vec2 | null {
     return size ? nodeRect(anchor, size) : anchor;
 }
 
-const geometry = computed<EdgeGeometry | null>(() => {
+const baseGeometry = computed<EdgeGeometry | null>(() => {
     if (treeGeometries) {
         return treeGeometries.get(id) ?? null;
     }
@@ -49,6 +49,28 @@ const geometry = computed<EdgeGeometry | null>(() => {
     const target = freeEndpoint(resolved.to_map_solarsystem_id);
     if (!source || !target) return null;
     return freeEdgeGeometry(id, source, target);
+});
+
+/** Patch 53: a second hole to the same system is drawn beside the first (14 px over per extra hole). */
+const PARALLEL_GAP = 14;
+const geometry = computed<EdgeGeometry | null>(() => {
+    const base = baseGeometry.value;
+    const position = store.parallelIndex.value.get(id) ?? 0;
+    if (!base || position === 0) return base;
+    const along = { x: base.to.x - base.from.x, y: base.to.y - base.from.y };
+    // Mostly sideways: move it down; mostly up or down: move it right.
+    const shift = Math.abs(along.x) >= Math.abs(along.y) ? { x: 0, y: PARALLEL_GAP * position } : { x: PARALLEL_GAP * position, y: 0 };
+    const move = (point: Vec2): Vec2 => ({ x: point.x + shift.x, y: point.y + shift.y });
+    if (base.kind === 'curve') return { ...base, from: move(base.from), to: move(base.to) };
+    return {
+        ...base,
+        from: move(base.from),
+        to: move(base.to),
+        // The elbow's middle run moves over too, so the two pipes don't share it.
+        bend: base.bend === null ? null : base.bend + PARALLEL_GAP * position,
+        start: base.start ? { ...base.start, point: move(base.start.point) } : base.start,
+        end: base.end ? { ...base.end, point: move(base.end.point) } : base.end,
+    };
 });
 
 const isOnRoute = computed(() => store.routeConnectionIds.value.has(id));
