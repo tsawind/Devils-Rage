@@ -43,6 +43,8 @@ use Staudenmeir\EloquentHasManyDeep\HasRelationships;
  * @property int|null $user_id
  * @property string|null $character_owner_hash
  * @property array|null $route
+ * @property bool|null $chat_log_to_file Patch 54: EVE's "Log Chat to File", as the desktop app last saw it
+ * @property CarbonImmutable|null $chat_log_checked_at
  * @property-read string|CarbonImmutable $created_at
  * @property-read string|CarbonImmutable $updated_at
  * @property-read Race $race
@@ -181,6 +183,8 @@ final class Character extends Model implements \NicolasKion\Esi\Interfaces\Chara
     {
         return [
             'birthday' => 'immutable_datetime',
+            'chat_log_to_file' => 'boolean',
+            'chat_log_checked_at' => 'immutable_datetime',
         ];
     }
 }

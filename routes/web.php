@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\AppConfigController;
+use App\Http\Controllers\AppChatLogController;
 use App\Http\Controllers\AppLocationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BulkMapConnectionController;
@@ -109,6 +110,8 @@ Route::middleware('auth')->group(function () {
     Route::post('window-switch', [WindowSwitchController::class, 'store'])->name('window-switch.store');
     // Patch 46: the desktop app's instant location (EVE's Local chat log).
     Route::post('desktop-app/location', [AppLocationController::class, 'store'])->middleware('throttle:240,1')->name('app.location.store');
+    // Patch 54: which of your characters write chat logs (EVE's "Log Chat to File").
+    Route::post('desktop-app/chat-logs', [AppChatLogController::class, 'store'])->middleware('throttle:30,1')->name('app.chat-logs.store');
     Route::get('desktop-app/admin', [AppConfigController::class, 'edit'])->name('app.admin.edit');
     Route::put('desktop-app/admin', [AppConfigController::class, 'update'])->name('app.admin.update');
     // Patch 39: the scanner pop-out's system and signatures.

@@ -22,6 +22,9 @@ final class LoginStatus
     /** Patch 49b: logged in on purpose with public data only. Counts as fine. */
     public const PUBLIC = 'public';
 
+    /** @var list<int> Patch 54: characters the desktop app saw with EVE's "Log Chat to File" off (from the last mapper() answer). */
+    private array $chatLogOff = [];
+
     /**
      * SeAT login state per character id: ok, expired (log in again), scopes (permissions missing:
      * log in again to add them) or missing (never logged in to SeAT).
@@ -85,6 +88,7 @@ final class LoginStatus
             }
             $answer = (array) $response->json('characters', []);
             $known = (array) $response->json('known', []);
+            $this->chatLogOff = array_values(array_map('intval', (array) $response->json('chat_log_off', [])));
         } catch (Throwable $e) {
             Log::warning('devilsrage: could not ask the mapper about logins: '.$e->getMessage());
 
@@ -99,6 +103,17 @@ final class LoginStatus
         }
 
         return $status;
+    }
+
+    /**
+     * Patch 54: of the characters last asked about with mapper(), the ones the desktop app saw
+     * with EVE's "Log Chat to File" off.
+     *
+     * @return list<int>
+     */
+    public function chatLogOff(): array
+    {
+        return $this->chatLogOff;
     }
 
     /**

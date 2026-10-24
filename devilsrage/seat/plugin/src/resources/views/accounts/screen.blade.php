@@ -122,6 +122,7 @@
   .newacct input { background: #101014; border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; width: 120px; }
   .pills { grid-column: 3 / -1; display: flex; flex-wrap: wrap; gap: 4px; margin-top: -2px; }
   .pills label { cursor: pointer; margin: 0; }
+  .chatlog { grid-column: 3 / -1; font-size: 11.5px; color: var(--warn); margin-top: -2px; }
   .pills input { display: none; }
   .pills span { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #1c1a2a; color: #77708f; border: 1px solid transparent; }
   .pills input:checked + span { background: #2a2340; color: #b9a8ff; border-color: #5a4a9a; }
@@ -333,6 +334,9 @@
                       <label><input type="checkbox" name="groups[]" value="{{ $group->id }}" @checked(in_array($group->id, $ticked, true)) onchange="this.form.submit()"><span>{{ $group->name }}</span></label>
                     @endforeach
                   </form>
+                @endif
+                @if(! $link->external && in_array((int) $link->character_id, $chatLogOff ?? [], true))
+                  <div class="chatlog" title="Without chat logs the app can't move {{ $link->displayName() }} on the map instantly (it waits for ESI) or tell whose probe scan it copied.">⚠ Log Chat to File is off in EVE. Turn it on: Esc → Gameplay → Chat → Log Chat to File.</div>
                 @endif
               </div>
             @endforeach

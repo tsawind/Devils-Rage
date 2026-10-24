@@ -2,13 +2,18 @@
 
 declare(strict_types=1);
 
+use App\Events\Characters\CharacterStatusUpdatedEvent;
+use App\Events\Characters\UserCharacterStatusUpdatedEvent;
 use App\Jobs\Characters\UpdateCharacterLocation;
 use App\Models\Category;
 use App\Models\Character;
 use App\Models\CharacterStatus;
 use App\Models\Group;
+use App\Models\Map;
+use App\Models\MapUserSetting;
 use App\Models\Type;
 use App\Models\User;
+use Illuminate\Support\Facades\Event;
 use NicolasKion\Esi\DTO\EsiResult;
 use NicolasKion\Esi\DTO\Location;
 use NicolasKion\Esi\DTO\Ship;
@@ -51,7 +56,34 @@ it('moves your character to the system the app read in the chat log', function (
     $status->refresh();
     expect($status->solarsystem_id)->toBe(31000402)
         ->and($status->app_location_at)->not->toBeNull()
-        ->and($status->event_queued_at)->not->toBeNull();
+        ->and($status->is_online)->toBeTrue();
+});
+
+it('tells the maps and the owner about an app jump straight away, without waiting for ESI', function () {
+    Event::fake([CharacterStatusUpdatedEvent::class, UserCharacterStatusUpdatedEvent::class]);
+    ['user' => $user, 'character' => $character, 'status' => $status] = appLocationSetup();
+    makeSolarsystem(31000402);
+    $map = Map::factory()->create();
+    MapUserSetting::query()->create(['map_id' => $map->id, 'user_id' => $user->id, 'tracking_allowed' => true]);
+    actingAs($user);
+
+    postJson(route('app.location.store'), ['character_id' => $character->id, 'solarsystem' => 'Test System 31000402'])
+        ->assertSuccessful();
+
+    Event::assertDispatched(CharacterStatusUpdatedEvent::class, fn (CharacterStatusUpdatedEvent $event) => $event->map_id === $map->id);
+    Event::assertDispatched(UserCharacterStatusUpdatedEvent::class);
+    expect($status->refresh()->event_queued_at)->toBeNull();
+});
+
+it('broadcasts nothing when the app reports the system the character is already in', function () {
+    Event::fake([CharacterStatusUpdatedEvent::class, UserCharacterStatusUpdatedEvent::class]);
+    ['user' => $user, 'character' => $character] = appLocationSetup();
+    actingAs($user);
+
+    postJson(route('app.location.store'), ['character_id' => $character->id, 'solarsystem' => 'Test System 31000401'])
+        ->assertSuccessful();
+
+    Event::assertNotDispatched(CharacterStatusUpdatedEvent::class);
 });
 
 it('leaves a character where it is when the app reports the same system', function () {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Actions\Tracking;
 
 use App\Actions\MapConnections\RecordMapConnectionJumpAction;
+use App\Jobs\Characters\DispatchCharacterStatusEvents;
 use App\Models\Character;
 use App\Models\CharacterStatus;
 use App\Models\Solarsystem;
@@ -15,6 +16,11 @@ use Throwable;
  * Patch 46: the desktop app read "Channel changed to Local : <system>" from EVE's chat log.
  * The character is there now: move it on the map straight away (the same way an ESI answer
  * does), without waiting for the next location poll.
+ *
+ * Patch 54 (fast mode): everyone's map hears about it at once, instead of with the next ESI
+ * location round (every 5 s, and only once ESI has answered for every online character, so
+ * slow or down ESI held app jumps back too). The character counts as online: it's jumping.
+ * ESI keeps polling and recording as before.
  */
 final readonly class ReportAppLocationAction
 {
@@ -47,7 +53,7 @@ final readonly class ReportAppLocationAction
             'station_id' => null,
             'structure_id' => null,
             'app_location_at' => now(),
-            'event_queued_at' => now(),
+            'is_online' => true,
         ]);
 
         try {
@@ -63,6 +69,8 @@ final readonly class ReportAppLocationAction
                 'exception' => $exception,
             ]);
         }
+
+        DispatchCharacterStatusEvents::broadcastFor([$character->id]);
 
         return true;
     }

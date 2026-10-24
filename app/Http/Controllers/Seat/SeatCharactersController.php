@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Seat;
 
 use App\Http\Controllers\Controller;
+use App\Models\Character;
 use App\Models\EsiToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -42,12 +43,15 @@ final class SeatCharactersController extends Controller
             ->get(['character_id', 'refresh_token']);
         $loggedIn = $tokens->whereNotNull('refresh_token')->pluck('character_id')->map(fn ($id): int => (int) $id)->flip();
         $known = $tokens->pluck('character_id')->map(fn ($id): int => (int) $id)->flip();
+        $chatLogOff = Character::query()->whereIn('id', $ids)->where('chat_log_to_file', false)->pluck('id')->map(fn ($id): int => (int) $id)->values();
 
         return response()->json([
             // A working login (location tracking and the rest).
             'characters' => $ids->mapWithKeys(fn (int $id): array => [(string) $id => $loggedIn->has($id)])->all(),
             // Patch 49b: logged in at all (a public-only character has no tracking login).
             'known' => $ids->mapWithKeys(fn (int $id): array => [(string) $id => $known->has($id)])->all(),
+            // Patch 54: characters the desktop app last saw with EVE's "Log Chat to File" off.
+            'chat_log_off' => $chatLogOff->all(),
         ]);
     }
 

@@ -36,10 +36,21 @@ final class DispatchCharacterStatusEvents implements ShouldQueue
             ->whereNotNull('event_queued_at')
             ->update(['event_queued_at' => null]);
 
+        self::broadcastFor($updated_character_ids->all());
+    }
+
+    /**
+     * Tells every map tracking these characters, and their owners, that they changed. Patch 54:
+     * also called straight away for a jump the desktop app reported, without waiting for ESI.
+     *
+     * @param  array<int, int>  $character_ids
+     */
+    public static function broadcastFor(array $character_ids): void
+    {
         Map::query()
             ->whereHas('mapUserSettings', fn (Builder $query) => $query
                 ->where('tracking_allowed', true)
-                ->whereHas('user.characters', fn (Builder $query) => $query->whereIn('id', $updated_character_ids))
+                ->whereHas('user.characters', fn (Builder $query) => $query->whereIn('id', $character_ids))
             )
             ->select('maps.id')
             ->lazy()
@@ -48,7 +59,7 @@ final class DispatchCharacterStatusEvents implements ShouldQueue
         // Notify each owning user directly so their character list refreshes even
         // for characters that are not on any map they are currently viewing.
         Character::query()
-            ->whereIn('id', $updated_character_ids)
+            ->whereIn('id', $character_ids)
             ->whereNotNull('user_id')
             ->pluck('user_id')
             ->unique()

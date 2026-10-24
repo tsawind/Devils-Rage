@@ -67,6 +67,7 @@ class AccountsController extends Controller
         return view('devilsrage::accounts.index', [
             'seatStatus' => $seatStatus,
             'mapperStatus' => $mapperStatus,
+            'chatLogOff' => $logins->chatLogOff(),
             'mainStatus' => $seatStatus[(int) $user->main_character_id] ?? null,
             'justLoggedIn' => $justLoggedIn,
             'mapperUrl' => rtrim((string) config('devilsrage.mapper_url', ''), '/'),
@@ -226,6 +227,7 @@ class AccountsController extends Controller
             'holdings' => app(Holdings::class)->accounts($accounts, app(Holdings::class)->characters(array_map('intval', $assigned))),
             'seatStatus' => $seatStatus,
             'mapperStatus' => $mapperStatus,
+            'chatLogOff' => $logins->chatLogOff(),
             'mainStatus' => $seatStatus[(int) $user->main_character_id] ?? null,
             'justLoggedIn' => $justLoggedIn,
             'mapperUrl' => rtrim((string) config('devilsrage.mapper_url', ''), '/'),

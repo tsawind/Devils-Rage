@@ -44,7 +44,18 @@ it('tells SeAT which characters have a working mapper login', function () {
         ->assertExactJson([
             'characters' => [(string) $in->id => true, (string) $lost->id => false, '999' => false],
             'known' => [(string) $in->id => true, (string) $lost->id => true, '999' => false],
+            'chat_log_off' => [],
         ]);
+});
+
+it('tells SeAT which characters have EVE\'s Log Chat to File off (Patch 54)', function () {
+    $off = Character::factory()->create(['chat_log_to_file' => false]);
+    $on = Character::factory()->create(['chat_log_to_file' => true]);
+    $unknown = Character::factory()->create();
+
+    getJson(route('seat-api.characters', ['ids' => "{$off->id},{$on->id},{$unknown->id}"]), ['X-DR-Key' => SEAT_TEST_KEY])
+        ->assertSuccessful()
+        ->assertJsonPath('chat_log_off', [$off->id]);
 });
 
 it('answers SeAT only with the shared key', function () {
