@@ -12,6 +12,7 @@ use App\Models\MapSolarsystem;
 use App\Models\Signature;
 use App\Support\Broadcasting\MapBroadcaster;
 use App\Support\ChainMemory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -78,6 +79,19 @@ final readonly class NewStaticAction
                     ->whereKeyNot($rolling->id)
                     ->whereRaw('UPPER(alias) = ?', [$base])
                     ->first();
+                // That pipe was the old static, which just rolled: it goes too (as when the
+                // signature is tied to it), so the old chain isn't still hanging off home.
+                if ($old_system !== null) {
+                    MapConnection::query()
+                        ->where('map_id', $rolling->map_id)
+                        ->where(fn (Builder $query): Builder => $query
+                            ->where(fn (Builder $pair): Builder => $pair->where('from_map_solarsystem_id', $rolling->id)->where('to_map_solarsystem_id', $old_system->id))
+                            ->orWhere(fn (Builder $pair): Builder => $pair->where('from_map_solarsystem_id', $old_system->id)->where('to_map_solarsystem_id', $rolling->id)))
+                        ->whereDoesntHave('signatures', fn (Builder $signatures): Builder => $signatures->where('map_solarsystem_id', $rolling->id))
+                        ->orderBy('id')
+                        ->first()
+                        ?->delete();
+                }
             }
             $stamped = 0;
             $stamp = null;

@@ -169,9 +169,9 @@ it('patch 35: New Alpha stamps the old chain, frees the name and makes the new s
 it('patch 35: New Alpha stamps the old chain even when its pipe was never tied to the signature (no second Alpha)', function () {
     $map = Map::factory()->create();
     $daisy = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000005), 'alias' => 'Daisy']);
-    $alpha = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000006), 'alias' => 'A', 'created_at' => '2026-10-07 19:58:12']);
-    $a1 = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000007), 'alias' => 'A1']);
-    MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $daisy->id, 'to_map_solarsystem_id' => $alpha->id]);
+    $alpha = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000006), 'alias' => 'A', 'pinned' => false, 'created_at' => '2026-10-07 19:58:12']);
+    $a1 = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000007), 'alias' => 'A1', 'pinned' => false]);
+    $pipe = MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $daisy->id, 'to_map_solarsystem_id' => $alpha->id]);
     $old = Signature::factory()->create(['map_solarsystem_id' => $daisy->id, 'signature_id' => 'ZGB-111', 'alias' => 'A', 'is_static' => true, 'map_connection_id' => null]);
     $new = Signature::factory()->create(['map_solarsystem_id' => $daisy->id, 'signature_id' => 'XYZ-333']);
     actingAs(rageRoller($map, Permission::Member));
@@ -182,7 +182,8 @@ it('patch 35: New Alpha stamps the old chain even when its pipe was never tied t
     expect($alpha->refresh()->alias)->toBe('A~1958')
         ->and($a1->refresh()->alias)->toBe('A1~1958')
         ->and($new->refresh()->alias)->toBe('A')
-        ->and(MapSolarsystem::query()->where('map_id', $map->id)->where('alias', 'A')->count())->toBe(0);
+        ->and(MapSolarsystem::query()->where('map_id', $map->id)->where('alias', 'A')->count())->toBe(0)
+        ->and(MapConnection::query()->find($pipe->id))->toBeNull();
 });
 
 it('patch 35: chain membership by name', function (string $alias, string $base, bool $expected) {
