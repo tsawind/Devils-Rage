@@ -8,6 +8,7 @@ use App\Actions\MapConnections\RecordMapConnectionJumpAction;
 use App\Actions\ShipHistories\UpdateShipHistoryAction;
 use App\Actions\Tracking\ReportAppLocationAction;
 use App\Models\CharacterStatus;
+use App\Support\LocationTiming;
 use Illuminate\Bus\Batchable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -53,15 +54,38 @@ final class UpdateCharacterLocation implements ShouldQueue
             return;
         }
 
+        $location = $location_request->data;
+
+        // Patch 54: a new system is told to everyone's map now, before the ship lookup and
+        // without waiting for the rest of the round (every online character's ESI calls).
+        $previous_solarsystem_id = $characterStatus->solarsystem_id;
+        $appTrusted = $characterStatus->app_location_at?->gt(now()->subSeconds(ReportAppLocationAction::TRUSTED_FOR_SECONDS)) ?? false;
+        if ($characterStatus->solarsystem_id !== null && $location->solar_system_id !== $characterStatus->solarsystem_id && ! $appTrusted) {
+            $characterStatus->update([
+                'solarsystem_id' => $location->solar_system_id,
+                'station_id' => $location->station_id,
+                'structure_id' => $location->structure_id,
+            ]);
+            DispatchCharacterStatusEvents::broadcastFor([$characterStatus->character_id]);
+            LocationTiming::moved($characterStatus->character_id, $this->batch()?->createdAt);
+        }
+
         $ship_request = $esi->getShip($characterStatus->character);
 
         if ($ship_request->failed()) {
             Log::info(sprintf('Failed to fetch ship for character %d', $characterStatus->character_id), (array) $ship_request);
+            // Moved above already: the jump is still logged (with the ship it had).
+            if ($previous_solarsystem_id !== null && $previous_solarsystem_id !== $location->solar_system_id) {
+                try {
+                    $recordJumpAction->handle($characterStatus->character_id, $previous_solarsystem_id, $location->solar_system_id, $characterStatus->ship_type_id, $characterStatus->ship_name);
+                } catch (Throwable $exception) {
+                    Log::warning(sprintf('Failed to record connection jump for character %d', $characterStatus->character_id), ['exception' => $exception]);
+                }
+            }
 
             return;
         }
 
-        $location = $location_request->data;
         $ship = $ship_request->data;
 
         // Patch 46: the desktop app just saw a jump in the chat log; ESI can still show the
@@ -71,8 +95,6 @@ final class UpdateCharacterLocation implements ShouldQueue
         if ($appSaysOtherwise) {
             return;
         }
-
-        $previous_solarsystem_id = $characterStatus->solarsystem_id;
 
         $characterStatus->update([
             'solarsystem_id' => $location->solar_system_id,

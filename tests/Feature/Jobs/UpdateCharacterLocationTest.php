@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Events\Characters\CharacterStatusUpdatedEvent;
 use App\Jobs\Characters\UpdateCharacterLocation;
 use App\Models\Category;
 use App\Models\Character;
@@ -12,6 +13,8 @@ use App\Models\MapConnection;
 use App\Models\MapConnectionJump;
 use App\Models\MapUserSetting;
 use App\Models\Type;
+use App\Support\LocationTiming;
+use Illuminate\Support\Facades\Event;
 use NicolasKion\Esi\DTO\EsiError;
 use NicolasKion\Esi\DTO\EsiResult;
 use NicolasKion\Esi\DTO\Location;
@@ -114,4 +117,20 @@ it('records nothing when the location request fails', function () {
 
     expect($status->fresh()->solarsystem_id)->toBe(31000205)
         ->and(MapConnectionJump::query()->count())->toBe(0);
+});
+
+it('tells the maps about an ESI move straight away, even when the ship lookup then fails (Patch 54)', function () {
+    Event::fake([CharacterStatusUpdatedEvent::class]);
+    ['status' => $status, 'connection' => $connection] = createTrackedCharacterOnConnection(31000211, 31000212);
+
+    $esi = test()->mock(Esi::class);
+    $esi->shouldReceive('getLocation')->andReturn(new EsiResult(data: new Location(solar_system_id: 31000212)));
+    $esi->shouldReceive('getShip')->andReturn(new EsiResult(error: new EsiError(500, 'unavailable')));
+
+    UpdateCharacterLocation::dispatchSync($status->id);
+
+    expect($status->fresh()->solarsystem_id)->toBe(31000212)
+        ->and(MapConnectionJump::query()->where('map_connection_id', $connection->id)->count())->toBe(1);
+    Event::assertDispatched(CharacterStatusUpdatedEvent::class, fn (CharacterStatusUpdatedEvent $event) => $event->map_id === $connection->map_id);
+    expect(LocationTiming::lines(LocationTiming::MOVES))->not->toBeEmpty();
 });

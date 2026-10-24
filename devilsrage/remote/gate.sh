@@ -63,6 +63,18 @@ case "$ACTION" in
             | sed -E 's/[A-Za-z0-9_+\/=-]{32,}/[masked]/g; s/(password|secret|token|key)=[^ &"]*/\1=[masked]/gi' \
             | cut -c1-400 || echo "(none)"
         ;;
+    mapper-timing)
+        # Patch 54: how long ESI location rounds take, when jumps were noticed (ESI or the app's
+        # chat logs), and the queue's backlog. Character ids and seconds only.
+        cd "$STACK"
+        echo "== Containers"
+        docker ps --format '{{.Names}}\t{{.Status}}' | grep -iE 'wormhole|app|queue|worker|scheduler|reverb' || true
+        "${C[@]}" exec -T app php artisan tinker --execute="
+            echo '== Queue: '.config('queue.default').(config('queue.default') === 'database' ? ', waiting jobs: '.DB::table('jobs')->count() : '').PHP_EOL;
+            echo '== Location rounds (newest last)'.PHP_EOL.implode(PHP_EOL, array_slice(App\Support\LocationTiming::lines(App\Support\LocationTiming::ROUNDS), -15)).PHP_EOL;
+            echo '== Jumps noticed (newest last)'.PHP_EOL.implode(PHP_EOL, array_slice(App\Support\LocationTiming::lines(App\Support\LocationTiming::MOVES), -25)).PHP_EOL;
+        " 2>&1 | cut -c1-200
+        ;;
     deploy-seat)
         bash "$REPO/devilsrage/seat/deploy.sh"
         ;;
@@ -80,7 +92,7 @@ case "$ACTION" in
         ;;
     *)
         echo "!! Unknown action: $ACTION"
-        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, seat-sde"
+        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-sde"
         exit 2
         ;;
 esac

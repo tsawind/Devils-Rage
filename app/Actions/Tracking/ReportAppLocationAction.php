@@ -9,6 +9,7 @@ use App\Jobs\Characters\DispatchCharacterStatusEvents;
 use App\Models\Character;
 use App\Models\CharacterStatus;
 use App\Models\Solarsystem;
+use App\Support\LocationTiming;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -72,6 +73,7 @@ final readonly class ReportAppLocationAction
         }
 
         DispatchCharacterStatusEvents::broadcastFor([$character->id]);
+        LocationTiming::appMoved($character->id);
 
         return true;
     }

@@ -8,6 +8,7 @@ use App\Console\Commands\AppCommand;
 use App\Jobs\Characters\DispatchCharacterStatusEvents;
 use App\Jobs\Characters\UpdateCharacterLocation;
 use App\Models\CharacterStatus;
+use App\Support\LocationTiming;
 use Illuminate\Bus\Batch;
 use Illuminate\Support\Facades\Bus;
 use Throwable;
@@ -61,6 +62,8 @@ final class GetOnlineCharacterLocationsCommand extends AppCommand
         $batch = Bus::batch($jobs->all())
             ->name('Update Character Locations')
             ->finally(function (Batch $batch): void {
+                // Patch 54: how long the round took (Server workflow → mapper-timing).
+                LocationTiming::round($batch->totalJobs, $batch->createdAt);
                 // Dispatch a job to handle event dispatching after all character updates are complete
                 DispatchCharacterStatusEvents::dispatch();
             })
