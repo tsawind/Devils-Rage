@@ -51,6 +51,11 @@ final class UpdateMapUserSettingRequest extends FormRequest
             'route_use_frigate_holes' => ['boolean'],
             'jumping_hot' => ['boolean'],
             'jumping_thread' => ['boolean'],
+            // Patch 53: a pop-out's own switch for its character.
+            'jumping_for' => ['sometimes', 'array'],
+            'jumping_for.character_id' => ['required_with:jumping_for', 'integer'],
+            'jumping_for.hot' => ['sometimes', 'boolean'],
+            'jumping_for.thread' => ['sometimes', 'boolean'],
             'route_preference' => ['nullable', 'string', Rule::enum(RoutePreference::class)],
             'security_penalty' => ['nullable', 'integer', 'min:0', 'max:100'],
             'killmail_filter' => ['nullable', 'string', Rule::enum(KillmailFilter::class)],

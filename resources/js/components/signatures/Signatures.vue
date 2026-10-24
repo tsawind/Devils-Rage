@@ -59,7 +59,7 @@ import { signatureToast as toast } from '@/lib/signatureToast';
 const props = defineProps<{
     map_solarsystem: TResolvedSelectedMapSolarsystem | null;
     /** Patch 39: drawn in the scanner pop-out: Ctrl+V there, checked against the pop-out's character. */
-    popout?: { target: () => EventTarget | null | undefined; locationSystemId: () => number | null | undefined } | null;
+    popout?: { target: () => EventTarget | null | undefined; locationSystemId: () => number | null | undefined; characterId?: () => number | null | undefined } | null;
 }>();
 
 /** Patch 41: the pop-out's filter row (folded behind one button). */
@@ -820,7 +820,7 @@ function createNewSignature() {
                     </TooltipContent>
                 </Tooltip>
                 <!-- Patch 37: JUMPING HOT / COLD (next to rage scanning) -->
-                <JumpingHotToggle size="icon" />
+                <JumpingHotToggle size="icon" :character-id="popout?.characterId?.() ?? null" />
                 <!-- Patch 41: in the pop-out the category filters fold into one button (one row header) -->
                 <MapPanelHeaderActionButton
                     v-if="popout"

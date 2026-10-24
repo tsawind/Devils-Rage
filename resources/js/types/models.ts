@@ -302,6 +302,10 @@ export type TMapUserSetting = {
     jumping_hot?: boolean;
     /** Patch 37: the 🧵 thread switch (entanglers on). */
     jumping_thread?: boolean;
+    /** Patch 53: a pop-out's own switches for its character (the main switch resets them). */
+    jumping_by_character?: Record<string, { hot?: boolean; thread?: boolean }>;
+    /** Patch 53: sent only: set one character's own switch. */
+    jumping_for?: { character_id: number; hot?: boolean; thread?: boolean };
     route_preference: TRoutePreference;
     security_penalty: number;
     killmail_filter: 'all' | 'jspace' | 'kspace';

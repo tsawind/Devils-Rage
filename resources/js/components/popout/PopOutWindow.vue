@@ -178,6 +178,8 @@ async function copyWayBack(): Promise<void> {
 const popoutOptions = {
     target: () => popOutWindow.value?.document ?? null,
     locationSystemId: () => hereId.value,
+    // Patch 53: the pop-out's own JUMPING HOT / COLD / 🧵 for its character.
+    characterId: () => popOut.value?.characterId ?? null,
 };
 
 function pick(solarsystemId: number): void {

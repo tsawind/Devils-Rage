@@ -73,6 +73,8 @@
   .top h1 { font-size: 20px; font-weight: 600; margin: 0; }
   .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
   .tabs button { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 5px 13px; cursor: pointer; color: #c8c8d0; }
+  #pi-update { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; cursor: pointer; color: #c8c8d0; margin-left: 8px; }
+  #pi-update:disabled { opacity: .5; cursor: default; }
   .tabs button.on { border-color: var(--red-hi); background: #2a0f12; color: #fff; }
   .grow { flex: 1; }
   .muted { color: var(--muted); }
@@ -155,6 +157,9 @@
     @if($checked)
       <span class="muted small" title="SeAT updates each character's colonies from EVE on its own schedule">SeAT checked EVE <span data-ts="{{ $checked }}" data-fmt="ago"></span></span>
     @endif
+    {{-- Patch 53: ask EVE for your colonies now --}}
+    <button type="button" id="pi-update" class="small" title="Ask EVE for all your characters' colonies now (EVE refreshes them about every 10 minutes; storage only changes when a colony is opened in game)">↻ Update now</button>
+    <span id="pi-update-said" class="muted small"></span>
   </div>
 
   {{-- ============================== PI run ============================== --}}
@@ -474,6 +479,15 @@
     const mode = (document.querySelector('input[name="mode"]:checked') || {}).value || 'never';
     const r = await post(@json(route('devilsrage.pi.alerts')), { mode, hour: Number(document.getElementById('hour').value), timezone: tz }).catch(() => null);
     toast(r && r.ok ? (mode === 'never' ? 'Saved. No messages.' : 'Saved.') : 'Could not save, try again.', !(r && r.ok));
+  });
+  // Patch 53: Update now.
+  const update = document.getElementById('pi-update');
+  update.addEventListener('click', async () => {
+    update.disabled = true;
+    const r = await post(@json(route('devilsrage.pi.update'))).catch(() => null);
+    const j = r && r.ok ? await r.json().catch(() => ({})) : {};
+    document.getElementById('pi-update-said').textContent = j.message || 'Could not ask EVE, try again.';
+    setTimeout(() => { update.disabled = false; }, 5000);
   });
   const test = document.getElementById('test');
   test.addEventListener('click', async () => {

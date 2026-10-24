@@ -6,8 +6,9 @@ import usePermission from '@/composables/usePermission';
  * Patch 37: the JUMPING HOT / COLD switch. Red pulse when hot (prop on), a slow blue pulse
  * when cold. `size="sm"` for panel headers.
  */
-const { size = 'md' } = defineProps<{ size?: 'icon' | 'sm' | 'md' }>();
-const { hot, toggle, thread, toggleThread } = useJumpingHot();
+/** Patch 53: `characterId` (in a pop-out): that character's own switch; the main one resets it. */
+const { size = 'md', characterId = null } = defineProps<{ size?: 'icon' | 'sm' | 'md'; characterId?: number | null }>();
+const { hot, toggle, thread, toggleThread, separate } = useJumpingHot(() => characterId);
 const { canEdit } = usePermission();
 </script>
 
@@ -21,7 +22,10 @@ const { canEdit } = usePermission();
                 size === 'icon' ? 'h-6 px-1.5 text-xs' : size === 'sm' ? 'px-2 py-0 text-[10px]' : 'px-3 py-0.5 text-xs',
             ]"
             :aria-pressed="hot"
-            :title="hot ? 'Your jumps count HOT (prop on). Click for cold.' : 'Your jumps count COLD (prop off). Click for hot.'"
+            :title="
+                (characterId ? (separate ? 'This character only (the main switch resets it). ' : 'This character (same as the main switch until you click). ') : '') +
+                (hot ? 'Jumps count HOT (prop on). Click for cold.' : 'Jumps count COLD (prop off). Click for hot.')
+            "
             @click="toggle"
         >
             <template v-if="size === 'icon'">{{ hot ? '🔥' : '❄' }}</template>

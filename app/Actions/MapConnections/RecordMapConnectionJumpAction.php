@@ -75,9 +75,11 @@ final readonly class RecordMapConnectionJumpAction
         }
 
         foreach ($maps as $map) {
-            $setting = $user_id === null ? null : MapUserSetting::query()->where('map_id', $map->id)->where('user_id', $user_id)->first(['jumping_hot', 'jumping_thread']);
-            $hot = $setting instanceof MapUserSetting && $setting->jumping_hot;
-            $thread = $setting instanceof MapUserSetting && $setting->jumping_thread;
+            $setting = $user_id === null ? null : MapUserSetting::query()->where('map_id', $map->id)->where('user_id', $user_id)->first(['jumping_hot', 'jumping_thread', 'jumping_by_character']);
+            // Patch 53: the character's pop-out switches when it has its own.
+            $switches = $setting instanceof MapUserSetting ? $setting->jumpingFor($character_id) : ['hot' => false, 'thread' => false];
+            $hot = $switches['hot'];
+            $thread = $switches['thread'];
             $mass = $profile instanceof ShipProfile ? $profile->jumpMass($hot, $thread) : Type::loggedJumpMass($ship_type_id);
             $this->recordJumpOnMap($map, $character_id, $from_solarsystem_id, $to_solarsystem_id, $ship_type_id, $ship_name, $mass, $hot, $thread);
         }

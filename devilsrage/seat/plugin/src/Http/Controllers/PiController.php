@@ -14,10 +14,12 @@ use DevilsRage\Seat\Services\PersonName;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Seat\Eveapi\Jobs\PlanetaryInteraction\Character\Planets;
 use Seat\Eveapi\Models\RefreshToken;
 use Seat\Web\Http\Controllers\Controller;
 use Seat\Web\Models\User;
@@ -97,6 +99,32 @@ class PiController extends Controller
         $setting->save();
 
         return response()->json(['saved' => true]);
+    }
+
+    /**
+     * Patch 53: "Update now": ask EVE for this pilot's colonies right away (all their own characters,
+     * at most once every 10 minutes: EVE itself only refreshes them that often). Storage and
+     * factories still only change when the colony was opened in game.
+     */
+    public function forceUpdate(): JsonResponse
+    {
+        $user = auth()->user();
+        $key = 'devilsrage:pi:force:'.$user->id;
+        if (! Cache::add($key, true, now()->addMinutes(10))) {
+            return response()->json(['queued' => 0, 'message' => 'Asked less than 10 minutes ago. EVE refreshes colonies about every 10 minutes.']);
+        }
+        $ids = array_map('intval', $user->associatedCharacterIds());
+        $queued = 0;
+        foreach (RefreshToken::query()->whereIn('character_id', $ids)->get() as $token) {
+            try {
+                Planets::dispatch($token);
+                $queued++;
+            } catch (\Throwable $error) {
+                report($error);
+            }
+        }
+
+        return response()->json(['queued' => $queued, 'message' => sprintf('Asked EVE for %d character%s. Give it a minute, then reload.', $queued, $queued === 1 ? '' : 's')]);
     }
 
     /** "Send me a test": today's message right now, whatever it says. */

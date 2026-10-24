@@ -36,6 +36,7 @@ final class MapUserSettingResource extends JsonResource
             'route_use_frigate_holes' => $this->route_use_frigate_holes ?? true,
             'jumping_hot' => (bool) ($this->jumping_hot ?? false),
             'jumping_thread' => (bool) ($this->jumping_thread ?? false),
+            'jumping_by_character' => (object) ($this->jumping_by_character ?? []),
             'route_preference' => $this->route_preference,
             'security_penalty' => $this->security_penalty,
             'killmail_filter' => $this->killmail_filter,

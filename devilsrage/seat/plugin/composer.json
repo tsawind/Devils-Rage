@@ -3,7 +3,7 @@
     "description": "The Devil's Rage additions to SeAT: corp fit library import, accounts and launch groups, skill plans, FC planner, and a read-only API for the Discord bot.",
     "type": "library",
     "license": "GPL-2.0-or-later",
-    "version": "1.8.1",
+    "version": "1.8.2",
     "require": {
         "php": "^8.2",
         "eveseat/web": "^5.0",

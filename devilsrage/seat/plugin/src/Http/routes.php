@@ -36,6 +36,7 @@ Route::group([
     Route::get('pi', [PiController::class, 'screen'])->name('devilsrage.pi');
     Route::post('pi/alerts', [PiController::class, 'saveAlerts'])->name('devilsrage.pi.alerts');
     Route::post('pi/alerts/test', [PiController::class, 'testAlert'])->name('devilsrage.pi.alerts.test');
+    Route::post('pi/update', [PiController::class, 'forceUpdate'])->name('devilsrage.pi.update');
     Route::post('accounts', [AccountsController::class, 'storeAccount'])->name('devilsrage.accounts.store');
     Route::post('accounts/share', [AccountsController::class, 'share'])->name('devilsrage.accounts.share');
     Route::post('accounts/name', [AccountsController::class, 'saveName'])->name('devilsrage.accounts.name');

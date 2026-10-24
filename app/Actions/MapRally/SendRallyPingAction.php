@@ -101,9 +101,8 @@ final readonly class SendRallyPingAction
         $name = $solarsystem->name ?? 'the rally point';
         $where = filled($alias) ? sprintf('%s (%s)', mb_trim((string) $alias), $name) : $name;
         // Patch 53: the class first ("C4 A2 (J111404)") and who lives there.
-        $class = $solarsystem instanceof Solarsystem ? $this->classLabel($solarsystem) : null;
-        if ($class !== null) {
-            $where = sprintf('%s %s', $class, $where);
+        if ($solarsystem instanceof Solarsystem) {
+            $where = sprintf('%s %s', $this->classLabel($solarsystem), $where);
         }
         $details = MapSolarsystemDetails::query()->where('map_id', $map->id)->where('solarsystem_id', $map->rally_solarsystem_id)->first(['occupier_alias', 'home_of']);
         $occupier = mb_trim((string) ($details->occupier_alias ?? $details->home_of ?? ''));
@@ -182,12 +181,12 @@ final readonly class SendRallyPingAction
         return sprintf('rally-ping:%d:%s', $map->id, $kind);
     }
 
-    /** Patch 53: "C4", "HS", "LS", "NS" (null when not known). */
-    private function classLabel(Solarsystem $solarsystem): ?string
+    /** Patch 53: "C4", "HS", "LS", "NS". */
+    private function classLabel(Solarsystem $solarsystem): string
     {
         $wormholeClass = $solarsystem->wormholeSystem?->class;
         if ($wormholeClass !== null) {
-            $value = $wormholeClass instanceof \BackedEnum ? (string) $wormholeClass->value : (string) $wormholeClass;
+            $value = (string) $wormholeClass->value;
 
             return ctype_digit($value) ? 'C'.$value : mb_strtoupper($value);
         }

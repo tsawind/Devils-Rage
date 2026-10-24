@@ -28,6 +28,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property bool $route_use_frigate_holes
  * @property bool $jumping_hot
  * @property bool $jumping_thread
+ * @property array<string, array{hot?: bool, thread?: bool}>|null $jumping_by_character Patch 53: a pop-out's own switches for its character
  * @property string|MassStatus $route_allow_mass_status
  * @property string|RoutePreference $route_preference
  * @property int $security_penalty
@@ -115,6 +116,7 @@ final class MapUserSetting extends Model
             'route_use_frigate_holes' => 'boolean',
             'jumping_hot' => 'boolean',
             'jumping_thread' => 'boolean',
+            'jumping_by_character' => 'array',
             'introduction_confirmed_at' => 'immutable_datetime',
             'prompt_for_signature_enabled' => 'boolean',
             'preselect_signature_enabled' => 'boolean',
@@ -132,6 +134,21 @@ final class MapUserSetting extends Model
             'is_pinned' => 'boolean',
             'background_image_mode' => MapBackgroundMode::class,
             'layout_override' => MapLayout::class,
+        ];
+    }
+
+    /**
+     * Patch 53: hot and 🧵 for one character: its pop-out's switches when it has its own, else the main ones.
+     *
+     * @return array{hot: bool, thread: bool}
+     */
+    public function jumpingFor(int $characterId): array
+    {
+        $own = ($this->jumping_by_character ?? [])[(string) $characterId] ?? [];
+
+        return [
+            'hot' => (bool) ($own['hot'] ?? $this->jumping_hot),
+            'thread' => (bool) ($own['thread'] ?? $this->jumping_thread),
         ];
     }
 }

@@ -30,6 +30,18 @@ final class MapUserSettingController extends Controller
             // Authenticated: update DB, then refresh session from full DB state
             $settings = DB::transaction(function () use ($user, $map, $validated): MapUserSetting {
                 $settings = $user->mapUserSettings()->firstOrCreate(['map_id' => $map->id]);
+                // Patch 53: a pop-out's own HOT / COLD / 🧵 for its character; the main switch resets them all.
+                $jumpingFor = $validated['jumping_for'] ?? null;
+                unset($validated['jumping_for']);
+                if (array_key_exists('jumping_hot', $validated) || array_key_exists('jumping_thread', $validated)) {
+                    $validated['jumping_by_character'] = null;
+                }
+                if (is_array($jumpingFor)) {
+                    $all = $settings->jumping_by_character ?? [];
+                    $key = (string) (int) $jumpingFor['character_id'];
+                    $all[$key] = [...($all[$key] ?? []), ...array_intersect_key($jumpingFor, array_flip(['hot', 'thread']))];
+                    $validated['jumping_by_character'] = $all;
+                }
                 $settings->update($validated);
 
                 // Patch 41c: one card layout for every map tab: a saved layout goes to all your maps.
@@ -49,6 +61,7 @@ final class MapUserSettingController extends Controller
         } else {
             // Guest: merge into session only
             $current = Session::get($sessionKey, array_merge(MapSettingsFeature::DEFAULTS, ['map_id' => $map->id]));
+            unset($validated['jumping_for']);
             Session::put($sessionKey, array_merge($current, $validated));
         }
 
