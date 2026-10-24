@@ -20,6 +20,7 @@ import SolarsystemDetails from '@/components/solarsystem/SolarsystemDetails.vue'
 import SystemInfo from '@/components/solarsystem/SystemInfo.vue';
 import SystemInfoEmptyState from '@/components/solarsystem/SystemInfoEmptyState.vue';
 import ThreatAnalysis from '@/components/threat-analysis/ThreatAnalysis.vue';
+import RemoteDialogs from '@/components/ui/dialog/RemoteDialogs.vue';
 import { useDisableTextSelection } from '@/composables/useDisableTextSelection';
 import { pulseKill } from '@/composables/useKillPulses';
 import { useMapBackground } from '@/composables/useMapBackground';
@@ -442,6 +443,7 @@ const handleResizeEnd = () => {
         <LayoutEditorToolbar :layout="layout" />
         <!-- Patch 39: a guest names themselves once -->
         <GuestNameDialog />
+        <RemoteDialogs />
         <!-- Patch 39: the scanner pop-out (drawn into its always-on-top window) -->
         <PopOutWindow :map="resolvedMap" :config="config" />
     </AppLayout>

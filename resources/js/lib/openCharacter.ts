@@ -45,11 +45,13 @@ export async function openCharacter(character: TOpenable, how: TOpenHow): Promis
         openWindow(character, 'window');
         return;
     }
-    // Patch 51: in the desktop app every character can have its own pop-out. A window holds
-    // one, so the second and later ones get a hidden window of their own (the app keeps it
-    // out of sight and closes it with its pop-out).
+    // Patch 51: in the desktop app every character can have its own pop-out, each from a hidden
+    // window of its own (the app keeps it out of sight and closes it with its pop-out).
+    // Patch 54 (step 2): the first one too, so it keeps working whatever this page does (reload,
+    // deploy); questions reach it through the dialog bus (lib/dialogBus.ts). A pop-out this page
+    // already has open from before is just moved to the character.
     const open = popOutWindow.value && !popOutWindow.value.closed ? popOut.value : null;
-    if (inDesktopApp() && open && open.characterId !== character.id) {
+    if (inDesktopApp() && !(open && open.characterId === character.id)) {
         openWindow(character, 'window', true);
         return;
     }

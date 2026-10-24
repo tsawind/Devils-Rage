@@ -13,6 +13,7 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui'
 import { computed, ref, watch, type HTMLAttributes } from 'vue'
+import DialogBroadcast from './DialogBroadcast.vue'
 import DialogMirror from './DialogMirror.vue'
 
 const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>()
@@ -66,6 +67,7 @@ watch(
       >
         <slot />
         <DialogMirror :to="mirrorTo" :class="props.class"><slot /></DialogMirror>
+        <DialogBroadcast />
 
         <DialogClose
           class="absolute top-4 right-4 p-0.5 transition-colors rounded-md hover:bg-secondary"

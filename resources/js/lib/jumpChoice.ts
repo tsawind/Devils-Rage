@@ -1,4 +1,4 @@
-import { appAttention, inDesktopApp } from '@/lib/desktopApp';
+import { appAttention, appPopOutIds, inDesktopApp } from '@/lib/desktopApp';
 import { popOutWindow } from '@/lib/popOut';
 import { shallowRef, watch } from 'vue';
 
@@ -43,9 +43,10 @@ function setAttention(on: boolean): void {
 
 if (typeof window !== 'undefined') {
     // No pop-out to answer it in and the mapper is behind EVE: ask the app to keep it in view.
-    watch([jumpChoice, popOutWindow], ([choice, pop]) => {
+    watch([jumpChoice, popOutWindow, appPopOutIds], ([choice, pop, hosted]) => {
         if (!inDesktopApp()) return;
-        const popOpen = Boolean(pop && !pop.closed);
+        // Patch 54: a pop-out in its own window shows the question too.
+        const popOpen = Boolean(pop && !pop.closed) || hosted.length > 0;
         setAttention(Boolean(choice) && !popOpen && !document.hasFocus());
     });
 }
