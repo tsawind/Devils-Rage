@@ -559,6 +559,16 @@
             "spawn_areas": ["1", "2", "3", "4", "5", "6"]
         },
         {
+            "id": 905,
+            "name": "K162 - Drifter",
+            "signature": "K162",
+            "signature_category_id": 1,
+            "category_name": "Wormhole",
+            "target_class": "unknown",
+            "extra": "drifter",
+            "spawn_areas": ["1", "2", "3", "4", "5", "6", "h", "l", "n"]
+        },
+        {
             "id": 218,
             "name": "K329 - 0.0",
             "signature": "K329",

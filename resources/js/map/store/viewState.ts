@@ -92,6 +92,8 @@ export function createViewState() {
     const currentSystemId: Ref<number | null> = ref(null);
     /** Patch 15: ask the viewport to center on a base point (bumped on every request). */
     const centerRequest: ShallowRef<{ x: number; y: number; at: number; force: boolean } | null> = shallowRef(null);
+    /** Patch 54: empty room before the map's top-left corner (the pop-out's, so any system can sit in its middle). */
+    const canvasOffset: ShallowRef<{ x: number; y: number }> = shallowRef({ x: 0, y: 0 });
 
     function toggleHoleParent(id: number): void {
         const next = new Set(openedHoleParents.value);
@@ -152,6 +154,7 @@ export function createViewState() {
         toggleHoleParent,
         currentSystemId,
         centerRequest,
+        canvasOffset,
         requestCenter,
         setSelection,
         clearSelection,

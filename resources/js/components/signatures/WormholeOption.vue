@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { classMeta } from '@/const/solarsystemClasses';
-import { isK162Frigate, k162Classes } from '@/lib/k162';
+import { isK162Drifter, isK162Frigate, k162Classes } from '@/lib/k162';
 import type { TSignatureType, TStringedSolarsystemClass } from '@/types/models';
 import { computed } from 'vue';
 
@@ -16,6 +16,7 @@ const range = computed(() => {
     return classes.length > 1 ? classes.map((value) => classMeta(value as TStringedSolarsystemClass)) : null;
 });
 const frigate = computed(() => isK162Frigate(props.wormhole));
+const drifter = computed(() => isK162Drifter(props.wormhole));
 </script>
 
 <template>
@@ -30,6 +31,7 @@ const frigate = computed(() => isK162Frigate(props.wormhole));
             </template>
         </span>
         <span v-else-if="frigate" class="text-muted-foreground">frigate</span>
+        <span v-else-if="drifter" class="text-muted-foreground">drifter</span>
         <template v-else>
             <span v-if="meta" :class="`text-${meta.color_token}`">
                 {{ meta.short_label }}

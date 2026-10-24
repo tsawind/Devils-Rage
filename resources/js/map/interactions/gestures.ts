@@ -151,9 +151,11 @@ export function usePointerGestures(surface: Ref<HTMLElement | null>, gestures: G
             return;
         }
         const rect = element.getBoundingClientRect();
+        // Patch 54: the pop-out map starts after some empty room.
+        const offset = store.canvasOffset.value;
         const frame: ViewportFrame = {
-            rectLeft: rect.left,
-            rectTop: rect.top,
+            rectLeft: rect.left + offset.x,
+            rectTop: rect.top + offset.y,
             scrollLeft: element.scrollLeft,
             scrollTop: element.scrollTop,
             scale: store.scale.value,
@@ -167,8 +169,8 @@ export function usePointerGestures(surface: Ref<HTMLElement | null>, gestures: G
             gesture,
             pointerId: event.pointerId,
             startClient: { x: event.clientX, y: event.clientY },
-            rectLeft: rect.left,
-            rectTop: rect.top,
+            rectLeft: rect.left + offset.x,
+            rectTop: rect.top + offset.y,
             scale: frame.scale,
             committed: false,
         };

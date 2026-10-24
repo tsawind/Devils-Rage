@@ -24,6 +24,8 @@ import type { TShipSize } from '@/types/models';
 type TTypeLike = { id: number; name?: string | null; signature?: string | null; target_class?: string | null; extra?: string | null; spawn_areas?: readonly string[] | null };
 
 export const K162_FRIGATE = 'frigate';
+/** Patch 54: a K162 whose Show Info says "Destination: Drifter wormhole systems" (rare). */
+export const K162_DRIFTER = 'drifter';
 
 const isK162 = (type: { signature?: string | null } | null | undefined) => (type?.signature ?? '').toUpperCase() === 'K162';
 
@@ -50,6 +52,10 @@ export function isK162Frigate(type: TTypeLike | null | undefined): boolean {
     return isK162(type) && (type?.extra ?? '').toLowerCase() === K162_FRIGATE;
 }
 
+export function isK162Drifter(type: TTypeLike | null | undefined): boolean {
+    return isK162(type) && (type?.extra ?? '').toLowerCase() === K162_DRIFTER;
+}
+
 /** "C4/5", "C2/3", "C1/2/3" for a grouped K162, else null. */
 export function k162RangeLabel(type: TTypeLike | null | undefined): string | null {
     const classes = k162Classes(type);
@@ -64,7 +70,7 @@ const wormholeNumber = (value: string | number | null | undefined): number | nul
 /** Whether a grouped K162 is offered where you stand (class 1–6). Plain K162s are always offered. */
 export function offersK162(type: TTypeLike, standingClass: string | number | null | undefined): boolean {
     if (!isK162(type)) return true;
-    if (isK162Frigate(type)) return true;
+    if (isK162Frigate(type) || isK162Drifter(type)) return true;
     const label = k162RangeLabel(type);
     if (!label) return true;
     const here = wormholeNumber(standingClass);
@@ -79,6 +85,7 @@ export function offersK162(type: TTypeLike, standingClass: string | number | nul
 export function k162Hint(type: TTypeLike, standingClass: string | number | null | undefined): string | null {
     if (!isK162(type)) return null;
     if (isK162Frigate(type)) return 'small';
+    if (isK162Drifter(type)) return 'Drifter systems';
     const label = k162RangeLabel(type);
     const here = wormholeNumber(standingClass);
     if (label === 'C1/2/3') return 'unknown';
@@ -95,9 +102,11 @@ export function k162Hint(type: TTypeLike, standingClass: string | number | null 
 
 /**
  * Sort weight inside the K162 group. Patch 37: "K162 ?" (class unknown) first, for a quick
- * mark when you're moving fast; then the class-narrowing options in class order; frigate last.
+ * mark when you're moving fast; then the class-narrowing options in class order; frigate, then
+ * (patch 54) drifter last: it's rare.
  */
 export function k162Order(type: TTypeLike): number {
+    if (isK162Drifter(type)) return 95;
     if (isK162Frigate(type)) return 90;
     const classes = k162Classes(type);
     if (classes.length === 0) return -1;

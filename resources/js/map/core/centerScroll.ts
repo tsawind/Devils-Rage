@@ -37,9 +37,14 @@ export function insideComfortZone(view: TCenterView, point: { x: number; y: numb
  * is. `force` (page load, Center switched on, rage scanning switched) always
  * re-centers.
  */
-export function centerScroll(view: TCenterView, point: { x: number; y: number }, options: { rage: boolean; force: boolean }): { left: number; top: number } | null {
-    if (!options.force && insideComfortZone(view, point)) return null;
-    const anchor = centerAnchor(options.rage);
+export function centerScroll(
+    view: TCenterView,
+    point: { x: number; y: number },
+    options: { rage: boolean; force: boolean; popout?: boolean },
+): { left: number; top: number } | null {
+    // Patch 54: the pop-out's small map keeps its character dead centre, always.
+    if (!options.popout && !options.force && insideComfortZone(view, point)) return null;
+    const anchor = options.popout ? { x: 0.5, y: 0.5 } : centerAnchor(options.rage);
     return {
         left: Math.max(0, Math.round(point.x - view.width * anchor.x)),
         top: Math.max(0, Math.round(point.y - view.height * anchor.y)),

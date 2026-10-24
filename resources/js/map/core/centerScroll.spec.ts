@@ -33,4 +33,8 @@ describe('centerScroll', () => {
     it('force always moves', () => {
         expect(centerScroll(view, { x: 750, y: 450 }, { rage: false, force: true })).toEqual({ left: 250, top: 0 });
     });
+    it('patch 54: the pop-out keeps its character dead centre, even when it is comfortably on screen', () => {
+        expect(centerScroll(view, { x: 750, y: 450 }, { rage: false, force: false, popout: true })).toEqual({ left: 0, top: 0 });
+        expect(centerScroll(view, { x: 1000, y: 500 }, { rage: true, force: false, popout: true })).toEqual({ left: 250, top: 50 });
+    });
 });

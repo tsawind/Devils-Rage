@@ -69,7 +69,8 @@ function currentPoint(element: HTMLElement, fallback: { x: number; y: number } |
             y: rect.top - box.top + element.scrollTop + 20 * scale,
         };
     }
-    return fallback ? { x: fallback.x * scale, y: fallback.y * scale } : null;
+    const offset = store.canvasOffset.value;
+    return fallback ? { x: fallback.x * scale + offset.x, y: fallback.y * scale + offset.y } : null;
 }
 
 function scrollToCenter(behavior: ScrollBehavior, force: boolean): void {
@@ -85,7 +86,7 @@ function scrollToCenter(behavior: ScrollBehavior, force: boolean): void {
         width: element.clientWidth,
         height: element.clientHeight,
     };
-    const target = centerScroll(view, point, { rage: is_combat.value, force });
+    const target = centerScroll(view, point, { rage: is_combat.value, force: force || popout, popout });
     const maxTop = element.scrollHeight - element.clientHeight;
     const maxLeft = element.scrollWidth - element.clientWidth;
     if (!target) return;
@@ -184,12 +185,27 @@ const contentSize = computed(() => {
     return { x: maxX + padding, y: maxY + padding };
 });
 
+/**
+ * Patch 54: the pop-out's map has half a window of empty room on every side, so its character
+ * can always sit in the middle, even at the edge of the chain (the map can't scroll past its edges).
+ */
+const room = computed(() => (popout ? { x: Math.round(viewWidth.value / 2), y: Math.round(viewHeight.value / 2) } : { x: 0, y: 0 }));
+watch(room, (value) => (store.canvasOffset.value = value), { immediate: true });
+// The pop-out window resized (or the map folded open): back to the middle.
+watch(room, () => {
+    if (popout) nextTick(() => scrollToCenter('auto', true));
+});
+const surfaceStyle = computed(() => ({
+    ...(scrollableContainerStyle.value ?? {}),
+    ...(popout ? { paddingLeft: `${room.value.x}px`, paddingTop: `${room.value.y}px` } : {}),
+}));
+
 const mapContainerStyle = computed(() => {
     const cell = `${store.config.value.grid_size * store.scale.value}px`;
     const baseStyle = {
         backgroundSize: `${cell} ${cell}`,
-        minHeight: `${contentSize.value.y}px`,
-        minWidth: `${contentSize.value.x}px`,
+        minHeight: `${contentSize.value.y + room.value.y}px`,
+        minWidth: `${contentSize.value.x + room.value.x}px`,
     };
 
     // In "grid" mode the image is painted onto the scaled map content, so it
@@ -261,8 +277,8 @@ function toBasePoint(event: MouseEvent): Vec2 {
     }
     const rect = element.getBoundingClientRect();
     return clientToBase(event.clientX, event.clientY, {
-        rectLeft: rect.left,
-        rectTop: rect.top,
+        rectLeft: rect.left + store.canvasOffset.value.x,
+        rectTop: rect.top + store.canvasOffset.value.y,
         scrollLeft: element.scrollLeft,
         scrollTop: element.scrollTop,
         scale: store.scale.value,
@@ -298,7 +314,7 @@ function handleContextMenu(event: MouseEvent): void {
                 'bg-stone-100 dark:bg-neutral-950': !fullScreenBackground,
                 'bg-transparent': fullScreenBackground,
             }"
-            :style="scrollableContainerStyle"
+            :style="surfaceStyle"
             @contextmenu="handleContextMenu"
         >
             <ContextMenu @update:open="(open) => emit('contextMenuOpenChange', open)">
