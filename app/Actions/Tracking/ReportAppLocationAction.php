@@ -54,6 +54,7 @@ final readonly class ReportAppLocationAction
             'structure_id' => null,
             'app_location_at' => now(),
             'is_online' => true,
+            'last_online_at' => now(),
         ]);
 
         try {

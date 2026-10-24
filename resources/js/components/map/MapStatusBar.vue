@@ -125,7 +125,9 @@ async function popOutDriver(): Promise<void> {
     if (!character) return;
     const backToOpener = waitingToPopOut.value;
     waitingToPopOut.value = false;
-    forgetPopOutHere();
+    // Patch 54: in the desktop app this hidden window only hosts the pop-out: it keeps ?popout=1,
+    // so if the page ever reloads (a deploy) the pop-out comes straight back instead of going.
+    if (!inDesktopApp()) forgetPopOutHere();
     if (!(await openPopOut(character.id, character.name, driverColor.value).catch(() => false))) {
         window.open(urlAs(window.location.href, character.id, true), '_blank', 'popup=yes,width=900,height=440');
         return;
