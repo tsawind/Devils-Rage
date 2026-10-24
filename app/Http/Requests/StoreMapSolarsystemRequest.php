@@ -53,6 +53,8 @@ final class StoreMapSolarsystemRequest extends FormRequest
                 'integer',
                 Rule::exists('map_solarsystems', 'id')->where('map_id', $this->input('map_id')),
             ],
+            // Patch 53: the dotted hole (in the origin system) this new pipe is.
+            'link_signature_id' => ['nullable', 'sometimes', 'integer', 'exists:signatures,id'],
         ];
     }
 }

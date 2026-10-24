@@ -10,7 +10,13 @@ import { router } from '@inertiajs/vue3';
  * links the new system to it in the same request (the "Add connection" flow), so the
  * frontend never needs the new node's id.
  */
-export function createMapSolarsystem(solarsystem_id: number, position: Vec2 | null = null, connectToMapSolarsystemId: number | null = null): void {
+export function createMapSolarsystem(
+    solarsystem_id: number,
+    position: Vec2 | null = null,
+    connectToMapSolarsystemId: number | null = null,
+    /** Patch 53: the dotted hole the new pipe is (and the name it shows), when someone knows where it leads. */
+    hole: { signatureId: number; alias: string | null } | null = null,
+): void {
     const store = useMapStore();
     const meta = store.meta.value;
     if (!meta) {
@@ -32,6 +38,7 @@ export function createMapSolarsystem(solarsystem_id: number, position: Vec2 | nu
             position_x: position.x,
             position_y: position.y,
             ...(connectToMapSolarsystemId != null ? { connect_to_map_solarsystem_id: connectToMapSolarsystemId } : {}),
+            ...(hole ? { link_signature_id: hole.signatureId, alias: hole.alias } : {}),
         },
         {
             preserveState: true,

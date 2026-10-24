@@ -11,6 +11,7 @@ import { changeNames, type TRenameMode } from '@/map/actions/names';
 import { linkedForwardBookmark, pendingHoleBookmark, wayBackBookmark } from '@/map/holeBookmark';
 import { useMapStore } from '@/map/store/mapStore';
 import MapSolarsystems from '@/routes/map-solarsystems';
+import { createMapSolarsystem } from '@/map/actions/createMapSolarsystem';
 import { router } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
@@ -96,6 +97,37 @@ function saveDetails(occupier: string, homeOf: string): void {
     );
 }
 
+/**
+ * Patch 53: the real system. A system on the map: it becomes that system (name, holes and pipes
+ * stay). A dotted hole: that system goes on the map (or is found there: a loop), connected
+ * through this hole.
+ */
+const systemField = computed(() => {
+    if (target.value) return { current: target.value.solarsystem.name, dotted: false };
+    if (pending.value && parent.value) return { current: null, dotted: true };
+    return null;
+});
+function setSystem(solarsystemId: number): void {
+    if (target.value) {
+        router.put(
+            `/map-solarsystems/${target.value.id}/system`,
+            { solarsystem_id: solarsystemId },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                only: ['map', 'selected_map_solarsystem'],
+                onSuccess: () => toast.success('System changed'),
+                onError: (errors) => toast.error(Object.values(errors)[0] ?? 'Could not change the system.'),
+            },
+        );
+        return;
+    }
+    if (pending.value && parent.value) {
+        createMapSolarsystem(solarsystemId, null, parent.value.id, { signatureId: pending.value.id, alias: currentName.value || null });
+        toast.success('Connected through the hole');
+    }
+}
+
 function rename(name: string, copy: boolean, mode: TRenameMode, next: string | null): void {
     const current = request.value;
     if (!current) return;
@@ -131,7 +163,9 @@ function rename(name: string, copy: boolean, mode: TRenameMode, next: string | n
         :holder-of="request?.signatureId ? holderOf : null"
         :jumped="Boolean(target && parent)"
         :details="target ? { occupier: target.occupier_alias ?? '', homeOf: target.home_of ?? '' } : null"
+        :system="systemField"
         @rename="rename"
         @details="saveDetails"
+        @system="setSystem"
     />
 </template>

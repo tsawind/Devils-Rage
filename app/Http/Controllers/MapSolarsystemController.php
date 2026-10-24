@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\MapSolarsystem\ChangeSolarsystemAction;
 use App\Actions\MapSolarsystem\DeleteMapSolarsystemAction;
 use App\Actions\MapSolarsystem\StoreMapSolarsystemAction;
 use App\Actions\MapSolarsystem\UpdateMapSolarsystemAction;
@@ -60,5 +61,18 @@ final class MapSolarsystemController extends Controller
             'Solarsystem deleted!',
             'You have successfully deleted the solarsystem from the map.'
         );
+    }
+
+    /**
+     * Patch 53: the right J-code for a system that went on the map as the wrong one.
+     */
+    public function changeSystem(Request $request, MapSolarsystem $mapSolarsystem, ChangeSolarsystemAction $action): RedirectResponse
+    {
+        Gate::authorize('update', $mapSolarsystem);
+        $validated = $request->validate(['solarsystem_id' => ['required', 'integer', 'exists:solarsystems,id']]);
+
+        $action->handle($mapSolarsystem, (int) $validated['solarsystem_id']);
+
+        return back();
     }
 }

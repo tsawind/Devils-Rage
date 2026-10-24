@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogScrollContent, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { clipboardAllowed } from '@/composables/useClipboardSetting';
+import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import { customLetter, displayAlias, isCustomName, renameProblem } from '@/lib/alias';
 import { visibleBookmarkName } from '@/lib/bookmark';
 import { computed, ref, watch } from 'vue';
@@ -32,13 +33,37 @@ const props = defineProps<{
     holderOf?: ((name: string) => { label: string; next: string | null } | null) | null;
     /** Patch 43: the system's occupier and whose home it is (shown when the system is on the map). */
     details?: { occupier: string; homeOf: string } | null;
+    /**
+     * Patch 53: the real system (J-code): fix a system that went on the map as the wrong one, or
+     * say where a dotted hole leads (the system goes on the map, connected through this hole).
+     */
+    system?: { current: string | null; dotted: boolean } | null;
 }>();
 
 const open = defineModel<boolean>('open', { required: true });
 const emit = defineEmits<{
     rename: [name: string, copy: boolean, mode: TRenameMode, next: string | null];
     details: [occupier: string, homeOf: string];
+    system: [solarsystemId: number];
 }>();
+
+// Patch 53: the J-code (or any system name), looked up in the static data.
+const { solarsystemsById } = useStaticSolarsystems();
+const systemName = ref(props.system?.current ?? '');
+const systemMatch = computed(() => {
+    const wanted = systemName.value.trim().toUpperCase();
+    if (!wanted || wanted === (props.system?.current ?? '').toUpperCase()) return null;
+    for (const solarsystem of solarsystemsById.value.values()) {
+        if (solarsystem.name.toUpperCase() === wanted) return solarsystem;
+    }
+    return undefined;
+});
+function setSystem(): void {
+    const match = systemMatch.value;
+    if (!match) return;
+    emit('system', match.id);
+    open.value = false;
+}
 
 const name = ref(props.currentName);
 const occupier = ref(props.details?.occupier ?? '');
@@ -48,6 +73,7 @@ watch(open, (isOpen) => {
     name.value = props.currentName;
     occupier.value = props.details?.occupier ?? '';
     homeOf.value = props.details?.homeOf ?? '';
+    systemName.value = props.system?.current ?? '';
 });
 const detailsChanged = computed(
     () => Boolean(props.details) && (occupier.value.trim() !== (props.details?.occupier ?? '').trim() || homeOf.value.trim() !== (props.details?.homeOf ?? '').trim()),
@@ -113,6 +139,16 @@ function rename(copy: boolean): void {
                         <span class="text-muted-foreground">🏠 Home of</span>
                         <Input v-model="homeOf" maxlength="100" placeholder="e.g. The Devil's Rage" aria-label="Home of" />
                     </label>
+                </div>
+                <!-- Patch 53: the real system (J-code) -->
+                <div v-if="system" class="grid gap-1">
+                    <span class="text-muted-foreground">{{ system.dotted ? 'Leads to (J-code): puts it on the map, connected through this hole' : 'Real system (J-code)' }}</span>
+                    <div class="flex gap-2">
+                        <Input v-model="systemName" maxlength="24" class="font-mono uppercase" placeholder="J123456" aria-label="Real system" @keydown.enter.prevent.stop="setSystem" />
+                        <Button type="button" variant="secondary" :disabled="!systemMatch" @click="setSystem">{{ system.dotted ? 'Connect' : 'Change' }}</Button>
+                    </div>
+                    <span v-if="systemMatch" class="text-emerald-600 dark:text-emerald-400">{{ systemMatch.name }} · {{ /^\d+$/.test(String(systemMatch.class)) ? `C${systemMatch.class}` : String(systemMatch.class).toUpperCase() }} · {{ systemMatch.region?.name }}</span>
+                    <span v-else-if="systemMatch === undefined" class="text-amber-600 dark:text-amber-300">No system by that name.</span>
                 </div>
                 <p v-if="problem" class="rounded-md bg-amber-500/15 px-3 py-2 text-amber-700 dark:text-amber-300">{{ problem }}</p>
                 <div v-if="holder && !problem" class="grid gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-3 py-2">

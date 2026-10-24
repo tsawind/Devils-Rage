@@ -12,6 +12,7 @@ use App\Jobs\MapAlerts\EvaluateMapAlertsJob;
 use App\Models\Map;
 use App\Models\MapConnection;
 use App\Models\MapSolarsystem;
+use App\Models\Signature;
 use App\Support\Broadcasting\MapBroadcaster;
 use App\Support\ChainMemory;
 use Illuminate\Database\Eloquent\Builder;
@@ -71,7 +72,27 @@ final readonly class StoreMapSolarsystemAction
             AnnounceKnownHomeJob::dispatch($returned_id)->afterCommit();
         }
 
-        $this->connectToOrigin($map, $map_solarsystem, $data['connect_to_map_solarsystem_id'] ?? null);
+        // Patch 53: a dotted hole that someone knows the far side of: the new pipe is that hole
+        // (also when the system is on the map already: a loop).
+        $hole = isset($data['link_signature_id'])
+            ? Signature::query()->where('map_solarsystem_id', $data['connect_to_map_solarsystem_id'] ?? 0)->whereNull('map_connection_id')->find($data['link_signature_id'])
+            : null;
+        $connection = $this->connectToOrigin($map, $map_solarsystem, $data['connect_to_map_solarsystem_id'] ?? null, always: $hole instanceof Signature);
+        if ($hole instanceof Signature && $connection instanceof MapConnection) {
+            $hole->forceFill(['map_connection_id' => $connection->id])->save();
+            if (blank($map_solarsystem->alias) && filled($data['alias'] ?? null)) {
+                $map_solarsystem->forceFill(['alias' => (string) $data['alias']])->save();
+            }
+            $this->mapBroadcaster->connectionsUpserted($map->id, MapConnection::query()
+                ->whereKey($connection->id)
+                ->with('signatures.signatureType', 'signatures.wormhole')
+                ->withJumpSummary()
+                ->get());
+            $origin = MapSolarsystem::query()->find($hole->map_solarsystem_id);
+            if ($origin instanceof MapSolarsystem) {
+                $this->mapBroadcaster->signaturesChanged($origin);
+            }
+        }
 
         $this->mapBroadcaster->systemsUpserted($map->id, MapSolarsystem::query()
             ->whereKey([$map_solarsystem->id, ...$restored['systems']])
@@ -94,10 +115,16 @@ final readonly class StoreMapSolarsystemAction
      * Link the freshly placed system back to the system it was added from (when the user
      * used "Add connection"), skipping self-links and any connection that already exists.
      */
-    private function connectToOrigin(Map $map, MapSolarsystem $target, ?int $origin_id): void
+    private function connectToOrigin(Map $map, MapSolarsystem $target, ?int $origin_id, bool $always = false): ?MapConnection
     {
         if ($origin_id === null || $origin_id === $target->id) {
-            return;
+            return null;
+        }
+        if ($always) {
+            return $this->createMapConnection->handle([
+                'from_map_solarsystem_id' => $origin_id,
+                'to_map_solarsystem_id' => $target->id,
+            ]);
         }
 
         // Each direction must AND its from/to pair, so the two pairs are wrapped in their
@@ -117,10 +144,10 @@ final readonly class StoreMapSolarsystemAction
             ->exists();
 
         if ($already_connected) {
-            return;
+            return null;
         }
 
-        $this->createMapConnection->handle([
+        return $this->createMapConnection->handle([
             'from_map_solarsystem_id' => $origin_id,
             'to_map_solarsystem_id' => $target->id,
         ]);

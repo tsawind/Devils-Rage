@@ -169,6 +169,7 @@ Route::middleware('auth')->group(function () {
     Route::post('map-solarsystems/{mapSolarsystem}/cleanup-convert', [ChainCleanupController::class, 'convert'])->name('map-solarsystems.cleanup.convert');
     Route::delete('map-solarsystems/{mapSolarsystem}/cleanup-return', [ChainCleanupController::class, 'returnDone'])->name('map-solarsystems.cleanup.return');
     Route::post('map-solarsystems/{mapSolarsystem}/names', [MapNamesController::class, 'update'])->name('map-solarsystems.names.update');
+    Route::put('map-solarsystems/{mapSolarsystem}/system', [MapSolarsystemController::class, 'changeSystem'])->name('map-solarsystems.system.update');
     Route::post('map-undo/{token}', [MapUndoController::class, 'store'])->whereUuid('token')->name('map-undo.store');
     Route::put('map-selection', [MapSelectionController::class, 'update'])->name('map-selection.update');
     Route::delete('map-selection', [MapSelectionController::class, 'destroy'])->name('map-selection.destroy');
