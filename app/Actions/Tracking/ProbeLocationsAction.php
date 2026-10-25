@@ -45,7 +45,7 @@ final readonly class ProbeLocationsAction
             if ($token === null || $token->isExpired()) {
                 continue;
             }
-            $ready[(string) $status->id] = ['status' => $status, 'token' => $token->getAccessToken()];
+            $ready['status-'.$status->id] = ['status' => $status, 'token' => $token->getAccessToken()];
         }
         if ($ready === []) {
             return 0;
