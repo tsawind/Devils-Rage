@@ -60,7 +60,7 @@ final class UpdateCharacterLocation implements ShouldQueue
         // without waiting for the rest of the round (every online character's ESI calls).
         $previous_solarsystem_id = $characterStatus->solarsystem_id;
         $appTrusted = $characterStatus->app_location_at?->gt(now()->subSeconds(ReportAppLocationAction::TRUSTED_FOR_SECONDS)) ?? false;
-        if ($characterStatus->solarsystem_id !== null && $location->solar_system_id !== $characterStatus->solarsystem_id && ! $appTrusted) {
+        if ($location->solar_system_id !== $characterStatus->solarsystem_id && ! $appTrusted) {
             $characterStatus->update([
                 'solarsystem_id' => $location->solar_system_id,
                 'station_id' => $location->station_id,
@@ -75,7 +75,7 @@ final class UpdateCharacterLocation implements ShouldQueue
         if ($ship_request->failed()) {
             Log::info(sprintf('Failed to fetch ship for character %d', $characterStatus->character_id), (array) $ship_request);
             // Moved above already: the jump is still logged (with the ship it had).
-            if ($previous_solarsystem_id !== null && $previous_solarsystem_id !== $location->solar_system_id) {
+            if ($previous_solarsystem_id !== $location->solar_system_id) {
                 try {
                     $recordJumpAction->handle($characterStatus->character_id, $previous_solarsystem_id, $location->solar_system_id, $characterStatus->ship_type_id, $characterStatus->ship_name);
                 } catch (Throwable $exception) {
