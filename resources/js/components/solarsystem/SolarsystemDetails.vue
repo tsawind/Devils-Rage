@@ -8,7 +8,9 @@ import usePermission from '@/composables/usePermission';
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import MapSolarsystems from '@/routes/map-solarsystems';
 import { useForm } from '@inertiajs/vue3';
-import { Pencil } from 'lucide-vue-next';
+import SystemIntelDialog from '@/components/intel/SystemIntelDialog.vue';
+import { displayAlias } from '@/lib/alias';
+import { Maximize2, Pencil } from 'lucide-vue-next';
 import markdownit from 'markdown-it';
 import attr from 'markdown-it-link-attributes';
 import { computed, ref, watch } from 'vue';
@@ -20,6 +22,9 @@ const { map_solarsystem } = defineProps<{
 const { canEdit: can_write } = usePermission();
 
 const editing = ref(false);
+// Patch 55: the system's intel, opened big (structures, scans, screenshots, who lives there).
+const intelOpen = ref(false);
+const systemLabel = computed(() => [displayAlias(map_solarsystem.alias), map_solarsystem.solarsystem?.name].filter(Boolean).join(' · '));
 
 const form = useForm({
     notes: map_solarsystem.notes || '',
@@ -71,6 +76,16 @@ watch(
         <MapPanelHeader>
             Notes
             <template #actions>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    class="h-5 gap-1 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                    title="Intel: structures, D-scans, fits, screenshots and who lives here, in a big window"
+                    type="button"
+                    @click="intelOpen = true"
+                >
+                    <Maximize2 class="size-3" /> Intel
+                </Button>
                 <template v-if="editing && can_write">
                     <Button variant="ghost" size="sm" class="h-5 px-1.5 text-[11px]" @click="editing = false" type="button"> Cancel </Button>
                     <Button
@@ -111,5 +126,6 @@ watch(
                 <p class="font-sans font-semibold text-[11px] tracking-wider text-muted-foreground/60 uppercase">No notes</p>
             </div>
         </MapPanelContent>
+        <SystemIntelDialog v-model:open="intelOpen" :map-solarsystem-id="map_solarsystem.id" :system-label="systemLabel" />
     </MapPanel>
 </template>

@@ -16,11 +16,12 @@ import { computed, ref, watch, type HTMLAttributes } from 'vue'
 import DialogBroadcast from './DialogBroadcast.vue'
 import DialogMirror from './DialogMirror.vue'
 
-const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>()
+// Patch 55: `local` keeps a big window (intel) in the window it opened in: no copy in the pop-out.
+const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class']; local?: boolean }>()
 const emits = defineEmits<DialogContentEmits>()
 
 const delegatedProps = computed(() => {
-  const { class: _, ...delegated } = props
+  const { class: _, local: __, ...delegated } = props
 
   return delegated
 })
@@ -38,7 +39,7 @@ watch(
   (open) => {
     if (!open) return
     openedIn.value = portalTo.value
-    mirrorTo.value = mirrorTargetFor(portalTo.value)
+    mirrorTo.value = props.local ? undefined : mirrorTargetFor(portalTo.value)
   },
   { immediate: true, flush: 'sync' },
 )
@@ -67,7 +68,7 @@ watch(
       >
         <slot />
         <DialogMirror :to="mirrorTo" :class="props.class"><slot /></DialogMirror>
-        <DialogBroadcast />
+        <DialogBroadcast v-if="!props.local" />
 
         <DialogClose
           class="absolute top-4 right-4 p-0.5 transition-colors rounded-md hover:bg-secondary"

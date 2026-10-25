@@ -16,11 +16,12 @@ import DialogBroadcast from './DialogBroadcast.vue'
 import DialogMirror from './DialogMirror.vue'
 import DialogOverlay from './DialogOverlay.vue'
 
-const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>()
+// Patch 55: `local` keeps a big window (intel) in the window it opened in: no copy in the pop-out.
+const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class']; local?: boolean }>()
 const emits = defineEmits<DialogContentEmits>()
 
 const delegatedProps = computed(() => {
-  const { class: _, ...delegated } = props
+  const { class: _, local: __, ...delegated } = props
 
   return delegated
 })
@@ -38,7 +39,7 @@ watch(
   (open) => {
     if (!open) return
     openedIn.value = portalTo.value
-    mirrorTo.value = mirrorTargetFor(portalTo.value)
+    mirrorTo.value = props.local ? undefined : mirrorTargetFor(portalTo.value)
   },
   { immediate: true, flush: 'sync' },
 )
@@ -58,7 +59,7 @@ watch(
     >
       <slot />
       <DialogMirror :to="mirrorTo" :class="props.class"><slot /></DialogMirror>
-      <DialogBroadcast />
+      <DialogBroadcast v-if="!props.local" />
 
       <DialogClose
         class="ring-offset-background focus:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-4 right-4 rounded-xs opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"

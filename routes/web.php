@@ -74,6 +74,7 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SignatureArmController;
 use App\Http\Controllers\SignatureController;
 use App\Http\Controllers\StatisticsController;
+use App\Http\Controllers\SystemIntelController;
 use App\Http\Controllers\SystemNoteController;
 use App\Http\Controllers\TokenManagementController;
 use App\Http\Controllers\TrackingController;
@@ -169,6 +170,14 @@ Route::middleware('auth')->group(function () {
     Route::delete('maps/{map}/combat-chains/{color}', [MapCombatController::class, 'clearChain'])->name('maps.combat-chains.destroy');
     Route::post('map-solarsystems/{mapSolarsystem}/cleanup', [ChainCleanupController::class, 'store'])->name('map-solarsystems.cleanup.store');
     Route::post('map-solarsystems/{mapSolarsystem}/notes', [SystemNoteController::class, 'store'])->name('map-solarsystems.notes.store');
+    // Patch 55: a system's intel: structures / POS, D-scans, fits, screenshots, notes, and who lives there.
+    Route::get('map-solarsystems/{mapSolarsystem}/intel', [SystemIntelController::class, 'show'])->name('map-solarsystems.intel.show');
+    Route::post('map-solarsystems/{mapSolarsystem}/intel/structures', [SystemIntelController::class, 'storeStructure'])->name('map-solarsystems.intel.structures.store');
+    Route::put('map-solarsystems/{mapSolarsystem}/intel/structures/{structure}', [SystemIntelController::class, 'updateStructure'])->name('map-solarsystems.intel.structures.update');
+    Route::delete('map-solarsystems/{mapSolarsystem}/intel/structures/{structure}', [SystemIntelController::class, 'destroyStructure'])->name('map-solarsystems.intel.structures.destroy');
+    Route::post('map-solarsystems/{mapSolarsystem}/intel/entries', [SystemIntelController::class, 'storeEntry'])->middleware('throttle:60,1')->name('map-solarsystems.intel.entries.store');
+    Route::post('map-solarsystems/{mapSolarsystem}/intel/screenshots', [SystemIntelController::class, 'storeScreenshot'])->middleware('throttle:30,1')->name('map-solarsystems.intel.screenshots.store');
+    Route::get('map-solarsystems/{mapSolarsystem}/intel/screenshots/{entry}', [SystemIntelController::class, 'screenshot'])->name('map-solarsystems.intel.screenshot');
     Route::post('map-solarsystems/{mapSolarsystem}/cleanup-convert', [ChainCleanupController::class, 'convert'])->name('map-solarsystems.cleanup.convert');
     Route::delete('map-solarsystems/{mapSolarsystem}/cleanup-return', [ChainCleanupController::class, 'returnDone'])->name('map-solarsystems.cleanup.return');
     Route::post('map-solarsystems/{mapSolarsystem}/names', [MapNamesController::class, 'update'])->name('map-solarsystems.names.update');
