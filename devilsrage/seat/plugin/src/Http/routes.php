@@ -10,6 +10,7 @@ use DevilsRage\Seat\Http\Controllers\PlannerController;
 use DevilsRage\Seat\Http\Controllers\RemindersController;
 use DevilsRage\Seat\Http\Controllers\SkillPlansController;
 use DevilsRage\Seat\Http\Controllers\SpFarmController;
+use DevilsRage\Seat\Http\Controllers\SrpBattleController;
 use DevilsRage\Seat\Http\Controllers\SuggestionsController;
 use DevilsRage\Seat\Http\Middleware\BotApiKey;
 use Illuminate\Routing\Middleware\ThrottleRequests;
@@ -34,6 +35,9 @@ Route::group([
     Route::post('accounts/{account}/characters/order', [AccountsController::class, 'orderCharacters'])->name('devilsrage.accounts.characters.order');
     // Patch 50: PI screen (the app's PI tab; works in a browser too) and its opt-in daily message.
     Route::get('pi', [PiController::class, 'screen'])->name('devilsrage.pi');
+    // Patch 54: SRP for a whole fight (zKillboard / br.evetools related link, or kill links).
+    Route::get('srp-battle', [SrpBattleController::class, 'index'])->middleware('can:srp.request')->name('devilsrage.srp.battle');
+    Route::post('srp-battle', [SrpBattleController::class, 'file'])->middleware('can:srp.request')->name('devilsrage.srp.battle.file');
     Route::post('pi/alerts', [PiController::class, 'saveAlerts'])->name('devilsrage.pi.alerts');
     Route::post('pi/alerts/test', [PiController::class, 'testAlert'])->name('devilsrage.pi.alerts.test');
     Route::post('pi/update', [PiController::class, 'forceUpdate'])->name('devilsrage.pi.update');

@@ -8,6 +8,7 @@ use DevilsRage\Seat\Commands\ImportLibraryFits;
 use DevilsRage\Seat\Commands\PiHourly;
 use DevilsRage\Seat\Commands\RemindOmega;
 use DevilsRage\Seat\Http\Composers\FolderedSidebar;
+use DevilsRage\Seat\Http\Middleware\NormalizeSrpLink;
 use DevilsRage\Seat\Http\Middleware\StartPage;
 use DevilsRage\Seat\Seeders\ScheduleSeeder;
 use DevilsRage\Seat\Services\Corporation;
@@ -37,6 +38,8 @@ class DevilsRageServiceProvider extends AbstractSeatPlugin
             View::composer('web::includes.sidebar', FolderedSidebar::class);
         });
         $this->app['router']->pushMiddlewareToGroup('web', StartPage::class);
+        // Patch 54: SRP takes zKillboard, ESI (with ?datasource) and in-game kill links.
+        $this->app['router']->pushMiddlewareToGroup('web', NormalizeSrpLink::class);
 
         // Patch 49: a character logged in on SeAT comes back to My accounts.
         LoginReturn::listen();

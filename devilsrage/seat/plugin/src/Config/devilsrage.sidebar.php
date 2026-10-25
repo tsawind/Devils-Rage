@@ -29,6 +29,12 @@ return [
                 'route' => 'devilsrage.pi',
             ],
             [
+                'name' => 'SRP a battle',
+                'icon' => 'fas fa-life-ring',
+                'route' => 'devilsrage.srp.battle',
+                'permission' => 'srp.request',
+            ],
+            [
                 'name' => 'Skill plans',
                 'icon' => 'fas fa-graduation-cap',
                 'route' => 'devilsrage.skillplans.index',
