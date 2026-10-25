@@ -97,6 +97,9 @@ case "$ACTION" in
         ' 2>&1 | cut -c1-240
         echo "== Pricing our losses of the last 3 days (dry run, nothing filed)"
         docker compose exec -T front php artisan tinker --execute='
+            echo "SRP mode advanced=", json_encode(setting("cryptatech_seat_srp_advanced_srp", true)), " simple_source=", json_encode(setting("cryptatech_seat_srp_simple_source", true)), " advanced_default_source=", json_encode(setting("cryptatech_seat_srp_advrule_def_source", true)), PHP_EOL;
+            echo "Price providers: ", json_encode(RecursiveTree\Seat\PricesCore\Models\PriceProviderInstance::query()->get(["id", "name", "backend"])), PHP_EOL;
+            echo "Rules: ", Seat\Eveapi\Models\Killmails\Killmail::query()->getConnection()->table("cryptatech_seat_srp_advrule")->count(), PHP_EOL;
             $ids = Seat\Eveapi\Models\Killmails\KillmailDetail::query()->where("killmail_time", ">=", now()->subDays(3))->pluck("killmail_id");
             $ours = Seat\Eveapi\Models\RefreshToken::query()->pluck("character_id")->all();
             $p = new class { use CryptaTech\Seat\SeatSrp\Helpers\SrpManager; public function run($k) { return $this->srpPopulateSlots($k); } };
