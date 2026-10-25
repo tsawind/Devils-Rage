@@ -64,21 +64,27 @@ case "$ACTION" in
             | cut -c1-400 || echo "(none)"
         ;;
     seat-trace|mapper-trace)
-        # The newest real errors (not ESI's [http …] noise) with a few lines of their stack trace,
-        # from every log file of the last day; anything that looks like a key or token is masked.
+        # The real errors of the last 6 hours (not ESI's [http …] or market-history noise) with a
+        # few lines of their trace, oldest first, plus PHP / web server errors from the container
+        # output. Anything that looks like a key or token is masked.
+        since=$(date -u -d '-6 hours' '+%Y-%m-%d %H:%M:%S')
         if [ "$ACTION" = seat-trace ]; then
             cd "$HOME/seat-docker"
-            logs=$(docker compose exec -T front sh -c 'find storage/logs -name "*.log" -mtime -1 -print0 2>/dev/null | xargs -0 -r tail -q -n 4000' || true)
+            logs=$(docker compose exec -T front sh -c 'find storage/logs -name "*.log" -mtime -1 -print0 2>/dev/null | xargs -0 -r cat' || true)
+            raw=$(docker compose logs --no-color --since 6h front 2>&1 || true)
         else
             cd "$STACK"
-            logs=$("${C[@]}" exec -T app sh -c 'find storage/logs -name "*.log" -mtime -1 -print0 2>/dev/null | xargs -0 -r tail -q -n 4000' || true)
+            logs=$("${C[@]}" exec -T app sh -c 'find storage/logs -name "*.log" -mtime -1 -print0 2>/dev/null | xargs -0 -r cat' || true)
+            raw=$("${C[@]}" logs --no-color --since 6h app 2>&1 || true)
         fi
-        echo "== Newest errors with their trace"
+        mask() { sed -E 's/[A-Za-z0-9_+\/=-]{32,}/[masked]/g; s/(password|secret|token|key)=[^ &"]*/\1=[masked]/gi' | cut -c1-300; }
+        echo "== Errors since $since UTC (oldest first)"
         printf '%s\n' "$logs" \
-            | awk '/^\[[0-9-]+ [0-9:]+\] / { keep = ($0 ~ /^\[[0-9-]+ [0-9:]+\] [a-z]+\.(ERROR|CRITICAL|EMERGENCY)/ && $0 !~ /\[http [0-9]+/); n = 0 } keep && n < 14 { print; n++ }' \
-            | tail -n 45 \
-            | sed -E 's/[A-Za-z0-9_+\/=-]{32,}/[masked]/g; s/(password|secret|token|key)=[^ &"]*/\1=[masked]/gi' \
-            | cut -c1-300 || echo "(none)"
+            | awk -v since="$since" '/^\[[0-9-]+ [0-9:]+\] / { ts = substr($0, 2, 19); keep = (ts >= since && $0 ~ /\.(ERROR|CRITICAL|EMERGENCY)/ && $0 !~ /\[http [0-9]+|not found on market/); if (keep) { print "@@" ts } n = 0 } keep && n < 12 { print; n++ }' \
+            | awk '/^@@/ { ts = substr($0, 3); next } { print ts "\t" $0 }' | sort -s -k1,2 | cut -f2- \
+            | tail -n 60 | mask || echo "(none)"
+        echo "== PHP / web server errors in the container output"
+        printf '%s\n' "$raw" | grep -iE 'php (fatal|warning|parse)|fatal error|exception|\] \[(php|proxy_fcgi):error\]|AH0[0-9]+' | tail -n 15 | mask || echo "(none)"
         ;;
     mapper-timing)
         # Patch 54: how long ESI location rounds take, when jumps were noticed (ESI or the app's
