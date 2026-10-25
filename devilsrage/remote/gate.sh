@@ -81,7 +81,7 @@ case "$ACTION" in
         echo "== Errors since $since UTC (oldest first)"
         printf '%s\n' "$logs" \
             | awk -v since="$since" '/^\[[0-9-]+ [0-9:]+\] / { ts = substr($0, 2, 19); keep = (ts >= since && $0 ~ /\.(ERROR|CRITICAL|EMERGENCY)/ && $0 !~ /\[http [0-9]+|not found on market|RedisException|Connection refused/); if (keep) { print "@@" ts } n = 0 } keep && n < 40 { print; n++ }' \
-            | awk '/^@@/ { ts = substr($0, 3); next } { print ts "\t" $0 }' | sort -s -k1,2 | cut -f2- \
+            | awk '/^@@/ { ts = substr($0, 3); next } { print ts "\t" $0 }' | sort -s -t "$(printf '\t')" -k1,1 | cut -f2- \
             | tail -n 120 | mask || echo "(none)"
         echo "== PHP / web server errors in the container output"
         printf '%s\n' "$raw" | grep -iE 'php (fatal|warning|parse)|fatal error|exception|\] \[(php|proxy_fcgi):error\]|AH0[0-9]+' | tail -n 15 | mask || echo "(none)"
