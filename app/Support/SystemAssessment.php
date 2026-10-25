@@ -65,7 +65,7 @@ final class SystemAssessment
             }
         }
 
-        uasort($corps, fn (array $a, array $b): int => [count($b['days'] ?? []), ($b['kills'] ?? 0) + ($b['losses'] ?? 0)] <=> [count($a['days'] ?? []), ($a['kills'] ?? 0) + ($a['losses'] ?? 0)]);
+        uasort($corps, fn (array $a, array $b): int => [count($b['days']), ($b['kills'] ?? 0) + ($b['losses'] ?? 0)] <=> [count($a['days']), ($a['kills'] ?? 0) + ($a['losses'] ?? 0)]);
         $topCorps = array_slice($corps, 0, 6, true);
         $corpNames = Corporation::query()->whereKey(array_keys($topCorps))->pluck('name', 'id');
         arsort($ships);
@@ -79,16 +79,16 @@ final class SystemAssessment
             'hours' => $hours,
             'peak' => self::peak($hours),
             'fleet' => $fleetSizes === [] ? null : ['median' => $fleetSizes[intdiv(count($fleetSizes), 2)], 'max' => end($fleetSizes)],
-            'corporations' => array_values(array_map(
-                fn (int $id, array $corp): array => ['name' => (string) ($corpNames[$id] ?? "Corp $id"), 'kills' => $corp['kills'] ?? 0, 'losses' => $corp['losses'] ?? 0, 'days' => count($corp['days'] ?? [])],
+            'corporations' => array_map(
+                fn (int $id, array $corp): array => ['name' => (string) ($corpNames[$id] ?? "Corp $id"), 'kills' => $corp['kills'] ?? 0, 'losses' => $corp['losses'] ?? 0, 'days' => count($corp['days'])],
                 array_keys($topCorps),
                 $topCorps,
-            )),
-            'ships' => array_values(array_map(
+            ),
+            'ships' => array_map(
                 fn (int $id, int $count): array => ['name' => (string) ($shipNames[$id] ?? "Type $id"), 'count' => $count],
                 array_keys($topShips),
                 $topShips,
-            )),
+            ),
         ];
     }
 
