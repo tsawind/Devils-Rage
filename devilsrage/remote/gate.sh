@@ -94,8 +94,20 @@ case "$ACTION" in
             echo "== Files defining srpPopulateSlots"; grep -rln "function srpPopulateSlots" vendor 2>/dev/null
             echo "== ESI calls in the SRP plugin"; grep -rn "invoke(\|Eseye\|EsiClient\|killmails/" vendor/cryptatech/seat-srp/src --include=*.php 2>/dev/null | cut -c1-220
             f=$(grep -rln "function srpPopulateSlots" vendor 2>/dev/null | head -1)
-            [ -n "$f" ] && { echo "== $f lines 300-335"; sed -n 300,335p "$f"; }
         ' 2>&1 | cut -c1-240
+        echo "== Pricing our losses of the last 3 days (dry run, nothing filed)"
+        docker compose exec -T front php artisan tinker --execute='
+            $ids = Seat\Eveapi\Models\Killmails\KillmailDetail::query()->where("killmail_time", ">=", now()->subDays(3))->pluck("killmail_id");
+            $ours = Seat\Eveapi\Models\RefreshToken::query()->pluck("character_id")->all();
+            $p = new class { use CryptaTech\Seat\SeatSrp\Helpers\SrpManager; public function run($k) { return $this->srpPopulateSlots($k); } };
+            foreach (Seat\Eveapi\Models\Killmails\KillmailVictim::query()->whereIn("killmail_id", $ids)->whereIn("character_id", $ours)->limit(12)->get() as $v) {
+                $k = Seat\Eveapi\Models\Killmails\Killmail::query()->find($v->killmail_id);
+                $line = $v->killmail_id." hash=".strlen((string) $k?->killmail_hash)." chars ";
+                try { $s = $p->run($k); $line .= "ok ".($s["shipType"] ?? "?")." ".json_encode($s["price"]["error"] ?? null); }
+                catch (Throwable $e) { $line .= "FAILS ".get_class($e).": ".$e->getMessage()." @ ".basename($e->getFile()).":".$e->getLine()." | ".implode(" < ", array_map(fn ($f) => basename($f["file"] ?? "?").":".($f["line"] ?? "?"), array_slice($e->getTrace(), 0, 8))); }
+                echo $line, PHP_EOL;
+            }
+        ' 2>&1 | cut -c1-400
         ;;
     update-gate)
         # Only fetches the newest scripts (this file included): no build, nothing restarts.
