@@ -86,6 +86,17 @@ case "$ACTION" in
         echo "== PHP / web server errors in the container output"
         printf '%s\n' "$raw" | grep -iE 'php (fatal|warning|parse)|fatal error|exception|\] \[(php|proxy_fcgi):error\]|AH0[0-9]+' | tail -n 15 | mask || echo "(none)"
         ;;
+    seat-srp-check)
+        # Which SRP code SeAT really runs: its version and every place it calls ESI. Code only.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front sh -c '
+            echo "== seat-srp version"; composer show cryptatech/seat-srp 2>/dev/null | grep -E "^(versions|source)" || true
+            echo "== Files defining srpPopulateSlots"; grep -rln "function srpPopulateSlots" vendor 2>/dev/null
+            echo "== ESI calls in the SRP plugin"; grep -rn "invoke(\|Eseye\|EsiClient\|killmails/" vendor/cryptatech/seat-srp/src --include=*.php 2>/dev/null | cut -c1-220
+            f=$(grep -rln "function srpPopulateSlots" vendor 2>/dev/null | head -1)
+            [ -n "$f" ] && { echo "== $f lines 300-335"; sed -n 300,335p "$f"; }
+        ' 2>&1 | cut -c1-240
+        ;;
     update-gate)
         # Only fetches the newest scripts (this file included): no build, nothing restarts.
         cd "$REPO" && git pull --ff-only && git log --oneline -1
@@ -119,7 +130,7 @@ case "$ACTION" in
         ;;
     *)
         echo "!! Unknown action: $ACTION"
-        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde"
+        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check"
         exit 2
         ;;
 esac
