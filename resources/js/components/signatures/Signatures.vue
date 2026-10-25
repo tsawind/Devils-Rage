@@ -997,12 +997,12 @@ function createNewSignature() {
                 v-for="row in ghost_rows"
                 :key="row.key"
                 class="grid grid-cols-[minmax(3.5rem,auto)_5rem_1fr_auto] items-center gap-3 border-b border-border/30 px-3 py-1 font-mono text-xs"
-                :class="row.isStatic ? 'bg-emerald-500/10 text-emerald-200/90' : 'bg-sky-500/10 text-sky-200/90'"
+                :class="row.isStatic ? 'bg-yellow-500/10 text-yellow-200/90' : 'bg-sky-500/10 text-sky-200/90'"
                 :title="row.title"
             >
                 <span class="truncate font-semibold">{{ row.name }}</span>
                 <span class="text-muted-foreground">???-???</span>
-                <span class="truncate">{{ row.type }}<span v-if="row.isStatic" class="ml-1 rounded bg-emerald-600/70 px-1 font-sans text-[9px] text-white">static</span></span>
+                <span class="truncate">{{ row.type }}<span v-if="row.isStatic" class="ml-1 rounded bg-yellow-500 px-1 font-sans text-[9px] text-yellow-950">static</span></span>
                 <span class="truncate text-muted-foreground">→ {{ row.target }}</span>
             </div>
             <div v-if="!sorted.length && !ghost_rows.length" class="flex h-full flex-col items-center justify-center gap-2 p-4">

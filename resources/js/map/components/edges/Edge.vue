@@ -99,14 +99,14 @@ function getShipSizeLabel(size?: TShipSize | null): string | null {
 const indicators = computed<EdgeIndicator[]>(() => {
     const items: EdgeIndicator[] = [];
 
-    // Patch 21: the static sits inside the pill, in green ("Static?" in yellow when in doubt).
+    // Patch 21: the static sits inside the pill. Patch 54: in yellow ("Static?" dashed yellow when in doubt).
     if (staticEnd) {
         items.push({
             type: 'static',
             label: staticEnd.doubt ? 'Static?' : 'Static',
             strong: staticEnd.doubt,
-            fill: 'var(--color-green-700)',
-            stroke: 'var(--color-green-800)',
+            fill: 'var(--color-yellow-500)',
+            stroke: 'var(--color-yellow-600)',
             copy: forwardCopy.value === 'on' ? 'on' : undefined,
         });
     }

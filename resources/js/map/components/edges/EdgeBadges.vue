@@ -41,7 +41,7 @@ function onPartClick(event: MouseEvent, indicator: EdgeIndicator): void {
 const size = computed(() => badgeSize(indicators));
 const lines = computed(() => badgeLines(indicators));
 
-/** The dot's colour: Static green, else EOL purple, else the first part's. */
+/** The dot's colour: Static yellow (patch 54), else EOL purple, else the first part's. */
 const dotColor = computed(() => (indicators.find((item) => item.type === 'static') ?? indicators.find((item) => item.type === 'eol') ?? indicators[0])?.fill ?? 'var(--color-neutral-500)');
 </script>
 
@@ -77,8 +77,8 @@ const dotColor = computed(() => (indicators.find((item) => item.type === 'static
                         :class="
                             indicator.type === 'static'
                                 ? indicator.strong
-                                    ? 'bg-yellow-700 text-yellow-100'
-                                    : 'bg-green-800 text-green-100'
+                                    ? 'border border-dashed border-yellow-500 text-yellow-400'
+                                    : 'bg-yellow-500 text-yellow-950'
                                 : indicator.closing
                                   ? 'animate-pulse bg-red-800 text-red-50'
                                   : indicator.strong

@@ -52,7 +52,7 @@ function pillParts(placeholder: TPlaceholder, facts: ReturnType<typeof holeFacts
     // Patch 37: the type is a green chip that copies the hole's bookmark; an expected static has no sig yet (faint).
     const copy: 'on' | 'faint' = placeholder.expected ? 'faint' : 'on';
     if (placeholder.isStatic || placeholder.expected) {
-        parts.push({ type: 'static', label: 'Static', fill: 'var(--color-green-700)', stroke: 'var(--color-green-800)', copy: copy === 'on' ? 'on' : undefined });
+        parts.push({ type: 'static', label: 'Static', fill: 'var(--color-yellow-500)', stroke: 'var(--color-yellow-600)', copy: copy === 'on' ? 'on' : undefined });
     } else if (placeholder.maybeStatic) {
         parts.push({ type: 'static', label: 'Static?', strong: true, fill: 'var(--color-yellow-600)', stroke: 'var(--color-yellow-700)' });
     }
@@ -241,8 +241,8 @@ const items = computed(() => {
                     width: `${NODE_WIDTH * scale}px`,
                     height: `${NODE_HEIGHT * scale}px`,
                     ...(hex ? { borderColor: `${hex}b3` } : {}),
-                    // Patch 18: a static nobody has identified yet: faint green, like the signature pills.
-                    ...(placeholder.expected ? { borderStyle: 'dotted', borderColor: 'rgba(34, 197, 94, 0.55)', backgroundColor: 'rgba(12, 26, 16, 0.7)', color: '#dcfce7' } : {}),
+                    // Patch 18: a static nobody has identified yet: dotted. Patch 54: in the statics' yellow.
+                    ...(placeholder.expected ? { borderStyle: 'dotted', borderColor: 'rgba(234, 179, 8, 0.6)', backgroundColor: 'rgba(28, 24, 6, 0.72)', color: '#fef9c3' } : {}),
                     // Patch 13: armed as someone's next jump.
                     ...(placeholder.armedBy ? { borderColor: '#ef4444', borderWidth: '2px', borderStyle: 'dashed' } : {}),
                 },
@@ -304,12 +304,12 @@ const chips = computed(() => {
         <svg class="absolute inset-0 h-full w-full overflow-visible" xmlns="http://www.w3.org/2000/svg">
             <template v-for="item in items" :key="`line-${item.nodeId}`">
                 <template v-if="item.pipe">
-                    <!-- Patch 18: a static nobody has identified yet: a soft green band under the stripes -->
+                    <!-- Patch 18: a static nobody has identified yet: a soft band under the stripes (patch 54: yellow) -->
                     <path
                         v-if="item.expected"
                         :d="item.path"
                         fill="none"
-                        stroke="#16a34a"
+                        stroke="#eab308"
                         :stroke-width="item.pipe.width + 8"
                         stroke-opacity="0.22"
                         stroke-linecap="round"

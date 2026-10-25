@@ -150,7 +150,7 @@ function copy(): void {
                 <span class="font-semibold">{{ details.title }}</span>
                 <span class="text-xs text-muted-foreground">not jumped yet</span>
             </div>
-            <span v-if="details.static" class="mt-1 inline-block rounded-full bg-green-800 px-1.5 text-[10px] leading-[14px] font-bold text-green-100">{{ details.static }}</span>
+            <span v-if="details.static" class="mt-1 inline-block rounded-full bg-yellow-500 px-1.5 text-[10px] leading-[14px] font-bold text-yellow-950">{{ details.static }}</span>
             <dl class="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
                 <dt class="text-muted-foreground">Sig in {{ details.where }}</dt>
                 <dd class="font-mono">{{ details.signature }}</dd>

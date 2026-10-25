@@ -74,11 +74,11 @@ describe('Edge ship size badge', () => {
 });
 
 describe('patch 21: Static and EOL inside the pill', () => {
-    it('puts the static in the pill, in green', () => {
+    it('puts the static in the pill, in yellow (patch 54)', () => {
         const wrapper = mount(Edge, { props: { geometry, connection: connection(), staticEnd: { side: 'from', doubt: false }, scale: 1 } });
         const pill = wrapper.find('foreignObject');
         expect(pill.text()).toContain('Static');
-        expect(pill.find('.bg-green-800').exists()).toBe(true);
+        expect(pill.find('.bg-yellow-500').exists()).toBe(true);
         // No separate floating "Static" label any more.
         expect(wrapper.findAll('text').some((text) => text.text().includes('Static'))).toBe(false);
     });
