@@ -69,6 +69,7 @@ class SrpBattleController extends Controller
             'notes' => $notes,
             'srpInstalled' => class_exists(\CryptaTech\Seat\SeatSrp\Models\KillMail::class),
             'settler' => Gate::allows('srp.settle'),
+            'priced' => class_exists(\CryptaTech\Seat\SeatSrp\Models\KillMail::class) && SrpFiler::hasPriceSource(),
         ]);
     }
 
@@ -96,7 +97,12 @@ class SrpBattleController extends Controller
 
                 continue;
             }
-            $result = $filer->file($killmail, $owner);
+            try {
+                $result = $filer->file($killmail, $owner);
+            } catch (\Throwable $e) {
+                report($e);
+                $result = ['ok' => false, 'message' => 'SRP refused it: '.mb_strimwidth($e->getMessage(), 0, 120, '…')];
+            }
             $result['ok'] ? $filed++ : $skipped[] = "$killId ({$result['message']})";
         }
 

@@ -32,7 +32,12 @@
 
   @if(! $srpInstalled)
     <div class="alert alert-danger">The SRP plugin isn't installed on this SeAT.</div>
-  @elseif($link !== '' || $extra !== '')
+  @else
+    @if(! $priced)
+      <div class="alert alert-warning py-2">SRP can't price losses yet: no price provider is picked. An admin adds one under <b>Settings &gt; Price Providers</b>, then picks it under <b>SRP &gt; Settings</b>.</div>
+    @endif
+  @endif
+  @if($srpInstalled && ($link !== '' || $extra !== ''))
     <div class="card">
       <div class="card-header">
         <h3 class="card-title">
