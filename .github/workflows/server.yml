@@ -12,7 +12,7 @@ on:
       action:
         description: 'What to do on the server'
         type: choice
-        options: [status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-sde]
+        options: [status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, seat-sde]
         default: status
 
 permissions:

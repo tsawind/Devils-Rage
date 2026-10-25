@@ -63,6 +63,23 @@ case "$ACTION" in
             | sed -E 's/[A-Za-z0-9_+\/=-]{32,}/[masked]/g; s/(password|secret|token|key)=[^ &"]*/\1=[masked]/gi' \
             | cut -c1-400 || echo "(none)"
         ;;
+    seat-trace|mapper-trace)
+        # The newest real errors (not ESI's [http …] noise) with a few lines of their stack trace,
+        # from every log file of the last day; anything that looks like a key or token is masked.
+        if [ "$ACTION" = seat-trace ]; then
+            cd "$HOME/seat-docker"
+            logs=$(docker compose exec -T front sh -c 'find storage/logs -name "*.log" -mtime -1 -print0 2>/dev/null | xargs -0 -r tail -q -n 4000' || true)
+        else
+            cd "$STACK"
+            logs=$("${C[@]}" exec -T app sh -c 'find storage/logs -name "*.log" -mtime -1 -print0 2>/dev/null | xargs -0 -r tail -q -n 4000' || true)
+        fi
+        echo "== Newest errors with their trace"
+        printf '%s\n' "$logs" \
+            | awk '/^\[[0-9-]+ [0-9:]+\] / { keep = ($0 ~ /^\[[0-9-]+ [0-9:]+\] [a-z]+\.(ERROR|CRITICAL|EMERGENCY)/ && $0 !~ /\[http [0-9]+/); n = 0 } keep && n < 14 { print; n++ }' \
+            | tail -n 45 \
+            | sed -E 's/[A-Za-z0-9_+\/=-]{32,}/[masked]/g; s/(password|secret|token|key)=[^ &"]*/\1=[masked]/gi' \
+            | cut -c1-300 || echo "(none)"
+        ;;
     mapper-timing)
         # Patch 54: how long ESI location rounds take, when jumps were noticed (ESI or the app's
         # chat logs), and the queue's backlog. Character ids and seconds only.
@@ -92,7 +109,7 @@ case "$ACTION" in
         ;;
     *)
         echo "!! Unknown action: $ACTION"
-        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-sde"
+        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, seat-sde"
         exit 2
         ;;
 esac
