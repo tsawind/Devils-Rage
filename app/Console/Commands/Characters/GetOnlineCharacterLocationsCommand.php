@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Console\Commands\Characters;
 
+use App\Actions\Tracking\ProbeLocationsAction;
 use App\Console\Commands\AppCommand;
 use App\Jobs\Characters\DispatchCharacterStatusEvents;
 use App\Jobs\Characters\UpdateCharacterLocation;
@@ -54,6 +55,10 @@ final class GetOnlineCharacterLocationsCommand extends AppCommand
 
             return;
         }
+
+        // Patch 54: everyone's location at once first; jumps reach the maps without waiting for the queue.
+        $moved = app(ProbeLocationsAction::class)->handle($characters);
+        $this->info(sprintf('%d characters moved (checked at once).', $moved));
 
         $this->info(sprintf('Dispatching jobs for %d characters...', $characters->count()));
 
