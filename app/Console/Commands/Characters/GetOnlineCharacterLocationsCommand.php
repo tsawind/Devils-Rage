@@ -12,6 +12,7 @@ use App\Models\CharacterStatus;
 use App\Support\LocationTiming;
 use Illuminate\Bus\Batch;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 use function sprintf;
@@ -24,6 +25,9 @@ final class GetOnlineCharacterLocationsCommand extends AppCommand
      * @var string
      */
     protected $signature = 'app:get-online-character-locations';
+
+    /** Patch 54: rounds between per-character job batches (a round is 5 s). */
+    private const int FULL_ROUND_EVERY = 3;
 
     /**
      * The console command description.
@@ -59,6 +63,14 @@ final class GetOnlineCharacterLocationsCommand extends AppCommand
         // Patch 54: everyone's location at once first; jumps reach the maps without waiting for the queue.
         $moved = app(ProbeLocationsAction::class)->handle($characters);
         $this->info(sprintf('%d characters moved (checked at once).', $moved));
+
+        // Patch 54: the per-character jobs (ship, station, token refresh) every third round (15 s):
+        // moves are already handled above, and the queue stays free for everything else.
+        $round = (int) Cache::get('dr:location-rounds-counter', 0) + 1;
+        Cache::forever('dr:location-rounds-counter', $round % 1_000_000);
+        if ($round % self::FULL_ROUND_EVERY !== 1) {
+            return;
+        }
 
         $this->info(sprintf('Dispatching jobs for %d characters...', $characters->count()));
 

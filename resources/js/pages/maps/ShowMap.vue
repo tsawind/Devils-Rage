@@ -180,7 +180,20 @@ useMapPresence(map.slug, () => presenceManager.value);
 
 // Patch 37: the event now carries the kill's system and ship (it carried nothing, so the flash never fired).
 useOnClient(() =>
-    useEcho<{ killmail: { solarsystem_id: number; ship_name: string | null; is_capital: boolean; value: number | null; highsec?: boolean } | null }>(
+    useEcho<{
+        killmail: {
+            id?: number;
+            solarsystem_id: number;
+            ship_name: string | null;
+            is_capital: boolean;
+            value: number | null;
+            highsec?: boolean;
+            victim_corporation?: string | null;
+            victim_alliance?: string | null;
+            attackers?: number;
+            final_blow_corporation?: string | null;
+        } | null;
+    }>(
         getMapChannelName(map.id),
         KillmailReceivedEvent,
         (event) => {
@@ -189,7 +202,17 @@ useOnClient(() =>
                 pulseKill(
                     event.killmail.solarsystem_id,
                     Date.now(),
-                    { ship: event.killmail.ship_name, capital: event.killmail.is_capital, value: event.killmail.value },
+                    {
+                        ship: event.killmail.ship_name,
+                        capital: event.killmail.is_capital,
+                        value: event.killmail.value,
+                        // Patch 54: hover details and the zKillboard link on the map's kill marker.
+                        id: event.killmail.id ?? null,
+                        victimCorporation: event.killmail.victim_corporation ?? null,
+                        victimAlliance: event.killmail.victim_alliance ?? null,
+                        attackers: event.killmail.attackers ?? null,
+                        finalBlowCorporation: event.killmail.final_blow_corporation ?? null,
+                    },
                     event.killmail.highsec || killMuted(event.killmail.solarsystem_id) ? { sound: false } : {},
                 );
         },

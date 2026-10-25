@@ -147,7 +147,14 @@ final class ListenForKillmails extends AppCommand
 
         $this->notifyMaps($stored);
 
-        EvaluateKillmailAlertsJob::dispatch($stored->id);
+        // Patch 54: Discord alerts (e.g. #daisy-chain-kills) go out now, not after the queue's
+        // location checks; the queue is the fallback if running it here fails.
+        try {
+            EvaluateKillmailAlertsJob::dispatchSync($stored->id);
+        } catch (Throwable $e) {
+            $this->error(sprintf('Kill alerts for %d failed here, queued instead: %s', $stored->id, $e->getMessage()));
+            EvaluateKillmailAlertsJob::dispatch($stored->id);
+        }
     }
 
     private function notifyMaps(Killmail $killmail): void

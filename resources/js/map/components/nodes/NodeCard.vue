@@ -81,10 +81,23 @@ const killMarker = computed(() => {
     if (!kills.length) return null;
     const last = Math.max(...kills.map((kill) => kill.at));
     const minutes = Math.max(0, Math.floor((Math.max(minuteNow.value, last) - last) / 60_000));
-    const lines = kills.map((kill) => `${kill.ship ?? 'Unknown ship'}${kill.capital ? ' (capital)' : ''}${kill.value ? ` · ${(kill.value / 1_000_000).toFixed(0)}M ISK` : ''}`);
+    const sorted = kills.toSorted((a, b) => b.at - a.at);
+    // Patch 54: a click opens zKillboard: the kill itself, or the fight (related page) for several.
+    const hour = new Date(last).toISOString().replace(/[-T:]/g, '').slice(0, 10);
+    const href =
+        kills.length === 1 && sorted[0].id
+            ? `https://zkillboard.com/kill/${sorted[0].id}/`
+            : `https://zkillboard.com/related/${system.solarsystem_id}/${hour}00/`;
     return {
         label: `💥 ${kills.length} ${kills.length === 1 ? 'kill' : 'kills'} · ${minutes < 1 ? 'now' : `${minutes} min ago`}`,
-        title: `${lines.join('\n')}\nMore in the Killmails window`,
+        href,
+        kills: sorted.map((kill) => ({
+            ship: `${kill.ship ?? 'Unknown ship'}${kill.capital ? ' (capital)' : ''}`,
+            value: kill.value ? `${(kill.value / 1_000_000).toFixed(kill.value < 10_000_000 ? 1 : 0)}M ISK` : null,
+            victim: [kill.victimCorporation, kill.victimAlliance].filter(Boolean).join(' · ') || null,
+            by: kill.attackers ? `${kill.attackers} attacker${kill.attackers === 1 ? '' : 's'}${kill.finalBlowCorporation ? ` · final blow ${kill.finalBlowCorporation}` : ''}` : null,
+            ago: Math.max(0, Math.floor((Math.max(minuteNow.value, kill.at) - kill.at) / 60_000)),
+        })),
     };
 });
 /** Kept when its chain was cleared (patch 12): "was Red". */
@@ -210,13 +223,34 @@ function handleSubmit() {
             <!-- Patch 37: after the burst, a gentle red pulse until 15 s -->
             <div :key="`kill-d-${killFlash}`" class="kill-pulse pointer-events-none absolute -inset-1 rounded-lg border-2 border-red-500/80" />
         </template>
-        <div
-            v-if="killMarker"
-            class="absolute -top-2.5 right-2 z-10 rounded bg-red-900/90 px-1 font-mono text-[10px] leading-4 font-bold whitespace-nowrap text-red-100 ring-1 ring-red-500/60"
-            :title="killMarker.title"
-        >
-            {{ killMarker.label }}
-        </div>
+        <!-- Patch 54: hover for the kills, click for zKillboard -->
+        <Tooltip v-if="killMarker" :delay-duration="150">
+            <TooltipTrigger as-child>
+                <a
+                    :href="killMarker.href"
+                    target="_blank"
+                    rel="noopener"
+                    class="absolute -top-2.5 right-2 z-10 cursor-pointer rounded bg-red-900/90 px-1 font-mono text-[10px] leading-4 font-bold whitespace-nowrap text-red-100 ring-1 ring-red-500/60 hover:bg-red-800"
+                    @pointerdown.stop
+                    @click.stop
+                >
+                    {{ killMarker.label }}
+                </a>
+            </TooltipTrigger>
+            <TooltipContent side="top" class="max-w-72 p-2">
+                <div class="flex flex-col gap-1.5 text-xs">
+                    <div v-for="(kill, index) in killMarker.kills" :key="index" class="flex flex-col">
+                        <span class="font-semibold">
+                            {{ kill.ship }}<span v-if="kill.value" class="font-normal text-muted-foreground"> · {{ kill.value }}</span>
+                            <span class="font-normal text-muted-foreground"> · {{ kill.ago < 1 ? 'now' : `${kill.ago} min ago` }}</span>
+                        </span>
+                        <span v-if="kill.victim" class="text-muted-foreground">{{ kill.victim }}</span>
+                        <span v-if="kill.by" class="text-muted-foreground">{{ kill.by }}</span>
+                    </div>
+                    <span class="text-[10px] text-muted-foreground">Click: {{ killMarker.kills.length === 1 ? 'the kill' : 'the fight' }} on zKillboard</span>
+                </div>
+            </TooltipContent>
+        </Tooltip>
         <!-- Combat chain: a border in the chain's color; the combat home's is thicker and pulses while someone works the chain -->
         <div
             v-if="chainHex"

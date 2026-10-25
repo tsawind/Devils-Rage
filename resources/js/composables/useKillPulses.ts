@@ -15,7 +15,18 @@ import { shallowRef } from 'vue';
 export const KILL_PULSE_MS = 15_000;
 export const KILL_MARKER_MS = 15 * 60_000;
 
-export type TKillNote = { at: number; ship: string | null; capital: boolean; value: number | null };
+export type TKillNote = {
+    at: number;
+    ship: string | null;
+    capital: boolean;
+    value: number | null;
+    /** Patch 54: for the marker's hover card and its zKillboard link. */
+    id?: number | null;
+    victimCorporation?: string | null;
+    victimAlliance?: string | null;
+    attackers?: number | null;
+    finalBlowCorporation?: string | null;
+};
 
 /** Systems (solar system ids) with a kill that just came in, and when. */
 const pulses = shallowRef<ReadonlyMap<number, number>>(new Map());
@@ -24,7 +35,7 @@ const recent = shallowRef<ReadonlyMap<number, readonly TKillNote[]>>(new Map());
 
 export function pulseKill(solarsystemId: number, now: number = Date.now(), note: Partial<TKillNote> = {}, options: { sound?: boolean; force?: boolean } = {}): void {
     const { effects } = useMapEffects();
-    const kill: TKillNote = { at: now, ship: note.ship ?? null, capital: Boolean(note.capital), value: note.value ?? null };
+    const kill: TKillNote = { ...note, at: now, ship: note.ship ?? null, capital: Boolean(note.capital), value: note.value ?? null };
 
     if (options.sound ?? soundsEnabled()) playKillFor(solarsystemId, kill.capital);
     if (!effects.value.killEffects && !options.force) return;

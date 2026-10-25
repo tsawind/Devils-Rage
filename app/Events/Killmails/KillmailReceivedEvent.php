@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Events\Killmails;
 
 use App\Enums\SolarsystemClass;
+use App\Models\Alliance;
+use App\Models\Corporation;
 use App\Models\Killmail;
 use App\Models\Map;
 use App\Models\Solarsystem;
 use App\Models\Type;
+use DateTimeInterface;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -46,8 +49,20 @@ final class KillmailReceivedEvent implements ShouldBroadcastNow, ShouldDispatchA
         $totalValue = data_get($this->killmail->zkb, 'totalValue');
         $value = is_numeric($totalValue) ? (float) $totalValue : null;
 
+        // Patch 54: who died and who killed them, for the map's kill marker (hover / click to zKillboard).
+        $victimCorporationId = data_get($this->killmail->data, 'victim.corporation_id');
+        $victimAllianceId = data_get($this->killmail->data, 'victim.alliance_id');
+        $attackers = (array) data_get($this->killmail->data, 'attackers', []);
+        $finalBlow = collect($attackers)->first(fn ($attacker): bool => (bool) data_get($attacker, 'final_blow'));
+        $finalCorporationId = data_get($finalBlow, 'corporation_id');
+
         return ['killmail' => [
             'id' => $this->killmail->id,
+            'time' => $this->killmail->time instanceof DateTimeInterface ? $this->killmail->time->format(DATE_ATOM) : (string) $this->killmail->time,
+            'victim_corporation' => is_int($victimCorporationId) ? Corporation::query()->whereKey($victimCorporationId)->value('name') : null,
+            'victim_alliance' => is_int($victimAllianceId) ? Alliance::query()->whereKey($victimAllianceId)->value('name') : null,
+            'attackers' => count($attackers),
+            'final_blow_corporation' => is_int($finalCorporationId) ? Corporation::query()->whereKey($finalCorporationId)->value('name') : null,
             'solarsystem_id' => $this->killmail->solarsystem_id,
             'ship_name' => $ship?->name,
             'is_capital' => $ship instanceof Type && in_array($ship->group_id, self::CAPITAL_GROUP_IDS, true),
