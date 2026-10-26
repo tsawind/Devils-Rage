@@ -40,7 +40,7 @@ const scanIn = computed(() => (timer.value?.phase === 'counting' ? timer.value.t
 const progress = computed(() => (timer.value?.phase === 'counting' ? Math.min(100, (timer.value.elapsed / ROLL_SIG_DUE_SECONDS) * 100) : 100));
 const scanMark = (ROLL_SCAN_AT_SECONDS / ROLL_SIG_DUE_SECONDS) * 100;
 
-type TCollapsePrompt = { name: string; at: number };
+type TCollapsePrompt = { name: string; at: number; from: number };
 const collapsePrompt = ref<TCollapsePrompt | null>(null);
 let promptTimer: ReturnType<typeof setTimeout> | null = null;
 const PROMPT_SECONDS = 45;
@@ -60,7 +60,7 @@ watch(myLocations, (now, before) => {
     for (const [id, place] of now) {
         const was = before.get(id)?.solarsystemId ?? null;
         if (place.solarsystemId === rolling && was !== null && was !== rolling) {
-            showCollapsePrompt({ name: place.name, at: Date.now() });
+            showCollapsePrompt({ name: place.name, at: Date.now(), from: was });
         }
     }
 });
@@ -74,7 +74,7 @@ function showCollapsePrompt(prompt: TCollapsePrompt): void {
 function confirmCollapse(): void {
     const prompt = collapsePrompt.value;
     if (!prompt) return;
-    markCollapsed(prompt.at, prompt.name);
+    markCollapsed(prompt.at, prompt.name, prompt.from);
     collapsePrompt.value = null;
 }
 
@@ -184,7 +184,7 @@ function copyNewStatic(candidate: TSignature, old: TSignature | null): void {
         aria-label="Did the static collapse?"
     >
         <p class="font-display font-bold tracking-wider text-red-400 uppercase">⚡ Collapsed?</p>
-        <p class="mt-1 text-xs text-stone-400">{{ collapsePrompt.name }} just came back. If that jump killed the static, the timer counts from that jump.</p>
+        <p class="mt-1 text-xs text-stone-400">{{ collapsePrompt.name }} just came back. If that jump killed the static, the timer counts from that jump and the old chain is removed (unless someone's still in it).</p>
         <div class="mt-2 flex gap-2">
             <Button size="sm" class="bg-red-700 font-semibold text-white hover:bg-red-600" @click="confirmCollapse">Yes, start the timer</Button>
             <Button size="sm" variant="ghost" class="text-stone-300" @click="collapsePrompt = null">Not yet</Button>

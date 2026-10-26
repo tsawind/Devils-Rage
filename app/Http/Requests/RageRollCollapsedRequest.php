@@ -31,6 +31,7 @@ final class RageRollCollapsedRequest extends FormRequest
         return [
             'at' => ['nullable', 'date'],
             'character_name' => ['nullable', 'string', 'max:64'],
+            'from_solarsystem_id' => ['nullable', 'integer'],
         ];
     }
 

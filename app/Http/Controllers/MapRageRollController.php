@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\MapRageRoll\CollapseStaticAction;
 use App\Actions\MapRageRoll\NewStaticAction;
 use App\Actions\MapRageRoll\ResolveRageRollTargetsAction;
 use App\Actions\MapRageRoll\StartRageRollAction;
@@ -67,7 +68,7 @@ final class MapRageRollController extends Controller
      *
      * @throws ValidationException
      */
-    public function collapsed(RageRollCollapsedRequest $request, Map $map, #[CurrentUser] User $user, MapBroadcaster $mapBroadcaster): RedirectResponse
+    public function collapsed(RageRollCollapsedRequest $request, Map $map, #[CurrentUser] User $user, MapBroadcaster $mapBroadcaster, CollapseStaticAction $collapse): RedirectResponse
     {
         if ($map->rage_roll_solarsystem_id === null) {
             throw ValidationException::withMessages(['at' => 'Nobody is rage rolling right now.']);
@@ -85,7 +86,17 @@ final class MapRageRollController extends Controller
         ]);
         $mapBroadcaster->metadataUpdated($map);
 
-        return back();
+        // The old static's chain goes now (stamped, its pipe removed, hidden unless someone's in it).
+        $removed = $collapse->handle($map, $request->filled('from_solarsystem_id') ? $request->integer('from_solarsystem_id') : null);
+        if ($removed === null) {
+            return back();
+        }
+
+        return back()->notify('Roll timer started', message: sprintf(
+            'Old %s chain %s.',
+            $removed['alias'] ?? 'static',
+            $removed['hidden'] > 0 ? sprintf('removed (%d system%s)', $removed['hidden'], $removed['hidden'] === 1 ? '' : 's') : 'cut off, still shown (pilot inside, pinned or another exit)',
+        ));
     }
 
     public function destroy(Map $map, #[CurrentUser] User $user, StopRageRollAction $action): RedirectResponse

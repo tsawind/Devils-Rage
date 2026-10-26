@@ -151,7 +151,7 @@ final readonly class NewStaticAction
      * numbers locked on their signatures. Plain names that only share a first
      * letter ("Daisy") and names already stamped are left alone.
      */
-    private function stampChain(MapSolarsystem $rolling, string $base, string $stamp): int
+    public function stampChain(MapSolarsystem $rolling, string $base, string $stamp): int
     {
         $systems = MapSolarsystem::query()
             ->where('map_id', $rolling->map_id)

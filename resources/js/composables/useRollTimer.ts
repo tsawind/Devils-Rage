@@ -15,7 +15,7 @@ const TONE_LATE_SECONDS = 3;
 
 /**
  * Patch 57: the rage roll timer. When the static collapsed, everyone's mapper counts down to
- * the new static's signature (59 s); at 54 s the SCAN tone tells scanners to press Scan, so the
+ * the new static's signature (59 s); at 53 s the SCAN tone tells scanners to press Scan, so the
  * scan lands as the signature appears. Muted by Sounds off or the menu's "Roll timer sound".
  */
 export function useRollTimer() {
@@ -25,10 +25,11 @@ export function useRollTimer() {
 
     const timer = computed(() => rollTimer(rageRoll.value, now.value.getTime()));
 
-    function markCollapsed(atMs: number | null = null, characterName: string | null = null): void {
+    /** `fromSolarsystemId`: where the collapsing pilot came back from (that chain is removed). */
+    function markCollapsed(atMs: number | null = null, characterName: string | null = null, fromSolarsystemId: number | null = null): void {
         router.post(
             MapRageRollController.collapsed(mapSlug.value).url,
-            { at: atMs === null ? null : new Date(atMs).toISOString(), character_name: characterName },
+            { at: atMs === null ? null : new Date(atMs).toISOString(), character_name: characterName, from_solarsystem_id: fromSolarsystemId },
             { preserveScroll: true, preserveState: true, only: ['map'] },
         );
     }

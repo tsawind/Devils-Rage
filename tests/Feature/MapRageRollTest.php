@@ -253,3 +253,49 @@ it('patch 57: ending the roll clears the timer', function () {
     expect($map->refresh()->rage_roll_collapsed_at)->toBeNull()
         ->and($map->rage_roll_collapsed_by)->toBeNull();
 });
+
+it('patch 57: the collapse removes the old static chain and keeps the static signature for New Alpha', function () {
+    $map = Map::factory()->create();
+    $daisy = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000005), 'alias' => 'Daisy']);
+    $alpha = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000006), 'alias' => 'A', 'pinned' => false, 'created_at' => '2026-10-07 19:58:12']);
+    $a1 = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000007), 'alias' => 'A1', 'pinned' => false]);
+    $pipe = MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $daisy->id, 'to_map_solarsystem_id' => $alpha->id]);
+    MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $alpha->id, 'to_map_solarsystem_id' => $a1->id]);
+    $old = Signature::factory()->create(['map_solarsystem_id' => $daisy->id, 'signature_id' => 'ZGB-111', 'alias' => 'A', 'is_static' => true, 'map_connection_id' => $pipe->id]);
+    $map->update(['rage_roll_solarsystem_id' => 31000005, 'rage_roll_started_at' => now()]);
+    actingAs(rageRoller($map, Permission::Member));
+
+    $this->post(route('maps.rage-roll.collapsed', $map), ['character_name' => 'LuigiSquirrel', 'from_solarsystem_id' => 31000006])
+        ->assertRedirect()->assertSessionHasNoErrors();
+
+    expect($alpha->refresh()->alias)->toBe('A~1958')
+        ->and($a1->refresh()->alias)->toBe('A1~1958')
+        ->and(MapConnection::query()->find($pipe->id))->toBeNull()
+        ->and($old->refresh()->map_connection_id)->toBeNull()
+        ->and($old->is_static)->toBeTrue()
+        ->and($old->alias)->toBe('A')
+        ->and($map->refresh()->rage_roll_collapsed_at)->not->toBeNull();
+
+    $new = Signature::factory()->create(['map_solarsystem_id' => $daisy->id, 'signature_id' => 'XYZ-333']);
+    $this->post(route('maps.rage-roll.new-static', $map), ['old_signature_id' => $old->id, 'signature_id' => $new->id])->assertSessionHasNoErrors();
+
+    expect($new->refresh()->alias)->toBe('A')
+        ->and($new->is_static)->toBeTrue()
+        ->and($alpha->refresh()->alias)->toBe('A~1958');
+});
+
+it('patch 57: coming back through a wandering hole removes nothing', function () {
+    $map = Map::factory()->create();
+    $daisy = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000005), 'alias' => 'Daisy']);
+    $wanderer = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000006), 'alias' => 'W1']);
+    $pipe = MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $daisy->id, 'to_map_solarsystem_id' => $wanderer->id]);
+    Signature::factory()->create(['map_solarsystem_id' => $daisy->id, 'signature_id' => 'QQQ-111', 'alias' => 'W1', 'is_static' => false, 'map_connection_id' => $pipe->id]);
+    $map->update(['rage_roll_solarsystem_id' => 31000005, 'rage_roll_started_at' => now()]);
+    actingAs(rageRoller($map, Permission::Member));
+
+    $this->post(route('maps.rage-roll.collapsed', $map), ['from_solarsystem_id' => 31000006])->assertSessionHasNoErrors();
+
+    expect(MapConnection::query()->find($pipe->id))->not->toBeNull()
+        ->and($wanderer->refresh()->alias)->toBe('W1')
+        ->and($map->refresh()->rage_roll_collapsed_at)->not->toBeNull();
+});
