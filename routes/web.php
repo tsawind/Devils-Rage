@@ -177,6 +177,7 @@ Route::middleware('auth')->group(function () {
     Route::put('map-solarsystems/{mapSolarsystem}/intel/structures/{structure}', [SystemIntelController::class, 'updateStructure'])->name('map-solarsystems.intel.structures.update');
     Route::delete('map-solarsystems/{mapSolarsystem}/intel/structures/{structure}', [SystemIntelController::class, 'destroyStructure'])->name('map-solarsystems.intel.structures.destroy');
     Route::post('map-solarsystems/{mapSolarsystem}/intel/entries', [SystemIntelController::class, 'storeEntry'])->middleware('throttle:60,1')->name('map-solarsystems.intel.entries.store');
+    Route::delete('map-solarsystems/{mapSolarsystem}/intel/entries/{entry}', [SystemIntelController::class, 'destroyEntry'])->name('map-solarsystems.intel.entries.destroy');
     Route::post('map-solarsystems/{mapSolarsystem}/intel/screenshots', [SystemIntelController::class, 'storeScreenshot'])->middleware('throttle:30,1')->name('map-solarsystems.intel.screenshots.store');
     Route::get('map-solarsystems/{mapSolarsystem}/intel/screenshots/{entry}', [SystemIntelController::class, 'screenshot'])->name('map-solarsystems.intel.screenshot');
     Route::post('map-solarsystems/{mapSolarsystem}/cleanup-convert', [ChainCleanupController::class, 'convert'])->name('map-solarsystems.cleanup.convert');

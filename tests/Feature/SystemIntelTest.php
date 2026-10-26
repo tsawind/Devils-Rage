@@ -192,3 +192,34 @@ it('patch 57: only people who can edit the map import structures', function () {
     postJson(route('map-solarsystems.intel.structures.import', $system), [])->assertForbidden();
     expect(IntelStructure::query()->count())->toBe(0);
 });
+
+it('patch 57: deletes a D-scan or screenshot added by mistake, but keeps structure history', function () {
+    Storage::fake('local');
+    $map = Map::factory()->create();
+    actingAs(intelMember($map));
+    $system = placeMapSolarsystem($map, 31000506);
+
+    $dscan = postJson(route('map-solarsystems.intel.entries.store', $system), ['kind' => 'dscan', 'body' => "35833\tX\tFortizar\t101 km"])->json('entry');
+    $shot = post(route('map-solarsystems.intel.screenshots.store', $system), ['image' => UploadedFile::fake()->image('shot.png')])->json('entry');
+    $path = IntelEntry::query()->findOrFail($shot['id'])->image_path;
+    $history = IntelEntry::query()->where('kind', 'structure')->firstOrFail();
+
+    delete(route('map-solarsystems.intel.entries.destroy', [$system, $dscan['id']]))->assertSuccessful();
+    delete(route('map-solarsystems.intel.entries.destroy', [$system, $shot['id']]))->assertSuccessful();
+    delete(route('map-solarsystems.intel.entries.destroy', [$system, $history->id]))->assertStatus(422);
+
+    expect(IntelEntry::query()->find($dscan['id']))->toBeNull()
+        ->and(IntelEntry::query()->find($history->id))->not->toBeNull();
+    Storage::disk('local')->assertMissing((string) $path);
+});
+
+it('patch 57: viewers cannot delete intel', function () {
+    $map = Map::factory()->create();
+    $system = placeMapSolarsystem($map, 31000507);
+    actingAs(intelMember($map));
+    $note = postJson(route('map-solarsystems.intel.entries.store', $system), ['kind' => 'note', 'body' => 'hi'])->json('entry');
+
+    actingAs(intelMember($map, Permission::Viewer));
+    delete(route('map-solarsystems.intel.entries.destroy', [$system, $note['id']]))->assertForbidden();
+    expect(IntelEntry::query()->find($note['id']))->not->toBeNull();
+});

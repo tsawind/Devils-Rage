@@ -205,6 +205,19 @@ async function seenNow(structure: TStructure): Promise<void> {
     await saveStructure();
 }
 
+/** Patch 57: a D-scan, fit, note or screenshot added by mistake. */
+const confirmingDelete = ref<number | null>(null);
+async function removeEntry(entry: TEntry): Promise<void> {
+    // First click arms it ("Sure?"), the second deletes (no browser pop-up: it blocks the app window).
+    if (confirmingDelete.value !== entry.id) {
+        confirmingDelete.value = entry.id;
+        return;
+    }
+    confirmingDelete.value = null;
+    await jsonFetch(SystemIntelController.destroyEntry({ mapSolarsystem: mapSolarsystemId, entry: entry.id }).url, 'DELETE');
+    await load();
+}
+
 async function removeStructure(structure: TStructure): Promise<void> {
     await jsonFetch(SystemIntelController.destroyStructure({ mapSolarsystem: mapSolarsystemId, structure: structure.id }).url, 'DELETE');
     await load();
@@ -604,6 +617,15 @@ const KIND_BADGES: Record<string, string> = {
                                 <span class="rounded px-1.5 text-[10px] font-semibold uppercase" :class="KIND_BADGES[entry.kind]">{{ entry.kind === 'dscan' ? 'D-scan' : entry.kind }}</span>
                                 <span v-if="entry.author_name" class="text-muted-foreground">{{ entry.author_name }}</span>
                                 <span v-if="structureName(entry.intel_structure_id) && entry.kind !== 'structure'" class="text-muted-foreground">· {{ structureName(entry.intel_structure_id) }}</span>
+                                <button
+                                    v-if="canEdit && entry.kind !== 'structure'"
+                                    type="button"
+                                    class="ml-auto rounded px-1.5 text-[11px] text-muted-foreground hover:bg-red-950 hover:text-red-200"
+                                    :aria-label="`Delete this ${entry.kind === 'dscan' ? 'D-scan' : entry.kind}`"
+                                    @click="removeEntry(entry)"
+                                >
+                                    {{ confirmingDelete === entry.id ? 'Sure? Delete' : 'Delete' }}
+                                </button>
                             </div>
                             <template v-if="entry.kind === 'dscan' && entry.data">
                                 <span

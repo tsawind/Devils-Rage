@@ -153,6 +153,24 @@ final class SystemIntelController extends Controller
         return response()->json(['entry' => $this->entryPayload($mapSolarsystem, $entry)], 201);
     }
 
+    /**
+     * Patch 57: a D-scan, fit, note or screenshot added by mistake can be deleted (its picture too).
+     * Structure log lines stay: they are the history.
+     */
+    public function destroyEntry(MapSolarsystem $mapSolarsystem, IntelEntry $entry): JsonResponse
+    {
+        Gate::authorize('update', $mapSolarsystem);
+        abort_unless($entry->map_id === $mapSolarsystem->map_id && $entry->solarsystem_id === $mapSolarsystem->solarsystem_id, 404);
+        abort_if($entry->kind === 'structure', 422, 'Structure history stays.');
+
+        if ($entry->image_path) {
+            Storage::disk(self::DISK)->delete((string) $entry->image_path);
+        }
+        $entry->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
     public function screenshot(MapSolarsystem $mapSolarsystem, IntelEntry $entry): StreamedResponse
     {
         Gate::authorize('view', $mapSolarsystem);
