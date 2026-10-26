@@ -136,9 +136,7 @@ case "$ACTION" in
             foreach ($kills->take(8) as $id => $n) {
                 $k = Seat\Eveapi\Models\Killmails\Killmail::query()->find($id);
                 $hasDetail = Seat\Eveapi\Models\Killmails\KillmailDetail::query()->find($id) !== null;
-                $corp = DB::table("corporation_killmails")->where("killmail_id", $id)->exists();
-                $char = DB::table("character_killmails")->where("killmail_id", $id)->exists();
-                echo "  ", $id, " x", $n, " stored-hash=", strlen((string) $k?->killmail_hash), " chars detail=", $hasDetail ? "yes" : "no", " corp=", $corp ? "y" : "n", " char=", $char ? "y" : "n", " created=", $k?->created_at, PHP_EOL;
+                echo "  ", $id, " x", $n, " still-in-seat=", $k ? "yes" : "no", " stored-hash=", strlen((string) $k?->killmail_hash), " chars detail=", $hasDetail ? "yes" : "no", " created=", $k?->created_at, PHP_EOL;
             }
         ' 2>&1 | sed -E 's/[A-Za-z0-9_+\/=-]{32,}/[masked]/g' | cut -c1-260
         ;;
