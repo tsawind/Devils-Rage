@@ -32,10 +32,15 @@ if [ -f "$SEAT/.env" ]; then
     tar czf "$DEST/seat_config_$STAMP.tar.gz" -C "$SEAT" .env $(cd "$SEAT" && ls docker-compose*.yml mariadb-small.cnf 2>/dev/null)
 fi
 
+# Intel screenshots pilots uploaded (mapper storage volume), when there are any.
+( cd "$STACK" && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app \
+    sh -c 'cd storage/app/private && [ -d intel ] && tar czf - intel || true' ) > "$DEST/intel_$STAMP.tar.gz" || true
+[ -s "$DEST/intel_$STAMP.tar.gz" ] || rm -f "$DEST/intel_$STAMP.tar.gz"
+
 # Drop backups older than KEEP_DAYS.
 find "$DEST" -type f -mtime +"$KEEP_DAYS" -delete
 
 # Tell the mapper (its /health check warns when backups stop).
 ( cd "$STACK" && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app php artisan devilsrage:backup-done >/dev/null ) || true
 
-echo "$(date -Is) backup ok: mapper $(du -h "$DEST/db_$STAMP.sql.gz" | cut -f1), SeAT $(du -h "$DEST/seat_db_$STAMP.sql.gz" 2>/dev/null | cut -f1 || echo none)"
+echo "$(date -Is) backup ok: mapper $(du -h "$DEST/db_$STAMP.sql.gz" | cut -f1), SeAT $(du -h "$DEST/seat_db_$STAMP.sql.gz" 2>/dev/null | cut -f1 || echo none), intel $(du -h "$DEST/intel_$STAMP.tar.gz" 2>/dev/null | cut -f1 || echo none)"
