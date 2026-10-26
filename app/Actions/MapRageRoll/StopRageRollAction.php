@@ -37,6 +37,8 @@ final readonly class StopRageRollAction
             'rage_roll_started_by' => null,
             'rage_roll_targets' => null,
             'rage_roll_scanning' => false,
+            'rage_roll_collapsed_at' => null,
+            'rage_roll_collapsed_by' => null,
         ]);
 
         $this->mapBroadcaster->metadataUpdated($map);

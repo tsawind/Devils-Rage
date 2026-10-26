@@ -197,3 +197,59 @@ it('patch 35: chain membership by name', function (string $alias, string $base, 
     'a side chain static' => ['Z01', 'Z0', true],
     'a sibling of the static' => ['Z1', 'Z0', false],
 ]);
+
+it('patch 57: the collapsing pilot starts the roll timer from their jump time', function () {
+    $this->freezeTime();
+    $map = Map::factory()->create();
+    $map->update(['rage_roll_solarsystem_id' => makeSolarsystem(31000005), 'rage_roll_started_at' => now()]);
+    actingAs(rageRoller($map, Permission::Member));
+
+    $this->post(route('maps.rage-roll.collapsed', $map), [
+        'at' => now()->subSeconds(3)->toIso8601String(),
+        'character_name' => 'LuigiSquirrel',
+    ])->assertRedirect()->assertSessionHasNoErrors();
+
+    $map->refresh();
+    expect($map->rage_roll_collapsed_at?->toIso8601String())->toBe(now()->subSeconds(3)->toIso8601String())
+        ->and($map->rage_roll_collapsed_by)->toBe('LuigiSquirrel')
+        ->and($map->rageRollState())->toMatchArray(['collapsed_at' => now()->subSeconds(3)->toIso8601String(), 'collapsed_by' => 'LuigiSquirrel']);
+});
+
+it('patch 57: a collapse time that is in the future or too old counts as now', function (int $offsetSeconds) {
+    $this->freezeTime();
+    $map = Map::factory()->create();
+    $map->update(['rage_roll_solarsystem_id' => makeSolarsystem(31000005), 'rage_roll_started_at' => now()]);
+    $user = rageRoller($map, Permission::Member);
+    actingAs($user);
+
+    $this->post(route('maps.rage-roll.collapsed', $map), ['at' => now()->addSeconds($offsetSeconds)->toIso8601String()])
+        ->assertSessionHasNoErrors();
+
+    expect($map->refresh()->rage_roll_collapsed_at?->toIso8601String())->toBe(now()->toIso8601String());
+})->with([
+    'in the future' => 30,
+    'five minutes ago' => -300,
+]);
+
+it('patch 57: a collapse needs a roll going on and someone who can map', function () {
+    $map = Map::factory()->create();
+    actingAs(rageRoller($map, Permission::Member));
+    $this->post(route('maps.rage-roll.collapsed', $map))->assertSessionHasErrors('at');
+
+    $map->update(['rage_roll_solarsystem_id' => makeSolarsystem(31000005), 'rage_roll_started_at' => now()]);
+    actingAs(rageRoller($map, Permission::Viewer));
+    $this->post(route('maps.rage-roll.collapsed', $map))->assertForbidden();
+
+    expect($map->refresh()->rage_roll_collapsed_at)->toBeNull();
+});
+
+it('patch 57: ending the roll clears the timer', function () {
+    $map = Map::factory()->create();
+    $map->update(['rage_roll_solarsystem_id' => makeSolarsystem(31000005), 'rage_roll_started_at' => now(), 'rage_roll_collapsed_at' => now(), 'rage_roll_collapsed_by' => 'LuigiSquirrel']);
+    actingAs(rageRoller($map, Permission::Member));
+
+    $this->delete(route('maps.rage-roll.destroy', $map))->assertRedirect();
+
+    expect($map->refresh()->rage_roll_collapsed_at)->toBeNull()
+        ->and($map->rage_roll_collapsed_by)->toBeNull();
+});

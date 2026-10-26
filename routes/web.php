@@ -240,6 +240,7 @@ Route::middleware('auth')->group(function () {
     Route::post('maps/{map}/rally-ping', [MapRallyPingController::class, 'store'])->name('maps.rally-ping.store');
     Route::post('maps/{map}/rage-roll', [MapRageRollController::class, 'store'])->name('maps.rage-roll.store');
     Route::put('maps/{map}/rage-roll/targets', [MapRageRollController::class, 'targets'])->name('maps.rage-roll.targets');
+    Route::post('maps/{map}/rage-roll/collapsed', [MapRageRollController::class, 'collapsed'])->name('maps.rage-roll.collapsed');
     Route::post('maps/{map}/rage-roll/new-static', [MapRageRollController::class, 'newStatic'])->name('maps.rage-roll.new-static');
     Route::delete('maps/{map}/rage-roll', [MapRageRollController::class, 'destroy'])->name('maps.rage-roll.destroy');
     Route::delete('discord-channel-feeds/{discord_channel_feed}', [DiscordChannelFeedController::class, 'destroy'])->name('discord-channel-feeds.destroy');

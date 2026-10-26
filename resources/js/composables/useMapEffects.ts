@@ -22,6 +22,8 @@ type TMapEffects = {
     homeKillSound: TKillSoundFamily;
     mainKillSound: TKillSoundFamily;
     sideKillSound: TKillSoundFamily;
+    /** Patch 57: the rage roll timer's SCAN tone (off = muted; the countdown still shows). */
+    rollTimerSound: boolean;
     /** Patch 40b: which default set the kill sounds come from (older picks are replaced once). */
     soundScheme: number;
 };
@@ -36,6 +38,7 @@ const DEFAULTS: TMapEffects = {
     homeKillSound: 'sonar',
     mainKillSound: 'pluck',
     sideKillSound: 'klaxon',
+    rollTimerSound: true,
     soundScheme: 2,
 };
 const isFamily = (value: unknown): value is TKillSoundFamily => KILL_SOUND_FAMILIES.some((family) => family.value === value);
@@ -56,6 +59,7 @@ function read(): TMapEffects {
             homeKillSound: parsed.soundScheme === 2 && isFamily(parsed.homeKillSound) ? parsed.homeKillSound : DEFAULTS.homeKillSound,
             mainKillSound: parsed.soundScheme === 2 && isFamily(parsed.mainKillSound) ? parsed.mainKillSound : DEFAULTS.mainKillSound,
             sideKillSound: parsed.soundScheme === 2 && isFamily(parsed.sideKillSound) ? parsed.sideKillSound : DEFAULTS.sideKillSound,
+            rollTimerSound: typeof parsed.rollTimerSound === 'boolean' ? parsed.rollTimerSound : DEFAULTS.rollTimerSound,
             soundScheme: 2,
         };
     } catch {

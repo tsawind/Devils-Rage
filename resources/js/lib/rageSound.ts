@@ -64,6 +64,31 @@ function distortionCurve(amount: number): Float32Array<ArrayBuffer> {
     return curve;
 }
 
+/**
+ * Patch 57: the roll timer's SCAN tone: press Scan now. Short, high and hard to miss over comms:
+ * two bright square-wave stabs and a ringing ping a fifth above.
+ */
+export function playScanTone(volume = 0.8): void {
+    const out = soundOut(volume);
+    if (!out) return;
+    const { ctx, master, t } = out;
+    const stab = (start: number, frequency: number, length: number, type: OscillatorType, peak: number) => {
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(peak, start + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+        oscillator.connect(gain).connect(master);
+        oscillator.start(start);
+        oscillator.stop(start + length + 0.02);
+    };
+    stab(t, 1318.5, 0.09, 'square', 0.22);
+    stab(t + 0.12, 1318.5, 0.09, 'square', 0.22);
+    stab(t + 0.24, 1975.5, 0.55, 'sine', 0.5);
+}
+
 /** Play the hit sound now (does nothing if the browser has no audio or it is still locked). */
 export function playRageHitSound(volume = 1): void {
     const ctx = audio();

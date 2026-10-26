@@ -4,16 +4,18 @@ import { Button } from '@/components/ui/button';
 import usePermission from '@/composables/usePermission';
 import { lastPaste, useRageRoll } from '@/composables/useRageRoll';
 import { useRageRollWatcher } from '@/composables/useRageRollWatcher';
+import { useRollTimer, useRollTimerTone } from '@/composables/useRollTimer';
 import { useShowMap } from '@/composables/useShowMap';
+import useUser from '@/composables/useUser';
 import { autoCopy, clipboardAllowed, copyButton } from '@/composables/useClipboardSetting';
 import { displayAlias } from '@/lib/alias';
 import { buildSignatureBookmark, visibleBookmarkName } from '@/lib/bookmark';
 import { chainAliases } from '@/lib/combat';
 import { signatureToast } from '@/lib/signatureToast';
-import { newStaticQuestion } from '@/lib/rageRoll';
+import { formatCountdown, newStaticQuestion, ROLL_SCAN_AT_SECONDS, ROLL_SIG_DUE_SECONDS } from '@/lib/rageRoll';
 import { useMapStore } from '@/map/store/mapStore';
 import type { TSignature } from '@/types/models';
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 /**
  * Patch 35: everything the rage roll puts over the map: the red breathing
@@ -25,6 +27,60 @@ const { canEdit } = usePermission();
 const page = useShowMap();
 const store = useMapStore();
 useRageRollWatcher();
+
+/**
+ * Patch 57: the roll timer. The countdown at the top of the map, the SCAN tone, and after one of
+ * your characters comes back into the rolling system (the jump that may have collapsed the static)
+ * a "Collapsed?" button: the timer then counts from that jump, not from the click.
+ */
+const { timer, markCollapsed } = useRollTimer();
+useRollTimerTone();
+const user = useUser();
+const scanIn = computed(() => (timer.value?.phase === 'counting' ? timer.value.toScan : null));
+const progress = computed(() => (timer.value?.phase === 'counting' ? Math.min(100, (timer.value.elapsed / ROLL_SIG_DUE_SECONDS) * 100) : 100));
+const scanMark = (ROLL_SCAN_AT_SECONDS / ROLL_SIG_DUE_SECONDS) * 100;
+
+type TCollapsePrompt = { name: string; at: number };
+const collapsePrompt = ref<TCollapsePrompt | null>(null);
+let promptTimer: ReturnType<typeof setTimeout> | null = null;
+const PROMPT_SECONDS = 45;
+
+const myLocations = computed(() => {
+    const mine = new Set((user.value?.characters ?? []).map((character) => character.id));
+    const where = new Map<number, { name: string; solarsystemId: number | null }>();
+    for (const character of page.props.map_characters ?? []) {
+        if (mine.has(character.id)) where.set(character.id, { name: character.name, solarsystemId: character.status?.solarsystem_id ?? null });
+    }
+    return where;
+});
+
+watch(myLocations, (now, before) => {
+    const rolling = rageRoll.value?.solarsystem_id;
+    if (!rolling || !canEdit.value || !before) return;
+    for (const [id, place] of now) {
+        const was = before.get(id)?.solarsystemId ?? null;
+        if (place.solarsystemId === rolling && was !== null && was !== rolling) {
+            showCollapsePrompt({ name: place.name, at: Date.now() });
+        }
+    }
+});
+
+function showCollapsePrompt(prompt: TCollapsePrompt): void {
+    collapsePrompt.value = prompt;
+    if (promptTimer) clearTimeout(promptTimer);
+    promptTimer = setTimeout(() => (collapsePrompt.value = null), PROMPT_SECONDS * 1000);
+}
+
+function confirmCollapse(): void {
+    const prompt = collapsePrompt.value;
+    if (!prompt) return;
+    markCollapsed(prompt.at, prompt.name);
+    collapsePrompt.value = null;
+}
+
+onBeforeUnmount(() => {
+    if (promptTimer) clearTimeout(promptTimer);
+});
 
 type TQuestion = { olds: TSignature[]; candidates: TSignature[] };
 const question = ref<TQuestion | null>(null);
@@ -103,6 +159,37 @@ function copyNewStatic(candidate: TSignature, old: TSignature | null): void {
 <template>
     <div class="contents">
     <div v-if="rageRoll" class="rage-vignette pointer-events-none absolute inset-0 z-[5]" aria-hidden="true" />
+
+    <div
+        v-if="rageRoll && timer?.phase === 'counting'"
+        class="pointer-events-none absolute top-3 left-1/2 z-30 flex -translate-x-1/2 flex-col items-center gap-1 rounded-xl border border-red-700 bg-neutral-950/90 px-5 py-2 text-stone-100 shadow-lg shadow-red-950/60"
+        role="timer"
+        aria-live="off"
+    >
+        <span class="text-[10px] font-bold tracking-[0.14em] text-red-300 uppercase">New static signature in</span>
+        <span class="font-mono text-4xl leading-none font-extrabold tabular-nums">{{ formatCountdown(timer.toDue) }}</span>
+        <div class="relative h-1.5 w-64 rounded-full bg-red-950">
+            <div class="h-1.5 rounded-full bg-red-500" :style="{ width: `${progress}%` }" />
+            <div class="absolute -top-1 h-3.5 w-0.5 bg-amber-300" :style="{ left: `${scanMark}%` }" />
+        </div>
+        <span class="text-xs" :class="scanIn !== null && scanIn <= 0 ? 'font-bold text-amber-300' : 'text-stone-400'">
+            {{ scanIn !== null && scanIn > 0 ? `Press Scan in ${formatCountdown(scanIn)}` : 'SCAN NOW' }}<span v-if="timer.by" class="text-stone-500"> · collapsed by {{ timer.by }}</span>
+        </span>
+    </div>
+
+    <div
+        v-if="rageRoll && collapsePrompt && canEdit"
+        class="absolute right-3 bottom-16 z-40 w-72 rounded-lg border border-red-800 bg-neutral-950/95 p-3 text-sm text-stone-100 shadow-lg shadow-red-950/60"
+        role="dialog"
+        aria-label="Did the static collapse?"
+    >
+        <p class="font-display font-bold tracking-wider text-red-400 uppercase">⚡ Collapsed?</p>
+        <p class="mt-1 text-xs text-stone-400">{{ collapsePrompt.name }} just came back. If that jump killed the static, the timer counts from that jump.</p>
+        <div class="mt-2 flex gap-2">
+            <Button size="sm" class="bg-red-700 font-semibold text-white hover:bg-red-600" @click="confirmCollapse">Yes, start the timer</Button>
+            <Button size="sm" variant="ghost" class="text-stone-300" @click="collapsePrompt = null">Not yet</Button>
+        </div>
+    </div>
 
     <div
         v-if="question"

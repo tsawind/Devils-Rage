@@ -16,8 +16,44 @@ export type TRageRoll = {
     started_by: string | null;
     /** Also a Rage Scanning session: Rage speed for everyone until the roll ends. */
     scanning: boolean;
+    /** Patch 57: when the static collapsed (the roll timer counts from it) and who collapsed it. */
+    collapsed_at?: string | null;
+    collapsed_by?: string | null;
     targets: TRageRollTarget[];
 };
+
+/** Patch 57: seconds from the collapse until the new static's signature can be scanned (Tsa's first guess, to be measured). */
+export const ROLL_SIG_DUE_SECONDS = 59;
+/** Patch 57: when the SCAN tone plays (press Scan now: the scan lands as the sig appears). */
+export const ROLL_SCAN_AT_SECONDS = 54;
+/** Patch 57: how long after the sig is due the chip keeps saying "sig due". */
+export const ROLL_DUE_SHOWN_SECONDS = 180;
+
+export type TRollTimer =
+    | { phase: 'counting'; elapsed: number; toDue: number; toScan: number; by: string | null }
+    | { phase: 'due'; elapsed: number; overdue: number; by: string | null };
+
+/** Patch 57: where the roll timer is at `nowMs`, or null (no collapse, or long past). */
+export function rollTimer(roll: Pick<TRageRoll, 'collapsed_at' | 'collapsed_by'> | null | undefined, nowMs: number): TRollTimer | null {
+    if (!roll?.collapsed_at) return null;
+    const at = Date.parse(roll.collapsed_at);
+    if (Number.isNaN(at)) return null;
+    const elapsed = Math.max(0, (nowMs - at) / 1000);
+    const by = roll.collapsed_by ?? null;
+    if (elapsed < ROLL_SIG_DUE_SECONDS) {
+        return { phase: 'counting', elapsed, toDue: ROLL_SIG_DUE_SECONDS - elapsed, toScan: ROLL_SCAN_AT_SECONDS - elapsed, by };
+    }
+    if (elapsed < ROLL_SIG_DUE_SECONDS + ROLL_DUE_SHOWN_SECONDS) {
+        return { phase: 'due', elapsed, overdue: elapsed - ROLL_SIG_DUE_SECONDS, by };
+    }
+    return null;
+}
+
+/** "0:41" (rounded up: 0:01 until it's really due). */
+export function formatCountdown(seconds: number): string {
+    const whole = Math.max(0, Math.ceil(seconds));
+    return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+}
 
 type TRollSystem = {
     id: number;

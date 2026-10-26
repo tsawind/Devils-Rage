@@ -38,6 +38,8 @@ use function sprintf;
  * @property string|null $rage_roll_started_by
  * @property list<int>|null $rage_roll_targets Solarsystem ids that end the roll when hit
  * @property bool $rage_roll_scanning The roll is also a Rage Scanning session: rage speed for everyone
+ * @property CarbonImmutable|null $rage_roll_collapsed_at Patch 57: when the static collapsed (the roll timer counts from it)
+ * @property string|null $rage_roll_collapsed_by
  * @property string $bookmark_format_wormhole
  * @property string $bookmark_format_kspace
  * @property string $bookmark_format_return
@@ -249,7 +251,7 @@ final class Map extends Model
      * Patch 35: the rage roll in progress (null when nobody is rolling), with the
      * target systems' names for the mapper.
      *
-     * @return array{solarsystem_id: int, started_at: string|null, started_by: string|null, scanning: bool, targets: list<array{id: int, name: string}>}|null
+     * @return array{solarsystem_id: int, started_at: string|null, started_by: string|null, scanning: bool, collapsed_at: string|null, collapsed_by: string|null, targets: list<array{id: int, name: string}>}|null
      */
     public function rageRollState(): ?array
     {
@@ -265,6 +267,8 @@ final class Map extends Model
             'started_at' => $this->rage_roll_started_at?->toIso8601String(),
             'started_by' => $this->rage_roll_started_by,
             'scanning' => (bool) $this->rage_roll_scanning,
+            'collapsed_at' => $this->rage_roll_collapsed_at?->toIso8601String(),
+            'collapsed_by' => $this->rage_roll_collapsed_by,
             'targets' => array_map(
                 fn (int $id): array => ['id' => $id, 'name' => (string) ($names[$id] ?? $id)],
                 $target_ids,
@@ -281,6 +285,7 @@ final class Map extends Model
             'constant_width_enabled' => 'boolean',
             'bookmark_alias_scheme' => AliasScheme::class,
             'rage_roll_started_at' => 'immutable_datetime',
+            'rage_roll_collapsed_at' => 'immutable_datetime',
             'rage_roll_targets' => 'array',
             'rage_roll_scanning' => 'boolean',
         ];

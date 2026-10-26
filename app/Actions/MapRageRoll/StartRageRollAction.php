@@ -58,6 +58,8 @@ final readonly class StartRageRollAction
             'rage_roll_started_by' => $user->active_character->name ?? null,
             'rage_roll_targets' => $target_ids,
             'rage_roll_scanning' => (bool) ($data['scanning'] ?? false),
+            'rage_roll_collapsed_at' => null,
+            'rage_roll_collapsed_by' => null,
         ]);
 
         $this->mapBroadcaster->metadataUpdated($map);

@@ -6,10 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import usePermission from '@/composables/usePermission';
 import { useRageRoll } from '@/composables/useRageRoll';
+import { useRollTimer } from '@/composables/useRollTimer';
 import { rageRollHit } from '@/composables/useRageRollWatcher';
 import { useStaticSolarsystem } from '@/composables/useStaticSolarsystems';
 import { displayAlias } from '@/lib/alias';
-import { formatElapsed, parseTargets } from '@/lib/rageRoll';
+import { formatCountdown, formatElapsed, parseTargets } from '@/lib/rageRoll';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import { useNow } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
@@ -38,6 +39,13 @@ const name = computed(() => {
     return displayAlias(alias) || solarsystem.value?.name || 'the static';
 });
 const statics = computed(() => (solarsystem.value?.statics ?? []).map((value) => `${value.name} → ${value.leads_to.toUpperCase()}`).join(' + '));
+// Patch 57: the roll timer in the chip ("sig 0:41") and a "Collapsed now" button for pilots without logs.
+const { timer, markCollapsed } = useRollTimer();
+const timerText = computed(() => {
+    const value = timer.value;
+    if (!value) return null;
+    return value.phase === 'counting' ? `sig ${formatCountdown(value.toDue)}` : 'sig due: scan';
+});
 const elapsed = computed(() => formatElapsed(rageRoll.value?.started_at ?? null, now.value.getTime()));
 const targetNames = computed(() => (rageRoll.value?.targets ?? []).map((target) => target.name));
 
@@ -63,7 +71,7 @@ function saveTargets(): void {
             <button
                 type="button"
                 class="rage-chip flex h-8 max-w-[26rem] items-center gap-1.5 rounded-full px-3 font-display text-xs font-bold tracking-widest whitespace-nowrap text-white uppercase transition-colors"
-                :class="rageRollHit ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-800 hover:bg-red-700'"
+                :class="rageRollHit ? 'bg-emerald-600 hover:bg-emerald-500' : timer?.phase === 'due' ? 'bg-amber-600 hover:bg-amber-500' : 'bg-red-800 hover:bg-red-700'"
                 :title="rageRollHit ? `Target hit: ${rageRollHit.text}` : `Rage roll: ${name}`"
             >
                 <template v-if="rageRollHit">
@@ -76,7 +84,8 @@ function saveTargets(): void {
                     <span v-if="statics" class="hidden truncate font-mono tracking-normal lg:inline">· {{ statics }}</span>
                     <span v-if="rageRoll.scanning" class="rounded bg-black/30 px-1 tracking-normal">⚔ scan</span>
                 </template>
-                <span class="font-mono tracking-normal text-red-100/80">{{ elapsed }}</span>
+                <span v-if="timerText && !rageRollHit" class="rounded bg-black/30 px-1 font-mono tracking-normal">{{ timerText }}</span>
+                <span v-else class="font-mono tracking-normal text-red-100/80">{{ elapsed }}</span>
             </button>
         </PopoverTrigger>
         <PopoverContent align="center" class="w-80 border-red-900/70">
@@ -100,6 +109,13 @@ function saveTargets(): void {
                     </template>
                     <p v-else class="font-mono text-xs">{{ targetNames.join(', ') || 'None' }}</p>
                     <p class="text-xs text-muted-foreground">When the static opens into one, everyone with the map open hears it.</p>
+                </div>
+
+                <div v-if="canEdit" class="grid gap-1">
+                    <Button size="sm" class="justify-self-start bg-red-700 font-semibold text-white hover:bg-red-600" @click="markCollapsed()">Collapsed now (start the timer)</Button>
+                    <p class="text-xs text-muted-foreground">
+                        New static signature 59 s after the collapse; the SCAN tone plays at 54 s.<span v-if="timer?.by"> Last collapse: {{ timer.by }}.</span>
+                    </p>
                 </div>
 
                 <Button v-if="canEdit" size="sm" variant="ghost" class="justify-self-start text-red-400 hover:text-red-300" @click="stopRageRoll">End the roll</Button>

@@ -18,7 +18,7 @@ import { router } from '@inertiajs/vue3';
 import { CircleDashed, ImageUp, Loader2, Trash2, Volume1, Volume2, VolumeX, Waypoints, Workflow } from 'lucide-vue-next';
 import { useMapEffects } from '@/composables/useMapEffects';
 import { pulseKill } from '@/composables/useKillPulses';
-import { playKillSound, playTargetAcquired } from '@/lib/rageSound';
+import { playKillSound, playScanTone, playTargetAcquired } from '@/lib/rageSound';
 import { KILL_SOUND_FAMILIES, MAX_SOUND_JUMPS, playDistanceKill, playKillAt, type TKillSoundFamily } from '@/lib/distanceSound';
 import { computed, ref, useTemplateRef, type Component } from 'vue';
 import { toast } from 'vue-sonner';
@@ -127,6 +127,7 @@ const soundTests: { label: string; play: () => void }[] = [
     { label: '🎯 Target acquired (Rage Roll)', play: playTargetAcquired },
     { label: '💥 Kill', play: () => playKillSound(false) },
     { label: '☠ Capital kill', play: () => playKillSound(true) },
+    { label: '⏱ Roll timer: SCAN', play: () => playScanTone() },
 ];
 
 /** Patch 40: kill sounds by distance from home: test every distance, main chain and side chains. */
@@ -370,6 +371,11 @@ function onDrop(event: DragEvent) {
                     <label class="flex items-center justify-between gap-2">
                         <span>Kill effects on the map</span>
                         <input v-model="effects.killEffects" type="checkbox" class="size-4 accent-red-600" />
+                    </label>
+                    <!-- Patch 57: the rage roll timer's SCAN tone (54 s after the static collapses) -->
+                    <label class="flex items-center justify-between gap-2" :class="{ 'opacity-50': !effects.sounds }">
+                        <span>Rage roll timer sound</span>
+                        <input v-model="effects.rollTimerSound" type="checkbox" class="size-4 accent-red-600" />
                     </label>
                     <span class="mt-1 text-xs font-medium text-muted-foreground">Test the sounds</span>
                     <div class="flex flex-col gap-1">
