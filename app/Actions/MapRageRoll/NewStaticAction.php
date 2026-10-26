@@ -10,6 +10,9 @@ use App\Enums\SignatureCategory;
 use App\Models\MapConnection;
 use App\Models\MapSolarsystem;
 use App\Models\Signature;
+use App\Models\SignatureType;
+use App\Models\Wormhole;
+use App\Models\WormholeStatic;
 use App\Support\Broadcasting\MapBroadcaster;
 use App\Support\ChainMemory;
 use Illuminate\Database\Eloquent\Builder;
@@ -102,14 +105,19 @@ final readonly class NewStaticAction
             }
 
             $wormhole_id = $old->wormhole_id;
+            $signature_type_id = $old->signature_type_id;
             $this->deleteSignatureAction->handle($old, without_events: true);
 
             $new->refresh();
+            // Patch 57: the old static had no type: with one static, the system's static type is the answer.
+            $wormhole_id = $new->wormhole_id ?? $wormhole_id ?? $this->onlyStatic($rolling);
+            $signature_type_id = $new->signature_type_id ?? $signature_type_id ?? $this->signatureTypeFor($wormhole_id);
             $new->update([
                 'is_static' => true,
                 'is_wandering' => false,
                 'alias' => $base !== '' && ! str_contains($base, ChainMemory::STAMP) ? $base : $new->alias,
-                'wormhole_id' => $new->wormhole_id ?? $wormhole_id,
+                'wormhole_id' => $wormhole_id,
+                'signature_type_id' => $signature_type_id,
             ]);
 
             return ['alias' => $base !== '' ? $base : null, 'stamp' => $stamp, 'stamped' => $stamped, 'old_system_id' => $old_system?->id];
@@ -123,6 +131,26 @@ final readonly class NewStaticAction
         $this->mapBroadcaster->resync($rolling->map_id);
 
         return ['alias' => $result['alias'], 'stamp' => $result['stamp'], 'stamped' => $result['stamped'], 'hidden' => count($hidden)];
+    }
+
+    /** The rolling system's static hole type, when it has exactly one. */
+    private function onlyStatic(MapSolarsystem $rolling): ?int
+    {
+        $ids = WormholeStatic::query()->where('wormhole_system_id', $rolling->solarsystem_id)->pluck('wormhole_id');
+
+        return $ids->count() === 1 ? (int) $ids->first() : null;
+    }
+
+    /** The signature type for a hole type ("V753"), so the Type column shows it. */
+    private function signatureTypeFor(?int $wormholeId): ?int
+    {
+        if ($wormholeId === null) {
+            return null;
+        }
+        $name = Wormhole::query()->whereKey($wormholeId)->value('name');
+        $id = $name === null ? null : SignatureType::query()->where('signature', $name)->value('id');
+
+        return $id === null ? null : (int) $id;
     }
 
     /**

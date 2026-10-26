@@ -299,3 +299,21 @@ it('patch 57: coming back through a wandering hole removes nothing', function ()
         ->and($wanderer->refresh()->alias)->toBe('W1')
         ->and($map->refresh()->rage_roll_collapsed_at)->not->toBeNull();
 });
+
+it('patch 57: the new static gets the system\'s only static type when the old one had none', function () {
+    $map = Map::factory()->create();
+    $daisy = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000005), 'alias' => 'Daisy']);
+    App\Models\WormholeSystem::query()->create(['id' => 31000005]);
+    $v753 = makeWormhole('V753', 1_000_000_000, 'c6');
+    App\Models\WormholeStatic::query()->create(['wormhole_system_id' => 31000005, 'wormhole_id' => $v753->id]);
+    $type = App\Models\SignatureType::factory()->wormhole()->create(['signature' => 'V753', 'name' => 'V753 - C6']);
+    $old = Signature::factory()->create(['map_solarsystem_id' => $daisy->id, 'signature_id' => 'ZGB-111', 'alias' => 'A', 'is_static' => true, 'wormhole_id' => null, 'signature_type_id' => null]);
+    $new = Signature::factory()->create(['map_solarsystem_id' => $daisy->id, 'signature_id' => 'SGO-278', 'wormhole_id' => null, 'signature_type_id' => null]);
+    actingAs(rageRoller($map, Permission::Member));
+
+    $this->post(route('maps.rage-roll.new-static', $map), ['old_signature_id' => $old->id, 'signature_id' => $new->id])->assertSessionHasNoErrors();
+
+    expect($new->refresh()->wormhole_id)->toBe($v753->id)
+        ->and($new->signature_type_id)->toBe($type->id)
+        ->and($new->alias)->toBe('A');
+});
