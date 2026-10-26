@@ -14,9 +14,26 @@ describe('patch 57: text copied from EVE for intel', () => {
     });
 
     it('takes a bare name as a structure name that still needs its type', () => {
-        expect(readCopiedText('J145735 - Old-Daisy')).toEqual({ kind: 'name', name: 'J145735 - Old-Daisy' });
+        expect(readCopiedText('J145735 - Old-Daisy')).toEqual({ kind: 'name', name: 'J145735 - Old-Daisy', owner: null, structureKind: null });
         expect(readCopiedText('https://zkillboard.com/kill/1/')).toEqual({ kind: 'other' });
         expect(readCopiedText('two\nlines')).toEqual({ kind: 'other' });
+    });
+
+    it('reads the owner from Show Info, and the type when its line came along', () => {
+        expect(readCopiedText('J170845 - Main Barracks (E85 Holding Services)')).toEqual({
+            kind: 'name',
+            name: 'J170845 - Main Barracks',
+            owner: 'E85 Holding Services',
+            structureKind: null,
+        });
+        expect(readCopiedText('J170845 - Main Barracks (E85 Holding Services)\nCitadel - Fortizar')).toEqual({
+            kind: 'name',
+            name: 'J170845 - Main Barracks',
+            owner: 'E85 Holding Services',
+            structureKind: 'fortizar',
+        });
+        expect(readCopiedText("Home (Us)\nCitadel - 'Moreau' Fortizar")).toMatchObject({ structureKind: 'fortizar' });
+        expect(readCopiedText('Tower\nControl Tower - Amarr Control Tower Large')).toMatchObject({ name: 'Tower', structureKind: 'pos' });
         expect(readCopiedText('')).toEqual({ kind: 'other' });
     });
 });

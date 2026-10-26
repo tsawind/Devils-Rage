@@ -263,6 +263,7 @@ function tell(message: string): void {
 
 /** A bare name was pasted: which structure is it? */
 const askKind = ref<string | null>(null);
+const askOwner = ref<string | null>(null);
 
 async function importText(text: string): Promise<void> {
     const answer = await jsonFetch<{ added: number[]; updated: number[] }>(SystemIntelController.importStructures(mapSolarsystemId).url, 'POST', { text });
@@ -279,7 +280,7 @@ async function addNamed(kind: string): Promise<void> {
     const name = askKind.value;
     if (!name) return;
     askKind.value = null;
-    const answer = await jsonFetch(SystemIntelController.storeStructure(mapSolarsystemId).url, 'POST', { kind, name, state: 'online' });
+    const answer = await jsonFetch(SystemIntelController.storeStructure(mapSolarsystemId).url, 'POST', { kind, name, owner: askOwner.value, state: 'online' });
     if (!answer) {
         error.value = 'Could not add the structure.';
         return;
@@ -317,7 +318,10 @@ async function onPaste(event: ClipboardEvent): Promise<void> {
     } else if (read.kind === 'structures') {
         await importText(text);
     } else {
+        // Show Info gives the owner in brackets; with its "Citadel - Fortizar" line too, no question.
         askKind.value = read.name;
+        askOwner.value = read.owner;
+        if (read.structureKind) await addNamed(read.structureKind);
     }
 }
 useEventListener(() => (open.value ? document : null), 'paste', (event: ClipboardEvent) => void onPaste(event));
@@ -407,7 +411,7 @@ const KIND_BADGES: Record<string, string> = {
 
             <p v-if="notice" class="rounded bg-green-950/60 px-2 py-1 text-xs text-green-200" role="status">{{ notice }}</p>
             <div v-if="askKind" class="flex flex-col gap-2 rounded-md border border-red-900/70 bg-muted/30 p-2 text-xs">
-                <span>What is <b>{{ askKind }}</b>?</span>
+                <span>What is <b>{{ askKind }}</b><template v-if="askOwner"> ({{ askOwner }})</template>?</span>
                 <div class="flex flex-wrap gap-1">
                     <button
                         v-for="kind in intel?.kinds ?? []"
