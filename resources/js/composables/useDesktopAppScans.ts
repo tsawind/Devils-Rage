@@ -16,18 +16,20 @@ import { useEventListener } from '@vueuse/core';
 export function useDesktopAppScans(): void {
     if (!inDesktopApp()) return;
     const page = useShowMap();
-    const store = tryUseMapStore();
 
     useEventListener(window, APP_SCAN_EVENT, (raw: Event) => {
         const scan = (raw as CustomEvent<TAppScan>).detail;
         // After the signature panels had their turn.
         setTimeout(() => {
-            if (!scan || scan.claimed) return;
+            if (!scan || scan.claimed || scan.toasted) return;
             const signatures = signatureParser.parseSignatures(scan.text);
             if (!signatures || !signatures.length) return;
             const where = scanCharacter(scan, page.props.map_characters)?.status?.solarsystem_id;
+            // The map on screen now (not the one this listener started with: tabs keep old pages alive).
+            const store = tryUseMapStore();
             const system = where && store ? [...store.systems.values()].find((candidate) => candidate.solarsystem_id === where) : null;
             if (!system) {
+                scan.toasted = true;
                 toast.info(`${scan.character_name}'s scan wasn't pasted`, {
                     description: where ? 'Their system is not on this map yet. Paste it with Ctrl+V.' : 'Not sure where they are (is tracking on?). Paste it with Ctrl+V.',
                 });

@@ -62,7 +62,7 @@ export function appAttention(on: boolean): void {
  * Patch 47: the app saw a probe scan copied in EVE ("devils-rage-app:scan"). The character is the
  * one whose EVE window had focus, matched to a character id through the chat logs.
  */
-export type TAppScan = { character_id: number | null; character_name: string; text: string; claimed?: boolean };
+export type TAppScan = { character_id: number | null; character_name: string; text: string; claimed?: boolean; toasted?: boolean };
 export const APP_SCAN_EVENT = 'devils-rage-app:scan';
 
 /**
