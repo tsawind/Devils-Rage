@@ -118,7 +118,7 @@ case "$ACTION" in
         echo "== Last lines of nightly.log"; tail -n 15 "$HOME/backups/nightly.log" 2>/dev/null | cut -c1-200 || echo "(no log)"
         echo "== Newest backup files"; ls -lt "$HOME/backups/nightly" 2>/dev/null | head -10 || echo "(no folder)"
         echo "== What the mapper has recorded"
-        cd "$STACK" && "${C[@]}" exec -T app php artisan tinker --execute="echo json_encode(Illuminate\Support\Facades\Cache::get(App\Actions\Discord\ShowHealthAction::BACKUP_KEY)), ' cache=', config('cache.default'), PHP_EOL;" 2>&1 | cut -c1-200
+        cd "$STACK" && "${C[@]}" exec -T app php artisan tinker --execute="echo App\Actions\Discord\ShowHealthAction::lastBackup()?->toIso8601String() ?? 'never', PHP_EOL;" 2>&1 | cut -c1-200
         echo "== The report call backup.sh makes (output shown this time)"
         ( cd "$STACK" && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app php artisan devilsrage:backup-done ) 2>&1 | tail -n 8 | cut -c1-200 || true
         ;;
