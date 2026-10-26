@@ -28,7 +28,7 @@ RUN composer config repositories.devilsrage \
         recursivetree/seat-inventory:2.1.7 \
         cryptatech/seat-srp:5.0.7 \
         mattfalahe/seat-discord-pings:2.0.1 \
-        devilsrage/seat-devilsrage:1.8.5 \
+        devilsrage/seat-devilsrage:1.8.6 \
         --no-install --no-ansi \
  && composer update \
         cryptatech/seat-fitting recursivetree/seat-prices-core cryptatech/seat-prices-fuzzwork \

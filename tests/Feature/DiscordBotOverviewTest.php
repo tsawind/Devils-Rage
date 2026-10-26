@@ -342,7 +342,9 @@ function overviewHealth(array $overrides = []): array
 }
 
 it('reports SeAT health as all good', function () {
-    Cache::forever(ShowHealthAction::BACKUP_KEY, now()->subHours(5)->toIso8601String());
+    $this->travel(-5)->hours();
+    ShowHealthAction::recordBackup();
+    $this->travelBack();
     Http::fake(['seat.test/devilsrage/api/discord/5151/health' => Http::response(overviewHealth())]);
 
     $report = app(ShowHealthAction::class)->report('5151');
@@ -352,7 +354,6 @@ it('reports SeAT health as all good', function () {
 });
 
 it('lists broken leader logins, expired characters and a missing backup', function () {
-    Cache::forget(ShowHealthAction::BACKUP_KEY);
     Http::fake(['seat.test/devilsrage/api/discord/5151/health' => Http::response(overviewHealth([
         'leaders' => [['name' => '02Vicarious', 'role' => 'Director', 'status' => 'expired']],
         'expired' => ['Devil Coffin 2'],
@@ -370,16 +371,19 @@ it('lists broken leader logins, expired characters and a missing backup', functi
 });
 
 it('records the nightly backup', function () {
-    Cache::forget(ShowHealthAction::BACKUP_KEY);
 
     $this->artisan('devilsrage:backup-done')->assertSuccessful();
 
-    expect(Cache::get(ShowHealthAction::BACKUP_KEY))->toBeString();
+    expect(ShowHealthAction::lastBackup())->not->toBeNull();
+
+    Cache::flush();
+
+    expect(ShowHealthAction::lastBackup())->not->toBeNull();
 });
 
 it('posts health only when something is wrong, except with --always', function () {
     $this->travelTo(now()->next('Monday'));
-    Cache::forever(ShowHealthAction::BACKUP_KEY, now()->toIso8601String());
+    ShowHealthAction::recordBackup();
     $account = overviewAccount(Map::factory()->create());
     DiscordChannelFeed::factory()->create(['kind' => DiscordFeedKind::Health, 'map_id' => null, 'created_by_user_id' => $account->user_id, 'discord_channel_id' => 'health-channel']);
     Http::fake([

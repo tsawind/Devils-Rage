@@ -8,7 +8,7 @@ use App\Services\Seat\SeatClient;
 use App\Services\Seat\SeatForbiddenException;
 use App\Services\Seat\SeatUnavailableException;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
+use App\Models\AppSetting;
 
 /**
  * "/health" and the daily health post: SeAT logins of the CEO and directors (structure
@@ -23,6 +23,19 @@ final readonly class ShowHealthAction
     private const int FAILED_JOBS_WARN = 50;
 
     public function __construct(private SeatClient $seat) {}
+
+    /** Records that the nightly backup finished. Kept in the database: Redis restarts used to forget it. */
+    public static function recordBackup(): void
+    {
+        AppSetting::query()->updateOrCreate(['key' => self::BACKUP_KEY], ['value' => now()->toIso8601String(), 'updated_by_name' => 'backup.sh']);
+    }
+
+    public static function lastBackup(): ?Carbon
+    {
+        $value = AppSetting::query()->where('key', self::BACKUP_KEY)->value('value');
+
+        return is_string($value) ? Carbon::parse($value) : null;
+    }
 
     /**
      * @return array{text: string, problems: int}
@@ -69,8 +82,7 @@ final readonly class ShowHealthAction
             $problems[] = sprintf('• %d SeAT jobs failed in the last day (usually ESI hiccups; many means something is wrong).', $health['failed_jobs']);
         }
 
-        $backup = Cache::get(self::BACKUP_KEY);
-        $backupAt = is_string($backup) ? Carbon::parse($backup) : null;
+        $backupAt = self::lastBackup();
         if ($backupAt === null) {
             $problems[] = '• No nightly backup has reported in yet (backup.sh calls `devilsrage:backup-done`).';
         } elseif ($backupAt->lt(Carbon::now()->subHours(self::BACKUP_LATE_HOURS))) {

@@ -4,7 +4,6 @@
 @section('page_header', 'SRP a battle')
 
 @section('full')
-  @include('devilsrage::partials.flash')
   @if(session('warning'))
     <div class="alert alert-warning">{{ session('warning') }}</div>
   @endif
