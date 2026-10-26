@@ -112,6 +112,24 @@ case "$ACTION" in
             }
         ' 2>&1 | cut -c1-400
         ;;
+    backup-check)
+        # Is the nightly backup scheduled, did it run, and does the mapper know? File names and sizes only.
+        echo "== Cron line"; crontab -l 2>/dev/null | grep 'devilsrage/backup.sh' || echo "(none: backup is not scheduled)"
+        echo "== Last lines of nightly.log"; tail -n 15 "$HOME/backups/nightly.log" 2>/dev/null | cut -c1-200 || echo "(no log)"
+        echo "== Newest backup files"; ls -lt "$HOME/backups/nightly" 2>/dev/null | head -10 || echo "(no folder)"
+        echo "== What the mapper has recorded"
+        cd "$STACK" && "${C[@]}" exec -T app php artisan tinker --execute="echo json_encode(Illuminate\Support\Facades\Cache::get(App\Actions\Discord\ShowHealthAction::BACKUP_KEY)), ' cache=', config('cache.default'), PHP_EOL;" 2>&1 | cut -c1-200
+        ;;
+    seat-failed-jobs)
+        # SeAT's failed jobs of the last day, grouped by job and the first line of the error.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            $rows = DB::table("failed_jobs")->where("failed_at", ">=", now()->subDay())->get(["payload", "exception"]);
+            echo "Failed in the last day: ", $rows->count(), PHP_EOL;
+            $rows->map(fn ($r) => (json_decode($r->payload, true)["displayName"] ?? "?")." | ".mb_strimwidth(strtok((string) $r->exception, "\n"), 0, 170))
+                ->countBy()->sortDesc()->take(25)->each(function ($n, $k) { echo str_pad((string) $n, 4), " ", $k, PHP_EOL; });
+        ' 2>&1 | sed -E 's/[A-Za-z0-9_+\/=-]{32,}/[masked]/g' | cut -c1-260
+        ;;
     update-gate)
         # Only fetches the newest scripts (this file included): no build, nothing restarts.
         cd "$REPO" && git pull --ff-only && git log --oneline -1
@@ -145,7 +163,7 @@ case "$ACTION" in
         ;;
     *)
         echo "!! Unknown action: $ACTION"
-        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check"
+        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check, backup-check, seat-failed-jobs"
         exit 2
         ;;
 esac
