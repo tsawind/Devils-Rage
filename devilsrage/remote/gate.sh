@@ -140,6 +140,10 @@ case "$ACTION" in
             }
         ' 2>&1 | sed -E 's/[A-Za-z0-9_+\/=-]{32,}/[masked]/g' | cut -c1-260
         ;;
+    mapper-migrations)
+        # The newest migrations and whether they ran.
+        cd "$STACK" && "${C[@]}" exec -T app php artisan migrate:status 2>&1 | tail -n 6 | cut -c1-160
+        ;;
     update-gate)
         # Only fetches the newest scripts (this file included): no build, nothing restarts.
         cd "$REPO" && git pull --ff-only && git log --oneline -1
@@ -173,7 +177,7 @@ case "$ACTION" in
         ;;
     *)
         echo "!! Unknown action: $ACTION"
-        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check, backup-check, seat-failed-jobs"
+        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check, backup-check, seat-failed-jobs, mapper-migrations"
         exit 2
         ;;
 esac
