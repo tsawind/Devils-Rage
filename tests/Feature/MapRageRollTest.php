@@ -306,7 +306,11 @@ it('patch 57: the new static gets the system\'s only static type when the old on
     App\Models\WormholeSystem::query()->create(['id' => 31000005]);
     $v753 = makeWormhole('V753', 1_000_000_000, 'c6');
     App\Models\WormholeStatic::query()->create(['wormhole_system_id' => 31000005, 'wormhole_id' => $v753->id]);
-    $type = App\Models\SignatureType::factory()->wormhole()->create(['signature' => 'V753', 'name' => 'V753 - C6']);
+    App\Models\SignatureType::query()->firstOrCreate(['signature' => 'V753'], [
+        'name' => 'V753 - C6',
+        'signature_category_id' => App\Models\SignatureCategory::query()->where('code', 'wormhole')->value('id'),
+    ]);
+    $typeId = App\Models\SignatureType::query()->where('signature', 'V753')->value('id');
     $old = Signature::factory()->create(['map_solarsystem_id' => $daisy->id, 'signature_id' => 'ZGB-111', 'alias' => 'A', 'is_static' => true, 'wormhole_id' => null, 'signature_type_id' => null]);
     $new = Signature::factory()->create(['map_solarsystem_id' => $daisy->id, 'signature_id' => 'SGO-278', 'wormhole_id' => null, 'signature_type_id' => null]);
     actingAs(rageRoller($map, Permission::Member));
@@ -314,6 +318,6 @@ it('patch 57: the new static gets the system\'s only static type when the old on
     $this->post(route('maps.rage-roll.new-static', $map), ['old_signature_id' => $old->id, 'signature_id' => $new->id])->assertSessionHasNoErrors();
 
     expect($new->refresh()->wormhole_id)->toBe($v753->id)
-        ->and($new->signature_type_id)->toBe($type->id)
+        ->and($new->signature_type_id)->toBe($typeId)
         ->and($new->alias)->toBe('A');
 });
