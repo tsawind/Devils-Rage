@@ -25,7 +25,7 @@ export type TRageRoll = {
 /** Patch 57: seconds from the collapse until the new static's signature can be scanned (Tsa's first guess, to be measured). */
 export const ROLL_SIG_DUE_SECONDS = 59;
 /** Patch 57: when the SCAN tone plays (press Scan now: the scan lands as the sig appears). */
-export const ROLL_SCAN_AT_SECONDS = 54;
+export const ROLL_SCAN_AT_SECONDS = 53;
 /** Patch 57: how long after the sig is due the chip keeps saying "sig due". */
 export const ROLL_DUE_SHOWN_SECONDS = 180;
 

@@ -11,11 +11,11 @@ describe('patch 57: rage roll timer', () => {
         expect(rollTimer({ collapsed_at: 'nonsense', collapsed_by: null }, at(0))).toBeNull();
     });
 
-    it('counts down to the sig at 59 s with the scan moment at 54 s', () => {
+    it('counts down to the sig at 59 s with the scan moment at 53 s', () => {
         expect(ROLL_SIG_DUE_SECONDS).toBe(59);
-        expect(ROLL_SCAN_AT_SECONDS).toBe(54);
+        expect(ROLL_SCAN_AT_SECONDS).toBe(53);
         const timer = rollTimer({ collapsed_at: collapsed, collapsed_by: 'LuigiSquirrel' }, at(18));
-        expect(timer).toMatchObject({ phase: 'counting', toDue: 41, toScan: 36, by: 'LuigiSquirrel' });
+        expect(timer).toMatchObject({ phase: 'counting', toDue: 41, toScan: 35, by: 'LuigiSquirrel' });
     });
 
     it('says the sig is due after 59 s, then goes away', () => {

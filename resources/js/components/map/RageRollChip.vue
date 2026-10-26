@@ -10,7 +10,7 @@ import { useRollTimer } from '@/composables/useRollTimer';
 import { rageRollHit } from '@/composables/useRageRollWatcher';
 import { useStaticSolarsystem } from '@/composables/useStaticSolarsystems';
 import { displayAlias } from '@/lib/alias';
-import { formatCountdown, formatElapsed, parseTargets } from '@/lib/rageRoll';
+import { formatCountdown, formatElapsed, parseTargets, ROLL_SCAN_AT_SECONDS, ROLL_SIG_DUE_SECONDS } from '@/lib/rageRoll';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import { useNow } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
@@ -114,7 +114,7 @@ function saveTargets(): void {
                 <div v-if="canEdit" class="grid gap-1">
                     <Button size="sm" class="justify-self-start bg-red-700 font-semibold text-white hover:bg-red-600" @click="markCollapsed()">Collapsed now (start the timer)</Button>
                     <p class="text-xs text-muted-foreground">
-                        New static signature 59 s after the collapse; the SCAN tone plays at 54 s.<span v-if="timer?.by"> Last collapse: {{ timer.by }}.</span>
+                        New static signature {{ ROLL_SIG_DUE_SECONDS }} s after the collapse; the SCAN tone plays at {{ ROLL_SCAN_AT_SECONDS }} s.<span v-if="timer?.by"> Last collapse: {{ timer.by }}.</span>
                     </p>
                 </div>
 
