@@ -64,6 +64,8 @@ export function appAttention(on: boolean): void {
  */
 export type TAppScan = { character_id: number | null; character_name: string; text: string; claimed?: boolean; toasted?: boolean };
 export const APP_SCAN_EVENT = 'devils-rage-app:scan';
+/** Patch 57: a D-scan or overview rows with structures, copied in EVE (same detail as a scan). */
+export const APP_INTEL_EVENT = 'devils-rage-app:intel';
 
 /**
  * Patch 52: who copied the scan, among the characters on this map. By id when the app knows it

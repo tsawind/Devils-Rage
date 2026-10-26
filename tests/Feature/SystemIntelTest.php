@@ -11,6 +11,7 @@ use App\Models\Map;
 use App\Models\MapAccess;
 use App\Models\User;
 use App\Support\DscanSummary;
+use App\Support\StructureScan;
 use App\Support\SystemAssessment;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -134,4 +135,60 @@ it('counts D-scan types from both EVE copy formats', function () {
     expect($withIds['types'])->toBe([['type' => 'Legion', 'count' => 2]])
         ->and($withoutIds['objects'])->toBe(2)
         ->and($withoutIds['on_grid'])->toBe(1);
+});
+
+it('patch 57: reads structures from a D-scan and from overview rows', function () {
+    $dscan = "35833\tJ145735 - Old-Daisy\tFortizar\t27.7 AU\n12011\tSomeone's Legion\tLegion\t3.1 AU\n47512\tThe Moreau\t'Moreau' Fortizar\t2,500 km\n16213\tTower\tAmarr Control Tower Large\t4.2 AU\n2233\tCustoms Office (J145735 V)\tCustoms Office\t5 AU";
+    $overview = "27.7 AU\tJ145735 - Old-Daisy\tFortizar\t-\t-\t\t[TDVS]\n3.3 AU\tJ145735 - Star\tSun G5 (Pink)\t-\t-";
+
+    expect(StructureScan::parse($dscan))->toBe([
+        ['kind' => 'fortizar', 'type' => 'Fortizar', 'name' => 'J145735 - Old-Daisy', 'owner' => null, 'distance' => '27.7 AU'],
+        ['kind' => 'fortizar', 'type' => "'Moreau' Fortizar", 'name' => 'The Moreau', 'owner' => null, 'distance' => '2,500 km'],
+        ['kind' => 'pos', 'type' => 'Amarr Control Tower Large', 'name' => 'Tower', 'owner' => null, 'distance' => '4.2 AU'],
+    ])->and(StructureScan::parse($overview))->toBe([
+        ['kind' => 'fortizar', 'type' => 'Fortizar', 'name' => 'J145735 - Old-Daisy', 'owner' => 'TDVS', 'distance' => '27.7 AU'],
+    ])->and(StructureScan::parse('J145735 - Old-Daisy'))->toBe([])
+        ->and(StructureScan::parse("o7 fleet\nanyone got a Fortizar?"))->toBe([]);
+});
+
+it('patch 57: adds structures copied from EVE once, then marks them seen again', function () {
+    $map = Map::factory()->create();
+    actingAs(intelMember($map));
+    $system = placeMapSolarsystem($map, 31000503);
+
+    $first = postJson(route('map-solarsystems.intel.structures.import', $system), ['text' => "35833\tJ145735 - Old-Daisy\tFortizar\t27.7 AU"])
+        ->assertCreated()->json();
+    expect($first['added'])->toHaveCount(1)->and($first['updated'])->toBe([]);
+
+    $second = postJson(route('map-solarsystems.intel.structures.import', $system), ['text' => "27.7 AU\tJ145735 - Old-Daisy\tFortizar\t-\t[TDVS]"])
+        ->assertSuccessful()->json();
+    expect($second['added'])->toBe([])->and($second['updated'])->toBe($first['added']);
+
+    $structure = IntelStructure::query()->sole();
+    expect($structure->kind)->toBe('fortizar')
+        ->and($structure->name)->toBe('J145735 - Old-Daisy')
+        ->and($structure->owner)->toBe('TDVS')
+        ->and($structure->created_by_name)->toBe('Tsawind')
+        ->and(IntelEntry::query()->where('intel_structure_id', $structure->id)->pluck('body')->all())
+        ->toBe(['Added Fortizar "J145735 - Old-Daisy" (copied from EVE)', 'Fortizar "J145735 - Old-Daisy": seen again (copied from EVE)']);
+});
+
+it('patch 57: a pasted D-scan adds its structures to the system', function () {
+    $map = Map::factory()->create();
+    actingAs(intelMember($map));
+    $system = placeMapSolarsystem($map, 31000504);
+
+    postJson(route('map-solarsystems.intel.entries.store', $system), ['kind' => 'dscan', 'body' => "35832\tHome\tAstrahus\t1.2 AU\n12011\tA Legion\tLegion\t1,200 km"])->assertCreated();
+
+    expect(IntelStructure::query()->pluck('kind', 'name')->all())->toBe(['Home' => 'astrahus']);
+});
+
+it('patch 57: only people who can edit the map import structures', function () {
+    $map = Map::factory()->create();
+    actingAs(intelMember($map, Permission::Viewer));
+    $system = placeMapSolarsystem($map, 31000505);
+
+    postJson(route('map-solarsystems.intel.structures.import', $system), ['text' => "35833\tX\tFortizar\t1 AU"])->assertForbidden();
+    postJson(route('map-solarsystems.intel.structures.import', $system), [])->assertForbidden();
+    expect(IntelStructure::query()->count())->toBe(0);
 });

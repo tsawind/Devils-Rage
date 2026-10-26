@@ -10,6 +10,7 @@ use App\Models\IntelStructure;
 use App\Models\MapSolarsystem;
 use App\Models\User;
 use App\Support\DscanSummary;
+use App\Support\StructureScan;
 use App\Support\SystemAssessment;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Http\JsonResponse;
@@ -93,6 +94,24 @@ final class SystemIntelController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /**
+     * Patch 57: structures from text copied in EVE (a D-scan or overview rows): new ones are
+     * added, ones already here (same kind and name) are marked seen again, owner ticker filled in.
+     */
+    public function importStructures(Request $request, MapSolarsystem $mapSolarsystem, #[CurrentUser] User $user): JsonResponse
+    {
+        Gate::authorize('update', $mapSolarsystem);
+        $validated = $request->validate(['text' => ['required', 'string', 'max:200000']]);
+
+        $result = $this->importFrom($mapSolarsystem, (string) $validated['text'], $this->who($user));
+
+        return response()->json([
+            'added' => $result['added'],
+            'updated' => $result['updated'],
+            'structures' => array_map(fn (IntelStructure $structure): array => $this->structurePayload($structure), $result['structures']),
+        ], $result['added'] === [] ? 200 : 201);
+    }
+
     public function storeEntry(Request $request, MapSolarsystem $mapSolarsystem, #[CurrentUser] User $user): JsonResponse
     {
         Gate::authorize('update', $mapSolarsystem);
@@ -105,6 +124,11 @@ final class SystemIntelController extends Controller
         $body = mb_trim(str_replace("\r\n", "\n", (string) $validated['body']));
         $data = $validated['kind'] === 'dscan' ? DscanSummary::parse($body) : null;
         $entry = $this->log($mapSolarsystem, (string) $validated['kind'], $body, $this->who($user), $structureId, $data);
+
+        // Patch 57: structures in a pasted D-scan are added (or marked seen) as well.
+        if ($validated['kind'] === 'dscan') {
+            $this->importFrom($mapSolarsystem, $body, $this->who($user));
+        }
 
         if ($validated['kind'] === 'fit' && $structureId !== null) {
             IntelStructure::query()->whereKey($structureId)->update(['fit' => $body, 'updated_by_name' => $this->who($user)]);
@@ -167,6 +191,58 @@ final class SystemIntelController extends Controller
         $fields['seen_at'] = isset($validated['seen_at']) ? $validated['seen_at'] : now();
 
         return $fields;
+    }
+
+    /**
+     * @return array{added: list<int>, updated: list<int>, structures: list<IntelStructure>}
+     */
+    private function importFrom(MapSolarsystem $mapSolarsystem, string $text, string $who): array
+    {
+        $added = [];
+        $updated = [];
+        $structures = [];
+        $existing = IntelStructure::query()
+            ->where('map_id', $mapSolarsystem->map_id)
+            ->where('solarsystem_id', $mapSolarsystem->solarsystem_id)
+            ->get();
+
+        foreach (array_slice(StructureScan::parse($text), 0, 50) as $found) {
+            $name = $found['name'] !== null ? mb_substr($found['name'], 0, 120) : null;
+            $match = $existing->first(fn (IntelStructure $structure): bool => $structure->kind === $found['kind']
+                && mb_strtolower((string) $structure->name) === mb_strtolower((string) $name));
+
+            if ($match instanceof IntelStructure) {
+                $match->fill(['seen_at' => now(), 'updated_by_name' => $who]);
+                if ($found['owner'] !== null && $match->owner === null) {
+                    $match->owner = $found['owner'];
+                }
+                $match->save();
+                $this->log($mapSolarsystem, 'structure', sprintf('%s: seen again (copied from EVE)', $this->label($match)), $who, $match->id, ['action' => 'seen', 'state' => $match->state]);
+                $updated[] = $match->id;
+                $structures[] = $match;
+
+                continue;
+            }
+
+            $structure = new IntelStructure([
+                'map_id' => $mapSolarsystem->map_id,
+                'solarsystem_id' => $mapSolarsystem->solarsystem_id,
+                'kind' => $found['kind'],
+                'name' => $name,
+                'owner' => $found['owner'],
+                'state' => 'online',
+                'seen_at' => now(),
+                'created_by_name' => $who,
+                'updated_by_name' => $who,
+            ]);
+            $structure->save();
+            $existing->push($structure);
+            $this->log($mapSolarsystem, 'structure', sprintf('Added %s (copied from EVE)', $this->label($structure)), $who, $structure->id, ['action' => 'added', 'state' => $structure->state, 'type' => $found['type']]);
+            $added[] = $structure->id;
+            $structures[] = $structure;
+        }
+
+        return ['added' => $added, 'updated' => $updated, 'structures' => $structures];
     }
 
     private function belongs(MapSolarsystem $mapSolarsystem, IntelStructure $structure): void

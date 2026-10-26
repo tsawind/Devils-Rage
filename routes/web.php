@@ -173,6 +173,7 @@ Route::middleware('auth')->group(function () {
     // Patch 55: a system's intel: structures / POS, D-scans, fits, screenshots, notes, and who lives there.
     Route::get('map-solarsystems/{mapSolarsystem}/intel', [SystemIntelController::class, 'show'])->name('map-solarsystems.intel.show');
     Route::post('map-solarsystems/{mapSolarsystem}/intel/structures', [SystemIntelController::class, 'storeStructure'])->name('map-solarsystems.intel.structures.store');
+    Route::post('map-solarsystems/{mapSolarsystem}/intel/structures/import', [SystemIntelController::class, 'importStructures'])->middleware('throttle:60,1')->name('map-solarsystems.intel.structures.import');
     Route::put('map-solarsystems/{mapSolarsystem}/intel/structures/{structure}', [SystemIntelController::class, 'updateStructure'])->name('map-solarsystems.intel.structures.update');
     Route::delete('map-solarsystems/{mapSolarsystem}/intel/structures/{structure}', [SystemIntelController::class, 'destroyStructure'])->name('map-solarsystems.intel.structures.destroy');
     Route::post('map-solarsystems/{mapSolarsystem}/intel/entries', [SystemIntelController::class, 'storeEntry'])->middleware('throttle:60,1')->name('map-solarsystems.intel.entries.store');

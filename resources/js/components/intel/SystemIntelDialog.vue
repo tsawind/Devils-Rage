@@ -3,14 +3,19 @@ import SystemIntelController from '@/actions/App/Http/Controllers/SystemIntelCon
 import { Dialog, DialogDescription, DialogScrollContent, DialogTitle } from '@/components/ui/dialog';
 import usePermission from '@/composables/usePermission';
 import { jsonFetch } from '@/lib/jsonFetch';
+import { readCopiedText } from '@/lib/structureText';
 import { driverHeaders } from '@/lib/windowDriver';
-import { useEventListener } from '@vueuse/core';
+import { useElementSize, useEventListener } from '@vueuse/core';
 import { computed, reactive, ref, watch } from 'vue';
 
 /**
  * Patch 55: a system's intel, opened big from the Notes panel: who lives there (from the kills the
  * mapper keeps), structures and POS (each change logged), D-scans, fits, screenshots and notes,
  * and the log of everything, kept for good. A first version for testing in game.
+ *
+ * Patch 57: in a small window it shows one part at a time (Summary, Structures, Scans, Log), and
+ * whatever is pasted while it's open is recognised: a D-scan is saved (its structures added), overview
+ * rows add their structures, an image is saved as a screenshot, a bare name asks what structure it is.
  */
 type TStructure = {
     id: number;
@@ -222,12 +227,100 @@ function startEntry(kind: 'dscan' | 'fit' | 'note' | 'screenshot', structureId: 
     entryStructure.value = structureId;
 }
 
-function onPaste(event: ClipboardEvent): void {
-    if (adding.value !== 'screenshot') return;
-    const file = [...(event.clipboardData?.files ?? [])].find((candidate) => candidate.type.startsWith('image/'));
-    if (file) image.value = file;
+// --- Small window, paste anywhere (patch 57) ----------------------------------
+
+const root = ref<HTMLElement | null>(null);
+const { width } = useElementSize(root);
+const compact = computed(() => width.value > 0 && width.value < 640);
+const tab = ref<'summary' | 'structures' | 'scans' | 'log'>('summary');
+const shows = (part: 'who' | 'structures' | 'add' | 'log') => {
+    if (!compact.value) return true;
+    if (part === 'who') return tab.value === 'summary';
+    if (part === 'structures') return tab.value === 'summary' || tab.value === 'structures';
+    if (part === 'add') return tab.value === 'scans';
+    return tab.value === 'log' || tab.value === 'scans';
+};
+const shownEntries = computed(() => {
+    const entries = intel.value?.entries ?? [];
+    return compact.value && tab.value === 'scans' ? entries.filter((entry) => entry.kind !== 'structure' && entry.kind !== 'note') : entries;
+});
+const scanCount = computed(() => (intel.value?.entries ?? []).filter((entry) => entry.kind === 'dscan' || entry.kind === 'fit' || entry.kind === 'screenshot').length);
+
+const tabs = computed<{ value: 'summary' | 'structures' | 'scans' | 'log'; label: string }[]>(() => [
+    { value: 'summary', label: 'Summary' },
+    { value: 'structures', label: `Structures ${intel.value?.structures.length ?? 0}` },
+    { value: 'scans', label: `Scans ${scanCount.value}` },
+    { value: 'log', label: 'Log' },
+]);
+
+const notice = ref<string | null>(null);
+let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+function tell(message: string): void {
+    notice.value = message;
+    if (noticeTimer) clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => (notice.value = null), 6000);
 }
-useEventListener(() => (open.value ? document : null), 'paste', onPaste);
+
+/** A bare name was pasted: which structure is it? */
+const askKind = ref<string | null>(null);
+
+async function importText(text: string): Promise<void> {
+    const answer = await jsonFetch<{ added: number[]; updated: number[] }>(SystemIntelController.importStructures(mapSolarsystemId).url, 'POST', { text });
+    if (!answer) {
+        error.value = 'Could not add the structures.';
+        return;
+    }
+    const parts = [answer.added.length ? `${answer.added.length} added` : null, answer.updated.length ? `${answer.updated.length} seen again` : null].filter(Boolean);
+    tell(parts.length ? `Structures: ${parts.join(', ')}.` : 'No structures in what you pasted.');
+    await load();
+}
+
+async function addNamed(kind: string): Promise<void> {
+    const name = askKind.value;
+    if (!name) return;
+    askKind.value = null;
+    const answer = await jsonFetch(SystemIntelController.storeStructure(mapSolarsystemId).url, 'POST', { kind, name, state: 'online' });
+    if (!answer) {
+        error.value = 'Could not add the structure.';
+        return;
+    }
+    tell(`Added ${KIND_LABELS[kind] ?? kind} "${name}".`);
+    await load();
+}
+
+async function onPaste(event: ClipboardEvent): Promise<void> {
+    const file = [...(event.clipboardData?.files ?? [])].find((candidate) => candidate.type.startsWith('image/'));
+    if (adding.value === 'screenshot') {
+        if (file) image.value = file;
+        return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (!canEdit.value || !intel.value || (target && (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.isContentEditable))) return;
+
+    if (file) {
+        event.preventDefault();
+        startEntry('screenshot');
+        image.value = file;
+        await saveEntry();
+        tell('Screenshot saved.');
+        return;
+    }
+    const text = event.clipboardData?.getData('text/plain') ?? '';
+    const read = readCopiedText(text);
+    if (read.kind === 'other') return;
+    event.preventDefault();
+    if (read.kind === 'dscan') {
+        startEntry('dscan');
+        entryText.value = text;
+        await saveEntry();
+        tell(read.structures ? `D-scan saved, ${read.structures} structure${read.structures === 1 ? '' : 's'} in it.` : 'D-scan saved.');
+    } else if (read.kind === 'structures') {
+        await importText(text);
+    } else {
+        askKind.value = read.name;
+    }
+}
+useEventListener(() => (open.value ? document : null), 'paste', (event: ClipboardEvent) => void onPaste(event));
 function onPick(event: Event): void {
     image.value = (event.target as HTMLInputElement).files?.[0] ?? null;
 }
@@ -291,22 +384,55 @@ const KIND_BADGES: Record<string, string> = {
 <template>
     <Dialog v-model:open="open">
         <DialogScrollContent local class="w-[min(1180px,96vw)] max-w-[min(1180px,96vw)] gap-3 p-4 sm:max-w-[min(1180px,96vw)]">
+            <div ref="root" class="flex min-w-0 flex-col gap-3">
             <div class="flex flex-wrap items-baseline gap-2 pr-8">
                 <DialogTitle class="text-base">Intel · {{ systemLabel }}</DialogTitle>
-                <DialogDescription class="text-xs">Structures, scans and screenshots, kept for good. A first version: tell Tsa what's missing.</DialogDescription>
+                <DialogDescription class="text-xs">{{ compact ? 'Paste a D-scan, overview rows, a name or a screenshot.' : 'Structures, scans and screenshots, kept for good. Paste a D-scan, overview rows, a structure name or a screenshot anywhere here.' }}</DialogDescription>
+            </div>
+
+            <div v-if="compact && intel" class="flex flex-wrap gap-1" role="tablist" aria-label="Intel parts">
+                <button
+                    v-for="part in tabs"
+                    :key="part.value"
+                    type="button"
+                    role="tab"
+                    :aria-selected="tab === part.value"
+                    class="rounded-full border px-2.5 py-1 text-xs"
+                    :class="tab === part.value ? 'border-red-800 bg-red-950 font-semibold text-red-100' : 'border-border text-muted-foreground'"
+                    @click="tab = part.value"
+                >
+                    {{ part.label }}
+                </button>
+            </div>
+
+            <p v-if="notice" class="rounded bg-green-950/60 px-2 py-1 text-xs text-green-200" role="status">{{ notice }}</p>
+            <div v-if="askKind" class="flex flex-col gap-2 rounded-md border border-red-900/70 bg-muted/30 p-2 text-xs">
+                <span>What is <b>{{ askKind }}</b>?</span>
+                <div class="flex flex-wrap gap-1">
+                    <button
+                        v-for="kind in intel?.kinds ?? []"
+                        :key="kind"
+                        type="button"
+                        class="rounded border border-border px-2 py-1 hover:border-red-600 hover:bg-red-950"
+                        @click="addNamed(kind)"
+                    >
+                        {{ KIND_LABELS[kind] ?? kind }}
+                    </button>
+                    <button type="button" class="rounded px-2 py-1 text-muted-foreground" @click="askKind = null">Cancel</button>
+                </div>
             </div>
 
             <p v-if="error" class="rounded bg-red-950/60 px-2 py-1 text-xs text-red-200">{{ error }}</p>
             <p v-if="loading && !intel" class="text-xs text-muted-foreground">Loading…</p>
 
-            <div v-if="intel" class="grid gap-4 lg:grid-cols-2">
+            <div v-if="intel" class="grid gap-4" :class="compact ? '' : 'lg:grid-cols-2'">
                 <!-- Left: who lives here, structures -->
                 <div class="flex min-w-0 flex-col gap-4">
-                    <section class="flex flex-col gap-2">
+                    <section v-if="shows('who')" class="flex flex-col gap-2">
                         <h3 class="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
                             Who lives here <span class="font-normal normal-case">· {{ intel.assessment.kills }} kills since {{ intel.assessment.since }}</span>
                         </h3>
-                        <div class="grid gap-2 sm:grid-cols-3">
+                        <div class="grid gap-2" :class="compact ? 'grid-cols-1' : 'sm:grid-cols-3'">
                             <div class="flex flex-col gap-0.5 rounded-md border border-border bg-muted/30 p-2">
                                 <span class="text-[11px] text-muted-foreground">Seen most</span>
                                 <span class="truncate font-semibold">{{ resident?.name ?? 'nobody yet' }}</span>
@@ -347,7 +473,7 @@ const KIND_BADGES: Record<string, string> = {
                         </div>
                     </section>
 
-                    <section class="flex flex-col gap-2">
+                    <section v-if="shows('structures')" class="flex flex-col gap-2">
                         <div class="flex items-center gap-2">
                             <h3 class="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Structures</h3>
                             <span class="rounded-full bg-muted px-2 text-[11px]">{{ intel.structures.length }}</span>
@@ -433,7 +559,7 @@ const KIND_BADGES: Record<string, string> = {
 
                 <!-- Right: add scans / screenshots / notes, and the log -->
                 <div class="flex min-w-0 flex-col gap-4">
-                    <section v-if="canEdit" class="flex flex-col gap-2">
+                    <section v-if="canEdit && shows('add')" class="flex flex-col gap-2">
                         <div class="flex flex-wrap items-center gap-1">
                             <h3 class="mr-1 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Add</h3>
                             <button type="button" class="rounded border border-border px-2 py-1 text-xs hover:bg-muted" @click="startEntry('dscan')">D-scan</button>
@@ -465,10 +591,10 @@ const KIND_BADGES: Record<string, string> = {
                         </form>
                     </section>
 
-                    <section class="flex flex-col gap-2">
+                    <section v-if="shows('log')" class="flex flex-col gap-2">
                         <h3 class="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">Log <span class="font-normal normal-case">· kept for good</span></h3>
-                        <p v-if="!intel.entries.length" class="text-xs text-muted-foreground">Nothing yet.</p>
-                        <div v-for="entry in intel.entries" :key="entry.id" class="flex flex-col gap-1 border-b border-border/50 pb-2 text-xs">
+                        <p v-if="!shownEntries.length" class="text-xs text-muted-foreground">Nothing yet.</p>
+                        <div v-for="entry in shownEntries" :key="entry.id" class="flex flex-col gap-1 border-b border-border/50 pb-2 text-xs">
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="font-mono text-muted-foreground">{{ eveTime(entry.created_at) }}</span>
                                 <span class="rounded px-1.5 text-[10px] font-semibold uppercase" :class="KIND_BADGES[entry.kind]">{{ entry.kind === 'dscan' ? 'D-scan' : entry.kind }}</span>
@@ -494,6 +620,7 @@ const KIND_BADGES: Record<string, string> = {
                         </div>
                     </section>
                 </div>
+            </div>
             </div>
         </DialogScrollContent>
     </Dialog>
