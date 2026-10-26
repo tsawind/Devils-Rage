@@ -40,17 +40,18 @@ final class StructureScan
             if (! str_contains($line, "\t")) {
                 continue;
             }
-            $columns = array_values(array_map(fn (string $column): string => mb_trim($column), explode("\t", $line)));
+            $columns = array_map(fn (string $column): string => mb_trim($column), explode("\t", $line));
             $typeAt = null;
-            $kind = null;
+            $kind = '';
             foreach ($columns as $index => $column) {
-                $kind = self::kindOf($column);
-                if ($kind !== null) {
+                $kindOfColumn = self::kindOf($column);
+                if ($kindOfColumn !== null) {
                     $typeAt = $index;
+                    $kind = $kindOfColumn;
                     break;
                 }
             }
-            if ($typeAt === null || $kind === null) {
+            if ($typeAt === null) {
                 continue;
             }
 
