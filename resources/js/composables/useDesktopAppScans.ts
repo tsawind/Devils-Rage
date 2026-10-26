@@ -28,20 +28,28 @@ export function useDesktopAppScans(): void {
             // The map on screen now (not the one this listener started with: tabs keep old pages alive).
             const store = tryUseMapStore();
             const system = where && store ? [...store.systems.values()].find((candidate) => candidate.solarsystem_id === where) : null;
+            const paste = (target: { id: number; alias?: string | null; solarsystem?: { name: string } | null }, solarsystemId: number | null | undefined) => {
+                scan.claimed = true;
+                rememberAppScan(scan.text);
+                const name = displayAlias(target.alias) || target.solarsystem?.name || 'the system';
+                pasteSignatures(target.id, signatures, () =>
+                    toast.success(`Pasted ${signatures.length} signature${signatures.length === 1 ? '' : 's'} into ${name}`, { description: `${scan.character_name}'s scan, from the app` }),
+                );
+                if (solarsystemId && heldWayBack.value?.alt?.solarsystemId === solarsystemId) void copyHeldWayBack();
+            };
             if (!system) {
                 scan.toasted = true;
+                // The open system as a one-click way out when the pilot's location isn't known here.
+                const selected = page.props.selected_map_solarsystem;
                 toast.info(`${scan.character_name}'s scan wasn't pasted`, {
                     description: where ? 'Their system is not on this map yet. Paste it with Ctrl+V.' : 'Not sure where they are (is tracking on?). Paste it with Ctrl+V.',
+                    action: selected
+                        ? { label: `Paste into ${displayAlias(selected.alias) || selected.solarsystem?.name || 'the open system'}`, onClick: () => paste(selected, selected.solarsystem_id) }
+                        : undefined,
                 });
                 return;
             }
-            scan.claimed = true;
-            rememberAppScan(scan.text);
-            const name = displayAlias(system.alias) || system.solarsystem.name;
-            pasteSignatures(system.id, signatures, () =>
-                toast.success(`Pasted ${signatures.length} signature${signatures.length === 1 ? '' : 's'} into ${name}`, { description: `${scan.character_name}'s scan, from the app` }),
-            );
-            if (heldWayBack.value?.alt?.solarsystemId === where) void copyHeldWayBack();
+            paste(system, where);
         }, 0);
     });
 }
