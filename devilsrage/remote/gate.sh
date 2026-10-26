@@ -119,6 +119,8 @@ case "$ACTION" in
         echo "== Newest backup files"; ls -lt "$HOME/backups/nightly" 2>/dev/null | head -10 || echo "(no folder)"
         echo "== What the mapper has recorded"
         cd "$STACK" && "${C[@]}" exec -T app php artisan tinker --execute="echo json_encode(Illuminate\Support\Facades\Cache::get(App\Actions\Discord\ShowHealthAction::BACKUP_KEY)), ' cache=', config('cache.default'), PHP_EOL;" 2>&1 | cut -c1-200
+        echo "== The report call backup.sh makes (output shown this time)"
+        ( cd "$STACK" && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app php artisan devilsrage:backup-done ) 2>&1 | tail -n 8 | cut -c1-200 || true
         ;;
     seat-failed-jobs)
         # SeAT's failed jobs of the last day, grouped by job and the first line of the error.
@@ -128,6 +130,16 @@ case "$ACTION" in
             echo "Failed in the last day: ", $rows->count(), PHP_EOL;
             $rows->map(fn ($r) => (json_decode($r->payload, true)["displayName"] ?? "?")." | ".mb_strimwidth(strtok((string) $r->exception, "\n"), 0, 170))
                 ->countBy()->sortDesc()->take(25)->each(function ($n, $k) { echo str_pad((string) $n, 4), " ", $k, PHP_EOL; });
+            $kills = $rows->filter(fn ($r) => str_contains((string) $r->exception, "Invalid killmail_id"))
+                ->map(fn ($r) => preg_match("/killmail_id\\\\?\";i:(\\d+)/", (string) $r->payload, $m) ? (int) $m[1] : 0)->countBy()->sortDesc();
+            echo "Bad-hash killmails: ", $kills->count(), " distinct", PHP_EOL;
+            foreach ($kills->take(8) as $id => $n) {
+                $k = Seat\Eveapi\Models\Killmails\Killmail::query()->find($id);
+                $hasDetail = Seat\Eveapi\Models\Killmails\KillmailDetail::query()->find($id) !== null;
+                $corp = DB::table("corporation_killmails")->where("killmail_id", $id)->exists();
+                $char = DB::table("character_killmails")->where("killmail_id", $id)->exists();
+                echo "  ", $id, " x", $n, " stored-hash=", strlen((string) $k?->killmail_hash), " chars detail=", $hasDetail ? "yes" : "no", " corp=", $corp ? "y" : "n", " char=", $char ? "y" : "n", " created=", $k?->created_at, PHP_EOL;
+            }
         ' 2>&1 | sed -E 's/[A-Za-z0-9_+\/=-]{32,}/[masked]/g' | cut -c1-260
         ;;
     update-gate)
