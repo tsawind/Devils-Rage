@@ -30,12 +30,13 @@ import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { useAddConnectionDialog } from '@/map/interactions/useAddConnectionDialog';
 import { TMapSolarsystem } from '@/pages/maps';
 import { TMapSolarsystemStatus } from '@/types/models';
-import { Brush, Check, Megaphone, ClipboardCopy, Compass, Eraser, Eye, Flag, Home, Map, MapPin, Navigation, NotebookPen, Pin, Route, Scissors, Trash2, Users, Volume2, VolumeX, Waypoints } from 'lucide-vue-next';
+import { Brush, Check, Megaphone, ClipboardCopy, Compass, Eraser, Eye, Flag, Home, Map, MapPin, Navigation, NotebookPen, Pin, ShieldAlert, Route, Scissors, Trash2, Users, Volume2, VolumeX, Waypoints } from 'lucide-vue-next';
 import { isSystemMuted, setSystemMuted } from '@/lib/mutedSystems';
 import { setConnectionWatched } from '@/map/actions/holeChecked';
 import { chainParents } from '@/map/store/derived';
 import { tryUseMapStore } from '@/map/store/mapStore';
 import { addNoteTarget } from '@/map/components/overlays/AddNoteDialog.vue';
+import { intelTarget } from '@/map/components/overlays/IntelDialogHost.vue';
 import { chainBeyondTarget } from '@/map/components/overlays/ChainBeyondDialog.vue';
 import { displayAlias } from '@/lib/alias';
 import type { AcceptableValue } from 'reka-ui';
@@ -78,6 +79,12 @@ const { openAddConnection } = useAddConnectionDialog();
 
 function handleAddConnection() {
     openAddConnection(map_solarsystem);
+}
+
+/** Patch 58: the system's intel window. */
+function openIntel(): void {
+    const name = map_solarsystem.solarsystem.name;
+    intelTarget.value = { id: map_solarsystem.id, label: displayName.value === name ? name : `${displayName.value} · ${name}` };
 }
 
 function handleTogglePin() {
@@ -152,6 +159,11 @@ const inbound = computed(() => {
         <ContextMenuItem @select="handleTogglePin" v-if="can_write">
             <Pin class="size-4" />
             {{ map_solarsystem.pinned ? 'Unpin' : 'Pin' }}
+        </ContextMenuItem>
+        <!-- Patch 58: the system's intel (structures, scans, who lives there) -->
+        <ContextMenuItem @select="openIntel">
+            <ShieldAlert class="size-4" />
+            Intel
         </ContextMenuItem>
         <ContextMenuItem @select="handleAddConnection" v-if="can_write">
             <Waypoints class="size-4" />

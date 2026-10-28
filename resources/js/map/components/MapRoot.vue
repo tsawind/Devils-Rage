@@ -32,6 +32,7 @@ import ClearChainDialog from '@/map/components/overlays/ClearChainDialog.vue';
 import ClearSideChainsDialog from '@/map/components/overlays/ClearSideChainsDialog.vue';
 import MapAddConnectionDialog from '@/map/components/overlays/MapAddConnectionDialog.vue';
 import AddNoteDialog from '@/map/components/overlays/AddNoteDialog.vue';
+import IntelDialogHost from '@/map/components/overlays/IntelDialogHost.vue';
 import MapConnectionContextMenu from '@/map/components/overlays/MapConnectionContextMenu.vue';
 import MapContextMenu from '@/map/components/overlays/MapContextMenu.vue';
 import MapOptions from '@/map/components/overlays/MapOptions.vue';
@@ -355,6 +356,7 @@ whenever(Delete, () => {
     <PlaceholderDetailsPopover />
     <MapAddConnectionDialog />
     <AddNoteDialog />
+    <IntelDialogHost />
     <ClearChainDialog />
     <ChainBeyondDialog />
     <ClearSideChainsDialog />
