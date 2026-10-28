@@ -1,0 +1,328 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers;
+
+use App\Events\Cameras\CamerasChangedEvent;
+use App\Models\Character;
+use App\Models\Map;
+use App\Models\MapCamera;
+use App\Models\MapCameraEvent;
+use App\Models\MapConnection;
+use App\Models\MapShareLink;
+use App\Models\MapSolarsystem;
+use App\Models\User;
+use App\Support\CameraPass;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
+
+/**
+ * Patch 62: cameras. A member streams part (or all) of an EVE window or their screen through
+ * the video relay; members watch, and so do the guest links a camera allows. The browser
+ * talks to the relay itself (WHIP / WHEP); the mapper only hands out short passes.
+ */
+final class MapCameraController extends Controller
+{
+    /**
+     * The camera wall (members, and guests whose link a camera allows).
+     */
+    public function wall(Request $request, Map $map): Response
+    {
+        abort_unless(CameraPass::enabled(), 404);
+        $user = $request->user();
+        $member = $user instanceof User && $user->can('update', $map);
+        abort_unless($member || $this->guestLink($map) instanceof MapShareLink, 403);
+
+        return Inertia::render('maps/Cameras', [
+            'map' => ['id' => $map->id, 'name' => $map->name],
+            'member' => $member,
+            'places' => $member ? $this->places($map) : ['systems' => [], 'connections' => []],
+        ]);
+    }
+
+    /**
+     * "Share a camera": pick a window or screen, draw boxes, stream (members).
+     */
+    public function share(Request $request, Map $map): Response
+    {
+        abort_unless(CameraPass::enabled(), 404);
+        /** @var User $user */
+        $user = $request->user();
+        abort_unless($user->can('update', $map), 403);
+
+        return Inertia::render('maps/CameraShare', [
+            'map' => ['id' => $map->id, 'name' => $map->name],
+            'places' => $this->places($map),
+            'characters' => $user->characters()->orderBy('name')->get(['id', 'name'])->map(fn (Character $character): array => ['id' => $character->id, 'name' => $character->name])->all(),
+            'share_links' => array_values(array_filter(MapShareLinkController::linksFor($map, $user), fn (array $link): bool => $link['kind'] === 'map')),
+        ]);
+    }
+
+    /**
+     * Cameras that are on, and recent hole activity, for everyone who may see them.
+     */
+    public function index(Request $request, Map $map): JsonResponse
+    {
+        abort_unless(CameraPass::enabled(), 404);
+        $user = $request->user();
+        $member = $user instanceof User && $user->can('update', $map);
+        $link = $member ? null : $this->guestLink($map);
+        abort_unless($member || $link instanceof MapShareLink, 403);
+
+        $cameras = MapCamera::query()
+            ->where('map_id', $map->id)
+            ->whereIn('status', ['starting', 'live', 'paused'])
+            ->where('last_seen_at', '>', now()->subSeconds((int) config('cameras.stale_seconds')))
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (MapCamera $camera): bool => $member || in_array($link?->id, $camera->guest_share_link_ids ?? [], true))
+            ->values();
+        $visible = $cameras->pluck('id')->all();
+        $events = MapCameraEvent::query()
+            ->where('map_id', $map->id)
+            ->where('expires_at', '>', now())
+            ->when(! $member, fn ($query) => $query->whereIn('map_camera_id', $visible))
+            ->latest('happened_at')
+            ->limit(100)
+            ->get();
+
+        return response()->json([
+            'member' => $member,
+            'cameras' => $cameras->map(fn (MapCamera $camera): array => $this->present($camera, $user))->all(),
+            'events' => $events->map(fn (MapCameraEvent $event): array => $this->presentEvent($event))->all(),
+        ]);
+    }
+
+    /**
+     * Start a camera: the browser then publishes to the relay with the pass it gets back.
+     */
+    public function store(Request $request, Map $map): JsonResponse
+    {
+        abort_unless(CameraPass::enabled(), 404);
+        /** @var User $user */
+        $user = $request->user();
+        abort_unless($user->can('update', $map), 403);
+        $data = $this->validated($request, $map, true);
+
+        $character = $user->characters()->find($request->integer('character_id')) ?? $user->active_character;
+        $camera = MapCamera::query()->create($data + [
+            'map_id' => $map->id,
+            'user_id' => $user->id,
+            'character_id' => $character?->id,
+            'character_name' => $character?->name,
+            'owner_name' => $character instanceof Character ? ($character->seat_main_name ?? $character->name) : $user->name,
+            'path' => MapCamera::newPath(),
+            'status' => 'starting',
+            'last_seen_at' => now(),
+        ]);
+        CamerasChangedEvent::dispatch($map->id);
+
+        return response()->json([
+            'camera' => $this->present($camera, $user),
+            'publish' => $this->publishPass($camera, $user),
+        ], 201);
+    }
+
+    /**
+     * The camera's page checks in about every 30 s (status live / paused) and may change its
+     * name, pin, guests or detection; "reconnect" asks for a fresh publish pass.
+     */
+    public function update(Request $request, MapCamera $mapCamera): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $map = $mapCamera->loadMissing('map')->map;
+        abort_unless($mapCamera->user_id === $user->id, 403);
+        $data = $this->validated($request, $map, false);
+        $status = $request->input('status');
+        if (in_array($status, ['live', 'paused'], true)) {
+            $data['status'] = $status;
+        }
+        $mapCamera->fill($data);
+        $changed = $mapCamera->isDirty();
+        $mapCamera->fill(['last_seen_at' => now()])->save();
+        if ($changed) {
+            CamerasChangedEvent::dispatch($map->id);
+        }
+
+        return response()->json([
+            'camera' => $this->present($mapCamera, $user),
+            'publish' => $request->boolean('reconnect') ? $this->publishPass($mapCamera, $user) : null,
+        ]);
+    }
+
+    /** Stop a camera (its owner, or a map manager). */
+    public function destroy(Request $request, MapCamera $mapCamera): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        abort_unless($mapCamera->user_id === $user->id || $user->can('manageAccess', $mapCamera->loadMissing('map')->map), 403);
+        $mapCamera->fill(['status' => 'ended', 'ended_at' => now()])->save();
+        CamerasChangedEvent::dispatch($mapCamera->map_id);
+
+        return response()->json(['ended' => true]);
+    }
+
+    /**
+     * A pass to watch one camera: members, or a guest whose link this camera allows.
+     */
+    public function watch(Request $request, MapCamera $mapCamera): JsonResponse
+    {
+        abort_unless(CameraPass::enabled(), 404);
+        $map = $mapCamera->loadMissing('map')->map;
+        $user = $request->user();
+        $member = $user instanceof User && $user->can('update', $map);
+        $link = $member ? null : $this->guestLink($map);
+        $allowed = $member || ($link instanceof MapShareLink && in_array($link->id, $mapCamera->guest_share_link_ids ?? [], true));
+        abort_unless($allowed && $mapCamera->isOn(), 403);
+        $who = $member ? 'user:'.$user->id : 'link:'.$link?->id;
+
+        return response()->json([
+            'url' => rtrim((string) config('cameras.rtc_url'), '/').'/'.$mapCamera->path.'/whep',
+            'pass' => CameraPass::make($mapCamera->path, 'read', $who),
+        ]);
+    }
+
+    /**
+     * The relay (MediaMTX) asks whether a publish / watch may go ahead. Answers 200 or 401.
+     * MediaMTX sends {user, password, token, ip, action, path, protocol, id, query}.
+     */
+    public function relayAuth(Request $request): JsonResponse
+    {
+        $action = (string) $request->input('action');
+        $path = (string) $request->input('path');
+        $pass = (string) ($request->input('token') ?: $request->input('password') ?: '');
+        if ($pass === '') {
+            parse_str((string) $request->input('query'), $query);
+            $pass = is_string($query['pass'] ?? null) ? $query['pass'] : '';
+        }
+        if (! in_array($action, CameraPass::ACTIONS, true) || $pass === '' || CameraPass::check($pass, $path, $action) === null) {
+            return response()->json(['ok' => false], 401);
+        }
+        $camera = MapCamera::query()->where('path', $path)->first();
+        if (! $camera instanceof MapCamera || $camera->status === 'ended') {
+            return response()->json(['ok' => false], 401);
+        }
+        if ($action === 'publish') {
+            $wasLive = $camera->status === 'live';
+            $camera->fill(['status' => 'live', 'last_seen_at' => now()])->save();
+            if (! $wasLive) {
+                CamerasChangedEvent::dispatch($camera->map_id);
+            }
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validated(Request $request, Map $map, bool $creating): array
+    {
+        $required = $creating ? 'required' : 'sometimes';
+        $data = $request->validate([
+            'name' => [$required, 'string', 'max:80'],
+            'kind' => [$required, Rule::in(MapCamera::KINDS)],
+            'quality' => ['sometimes', Rule::in(MapCamera::QUALITIES)],
+            'detect' => ['sometimes', 'boolean'],
+            'map_solarsystem_id' => ['sometimes', 'nullable', 'integer', Rule::exists(MapSolarsystem::class, 'id')->where('map_id', $map->id)],
+            'map_connection_id' => ['sometimes', 'nullable', 'integer', Rule::exists(MapConnection::class, 'id')->where('map_id', $map->id)],
+            'guest_share_link_ids' => ['sometimes', 'nullable', 'array', 'max:20'],
+            'guest_share_link_ids.*' => ['integer', Rule::exists(MapShareLink::class, 'id')->where('map_id', $map->id)],
+            'character_id' => ['sometimes', 'nullable', 'integer'],
+        ]);
+        unset($data['character_id']);
+        if (array_key_exists('guest_share_link_ids', $data)) {
+            $data['guest_share_link_ids'] = array_values(array_unique(array_map('intval', $data['guest_share_link_ids'] ?? [])));
+        }
+
+        return $data;
+    }
+
+    /**
+     * @return array{url: string, pass: string}
+     */
+    private function publishPass(MapCamera $camera, User $user): array
+    {
+        return [
+            'url' => rtrim((string) config('cameras.rtc_url'), '/').'/'.$camera->path.'/whip',
+            'pass' => CameraPass::make($camera->path, 'publish', 'user:'.$user->id),
+        ];
+    }
+
+    /**
+     * Systems and pipes a camera can be pinned to.
+     *
+     * @return array{systems: list<array{id: int, name: string}>, connections: list<array{id: int, name: string}>}
+     */
+    private function places(Map $map): array
+    {
+        $systems = $map->mapSolarsystems()->with('solarsystem:id,name')->get();
+        $names = $systems->mapWithKeys(fn (MapSolarsystem $system): array => [$system->id => $system->alias ?: ($system->solarsystem?->name ?? '?')]);
+
+        return [
+            'systems' => $systems->map(fn (MapSolarsystem $system): array => ['id' => $system->id, 'name' => (string) $names[$system->id]])->sortBy('name')->values()->all(),
+            'connections' => $map->mapConnections()->get(['id', 'from_map_solarsystem_id', 'to_map_solarsystem_id'])
+                ->map(fn (MapConnection $connection): array => ['id' => $connection->id, 'name' => ($names[$connection->from_map_solarsystem_id] ?? '?').' → '.($names[$connection->to_map_solarsystem_id] ?? '?')])
+                ->sortBy('name')->values()->all(),
+        ];
+    }
+
+    /** The live share link this guest opened the map with, if any. */
+    private function guestLink(Map $map): ?MapShareLink
+    {
+        $token = session("map_share_token_{$map->id}");
+        if (! is_string($token) || $token === '') {
+            return null;
+        }
+
+        return $map->shareLinks()->where('kind', 'map')->where('token', $token)->live()->first();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function present(MapCamera $camera, ?User $viewer): array
+    {
+        return [
+            'id' => $camera->id,
+            'name' => $camera->name,
+            'kind' => $camera->kind,
+            'status' => $camera->status,
+            'quality' => $camera->quality,
+            'detect' => $camera->detect,
+            'map_solarsystem_id' => $camera->map_solarsystem_id,
+            'map_connection_id' => $camera->map_connection_id,
+            'owner' => $camera->owner_name,
+            'character' => $camera->character_name,
+            'mine' => $viewer instanceof User && $camera->user_id === $viewer->id,
+            'guest_share_link_ids' => $viewer instanceof User && $camera->user_id === $viewer->id ? ($camera->guest_share_link_ids ?? []) : null,
+            'since' => $camera->created_at->toIso8601String(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function presentEvent(MapCameraEvent $event): array
+    {
+        return [
+            'id' => $event->id,
+            'map_camera_id' => $event->map_camera_id,
+            'map_connection_id' => $event->map_connection_id,
+            'kind' => $event->kind,
+            'strength' => $event->strength,
+            'state' => $event->state,
+            'ship_class' => $event->ship_class,
+            'side' => $event->side,
+            'map_connection_jump_id' => $event->map_connection_jump_id,
+            'clip_url' => $event->clip_path !== null ? route('map-camera-events.file', [$event, 'clip']) : null,
+            'still_url' => $event->still_path !== null ? route('map-camera-events.file', [$event, 'still']) : null,
+            'happened_at' => $event->happened_at->toIso8601String(),
+        ];
+    }
+}

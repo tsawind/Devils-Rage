@@ -1,0 +1,37 @@
+# MediaMTX for the Devil's Rage cameras. Only WebRTC is on; every other protocol is off.
+logLevel: info
+api: no
+metrics: no
+pprof: no
+playback: no
+rtsp: no
+rtmp: no
+hls: no
+srt: no
+
+webrtc: yes
+webrtcAddress: :8889
+webrtcAllowOrigin: '*'
+# Video goes over port 8189: UDP first, TCP when a home network blocks UDP.
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+# Find the server's public address so browsers can reach it.
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302
+webrtcIPsFromInterfaces: no
+# The server's public name is set by MTX_WEBRTCADDITIONALHOSTS in ~/devilsrage-cameras/.env.
+
+# The mapper decides who may publish or watch (members; guests only where a camera allows
+# their link). MediaMTX passes the ?token= of the WHIP / WHEP request along.
+authMethod: http
+# authHTTPAddress comes from MTX_AUTHHTTPADDRESS in ~/devilsrage-cameras/.env (the mapper's URL).
+authHTTPExclude: []
+
+pathDefaults:
+  # Nothing is recorded on the server; cameras record their own short clips.
+  record: no
+  overridePublisher: yes
+
+paths:
+  # Every camera is cam-<id>; anything else is refused by the mapper anyway.
+  "~^cam-[a-z0-9]{20,40}$": {}

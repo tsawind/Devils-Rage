@@ -1,0 +1,42 @@
+# Devil's Rage cameras: the video relay (MediaMTX, WebRTC in and out, no re-encoding).
+#
+# Lives in ~/devilsrage-cameras on the server (setup-cameras.sh copies this file there).
+# - Cameras publish and viewers watch with plain browser WebRTC (WHIP / WHEP): no client
+#   library in the mapper or the app.
+# - Signalling goes through the mapper's Traefik on the mapper's domain under /rtc, so no
+#   new certificate or domain is needed.
+# - Video itself uses port 8189 (UDP, with a TCP fallback), published straight on the
+#   server; open it in the firewall (setup-cameras.sh says how).
+# - Every publish / watch is checked by the mapper (authHTTPAddress in mediamtx.yml), so
+#   only members, and guest links a camera allows, get in.
+# No secrets in this file.
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:1
+    restart: unless-stopped
+    mem_limit: 384m
+    env_file:
+      - .env
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      - "8189:8189/udp"
+      - "8189:8189/tcp"
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.cameras.entrypoints=websecure"
+      - "traefik.http.routers.cameras.rule=Host(`${CAMERAS_DOMAIN}`) && PathPrefix(`/rtc/`)"
+      - "traefik.http.routers.cameras.tls.certresolver=primary"
+      - "traefik.http.routers.cameras.priority=100"
+      - "traefik.http.routers.cameras.middlewares=cameras-strip@docker"
+      - "traefik.http.middlewares.cameras-strip.stripprefix.prefixes=/rtc"
+      - "traefik.http.routers.cameras.service=cameras"
+      - "traefik.http.services.cameras.loadbalancer.server.port=8889"
+
+networks:
+  web:
+    external: true

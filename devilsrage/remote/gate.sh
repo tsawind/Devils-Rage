@@ -144,6 +144,11 @@ case "$ACTION" in
         # The newest migrations and whether they ran.
         cd "$STACK" && "${C[@]}" exec -T app php artisan migrate:status 2>&1 | tail -n 6 | cut -c1-160
         ;;
+    deploy-cameras)
+        # The MediaMTX video relay for cameras (its own folder, like SeAT). Run deploy-mapper after
+        # the first run so the mapper picks up the camera pass secret.
+        bash "$REPO/devilsrage/cameras/setup-cameras.sh"
+        ;;
     capacity)
         # Cameras plan: what the VPS has for a video relay. No addresses or secrets (public log).
         echo "== CPU"
@@ -201,7 +206,7 @@ case "$ACTION" in
         ;;
     *)
         echo "!! Unknown action: $ACTION"
-        echo "   Allowed: status, capacity, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check, backup-check, seat-failed-jobs, mapper-migrations"
+        echo "   Allowed: status, capacity, deploy-cameras, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check, backup-check, seat-failed-jobs, mapper-migrations"
         exit 2
         ;;
 esac

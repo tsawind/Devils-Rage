@@ -34,6 +34,8 @@ use App\Http\Controllers\MapPresenceController;
 use App\Http\Controllers\MapBookmarkFormatController;
 use App\Http\Controllers\MapCombatController;
 use App\Http\Controllers\MapConnectionController;
+use App\Http\Controllers\MapCameraController;
+use App\Http\Controllers\MapCameraEventController;
 use App\Http\Controllers\MapConnectionJumpController;
 use App\Http\Controllers\MapController;
 use App\Http\Controllers\MapDiscordController;
@@ -287,10 +289,23 @@ Route::middleware('auth')->group(function () {
     Route::get('maps/{map}/rolling-crews/lookup', [RollingCrewController::class, 'lookup'])->name('maps.rolling-crews.lookup');
 
     Route::put('maps/{map}/bookmark-format', [MapBookmarkFormatController::class, 'update'])->name('maps.bookmark-format.update');
+
+    // Patch 62: cameras (streaming an EVE window / screen through the video relay).
+    Route::get('maps/{map}/cameras/share', [MapCameraController::class, 'share'])->name('maps.cameras.share');
+    Route::post('maps/{map}/cameras', [MapCameraController::class, 'store'])->middleware('throttle:30,1')->name('maps.cameras.store');
+    Route::patch('map-cameras/{mapCamera}', [MapCameraController::class, 'update'])->middleware('throttle:240,1')->name('map-cameras.update');
+    Route::delete('map-cameras/{mapCamera}', [MapCameraController::class, 'destroy'])->name('map-cameras.destroy');
+    Route::post('map-cameras/{mapCamera}/events', [MapCameraEventController::class, 'store'])->middleware('throttle:60,1')->name('map-cameras.events.store');
+    Route::patch('map-camera-events/{mapCameraEvent}', [MapCameraEventController::class, 'update'])->name('map-camera-events.update');
 });
 
 // Public map access (no auth required)
 Route::get('maps/{map}', [MapController::class, 'show'])->middleware(SetMapShareToken::class)->name('maps.show');
+// Patch 62: cameras for members and the guest links a camera allows.
+Route::get('maps/{map}/cameras', [MapCameraController::class, 'wall'])->name('maps.cameras.wall');
+Route::get('maps/{map}/camera-feed', [MapCameraController::class, 'index'])->middleware('throttle:120,1')->name('maps.cameras.index');
+Route::post('map-cameras/{mapCamera}/watch', [MapCameraController::class, 'watch'])->middleware('throttle:60,1')->name('map-cameras.watch');
+Route::get('map-camera-events/{mapCameraEvent}/{which}', [MapCameraEventController::class, 'file'])->whereIn('which', ['clip', 'still'])->name('map-camera-events.file');
 // Patch 37: every open map checks in (viewer-link visitors too); managers read who is here.
 Route::post('maps/{map}/presence', [MapPresenceController::class, 'store'])->middleware('throttle:20,1')->name('maps.presence.store');
 Route::get('maps/{map}/presence', [MapPresenceController::class, 'index'])->middleware('auth')->name('maps.presence.index');

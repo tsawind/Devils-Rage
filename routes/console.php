@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Console\Commands\Characters\GetOnlineCharacterLocationsCommand;
 use App\Console\Commands\Characters\GetOnlineCharactersCommand;
 use App\Console\Commands\CheckConnectionAgeCommand;
+use App\Console\Commands\PruneCamerasCommand;
 use App\Console\Commands\Discord\PostFuelSummaryCommand;
 use App\Console\Commands\Discord\PostHealthCommand;
 use App\Console\Commands\GenerateStaticDataCommand;
@@ -31,6 +32,8 @@ Schedule::command(GetSovereigntiesCommand::class)->runInBackground()->daily()->a
 Schedule::command(GetRaidableSkyhooksCommand::class)->runInBackground()->everyFiveMinutes()->withoutOverlapping()->notDuringDowntime();
 Schedule::command(GenerateStaticDataCommand::class)->runInBackground()->daily()->withoutOverlapping()->notDuringDowntime();
 Schedule::command(CheckConnectionAgeCommand::class)->runInBackground()->everyTenMinutes()->withoutOverlapping();
+// Patch 62: cameras that stopped checking in, and expired hole clips.
+Schedule::command(PruneCamerasCommand::class)->runInBackground()->everyMinute()->withoutOverlapping();
 Schedule::command(ReleaseExpiredArmsCommand::class)->runInBackground()->everyMinute()->withoutOverlapping();
 Schedule::command(DeleteOldSignaturesCommand::class)->runInBackground()->everyTenMinutes()->withoutOverlapping();
 Schedule::command(PruneUnclaimedConnectionJumpsCommand::class)->runInBackground()->everyTenMinutes()->withoutOverlapping();
