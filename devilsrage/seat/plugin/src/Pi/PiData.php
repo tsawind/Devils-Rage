@@ -23,7 +23,13 @@ final class PiData
     /** Patch 59: a customs office holds this much per planet (per pilot). */
     public const CUSTOMS_CAPACITY = 35000;
 
-    /** EVE's group ids for PI commodities by tier, in case a volume doesn't say. */
+    /**
+     * Patch 59: today's volume of one unit per tier (m3). SeAT's static data may still have the
+     * old, twice as big sizes, which would make every storage look twice as full.
+     */
+    public const VOLUME_BY_TIER = [0 => 0.005, 1 => 0.19, 2 => 0.75, 3 => 3.0, 4 => 50.0];
+
+    /** EVE's group ids for PI commodities by tier. */
     private const GROUP_TIER = [1042 => 1, 1034 => 2, 1040 => 3, 1041 => 4];
 
     /** @var array<int, array{name: string, tier: int, volume: float}> */
@@ -408,10 +414,11 @@ final class PiData
             ->select('t.typeID', 't.typeName', 't.volume', 't.groupID', 'g.categoryID')
             ->get();
         foreach ($rows as $row) {
+            $tier = $this->tier((int) $row->categoryID, (int) $row->groupID, (float) $row->volume);
             $this->types[(int) $row->typeID] = [
                 'name' => (string) $row->typeName,
-                'tier' => $this->tier((int) $row->categoryID, (int) $row->groupID, (float) $row->volume),
-                'volume' => (float) $row->volume,
+                'tier' => $tier,
+                'volume' => self::VOLUME_BY_TIER[$tier] ?? (float) $row->volume,
             ];
         }
     }
@@ -425,13 +432,18 @@ final class PiData
         if ($category !== 43) {
             return -1;
         }
-        foreach ([1 => 0.38, 2 => 1.5, 3 => 6.0, 4 => 100.0] as $tier => $size) {
-            if (abs($volume - $size) < $size * 0.1) {
-                return $tier;
+        if (isset(self::GROUP_TIER[$group])) {
+            return self::GROUP_TIER[$group];
+        }
+        foreach ([1 => [0.19, 0.38], 2 => [0.75, 1.5], 3 => [3.0, 6.0], 4 => [50.0, 100.0]] as $tier => $sizes) {
+            foreach ($sizes as $size) {
+                if (abs($volume - $size) < $size * 0.1) {
+                    return $tier;
+                }
             }
         }
 
-        return self::GROUP_TIER[$group] ?? 1;
+        return 1;
     }
 
     /** extractor, basic, advanced, hightech, launchpad, storage facility, command center or other. */

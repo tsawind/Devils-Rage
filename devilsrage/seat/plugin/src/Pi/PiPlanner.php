@@ -433,7 +433,7 @@ final class PiPlanner
                     'type' => (int) $raw['type_id'],
                     'amount' => (int) $raw['amount'] + ($buffers[$name]['amount'] ?? 0),
                     'fill' => (float) $store['used'] / (float) $store['capacity'],
-                    'room' => (int) floor(max(0.0, (float) $store['capacity'] - (float) $store['used']) / (float) ($this->types[(int) $raw['type_id']]['volume'] ?? 0.01)),
+                    'room' => (int) floor(max(0.0, (float) $store['capacity'] - (float) $store['used']) / (float) ($this->types[(int) $raw['type_id']]['volume'] ?? 0.005)),
                     'per_hour' => $was !== null && $gap >= self::TREND_MIN_GAP ? (int) round(((int) $raw['amount'] - $was) * 3600 / $gap) : null,
                     'since' => $was !== null && $gap >= self::TREND_MIN_GAP ? (int) $previous['at'] : null,
                 ];
