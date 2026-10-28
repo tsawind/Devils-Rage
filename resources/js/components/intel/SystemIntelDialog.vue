@@ -5,6 +5,7 @@ import usePermission from '@/composables/usePermission';
 import SystemIntelligence from '@/components/intel/SystemIntelligence.vue';
 import { jsonFetch } from '@/lib/jsonFetch';
 import type { TSystemIntelligence } from '@/types/models';
+import { APP_COPY_EVENT, APP_INTEL_EVENT, type TAppScan } from '@/lib/desktopApp';
 import { readCopiedText } from '@/lib/structureText';
 import { driverHeaders } from '@/lib/windowDriver';
 import { useElementSize, useEventListener } from '@vueuse/core';
@@ -328,6 +329,30 @@ async function onPaste(event: ClipboardEvent): Promise<void> {
     }
 }
 useEventListener(() => (open.value ? document : null), 'paste', (event: ClipboardEvent) => void onPaste(event));
+
+/**
+ * Patch 58: with the intel window open, a structure's name copied in EVE (Show Info, a chat link)
+ * comes straight here from the app and asks what type it is; structures the app added from a
+ * D-scan or overview copy show up without reopening.
+ */
+useEventListener(
+    () => (open.value ? window : null),
+    APP_COPY_EVENT,
+    (raw: Event) => {
+        const copy = (raw as CustomEvent<TAppScan>).detail;
+        if (!copy || !canEdit.value || !intel.value) return;
+        const read = readCopiedText(copy.text);
+        if (read.kind !== 'name') return;
+        askKind.value = read.name;
+        askOwner.value = read.owner;
+        tab.value = 'summary';
+    },
+);
+useEventListener(
+    () => (open.value ? window : null),
+    APP_INTEL_EVENT,
+    () => setTimeout(() => void load(), 1500),
+);
 function onPick(event: Event): void {
     image.value = (event.target as HTMLInputElement).files?.[0] ?? null;
 }
@@ -413,7 +438,7 @@ const KIND_BADGES: Record<string, string> = {
             </div>
 
             <p v-if="notice" class="rounded bg-green-950/60 px-2 py-1 text-xs text-green-200" role="status">{{ notice }}</p>
-            <div v-if="askKind" class="flex flex-col gap-2 rounded-md border border-red-900/70 bg-muted/30 p-2 text-xs">
+            <div v-if="askKind" class="flex flex-col gap-2 rounded-md border-2 border-red-700 bg-red-950/40 p-2 text-xs shadow-lg shadow-red-950/50" role="dialog" aria-label="Which structure is it?">
                 <span>What is <b>{{ askKind }}</b><template v-if="askOwner"> ({{ askOwner }})</template>?</span>
                 <div class="flex flex-wrap gap-1">
                     <button

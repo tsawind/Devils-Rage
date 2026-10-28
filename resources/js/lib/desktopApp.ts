@@ -66,6 +66,8 @@ export type TAppScan = { character_id: number | null; character_name: string; te
 export const APP_SCAN_EVENT = 'devils-rage-app:scan';
 /** Patch 57: a D-scan or overview rows with structures, copied in EVE (same detail as a scan). */
 export const APP_INTEL_EVENT = 'devils-rage-app:intel';
+/** Patch 58: any short copy from an EVE window (a structure's name); only an open intel window uses it. */
+export const APP_COPY_EVENT = 'devils-rage-app:copy';
 
 /**
  * Patch 52: who copied the scan, among the characters on this map. By id when the app knows it
