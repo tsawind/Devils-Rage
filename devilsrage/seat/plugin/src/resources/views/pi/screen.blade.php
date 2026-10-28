@@ -617,7 +617,7 @@
           <span class="toast" id="tax-toast" role="status"></span>
         </div>
       </section>
-      <p class="note">Everyone with a character in our corp, and all their characters on SeAT (alts in other or NPC corps included; only directors see this). Factory output assumes the factories run all the time, held back when a raw line is short. Worth at {{ $priceSource }} prices, after {{ rtrim(rtrim(number_format($taxPercent, 2), '0'), '.') }}% customs tax.</p>
+      <p class="note">Everyone with a character in our corp, and all their characters on SeAT (alts in other or NPC corps included; only directors see this). Factory output assumes the factories run all the time, held back when a raw line is short; a planet with only factories counts while it was opened in game in the last 8 days. Worth at {{ $priceSource }} prices, after {{ rtrim(rtrim(number_format($taxPercent, 2), '0'), '.') }}% customs tax.</p>
     </section>
   @endif
 

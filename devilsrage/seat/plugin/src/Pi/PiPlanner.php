@@ -36,6 +36,12 @@ final class PiPlanner
      */
     public const TAX_BASE = [0 => 5, 1 => 400, 2 => 7200, 3 => 60000, 4 => 1200000];
 
+    /**
+     * Patch 59: a factory-only planet (everything imported) only counts as producing when it was
+     * opened in game this recently (a working import planet gets visited about weekly).
+     */
+    public const FACTORY_ACTIVE_DAYS = 8;
+
     /** Most heads one extractor can have. */
     public const MAX_HEADS = 10;
 
@@ -495,6 +501,10 @@ final class PiPlanner
         $planet = $p['planet'];
         $out = [];
         $making = $p['making'];
+        $lastUpdate = $planet['last_update'] ?? null;
+        if (($planet['extractors'] ?? []) === [] && ($lastUpdate === null || $lastUpdate < $this->now - self::FACTORY_ACTIVE_DAYS * 86400)) {
+            return [];
+        }
         if ($making !== null) {
             $factor = $p['supply'] === null ? 1.0 : min(1.0, (float) $p['supply']);
             foreach ($making['per_hour'] as $name => $perHour) {
