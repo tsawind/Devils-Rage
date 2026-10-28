@@ -8,6 +8,7 @@ use DevilsRage\Seat\Models\AccountSetting;
 use DevilsRage\Seat\Models\PiTemplate as StoredTemplate;
 use DevilsRage\Seat\Models\Setting;
 use DevilsRage\Seat\Pi\PiData;
+use DevilsRage\Seat\Pi\PiMoney;
 use DevilsRage\Seat\Pi\PiDigest;
 use DevilsRage\Seat\Pi\PiPlanner;
 use DevilsRage\Seat\Pi\PiSkills;
@@ -98,21 +99,46 @@ class PiController extends Controller
         }
         $prices = $jita->get($priceIds, $hub);
         $otherPrices = $jita->get($priceIds, $otherHub);
-        $totals = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'tax' => 0.0, 'other_split' => 0.0, 'pad' => 0.0, 'customs' => 0.0, 'customs_capacity' => 0];
+        $totals = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'tax' => 0.0, 'other_split' => 0.0, 'potential' => 0.0, 'pad' => 0.0, 'customs' => 0.0, 'customs_capacity' => 0];
+        // Patch 63: what would add the most ISK (PiMoney), gathered as the planets are valued.
+        $money = ['stopped' => ['count' => 0, 'per_day' => 0.0], 'short' => ['count' => 0, 'per_day' => 0.0, 'planets' => []], 'hub' => 0.0, 'p2' => [], 'stock' => []];
         foreach ($colonies as &$colony) {
-            $sum = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'tax' => 0.0, 'other_split' => 0.0, 'pad' => 0.0, 'customs' => 0.0, 'customs_capacity' => count($colony['planets']) * PiData::CUSTOMS_CAPACITY];
+            $sum = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'tax' => 0.0, 'other_split' => 0.0, 'potential' => 0.0, 'pad' => 0.0, 'customs' => 0.0, 'customs_capacity' => count($colony['planets']) * PiData::CUSTOMS_CAPACITY];
             foreach ($colony['planets'] as &$info) {
                 $info['value'] = $planner->value($info, $prices, $taxRate);
                 $info['value']['other_split'] = $planner->value($info, $otherPrices, $taxRate)['split'];
-                foreach (['buy', 'split', 'sell', 'tax', 'other_split'] as $side) {
+                // Patch 63: what it makes with its factories fully fed (raw no longer short).
+                $info['value']['potential'] = $info['supply'] !== null && $info['supply'] < 0.995 ? $planner->value(['supply' => null] + $info, $prices, $taxRate)['split'] : $info['value']['split'];
+                foreach (['buy', 'split', 'sell', 'tax', 'other_split', 'potential'] as $side) {
                     $sum[$side] += $info['value'][$side];
                 }
+                if ($info['status'] === 'stopped' && $info['value']['split'] > 0) {
+                    $money['stopped']['count']++;
+                    $money['stopped']['per_day'] += $info['value']['split'];
+                }
+                $missing = $info['value']['potential'] - $info['value']['split'];
+                if ($info['supply'] !== null && $info['supply'] < 0.9 && $missing > 0) {
+                    $money['short']['count']++;
+                    $money['short']['per_day'] += $missing;
+                    $money['short']['planets'][] = ['name' => $colony['name'].' · '.$info['planet']['name'], 'per_day' => $missing];
+                }
+                $money['hub'] += max(0.0, $info['value']['other_split'] - $info['value']['split']);
+                foreach ($info['value']['items'] as $item) {
+                    if ($item['tier'] === 2) {
+                        $money['p2'][$item['name']] = ($money['p2'][$item['name']] ?? 0) + $item['per_day'];
+                    }
+                }
+                foreach ($info['stores'] as $store) {
+                    array_push($money['stock'], ...($store['contents'] ?? []));
+                }
+                array_push($money['stock'], ...($info['customs']['contents'] ?? []));
                 $sum['pad'] += $info['launchpad']['used'] ?? 0.0;
                 $sum['customs'] += $info['customs']['used'] ?? 0.0;
             }
             unset($info);
             foreach ($colony['customs_unplaced'] as $office) {
                 $sum['customs'] += $office['used'];
+                array_push($money['stock'], ...($office['contents'] ?? []));
             }
             $colony['totals'] = $sum;
             foreach ($sum as $key => $value) {
@@ -140,6 +166,8 @@ class PiController extends Controller
                 + PiSkills::potential($skillChecks[$characterId], $counts[$characterId] ?? 0, $perColony);
         }
 
+        $suggestions = $this->moneySuggestions($money, $totals, $skillRows, $perColony, $data, $jita, $hub, JitaPrices::HUBS[$otherHub]['name'], $taxRate);
+
         $setting = AccountSetting::query()->find($user->id);
         $leader = Gate::allows('devilsrage-leader');
         $checked = DB::table('character_planets')->whereIn('character_id', $ids)->max('updated_at');
@@ -149,6 +177,7 @@ class PiController extends Controller
             'colonies' => $colonies,
             'totals' => $totals,
             'skillRows' => $skillRows,
+            'suggestions' => $suggestions,
             'perColony' => $perColony,
             'priceSource' => collect($prices)->contains(fn (array $p): bool => ! str_ends_with($p['source'], ' orders')) ? JitaPrices::HUBS[$hub]['name'].' orders, market average where it has none' : JitaPrices::HUBS[$hub]['name'].' orders',
             'hub' => $hub,
@@ -168,6 +197,70 @@ class PiController extends Controller
             'corp' => $leader ? $this->corp($now, $jita, $hub, $taxRate, $piSkills) : null,
             'templates' => $this->templates((int) $user->id, $leader),
         ]);
+    }
+
+    /**
+     * Patch 63: the "Make more ISK" list for the PI run.
+     *
+     * @param  array<string, mixed>  $money
+     * @param  array<string, float|int>  $totals
+     * @param  array<int, array<string, mixed>>  $skillRows
+     * @return list<array{kind: string, title: string, why: string, per_month: float, now: float}>
+     */
+    private function moneySuggestions(array $money, array $totals, array $skillRows, float $perColony, PiData $data, JitaPrices $jita, string $hub, string $otherHubName, float $taxRate): array
+    {
+        $isk = fn (float $v): string => match (true) {
+            abs($v) >= 1e9 => number_format($v / 1e9, 2).' b',
+            abs($v) >= 1e6 => number_format($v / 1e6, 1).' m',
+            abs($v) >= 1e3 => number_format($v / 1e3, 0).' k',
+            default => number_format($v, 0),
+        };
+
+        $stockIds = array_values(array_unique(array_map(fn (array $c): int => (int) ($c['type_id'] ?? 0), $money['stock'])));
+        $stockPrices = $jita->get(array_values(array_filter($stockIds)), $hub);
+        $stock = ['value' => 0.0, 'm3' => 0.0];
+        $volumes = $data->typesFor(array_values(array_filter($stockIds)));
+        foreach ($money['stock'] as $content) {
+            $id = (int) ($content['type_id'] ?? 0);
+            $price = $stockPrices[$id] ?? null;
+            if ($price !== null) {
+                $stock['value'] += (int) $content['amount'] * (((float) $price['buy'] + (float) $price['sell']) / 2);
+            }
+            $stock['m3'] += (int) $content['amount'] * (float) ($volumes[$id]['volume'] ?? 0);
+        }
+
+        $names = PiMoney::recipeNames();
+        $ids = $data->typeIdsByName($names);
+        $recipePrices = $jita->get(array_values($ids), $hub);
+        $byName = [];
+        foreach ($ids as $name => $id) {
+            if (isset($recipePrices[$id])) {
+                $byName[$name] = ((float) $recipePrices[$id]['buy'] + (float) $recipePrices[$id]['sell']) / 2;
+            }
+        }
+        $upgrade = PiMoney::upgrades($money['p2'], $byName, $taxRate)[0] ?? null;
+
+        $grow = ['planets' => 0, 'per_day' => 0.0, 'characters' => 0];
+        foreach ($skillRows as $row) {
+            if (($row['extra_planets'] ?? 0) > 0) {
+                $grow['planets'] += (int) $row['extra_planets'];
+                $grow['per_day'] += (float) $row['per_day'];
+                $grow['characters']++;
+            }
+        }
+
+        $planets = $money['short']['planets'];
+        usort($planets, fn (array $a, array $b): int => $b['per_day'] <=> $a['per_day']);
+        $split = (float) $totals['split'];
+
+        return PiMoney::suggestions([
+            'stopped' => $money['stopped'],
+            'short' => ['count' => $money['short']['count'], 'per_day' => $money['short']['per_day'], 'planets' => $planets],
+            'hub' => ['name' => $otherHubName, 'per_day' => $money['hub'], 'share' => $split > 0 ? $money['hub'] / $split : 0.0],
+            'stock' => $stock,
+            'upgrade' => $upgrade,
+            'grow' => $grow,
+        ], $isk);
     }
 
     /**

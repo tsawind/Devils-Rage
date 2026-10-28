@@ -316,6 +316,25 @@ final class PiData
     }
 
     /**
+     * Patch 63: type ids by exact name (PI products for the P3 suggestions).
+     *
+     * @param  list<string>  $names
+     * @return array<string, int>
+     */
+    public function typeIdsByName(array $names): array
+    {
+        if ($names === []) {
+            return [];
+        }
+
+        return DB::table('invTypes')
+            ->whereIn('typeName', $names)
+            ->pluck('typeID', 'typeName')
+            ->map(fn ($id): int => (int) $id)
+            ->all();
+    }
+
+    /**
      * Records every extractor program SeAT knows about (run hourly). A program is one
      * install_time on one pin; numbers that arrive later fill in the same row.
      */

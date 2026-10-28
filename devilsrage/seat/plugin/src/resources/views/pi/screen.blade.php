@@ -181,6 +181,8 @@
   .chip.muted { color: #c4c4cc; background: #1d1d22; border-color: #34343c; }
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
   .stat { padding: 12px 14px; }
+  .money .money-row { display: flex; gap: 14px; padding: 10px 16px; border-top: 1px solid var(--line); align-items: baseline; }
+  .money .money-gain { min-width: 120px; color: var(--ok); white-space: nowrap; }
   .stat .label { color: var(--muted); font-size: 11.5px; letter-spacing: .4px; text-transform: uppercase; }
   .stat .v { font-size: 24px; font-weight: 600; }
   .scroll { overflow-x: auto; }
@@ -268,6 +270,7 @@
           @endif
         </div>
       </div>
+      @include('devilsrage::pi.money')
     @else
       <div class="card hero">
         <div class="grow">
@@ -286,6 +289,8 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Connect to my EVE PC (Parsec)
         </button>
       </div>
+
+      @include('devilsrage::pi.money')
 
       @foreach($run['characters'] as $i => $c)
         <section class="card char">
@@ -367,6 +372,7 @@
       <div class="card stat" style="border-color: {{ $stoppedCount ? '#6b1a1f' : 'var(--line)' }}"><div class="label">Stopped now</div><div class="v">{{ $stoppedCount }}</div></div>
       <div class="card stat" style="border-color: {{ $soonCount ? '#6b4310' : 'var(--line)' }}"><div class="label">Stops within 24 h</div><div class="v">{{ $soonCount }}</div></div>
       <div class="card stat" title="{{ $valueTitle($totals, 7) }} per week"><div class="label">Worth per day (split)</div><div class="v">{{ $isk($totals['split']) }}</div><div class="muted small">buy {{ $isk($totals['buy']) }} · sell {{ $isk($totals['sell']) }} · week {{ $isk($totals['split'] * 7) }}</div><div class="muted small">{{ $otherHub }}: {{ $isk($totals['other_split']) }}@if($taxPercent > 0) · after {{ rtrim(rtrim(number_format($taxPercent, 2), '0'), '.') }}% tax @endif</div></div>
+      <div class="card stat" title="30 days at today's split prices"><div class="label">Per month (split)</div><div class="v">{{ $isk($totals['split'] * 30) }}</div><div class="muted small">fully fed {{ $isk($totals['potential'] * 30) }}@if($totals['potential'] > $totals['split'] * 1.01) · <span style="color: var(--ok)">+{{ $isk(($totals['potential'] - $totals['split']) * 30) }}</span>@endif</div><div class="muted small">a year {{ $isk($totals['split'] * 365) }}</div></div>
       <div class="card stat"><div class="label">Waiting to move</div><div class="v">{{ number_format($totals['pad'] + $totals['customs']) }} m³</div><div class="muted small">launchpads {{ number_format($totals['pad']) }} · customs offices {{ number_format($totals['customs']) }}</div></div>
     </div>
     @foreach($colonies as $c)
@@ -381,7 +387,7 @@
             $t = $c['totals'];
             $free = $t['customs_capacity'] - $t['customs'];
           @endphp
-          <span class="small" title="{{ $valueTitle($t) }} per day; {{ $valueTitle($t, 7) }} per week"><b>{{ $isk($t['split']) }}</b> <span class="muted">ISK / day split · {{ $isk($t['split'] * 7) }} / week</span></span>
+          <span class="small" title="{{ $valueTitle($t) }} per day; {{ $valueTitle($t, 7) }} per week"><b>{{ $isk($t['split']) }}</b> <span class="muted">ISK / day split · {{ $isk($t['split'] * 7) }} / week · {{ $isk($t['split'] * 30) }} / month</span>@if($t['potential'] > $t['split'] * 1.02) <span class="muted" title="With every factory fully fed (fresh spots, balanced heads)">· full {{ $isk($t['potential'] * 30) }}</span>@endif</span>
           <span class="small" title="Launchpads {{ number_format($t['pad']) }} m³, customs offices {{ number_format($t['customs']) }} of {{ number_format($t['customs_capacity']) }} m³">
             @if($t['pad'] > 0 && $t['pad'] <= $free)<span class="chip ok">Just launch</span> <span class="muted">{{ number_format($t['pad']) }} m³ fits the customs offices</span>
             @elseif($t['pad'] > 0)<span class="chip warn">Haul</span> <span class="muted">{{ number_format($t['pad'] + $t['customs']) }} m³ waiting, customs offices nearly full</span>
@@ -441,7 +447,7 @@
                     @else <span class="muted">—</span> @endif
                   </td>
                   <td style="white-space: nowrap" title="{{ $valueTitle($info['value'])."\n".collect($info['value']['items'])->map(fn (array $item): string => number_format($item['per_day']).' '.$item['name'].' / day')->implode("\n") }}">
-                    @if($info['value']['split'] > 0){{ $isk($info['value']['split']) }}@if($info['supply'] !== null && $info['supply'] < 0.995)<div class="small" style="color: var(--warn)">{{ (int) round($info['supply'] * 100) }}% (short raw)</div>@endif
+                    @if($info['value']['split'] > 0){{ $isk($info['value']['split']) }}@if($info['supply'] !== null && $info['supply'] < 0.995)<div class="small" style="color: var(--warn)">{{ (int) round($info['supply'] * 100) }}% (short raw)</div><div class="small muted" title="With its factories fully fed">full {{ $isk($info['value']['potential']) }}</div>@endif
                     @else <span class="muted">—</span> @endif
                   </td>
                   <td class="muted">@if($info['planet']['last_update'])<span data-ts="{{ $info['planet']['last_update'] }}" data-fmt="ago"></span>@else — @endif</td>
@@ -558,7 +564,7 @@
         <div class="card stat"><div class="label">Colonies</div><div class="v">{{ $corp['colonies'] }}</div></div>
         <div class="card stat" style="border-color: {{ $corp['stopped'] ? '#6b1a1f' : 'var(--line)' }}"><div class="label">Stopped now</div><div class="v">{{ $corp['stopped'] }}</div><div class="muted small">{{ $corp['soon'] }} more within 24 h</div></div>
         <div class="card stat"><div class="label">Unused colony slots</div><div class="v">{{ $corp['unused'] }}</div><div class="muted small">on characters already doing PI</div></div>
-        <div class="card stat" title="{{ $valueTitle($corp['value'], 7) }} per week"><div class="label">Corp PI per day (split)</div><div class="v">{{ $isk($corp['value']['split']) }}</div><div class="muted small">buy {{ $isk($corp['value']['buy']) }} · sell {{ $isk($corp['value']['sell']) }} · week {{ $isk($corp['value']['split'] * 7) }}</div></div>
+        <div class="card stat" title="{{ $valueTitle($corp['value'], 7) }} per week"><div class="label">Corp PI per day (split)</div><div class="v">{{ $isk($corp['value']['split']) }}</div><div class="muted small">buy {{ $isk($corp['value']['buy']) }} · sell {{ $isk($corp['value']['sell']) }} · week {{ $isk($corp['value']['split'] * 7) }}</div><div class="muted small">month {{ $isk($corp['value']['split'] * 30) }} · year {{ $isk($corp['value']['split'] * 365) }}</div></div>
       </div>
       <div class="two">
         <section class="card wide">
