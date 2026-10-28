@@ -14,6 +14,8 @@ import { isWormholeClass } from '@/const/solarsystemClasses';
 import { displayAlias } from '@/lib/alias';
 import { combatColorHex, combatColorLabel } from '@/lib/combat';
 import { KILL_MARKER_MS, useKillPulses } from '@/composables/useKillPulses';
+import { useCameras } from '@/composables/useCameras';
+import { openCameraPreview } from '@/lib/cameras/preview';
 import { useMinuteNow } from '@/composables/useMinuteNow';
 import SolarsystemName from '@/map/components/solarsystem/SolarsystemName.vue';
 import SolarsystemOccupier from '@/map/components/solarsystem/SolarsystemOccupier.vue';
@@ -100,6 +102,9 @@ const killMarker = computed(() => {
         })),
     };
 });
+// Patch 62: cameras pinned to this system.
+const { systemCameras } = useCameras();
+const systemCams = computed(() => systemCameras.value.get(system.id) ?? []);
 /** Kept when its chain was cleared (patch 12): "was Red". */
 const previousChain = computed(() => combatColorLabel(system.combat_previous_color));
 const previousHex = computed(() => combatColorHex(system.combat_previous_color));
@@ -251,6 +256,17 @@ function handleSubmit() {
                 </div>
             </TooltipContent>
         </Tooltip>
+        <!-- Patch 62: cameras pinned to this system (structure, local…): click for the live picture -->
+        <button
+            v-if="systemCams.length"
+            type="button"
+            class="absolute -bottom-2.5 left-2 z-10 rounded bg-purple-900/90 px-1 text-[10px] leading-4 font-bold whitespace-nowrap text-purple-100 ring-1 ring-purple-500/60 hover:bg-purple-800"
+            :title="systemCams.map((camera) => `📹 ${camera.name} (${camera.owner ?? '?'})`).join('\n')"
+            @pointerdown.stop
+            @click.stop="(event: MouseEvent) => openCameraPreview(systemCams[0].id, event.clientX, event.clientY)"
+        >
+            📹{{ systemCams.length > 1 ? ` ${systemCams.length}` : '' }}
+        </button>
         <!-- Combat chain: a border in the chain's color; the combat home's is thicker and pulses while someone works the chain -->
         <div
             v-if="chainHex"

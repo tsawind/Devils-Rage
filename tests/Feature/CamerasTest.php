@@ -149,6 +149,29 @@ it('lets the camera report activity on its hole, broadcast to the map, with a cl
     expect($event->refresh()->state)->toBe('confirmed');
 });
 
+it('takes the clip a few seconds after the event, from the camera owner only', function () {
+    Storage::fake('local');
+    Event::fake([CameraActivityEvent::class, CamerasChangedEvent::class]);
+    $map = Map::factory()->create();
+    $owner = cameraPilot($map);
+    startCamera($map, $owner);
+    $camera = MapCamera::query()->sole();
+
+    actingAs($owner);
+    $id = postJson(route('map-cameras.events.store', $camera), ['kind' => 'activation'])->assertCreated()->json('id');
+    $event = MapCameraEvent::query()->findOrFail($id);
+    expect($event->clip_path)->toBeNull();
+
+    actingAs(cameraPilot($map));
+    postJson(route('map-camera-events.attach', $event), ['clip' => UploadedFile::fake()->create('clip.webm', 100, 'video/webm')])->assertForbidden();
+
+    actingAs($owner);
+    postJson(route('map-camera-events.attach', $event), ['clip' => UploadedFile::fake()->create('clip.webm', 100, 'video/webm')])->assertOk();
+    $event->refresh();
+    Storage::disk('local')->assertExists($event->clip_path);
+    Event::assertDispatchedTimes(CameraActivityEvent::class, 1);
+});
+
 it('ends cameras that stopped checking in and removes expired clips', function () {
     Storage::fake('local');
     $map = Map::factory()->create();

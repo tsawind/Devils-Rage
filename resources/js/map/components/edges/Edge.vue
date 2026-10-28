@@ -2,6 +2,8 @@
 import { usePilotNames } from '@/composables/usePilotNames';
 import { isDark } from '@/composables/useIsDark';
 import EdgeBadges from '@/map/components/edges/EdgeBadges.vue';
+import EdgeCameraMarks from '@/map/components/edges/EdgeCameraMarks.vue';
+import { useCameras } from '@/composables/useCameras';
 import { badgeSize, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
 import { scalePoint } from '@/map/core/coords';
 import { setPillSize, usePillSpots } from '@/map/store/pillLayout';
@@ -387,6 +389,11 @@ const pill = computed(() => {
     return spot ? { center: { x: spot.x, y: spot.y }, dot: spot.dot } : { center: path.value.center, dot: false };
 });
 
+// Patch 62: cameras (only drawn once the map has any camera or activity, so plain maps pay nothing).
+const { pipeActivity, pipeCameras } = useCameras();
+const cameraWatch = computed(() => Boolean(connection && (pipeCameras.value.has(connection.id) || pipeActivity.value.has(connection.id))));
+const pillSize = computed(() => badgeSize(indicators.value));
+
 function getDashArray(): string | undefined {
     if (!massStatus.value) return '0';
     if (lifetime.value === 'eol' || lifetime.value === 'critical' || lifetime.value === 'imminent') return '2,6';
@@ -537,6 +544,16 @@ const pillTarget = computed(() => pillLayer?.value ?? null);
                     @open="(event) => emit('connectionClick', event)"
                     @menu="(event) => emit('connectionContextMenu', event)"
                     @copy="() => store && connection && copyForwardBookmark(store, connection)"
+                />
+                <!-- Patch 62: a camera on this hole (📹) and the purple Activation with its cloak countdown -->
+                <EdgeCameraMarks
+                    v-if="connection && !haloOnly && cameraWatch"
+                    :connection-id="connection.id"
+                    :center="pill.center"
+                    :dot="pill.dot"
+                    :pill-width="pillSize.width"
+                    :pill-height="pillSize.height"
+                    :scale="scale"
                 />
             </g>
         </Teleport>

@@ -26,7 +26,10 @@ import { pulseKill } from '@/composables/useKillPulses';
 import { useMapBackground } from '@/composables/useMapBackground';
 import { useMapEffects } from '@/composables/useMapEffects';
 import { getMapChannelName } from '@/const/channels';
-import { KillmailReceivedEvent, KnownHomeConnectedEvent } from '@/const/events';
+import { CameraActivityEvent, CamerasChangedEvent, KillmailReceivedEvent, KnownHomeConnectedEvent } from '@/const/events';
+import CameraPreview from '@/components/cameras/CameraPreview.vue';
+import { noteActivity, refreshCamerasSoon, startCameraFeed, stopCameraFeed, type TCameraActivityBroadcast } from '@/composables/useCameras';
+import { playActivationTone } from '@/lib/rageSound';
 import { playTargetAcquired } from '@/lib/rageSound';
 import { forgetMutedSystems, isSystemMuted } from '@/lib/mutedSystems';
 import { tryUseMapStore } from '@/map/store/mapStore';
@@ -234,6 +237,18 @@ watch(
         forgetMutedSystems(before.filter((id) => !still.has(id)));
     },
 );
+
+// Patch 62: cameras. A camera that sees a hole activate pops a purple Activation on its pipe
+// (60 s jump-cloak countdown) for everyone, with a soft tone.
+useOnClient(() => {
+    startCameraFeed(map.id, map.slug);
+    onBeforeUnmount(stopCameraFeed);
+    useEcho(getMapChannelName(map.id), CamerasChangedEvent, () => refreshCamerasSoon());
+    useEcho<TCameraActivityBroadcast>(getMapChannelName(map.id), CameraActivityEvent, (event) => {
+        noteActivity(event);
+        if (event.kind === 'activation' && mapEffects.value.sounds) playActivationTone();
+    });
+});
 
 // Patch 43: a system marked as someone's home was connected: a notice that stays, and a sound.
 useOnClient(() =>
@@ -469,5 +484,7 @@ const handleResizeEnd = () => {
         <RemoteDialogs />
         <!-- Patch 39: the scanner pop-out (drawn into its always-on-top window) -->
         <PopOutWindow :map="resolvedMap" :config="config" />
+        <!-- Patch 62: a camera's little live window (from a 📹) -->
+        <CameraPreview />
     </AppLayout>
 </template>

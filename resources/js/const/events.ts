@@ -33,3 +33,7 @@ export const MapRouteSolarsystemsUpdatedEvent = getEventName('MapRouteSolarsyste
 export const MapIgnoredSolarsystemsUpdatedEvent = getEventName('MapIgnoredSolarsystems', 'MapIgnoredSolarsystemsUpdatedEvent');
 
 export const ServerStatusUpdatedEvent = getEventName('ServerStatusUpdatedEvent');
+
+// Patch 62: cameras.
+export const CameraActivityEvent = getEventName('Cameras', 'CameraActivityEvent');
+export const CamerasChangedEvent = getEventName('Cameras', 'CamerasChangedEvent');

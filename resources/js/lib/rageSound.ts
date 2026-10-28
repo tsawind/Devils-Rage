@@ -283,3 +283,35 @@ export function playTargetAcquired(): void {
     playRageHitSound();
     speakTargetAcquired();
 }
+
+/**
+ * Patch 62: a camera saw a hole activate. A soft falling "whoomp" with a short shimmer on top,
+ * different from the kill and scan sounds so it's known without looking.
+ */
+export function playActivationTone(volume = 0.6): void {
+    const out = soundOut(volume);
+    if (!out) return;
+    const { ctx, master, t } = out;
+    const sweep = ctx.createOscillator();
+    const sweepGain = ctx.createGain();
+    sweep.type = 'sine';
+    sweep.frequency.setValueAtTime(220, t);
+    sweep.frequency.exponentialRampToValueAtTime(70, t + 0.6);
+    sweepGain.gain.setValueAtTime(0.0001, t);
+    sweepGain.gain.exponentialRampToValueAtTime(0.7, t + 0.03);
+    sweepGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    sweep.connect(sweepGain).connect(master);
+    sweep.start(t);
+    sweep.stop(t + 0.75);
+    const shimmer = ctx.createOscillator();
+    const shimmerGain = ctx.createGain();
+    shimmer.type = 'triangle';
+    shimmer.frequency.setValueAtTime(1046.5, t + 0.05);
+    shimmer.frequency.linearRampToValueAtTime(1396.9, t + 0.35);
+    shimmerGain.gain.setValueAtTime(0.0001, t + 0.05);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.12, t + 0.08);
+    shimmerGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    shimmer.connect(shimmerGain).connect(master);
+    shimmer.start(t + 0.05);
+    shimmer.stop(t + 0.5);
+}

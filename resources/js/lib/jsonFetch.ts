@@ -27,3 +27,19 @@ export async function jsonFetch<T>(url: string, method: 'GET' | 'POST' | 'PUT' |
         return null;
     }
 }
+
+/** Patch 62: a multipart POST (a camera's clip and still), JSON back. */
+export async function formFetch<T>(url: string, body: FormData): Promise<T | null> {
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': xsrfToken(), ...driverHeaders() },
+            body,
+        });
+        if (!response.ok) return null;
+        return (await response.json()) as T;
+    } catch {
+        return null;
+    }
+}

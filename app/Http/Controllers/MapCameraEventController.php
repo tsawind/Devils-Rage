@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Events\Cameras\CameraActivityEvent;
+use App\Events\Cameras\CamerasChangedEvent;
 use App\Models\MapCamera;
 use App\Models\MapCameraEvent;
 use App\Models\MapConnectionJump;
@@ -75,6 +76,40 @@ final class MapCameraEventController extends Controller
         );
 
         return response()->json(['id' => $event->id], 201);
+    }
+
+    /**
+     * The clip (and still) come a few seconds after the event itself, so the map's popup
+     * doesn't wait for the recording: the camera's page sends them here once it has them.
+     */
+    public function attach(Request $request, MapCameraEvent $mapCameraEvent): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $camera = $mapCameraEvent->loadMissing('camera')->camera;
+        abort_unless($camera->user_id === $user->id, 403);
+        $maxKb = (int) config('cameras.max_clip_kb');
+        $request->validate([
+            'clip' => ['sometimes', 'file', 'max:'.$maxKb, 'mimetypes:video/webm,video/mp4,video/x-matroska,application/octet-stream'],
+            'still' => ['sometimes', 'file', 'max:'.$maxKb, 'mimes:jpg,jpeg,png,webp'],
+        ]);
+        $folder = 'camera-events/'.$camera->map_id;
+        foreach (['clip' => 'webm', 'still' => 'jpg'] as $which => $extension) {
+            $file = $request->file($which);
+            if ($file === null) {
+                continue;
+            }
+            $column = $which.'_path';
+            $old = $mapCameraEvent->{$column};
+            $mapCameraEvent->{$column} = $file->storeAs($folder, Str::uuid()->toString().'.'.$extension, self::DISK);
+            if (is_string($old)) {
+                Storage::disk(self::DISK)->delete($old);
+            }
+        }
+        $mapCameraEvent->save();
+        CamerasChangedEvent::dispatch($camera->map_id);
+
+        return response()->json(['id' => $mapCameraEvent->id]);
     }
 
     /**

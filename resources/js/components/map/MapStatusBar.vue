@@ -54,6 +54,7 @@ import { useRageRoll } from '@/composables/useRageRoll';
 import RouteCopyButtons from './RouteCopyButtons.vue';
 import MapSwitcher from './MapSwitcher.vue';
 import MapSharePopover from './MapSharePopover.vue';
+import CamerasButton from '@/components/cameras/CamerasButton.vue';
 import RoutingBox from './RoutingBox.vue';
 import BarHandle from '@/components/bar/BarHandle.vue';
 import CharacterTabs from '@/components/bar/CharacterTabs.vue';
@@ -328,6 +329,8 @@ const settingsUrl = computed(() => {
             <MapTabs :map="map" :width="mapsWidth" />
             <!-- Patch 37: share the map read only (timed viewer links; permanent for managers) -->
             <MapSharePopover v-if="canShare" :map-slug="map.slug" />
+            <!-- Patch 62: cameras -->
+            <CamerasButton :map-slug="map.slug" :can-share="canShare" />
             <BarHandle :width="mapsWidth" :min="92" @resize="(width) => (barWidths.maps = width)" />
             <CharacterTabs v-if="$page.props.auth.user" :width="charsWidth" :map-slug="map.slug" />
             <BarHandle :width="charsWidth" :min="136" @resize="(width) => (barWidths.chars = width)" />

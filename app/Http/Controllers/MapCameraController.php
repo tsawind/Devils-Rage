@@ -38,7 +38,7 @@ final class MapCameraController extends Controller
         abort_unless($member || $this->guestLink($map) instanceof MapShareLink, 403);
 
         return Inertia::render('maps/Cameras', [
-            'map' => ['id' => $map->id, 'name' => $map->name],
+            'map' => ['id' => $map->id, 'slug' => $map->slug, 'name' => $map->name],
             'member' => $member,
             'places' => $member ? $this->places($map) : ['systems' => [], 'connections' => []],
         ]);
@@ -55,7 +55,7 @@ final class MapCameraController extends Controller
         abort_unless($user->can('update', $map), 403);
 
         return Inertia::render('maps/CameraShare', [
-            'map' => ['id' => $map->id, 'name' => $map->name],
+            'map' => ['id' => $map->id, 'slug' => $map->slug, 'name' => $map->name],
             'places' => $this->places($map),
             'characters' => $user->characters()->orderBy('name')->get(['id', 'name'])->map(fn (Character $character): array => ['id' => $character->id, 'name' => $character->name])->all(),
             'share_links' => array_values(array_filter(MapShareLinkController::linksFor($map, $user), fn (array $link): bool => $link['kind'] === 'map')),

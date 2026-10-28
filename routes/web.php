@@ -297,6 +297,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('map-cameras/{mapCamera}', [MapCameraController::class, 'destroy'])->name('map-cameras.destroy');
     Route::post('map-cameras/{mapCamera}/events', [MapCameraEventController::class, 'store'])->middleware('throttle:60,1')->name('map-cameras.events.store');
     Route::patch('map-camera-events/{mapCameraEvent}', [MapCameraEventController::class, 'update'])->name('map-camera-events.update');
+    Route::post('map-camera-events/{mapCameraEvent}/files', [MapCameraEventController::class, 'attach'])->middleware('throttle:60,1')->name('map-camera-events.attach');
 });
 
 // Public map access (no auth required)
