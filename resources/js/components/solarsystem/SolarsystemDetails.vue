@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import MapPanel from '@/components/ui/map-panel/MapPanel.vue';
 import MapPanelContent from '@/components/ui/map-panel/MapPanelContent.vue';
 import MapPanelHeader from '@/components/ui/map-panel/MapPanelHeader.vue';
@@ -59,6 +60,36 @@ function timerText(iso: string | null): string | null {
     const hours = Math.floor(minutes / 60);
     return hours >= 24 ? `out in ${Math.floor(hours / 24)}d ${hours % 24}h` : `out in ${hours}h ${minutes % 60}m`;
 }
+/** Patch 58c: the big ones up front (whose citadel is here, at a glance), the rest behind "+N". */
+const UP_FRONT = ['keepstar', 'fortizar', 'sotiyo', 'azbel', 'tatara'];
+const SHOWN_UP_FRONT = 4;
+const upFront = computed(() =>
+    structures.value
+        .filter((structure) => UP_FRONT.includes(structure.kind))
+        .sort((a, b) => UP_FRONT.indexOf(a.kind) - UP_FRONT.indexOf(b.kind))
+        .slice(0, SHOWN_UP_FRONT),
+);
+const theRest = computed(() => structures.value.filter((structure) => !upFront.value.includes(structure)));
+function describe(structure: { kind: string; name: string | null; owner: string | null; state: string; timer_at: string | null }): string {
+    return [
+        `${KIND_SHORT[structure.kind] ?? structure.kind}${structure.name ? ` "${shortName(structure.name)}"` : ''}`,
+        structure.owner ? `owner ${structure.owner}` : 'owner unknown',
+        STATE_SHORT[structure.state]?.label ?? structure.state,
+        timerText(structure.timer_at),
+    ]
+        .filter(Boolean)
+        .join(' · ');
+}
+const allStructuresTitle = computed(() => structures.value.map(describe).join('\n'));
+const STATE_DOT: Record<string, string> = {
+    online: 'bg-green-500',
+    low_power: 'bg-amber-400',
+    armor_timer: 'bg-amber-400',
+    hull_timer: 'bg-red-500',
+    anchoring: 'bg-sky-400',
+    unanchoring: 'bg-sky-400',
+};
+
 // Changes made in the intel window show here once it closes.
 watch(intelOpen, (isOpen) => {
     if (!isOpen) router.reload({ only: ['selected_map_solarsystem'] });
@@ -149,20 +180,42 @@ watch(
             </template>
         </MapPanelHeader>
         <MapPanelContent>
-            <div v-if="structures.length" class="flex flex-col gap-0.5 border-b border-border/50 px-3 py-1.5 text-[11px]">
+            <!-- Patch 58c: whose structures are here, at a glance (two lines at most); hover for all, +N for the rest -->
+            <div v-if="structures.length" class="flex max-h-[2.75rem] flex-wrap items-center gap-1 overflow-hidden border-b border-border/50 px-3 py-1.5 text-[11px]" :title="allStructuresTitle">
                 <button
-                    v-for="structure in structures"
+                    v-for="structure in upFront"
                     :key="structure.id"
                     type="button"
-                    class="flex min-w-0 items-baseline gap-1.5 rounded px-1 text-left hover:bg-muted/50"
-                    :title="`${KIND_SHORT[structure.kind] ?? structure.kind} ${structure.name ?? ''}${structure.owner ? ` (${structure.owner})` : ''}: open the intel`"
+                    class="flex max-w-[14rem] items-center gap-1 rounded border border-border bg-muted/40 px-1.5 py-0.5 hover:bg-muted"
+                    :title="describe(structure)"
                     @click="intelOpen = true"
                 >
-                    <span class="shrink-0 font-semibold text-foreground">{{ KIND_SHORT[structure.kind] ?? structure.kind }}</span>
-                    <span class="min-w-0 truncate text-muted-foreground">{{ shortName(structure.name) }}<template v-if="structure.owner"> · {{ structure.owner }}</template></span>
-                    <span class="ml-auto shrink-0" :class="STATE_SHORT[structure.state]?.klass ?? 'text-muted-foreground'">{{ STATE_SHORT[structure.state]?.label ?? structure.state }}</span>
-                    <span v-if="timerText(structure.timer_at)" class="shrink-0 font-mono text-amber-300">{{ timerText(structure.timer_at) }}</span>
+                    <span class="size-1.5 shrink-0 rounded-full" :class="STATE_DOT[structure.state] ?? 'bg-neutral-500'" />
+                    <span class="font-semibold text-foreground">{{ KIND_SHORT[structure.kind] ?? structure.kind }}</span>
+                    <span class="truncate text-muted-foreground">{{ structure.owner ?? shortName(structure.name) }}</span>
+                    <span v-if="structure.timer_at" class="shrink-0 text-amber-300" aria-label="on a timer">⏱</span>
                 </button>
+                <Popover v-if="theRest.length">
+                    <PopoverTrigger as-child>
+                        <button type="button" class="rounded border border-border px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground" :title="theRest.map(describe).join('\n')">
+                            {{ upFront.length ? `+${theRest.length}` : `${theRest.length} structure${theRest.length === 1 ? '' : 's'}` }} ▾
+                        </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" class="w-72 p-2 text-[11px]">
+                        <button
+                            v-for="structure in theRest"
+                            :key="structure.id"
+                            type="button"
+                            class="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-muted"
+                            @click="intelOpen = true"
+                        >
+                            <span class="size-1.5 shrink-0 rounded-full" :class="STATE_DOT[structure.state] ?? 'bg-neutral-500'" />
+                            <span class="font-semibold">{{ KIND_SHORT[structure.kind] ?? structure.kind }}</span>
+                            <span class="min-w-0 truncate text-muted-foreground">{{ structure.owner ?? '' }}<template v-if="structure.name"> · {{ shortName(structure.name) }}</template></span>
+                            <span class="ml-auto shrink-0" :class="STATE_SHORT[structure.state]?.klass ?? 'text-muted-foreground'">{{ STATE_SHORT[structure.state]?.label ?? structure.state }}</span>
+                        </button>
+                    </PopoverContent>
+                </Popover>
             </div>
             <Textarea
                 v-if="editing"

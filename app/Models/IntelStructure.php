@@ -52,7 +52,7 @@ final class IntelStructure extends Model
             ->where('state', '!=', 'gone')
             ->orderByRaw("CASE WHEN state IN ('armor_timer', 'hull_timer') THEN 0 ELSE 1 END")
             ->orderByDesc('seen_at')
-            ->limit(8)
+            ->limit(30)
             ->get(['id', 'kind', 'name', 'owner', 'state', 'timer_at', 'seen_at'])
             ->map(fn (self $structure): array => [
                 'id' => (int) $structure->id,
