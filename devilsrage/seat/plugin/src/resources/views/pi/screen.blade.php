@@ -199,6 +199,12 @@
   textarea { min-height: 84px; font: 12px/1.4 ui-monospace, Consolas, monospace; resize: vertical; }
   .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   @media (max-width: 640px) { .fields { grid-template-columns: 1fr; } }
+  .person { border-top: 1px solid #202027; }
+  .person summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 16px; cursor: pointer; }
+  .person summary b { font-weight: 600; }
+  .corpgroup { padding: 4px 0 8px; }
+  .corpgroup > div { padding: 4px 16px; }
+  .corpgroup td { padding: 5px 10px; }
   [hidden] { display: none !important; }
   @media (max-width: 640px) { .tag { width: 76px; } .lines { grid-template-columns: 1fr; } }
 </style>
@@ -511,7 +517,7 @@
   @if($leader && $corp)
     <section class="pane" id="pane-corp" aria-label="Corp overview">
       <div class="stats">
-        <div class="card stat"><div class="label">Pilots doing PI</div><div class="v">{{ $corp['pilots'] }}</div><div class="muted small">{{ $corp['characters'] }} of {{ $corp['members'] }} characters</div></div>
+        <div class="card stat"><div class="label">Pilots doing PI</div><div class="v">{{ $corp['pilots'] }}</div><div class="muted small">{{ $corp['characters'] }} of their {{ $corp['members'] }} characters, alts included</div></div>
         <div class="card stat"><div class="label">Colonies</div><div class="v">{{ $corp['colonies'] }}</div></div>
         <div class="card stat" style="border-color: {{ $corp['stopped'] ? '#6b1a1f' : 'var(--line)' }}"><div class="label">Stopped now</div><div class="v">{{ $corp['stopped'] }}</div><div class="muted small">{{ $corp['soon'] }} more within 24 h</div></div>
         <div class="card stat"><div class="label">Unused colony slots</div><div class="v">{{ $corp['unused'] }}</div><div class="muted small">on characters already doing PI</div></div>
@@ -554,16 +560,6 @@
             </table>
           </section>
           <section class="card">
-            <div class="sect"><h2>Worth per pilot</h2><span class="muted small">ISK per day, split</span></div>
-            <table><tbody>
-              @forelse($corp['pilot_values'] as $pilotName => $split)
-                <tr><td>{{ $pilotName }}</td><td style="text-align: right; padding-right: 16px; font-variant-numeric: tabular-nums">{{ $isk($split) }}</td></tr>
-              @empty
-                <tr><td class="muted">Nothing yet.</td></tr>
-              @endforelse
-            </tbody></table>
-          </section>
-          <section class="card">
             <div class="sect"><h2>Busiest systems</h2></div>
             <table><tbody>
               @foreach($corp['systems'] as $s)
@@ -573,6 +569,45 @@
           </section>
         </div>
       </div>
+      {{-- Patch 59: every member and all their characters (alts in other or NPC corps too), by person, then corp. --}}
+      <section class="card">
+        <div class="sect"><h2>By pilot</h2><span class="muted small">every character on SeAT of each member, grouped by corporation · worth per day, split</span></div>
+        @foreach($corp['people'] as $person)
+          <details class="person" @if($person['stopped'] > 0) open @endif>
+            <summary>
+              <b>{{ $person['name'] }}</b>
+              @if($person['main'] !== $person['name'])<span class="muted small">{{ $person['main'] }}</span>@endif
+              <span class="muted small">{{ $person['pi_characters'] }} of {{ $person['characters'] }} characters do PI · {{ $person['colonies'] }} colonies</span>
+              @if($person['stopped'] > 0)<span class="chip bad">{{ $person['stopped'] }} stopped</span>@endif
+              @if($person['soon'] > 0)<span class="chip warn">{{ $person['soon'] }} soon</span>@endif
+              <span class="grow"></span>
+              <b>{{ $isk($person['split']) }}</b>
+            </summary>
+            @foreach($person['corps'] as $group)
+              <div class="corpgroup">
+                <div class="small"><b>{{ $group['name'] }}</b>@if($group['main']) <span class="chip muted">our corp</span>@endif <span class="muted">{{ count($group['characters']) }}</span></div>
+                <table>
+                  <tbody>
+                    @foreach($group['characters'] as $row)
+                      <tr>
+                        <td>{{ $row['name'] }}</td>
+                        <td class="muted">@if($row['colonies'] > 0){{ $row['colonies'] }}@if($row['slots']) of {{ $row['slots'] }}@endif colonies @else no PI @if($row['slots'])({{ $row['slots'] }} slots)@endif @endif</td>
+                        <td>
+                          @if($row['stopped'] > 0)<span class="chip bad">{{ $row['stopped'] }} stopped</span> <span class="muted small"><span data-ts="{{ $row['stopped_since'] }}" data-fmt="ago"></span></span>
+                          @elseif($row['next_stop'])<span class="chip {{ $row['soon'] > 0 ? 'warn' : 'ok' }}">Runs</span> <span class="muted small">until <span data-ts="{{ $row['next_stop'] }}" data-fmt="clock"></span></span>
+                          @elseif($row['colonies'] > 0)<span class="chip muted">No extractors</span>
+                          @endif
+                        </td>
+                        <td style="text-align: right; padding-right: 16px; font-variant-numeric: tabular-nums">@if($row['split'] > 0){{ $isk($row['split']) }}@endif</td>
+                      </tr>
+                    @endforeach
+                  </tbody>
+                </table>
+              </div>
+            @endforeach
+          </details>
+        @endforeach
+      </section>
       <section class="card form" style="max-width: 720px">
         <div><h2 style="margin: 0; font-size: 16px; font-weight: 600">Customs tax</h2>
           <div class="muted small">The tax on our customs offices. Every worth figure takes it off (EVE taxes PI on a fixed value per tier, not the market price: P2 is 7,200 ISK a unit, so 5% costs 360 ISK per P2 exported).</div></div>
@@ -582,7 +617,7 @@
           <span class="toast" id="tax-toast" role="status"></span>
         </div>
       </section>
-      <p class="note">Corp members' characters that SeAT has a login for. Factory output assumes the factories run all the time, held back when a raw line is short. Worth at {{ $priceSource }} prices, after {{ rtrim(rtrim(number_format($taxPercent, 2), '0'), '.') }}% customs tax.</p>
+      <p class="note">Everyone with a character in our corp, and all their characters on SeAT (alts in other or NPC corps included; only directors see this). Factory output assumes the factories run all the time, held back when a raw line is short. Worth at {{ $priceSource }} prices, after {{ rtrim(rtrim(number_format($taxPercent, 2), '0'), '.') }}% customs tax.</p>
     </section>
   @endif
 

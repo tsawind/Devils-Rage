@@ -348,30 +348,53 @@ class PiController extends Controller
      */
     private function corp(int $now, JitaPrices $jita, string $hub, float $taxRate): array
     {
-        $ids = app(Corporation::class)->memberCharacterIds();
+        $corporation = app(Corporation::class);
+        $memberIds = $corporation->memberCharacterIds();
+        $mainCorpId = (int) (DB::table('character_affiliations')->whereIn('character_id', $memberIds)->value('corporation_id') ?? 0);
+        // Patch 59: every character of every member (alts in NPC or other corps too), by person.
+        $userIds = RefreshToken::query()->whereIn('character_id', $memberIds)->pluck('user_id')->unique()->values()->all();
+        $owners = RefreshToken::query()->whereIn('user_id', $userIds)->pluck('user_id', 'character_id');
+        $ids = array_map('intval', $owners->keys()->all());
         $data = new PiData();
         $planets = $data->planets($ids);
         $planner = new PiPlanner($data->types(), [], $now);
-        $slots = $data->slots(array_map('intval', array_keys($planets)));
-        $owners = RefreshToken::query()->whereIn('character_id', array_keys($planets))->pluck('user_id', 'character_id');
-        $users = User::query()->whereIn('id', $owners->unique()->values())->with('main_character')->get()->keyBy('id');
-        $names = DB::table('character_infos')->whereIn('character_id', array_keys($planets))->pluck('name', 'character_id');
+        $slots = $data->slots($ids);
+        $users = User::query()->whereIn('id', $userIds)->with('main_character')->get()->keyBy('id');
+        $names = DB::table('character_infos')->whereIn('character_id', $ids)->pluck('name', 'character_id');
+        $corpOf = DB::table('character_affiliations')->whereIn('character_id', $ids)->pluck('corporation_id', 'character_id');
+        $corpIds = $corpOf->unique()->values()->all();
+        $corpNames = DB::table('universe_names')->whereIn('entity_id', $corpIds)->pluck('name', 'entity_id')
+            ->union(DB::table('corporation_infos')->whereIn('corporation_id', $corpIds)->pluck('name', 'corporation_id'));
 
         $attention = [];
         $products = [];
-        $pilotItems = [];
+        $characterItems = [];
         $systems = [];
-        $pilots = [];
+        $people = [];
         $colonies = 0;
         $stopped = 0;
         $soon = 0;
         $unused = 0;
-        foreach ($planets as $characterId => $list) {
-            $userId = $owners[$characterId] ?? null;
-            $pilot = $userId !== null && $users->has($userId) ? PersonName::mainName($users[$userId]) : '?';
-            $pilots[$pilot] = true;
+        foreach ($ids as $characterId) {
+            $userId = (int) ($owners[$characterId] ?? 0);
+            $user = $users->get($userId);
+            $pilot = $user !== null ? PersonName::of($user) : '?';
+            $main = $user !== null ? PersonName::mainName($user) : '?';
+            $list = $planets[$characterId] ?? [];
+            $corpId = (int) ($corpOf[$characterId] ?? 0);
+            $row = [
+                'id' => $characterId,
+                'name' => (string) ($names[$characterId] ?? $characterId),
+                'colonies' => count($list),
+                'slots' => $slots[$characterId] ?? null,
+                'stopped' => 0,
+                'soon' => 0,
+                'stopped_since' => null,
+                'next_stop' => null,
+                'split' => 0.0,
+            ];
             $colonies += count($list);
-            if (isset($slots[$characterId])) {
+            if ($list !== [] && isset($slots[$characterId])) {
                 $unused += max(0, $slots[$characterId] - count($list));
             }
             foreach ($list as $planet) {
@@ -379,13 +402,20 @@ class PiController extends Controller
                 $systems[$planet['system_id']] = ($systems[$planet['system_id']] ?? 0) + 1;
                 if ($info['status'] === 'stopped') {
                     $stopped++;
+                    $row['stopped']++;
+                    $since = $info['stopped_since'] ?? $now;
+                    $row['stopped_since'] = $row['stopped_since'] === null ? $since : min($row['stopped_since'], $since);
                 } elseif ($info['status'] === 'soon') {
                     $soon++;
+                    $row['soon']++;
+                }
+                if ($info['next_stop'] !== null && $info['next_stop'] > $now) {
+                    $row['next_stop'] = $row['next_stop'] === null ? $info['next_stop'] : min($row['next_stop'], $info['next_stop']);
                 }
                 if (in_array($info['status'], ['stopped', 'soon'], true)) {
                     $attention[] = [
                         'pilot' => $pilot,
-                        'character' => (string) ($names[$characterId] ?? $characterId),
+                        'character' => $row['name'],
                         'planet' => $planet['name'],
                         'status' => $info['status'],
                         'time' => $info['status'] === 'stopped' ? $info['stopped_since'] : $info['next_stop'],
@@ -395,11 +425,22 @@ class PiController extends Controller
                 if ($info['making'] !== null || $planet['factories'] === []) {
                     foreach ($planner->products($info) as $item) {
                         $products[$item['name']] = ['type' => $item['type'], 'tier' => $item['tier'], 'per_day' => ($products[$item['name']]['per_day'] ?? 0) + $item['per_day']];
-                        $pilotItems[$pilot][$item['type']] = ($pilotItems[$pilot][$item['type']] ?? 0) + $item['per_day'];
+                        $characterItems[$characterId][$item['type']] = ($characterItems[$characterId][$item['type']] ?? 0) + $item['per_day'];
                     }
                 }
             }
+            $person = &$people[$userId];
+            $person ??= ['name' => $pilot, 'main' => $main, 'characters' => 0, 'pi_characters' => 0, 'colonies' => 0, 'stopped' => 0, 'soon' => 0, 'split' => 0.0, 'corps' => []];
+            $person['characters']++;
+            $person['pi_characters'] += $list === [] ? 0 : 1;
+            $person['colonies'] += count($list);
+            $person['stopped'] += $row['stopped'];
+            $person['soon'] += $row['soon'];
+            $person['corps'][$corpId] ??= ['name' => $corpId === 0 ? 'Unknown corporation' : (string) ($corpNames[$corpId] ?? 'Corporation '.$corpId), 'main' => $corpId === $mainCorpId, 'characters' => []];
+            $person['corps'][$corpId]['characters'][] = $row;
+            unset($person);
         }
+
         $prices = $jita->get(array_column($products, 'type'), $hub);
         $tiers = array_column($products, 'tier', 'type');
         $value = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'tax' => 0.0];
@@ -413,23 +454,40 @@ class PiController extends Controller
             $value['tax'] += $tax;
         }
         $value['split'] = ($value['buy'] + $value['sell']) / 2;
-        $pilotValues = [];
-        foreach ($pilotItems as $pilotName => $items) {
+        $splitOf = function (int $characterId) use ($characterItems, $prices, $tiers, $taxRate): float {
             $split = 0.0;
-            foreach ($items as $typeId => $perDay) {
+            foreach ($characterItems[$characterId] ?? [] as $typeId => $perDay) {
                 $split += $perDay * ((float) ($prices[$typeId]['buy'] ?? 0) + (float) ($prices[$typeId]['sell'] ?? 0)) / 2
                     - PiPlanner::exportTax((int) ($tiers[$typeId] ?? 0), $perDay, $taxRate);
             }
-            $pilotValues[$pilotName] = $split;
+
+            return $split;
+        };
+        foreach ($people as &$person) {
+            foreach ($person['corps'] as &$corp) {
+                foreach ($corp['characters'] as &$row) {
+                    $row['split'] = $splitOf($row['id']);
+                    $person['split'] += $row['split'];
+                }
+                unset($row);
+                usort($corp['characters'], fn (array $a, array $b): int => [$b['colonies'] > 0, $a['name']] <=> [$a['colonies'] > 0, $b['name']]);
+            }
+            unset($corp);
+            uasort($person['corps'], fn (array $a, array $b): int => [! $a['main'], $a['name']] <=> [! $b['main'], $b['name']]);
+            $person['corps'] = array_values($person['corps']);
         }
-        arsort($pilotValues);
+        unset($person);
+        $people = array_values($people);
+        usort($people, fn (array $a, array $b): int => [$b['split'], $a['name']] <=> [$a['split'], $b['name']]);
+
         usort($attention, fn (array $a, array $b): int => [$a['status'] === 'stopped' ? 0 : 1, $a['time'] ?? 0] <=> [$b['status'] === 'stopped' ? 0 : 1, $b['time'] ?? 0]);
         uasort($products, fn (array $a, array $b): int => [$b['tier'], $b['per_day']] <=> [$a['tier'], $a['per_day']]);
         arsort($systems);
         $systemNames = DB::table('solar_systems')->whereIn('system_id', array_keys($systems))->pluck('name', 'system_id');
 
         return [
-            'pilots' => count($pilots),
+            'pilots' => count(array_filter($people, fn (array $p): bool => $p['colonies'] > 0)),
+            'people' => $people,
             'characters' => count($planets),
             'members' => count($ids),
             'colonies' => $colonies,
@@ -439,7 +497,6 @@ class PiController extends Controller
             'attention' => array_slice($attention, 0, 60),
             'products' => $products,
             'value' => $value,
-            'pilot_values' => array_slice($pilotValues, 0, 15, true),
             'systems' => array_map(
                 fn ($systemId, int $count): array => ['name' => (string) ($systemNames[$systemId] ?? $systemId), 'count' => $count],
                 array_keys(array_slice($systems, 0, 10, true)),
