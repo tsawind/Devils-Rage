@@ -238,7 +238,7 @@ final class MapCameraController extends Controller
             'detect' => ['sometimes', 'boolean'],
             'map_solarsystem_id' => ['sometimes', 'nullable', 'integer', Rule::exists(MapSolarsystem::class, 'id')->where('map_id', $map->id)],
             'map_connection_id' => ['sometimes', 'nullable', 'integer', Rule::exists(MapConnection::class, 'id')->where('map_id', $map->id)],
-            'signature_id' => ['sometimes', 'nullable', 'integer', Rule::exists(Signature::class, 'id')->whereIn('map_solarsystem_id', $map->mapSolarsystems()->select('id'))],
+            'signature_id' => ['sometimes', 'nullable', 'integer', Rule::exists(Signature::class, 'id')->whereIn('map_solarsystem_id', $map->mapSolarsystems()->pluck('id')->all())],
             'guest_share_link_ids' => ['sometimes', 'nullable', 'array', 'max:20'],
             'guest_share_link_ids.*' => ['integer', Rule::exists(MapShareLink::class, 'id')->where('map_id', $map->id)],
             'character_id' => ['sometimes', 'nullable', 'integer'],

@@ -227,7 +227,7 @@ function learn(): void {
 function pinFields(box: TBox): { map_connection_id: number | null; map_solarsystem_id: number | null; signature_id: number | null } {
     const [kind, id] = box.pin.split(':');
     if (kind === 'h') return { map_connection_id: null, map_solarsystem_id: null, signature_id: Number(id) };
-    return { map_connection_id: kind === 'c' ? Number(id) : null, map_solarsystem_id: kind === 's' ? Number(id) : null };
+    return { map_connection_id: kind === 'c' ? Number(id) : null, map_solarsystem_id: kind === 's' ? Number(id) : null, signature_id: null };
 }
 
 function details(box: TBox) {
