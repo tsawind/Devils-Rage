@@ -225,3 +225,17 @@ it('refuses a hole from another map', function () {
 
     postJson(route('maps.cameras.store', $map), ['name' => 'x', 'kind' => 'hole', 'signature_id' => $hole->id])->assertUnprocessable();
 });
+
+it('answers the relay yes with an empty body, whichever way the browser sent the pass', function () {
+    $map = Map::factory()->create();
+    $result = startCamera($map, cameraPilot($map));
+    $camera = MapCamera::query()->sole();
+    $pass = $result['publish']['pass'];
+    $ask = ['action' => 'publish', 'path' => $camera->path, 'protocol' => 'webrtc', 'user' => '', 'password' => '', 'token' => '', 'query' => ''];
+
+    $yes = postJson(route('api.cameras.relay-auth'), ['token' => $pass] + $ask)->assertOk();
+    expect($yes->getContent())->toBe('');
+    postJson(route('api.cameras.relay-auth'), ['password' => $pass, 'user' => 'x'] + $ask)->assertOk();
+    postJson(route('api.cameras.relay-auth'), ['query' => 'pass='.urlencode($pass)] + $ask)->assertOk();
+    postJson(route('api.cameras.relay-auth'), $ask)->assertUnauthorized()->assertJsonPath('error', 'no pass');
+});

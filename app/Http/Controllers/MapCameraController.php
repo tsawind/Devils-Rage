@@ -16,7 +16,9 @@ use App\Models\Signature;
 use App\Models\User;
 use App\Support\CameraPass;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -198,7 +200,7 @@ final class MapCameraController extends Controller
      * The relay (MediaMTX) asks whether a publish / watch may go ahead. Answers 200 or 401.
      * MediaMTX sends {user, password, token, ip, action, path, protocol, id, query}.
      */
-    public function relayAuth(Request $request): JsonResponse
+    public function relayAuth(Request $request): HttpResponse|JsonResponse
     {
         $action = (string) $request->input('action');
         $path = (string) $request->input('path');
@@ -207,12 +209,29 @@ final class MapCameraController extends Controller
             parse_str((string) $request->input('query'), $query);
             $pass = is_string($query['pass'] ?? null) ? $query['pass'] : '';
         }
-        if (! in_array($action, CameraPass::ACTIONS, true) || $pass === '' || CameraPass::check($pass, $path, $action) === null) {
-            return response()->json(['ok' => false], 401);
+        $refuse = function (string $why) use ($request, $action, $path): JsonResponse {
+            // Patch 62c: why, for cameras-check (no passes or addresses in the log).
+            Log::info('Cameras relay refused: '.$why, [
+                'action' => $action,
+                'protocol' => (string) $request->input('protocol'),
+                'path_ok' => preg_match('/^cam-[a-z0-9]{20,40}$/', $path) === 1,
+                'sent' => array_values(array_filter(['user', 'password', 'token', 'query'], fn (string $field): bool => (string) $request->input($field) !== '')),
+            ]);
+
+            return response()->json(['error' => $why], 401);
+        };
+        if (! in_array($action, CameraPass::ACTIONS, true)) {
+            return $refuse('action '.$action);
+        }
+        if ($pass === '') {
+            return $refuse('no pass');
+        }
+        if (CameraPass::check($pass, $path, $action) === null) {
+            return $refuse('pass not good for this path / action (or expired)');
         }
         $camera = MapCamera::query()->where('path', $path)->first();
         if (! $camera instanceof MapCamera || $camera->status === 'ended') {
-            return response()->json(['ok' => false], 401);
+            return $refuse('camera gone or ended');
         }
         if ($action === 'publish') {
             $wasLive = $camera->status === 'live';
@@ -222,7 +241,9 @@ final class MapCameraController extends Controller
             }
         }
 
-        return response()->json(['ok' => true]);
+        // Patch 62c: an empty 200. The relay reads a body as its own reply (expireAt), and an
+        // unknown field ({"ok": true}) made it count the yes as a no.
+        return response('', 200);
     }
 
     /**

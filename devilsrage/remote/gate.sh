@@ -168,6 +168,8 @@ case "$ACTION" in
             echo "== Through Traefik to the relay and back to the mapper (expect 401: relay up, asked the mapper, refused)"
             curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/sdp' --data 'v=0' "https://$domain/rtc/cam-checkcheckcheckcheckcheck/whep"
         fi
+        echo "== Why the mapper refused cameras (last 8)"
+        "${C[@]}" exec -T app sh -c 'ls -t storage/logs/*.log 2>/dev/null | head -2 | xargs -r grep -h "Cameras relay refused" 2>/dev/null | tail -n 8' | mask | cut -c1-300 || echo "(none)"
         echo "== Relay log (last 25 lines, addresses masked)"
         (cd "$CAM" 2>/dev/null && docker compose logs --no-color --tail 25 mediamtx 2>&1 | mask | cut -c1-220) || true
         ;;

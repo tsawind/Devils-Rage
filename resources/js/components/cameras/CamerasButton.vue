@@ -3,6 +3,7 @@ import MapCameraController from '@/actions/App/Http/Controllers/MapCameraControl
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useCameras } from '@/composables/useCameras';
 import { openCameraPreview } from '@/lib/cameras/preview';
+import { appSignal, inDesktopApp } from '@/lib/desktopApp';
 import { Video } from 'lucide-vue-next';
 import { computed } from 'vue';
 
@@ -13,6 +14,17 @@ import { computed } from 'vue';
 const { mapSlug, canShare = false } = defineProps<{ mapSlug: string; canShare?: boolean }>();
 const { enabled, cameras, pipeActivity } = useCameras();
 const busy = computed(() => pipeActivity.value.size > 0);
+
+/**
+ * Patch 62c: the desktop app shows our pages itself and can't pick a window to share yet, so
+ * there "Share a camera" (and the wall, so the map stays) open in the normal browser (the app's open-in-browser signal).
+ */
+const inApp = inDesktopApp();
+function inBrowser(event: MouseEvent, path: string): void {
+    if (!inApp) return;
+    event.preventDefault();
+    appSignal(`open?url=${encodeURIComponent(new URL(path, window.location.origin).href)}`);
+}
 
 const KIND_LABEL: Record<string, string> = { hole: 'Hole', structure: 'Structure', other: 'Local / other', pi: 'PI scan', screen: 'Whole screen' };
 </script>
@@ -48,14 +60,23 @@ const KIND_LABEL: Record<string, string> = { hole: 'Hole', structure: 'Structure
             </div>
             <p v-else class="mb-3 text-xs text-muted-foreground">No cameras on right now.</p>
             <div class="flex gap-2">
-                <a :href="MapCameraController.wall(mapSlug).url" target="_blank" rel="noopener" class="flex-1 rounded border border-border px-2 py-1 text-center text-xs hover:bg-muted">Camera wall</a>
+                <a
+                    :href="MapCameraController.wall(mapSlug).url"
+                    target="_blank"
+                    rel="noopener"
+                    class="flex-1 rounded border border-border px-2 py-1 text-center text-xs hover:bg-muted"
+                    @click="(event: MouseEvent) => inBrowser(event, MapCameraController.wall(mapSlug).url)"
+                    >Camera wall{{ inApp ? ' ↗' : '' }}</a
+                >
                 <a
                     v-if="canShare"
                     :href="MapCameraController.share(mapSlug).url"
                     target="_blank"
                     rel="noopener"
                     class="flex-1 rounded border border-purple-700 bg-purple-900/40 px-2 py-1 text-center text-xs text-purple-100 hover:bg-purple-800/60"
-                    >Share a camera</a
+                    :title="inApp ? 'Opens in your browser (Chrome / Edge): the app can\'t share a window yet' : undefined"
+                    @click="(event: MouseEvent) => inBrowser(event, MapCameraController.share(mapSlug).url)"
+                    >Share a camera{{ inApp ? ' ↗' : '' }}</a
                 >
             </div>
         </PopoverContent>
