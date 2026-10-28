@@ -146,9 +146,18 @@ final class PiPlanner
             $supply = min($supply, $line['per_hour'] / $line['need']);
         }
 
+        $contents = [];
+        foreach ($planet['storage'] ?? [] as $store) {
+            foreach ($store['contents'] ?? [] as $item) {
+                $contents[(int) $store['pin_id']][(int) $item['type_id']] = (int) $item['amount'];
+            }
+        }
+        $routes = PiRoutes::check($planet['pins'] ?? [], $planet['routes'] ?? [], $contents, array_values(array_unique(array_map(fn (array $e): int => (int) $e['product'], $extractors))));
+
         return [
             'planet' => $planet,
             'status' => $status,
+            'routes' => $routes,
             'next_stop' => $nextStop,
             'stopped_since' => $stoppedSince,
             'not_running' => count($notRunning),
@@ -361,6 +370,17 @@ final class PiPlanner
             } elseif ($p['next_stop'] !== null) {
                 $steps[] = $this->step('restart', 'Restart '.$what, '', $p['next_stop'], 'stops');
             }
+        }
+
+        // Patch 63: raw sitting in a storage with no way out: the storage fills, the extractor wastes its output.
+        foreach ($p['routes']['stuck'] ?? [] as $stuck) {
+            $name = $this->types[$stuck['type']]['name'] ?? 'it';
+            $volume = (float) ($this->types[$stuck['type']]['volume'] ?? 0);
+            $steps[] = $this->step(
+                'route',
+                sprintf('Route the %s out of the %s', $name, $stuck['kind']),
+                sprintf('It holds %s %s (%s m³) and no route takes it to the factories, so it fills up and the extractor feeding it wastes its output. Add a route from it to every factory that uses %s (and from the other storage too, so either works).', number_format($stuck['amount']), $name, number_format($stuck['amount'] * $volume), $name),
+            );
         }
 
         $balance = $p['balance'];

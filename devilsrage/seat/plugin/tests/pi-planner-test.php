@@ -2,6 +2,7 @@
 declare(strict_types=1);
 // Run: php devilsrage/seat/plugin/tests/pi-planner-test.php (plain PHP, no SeAT needed).
 require __DIR__.'/../src/Pi/PiPlanner.php';
+require __DIR__.'/../src/Pi/PiRoutes.php';
 use DevilsRage\Seat\Pi\PiPlanner;
 
 $fails = 0;
@@ -230,6 +231,16 @@ foreach ($tsa as [$cycle, $cycles, $total]) {
 }
 check('formula: same output at 2 days whatever the program length', abs(PiPlanner::programUnits(9062, 7200, 48 * 3600) - PiPlanner::programUnits(9062, 3600, 48 * 3600)) / 1044078 < 0.02);
 check('formula: nothing for an unset extractor', PiPlanner::programUnits(0, 7200, 86400) === 0 && PiPlanner::programUnits(5000, 0, 86400) === 0);
+
+// Patch 63: Base Metals piled up in a storage with no route out: a Route step, and the colony line says so.
+$stuckPlanet = $p2;
+$stuckPlanet['storage'][] = ['pin_id' => 9, 'kind' => 'storage facility', 'capacity' => 12000, 'used' => 12000, 'contents' => [['type_id' => 2267, 'name' => 'Base Metals', 'tier' => 0, 'amount' => 2_400_000]]];
+$stuckPlanet['pins'] = [1 => 'extractor', 2 => 'extractor', 3 => 'basic', 4 => 'basic', 5 => 'basic', 6 => 'basic', 7 => 'advanced', 8 => 'launchpad', 9 => 'storage facility'];
+$stuckPlanet['routes'] = [['from' => 1, 'to' => 9, 'type' => 2267], ['from' => 2, 'to' => 5, 'type' => 2270]];
+$stuckInfo = $planner->planet($stuckPlanet);
+$routeSteps = array_values(array_filter($planner->steps($stuckInfo), fn (array $s): bool => $s['kind'] === 'route'));
+check('stuck raw: one Route step naming it', count($routeSteps) === 1 && str_contains($routeSteps[0]['title'], 'Base Metals') && str_contains($routeSteps[0]['title'], 'storage facility'));
+check('colony without pins or routes: nothing to say', $planner->planet($p2)['routes']['stuck'] === [] && $planner->planet($p2)['routes']['wanted'] === 0);
 
 echo $fails === 0 ? "\nALL PASSED\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);

@@ -1,8 +1,8 @@
 <!doctype html>
 {{-- Patch 50: the app's PI screen (works in a browser too). --}}
 @php
-  $kindLabel = ['restart' => 'Restart', 'balance' => 'Balance', 'move' => 'Move heads', 'submit' => 'Submit once', 'haul' => 'Haul', 'launch' => 'Launch', 'pile' => 'Piling up', 'drain' => 'Running low', 'timer' => 'Same timer', 'align' => 'Line up'];
-  $kindClass = ['restart' => 'bad', 'balance' => 'warn', 'move' => 'warn', 'submit' => 'muted', 'haul' => 'info', 'launch' => 'info', 'pile' => 'warn', 'drain' => 'warn', 'timer' => 'info', 'align' => 'info'];
+  $kindLabel = ['restart' => 'Restart', 'balance' => 'Balance', 'move' => 'Move heads', 'submit' => 'Submit once', 'haul' => 'Haul', 'launch' => 'Launch', 'pile' => 'Piling up', 'drain' => 'Running low', 'timer' => 'Same timer', 'align' => 'Line up', 'route' => 'Route'];
+  $kindClass = ['restart' => 'bad', 'balance' => 'warn', 'move' => 'warn', 'submit' => 'muted', 'haul' => 'info', 'launch' => 'info', 'pile' => 'warn', 'drain' => 'warn', 'timer' => 'info', 'align' => 'info', 'route' => 'bad'];
   $isk = function (float $v): string {
       $a = abs($v);
       return match (true) {
@@ -416,7 +416,12 @@
                       <div class="small" style="color: var(--warn); margin-top: 3px">{{ collect($info['steps'])->where('kind', '!=', 'restart')->pluck('title')->implode('; ') }}</div>
                     @endif
                   </td>
-                  <td>{{ $factories($info['factory_counts']) }}</td>
+                  <td>{{ $factories($info['factory_counts']) }}
+                    @php $rc = $info['routes'] ?? null; @endphp
+                    @if($rc && $rc['stuck'] !== [])<div class="small" style="color: var(--bad)" title="Raw sitting in a storage with no route out">route missing</div>
+                    @elseif($rc && $rc['wanted'] > 0 && $rc['missing'] !== [])<div class="small muted" title="Any-input rule: every storage and launchpad routes every input to every factory using it. Routes cost nothing.">any-input {{ $rc['wanted'] - count($rc['missing']) }}/{{ $rc['wanted'] }}</div>
+                    @elseif($rc && $rc['wanted'] > 0)<div class="small" style="color: var(--ok)" title="Every storage and launchpad routes every input to every factory using it">any-input ✓</div>@endif
+                  </td>
                   <td>
                     @if($info['stores'])
                       <div class="stores">
@@ -518,6 +523,10 @@
             <div class="row">
               <b class="tpl-name">{{ $t['name'] }}</b>
               <span class="chip muted">{{ $sum['planet'] }} · CC {{ $sum['level'] }}</span>
+              @if(($sum['routes']['wanted'] ?? 0) > 0)
+                @if($sum['routes']['missing'] === 0)<span class="chip ok" title="Every storage and launchpad routes every input to every factory using it: works whichever storage an extractor or import goes to">Any-input routes</span>
+                @else<span class="chip warn" title="Any-input rule: every storage and launchpad routes every input to every factory using it. Routes cost nothing.">{{ $sum['routes']['missing'] }} {{ $sum['routes']['missing'] === 1 ? 'route' : 'routes' }} short of any-input</span>@endif
+              @endif
               @if($list === 'corp')<span class="muted small">by {{ $t['by'] }}</span>@endif
               @if($list === 'mine' && ! $t['shared'])<span class="chip muted">Only you</span>@endif
             </div>

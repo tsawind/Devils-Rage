@@ -125,7 +125,7 @@ final class PiTemplate
      *
      * @param  array<string, mixed>  $data
      * @param  array<int, array{name: string, tier: int}>  $types
-     * @return array{planet: string, level: int, comment: string, extractors: list<array{name: string, heads: int}>, factories: array{basic: int, advanced: int, hightech: int}, storage: array{launchpad: int, storage: int}, raw: list<string>, makes: list<string>, tier: int|null, links: int, title: string}
+     * @return array{planet: string, level: int, routes: array{wanted: int, missing: int}, comment: string, extractors: list<array{name: string, heads: int}>, factories: array{basic: int, advanced: int, hightech: int}, storage: array{launchpad: int, storage: int}, raw: list<string>, makes: list<string>, tier: int|null, links: int, title: string}
      */
     public static function summary(array $data, array $types): array
     {
@@ -173,9 +173,23 @@ final class PiTemplate
 
         $what = $makes !== [] ? implode(', ', $makes).' (P'.$tier.')' : ($rawNames !== [] ? implode(' + ', $rawNames) : 'Empty colony');
 
+        // Patch 63: does it follow the any-input rule (every storage routes every input to every factory using it)?
+        $kinds = [];
+        foreach ($data['P'] as $index => $pin) {
+            $kinds[$index + 1] = self::pinKind($types[(int) $pin['T']]['name'] ?? '');
+        }
+        $routes = [];
+        foreach (self::listOf($data, 'R') as $route) {
+            if (is_array($route) && is_array($route['P'] ?? null) && count($route['P']) >= 2 && is_int($route['T'] ?? null)) {
+                $routes[] = ['from' => (int) $route['P'][0], 'to' => (int) $route['P'][count($route['P']) - 1], 'type' => (int) $route['T']];
+            }
+        }
+        $check = PiRoutes::check($kinds, $routes);
+
         return [
             'planet' => $planet,
             'level' => (int) $data['CmdCtrLv'],
+            'routes' => ['wanted' => $check['wanted'], 'missing' => count($check['missing'])],
             'comment' => is_string($data['Cmt'] ?? null) ? $data['Cmt'] : '',
             'extractors' => $extractors,
             'factories' => $factories,

@@ -88,9 +88,13 @@ final class PiData
                 'extractors' => [],
                 'factories' => [],
                 'storage' => [],
+                // Patch 63: every pin's kind and every route, for the route checks (PiRoutes).
+                'pins' => [],
+                'routes' => $planetRoutes->map(fn ($route): array => ['from' => (int) $route->source_pin_id, 'to' => (int) $route->destination_pin_id, 'type' => (int) $route->content_type_id])->values()->all(),
             ];
             foreach ($pins->get($k, collect()) as $pin) {
                 $kind = $this->pinKind((int) $pin->type_id);
+                $result['pins'][(int) $pin->pin_id] = $kind;
                 $pinKey = $planet->character_id.':'.$pin->pin_id;
                 if ($kind === 'extractor') {
                     $details = $extractors->get($pinKey);

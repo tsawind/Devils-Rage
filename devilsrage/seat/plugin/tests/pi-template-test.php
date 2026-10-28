@@ -2,6 +2,7 @@
 declare(strict_types=1);
 // Run: php devilsrage/seat/plugin/tests/pi-template-test.php (plain PHP, no SeAT needed).
 require __DIR__.'/../src/Pi/PiPlanner.php';
+require __DIR__.'/../src/Pi/PiRoutes.php';
 require __DIR__.'/../src/Pi/PiTemplate.php';
 use DevilsRage\Seat\Pi\PiPlanner;
 use DevilsRage\Seat\Pi\PiTemplate;
@@ -73,6 +74,10 @@ check('contents largest first', $stores[2]['contents'][0]['name'] === 'Reactive 
 $only = $planner->stores(['storage' => [['pin_id' => 2, 'kind' => 'command center', 'capacity' => 500, 'used' => 250]]]);
 check('CC alone still shown', count($only) === 1 && $only[0]['kind'] === 'command center' && $only[0]['contents'] === []);
 check('no storage -> empty', $planner->stores(['storage' => []]) === []);
+
+// Patch 63: Girl Shady's oxides colony: each storage only feeds its own raw, the launchpad the P1.
+// Any-input wants every input from the launchpad and both storages to both factories using it: 4 x 3 x 2 = 24, 8 there.
+check('any-input routes counted', $sum['routes'] === ['wanted' => 24, 'missing' => 16]);
 
 echo $fails === 0 ? "\nALL PASSED\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);
