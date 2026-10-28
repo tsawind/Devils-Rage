@@ -42,6 +42,16 @@ final class PiPlanner
      */
     public const FACTORY_ACTIVE_DAYS = 8;
 
+    /**
+     * Patch 61: CCP's extraction formula (developers.eveonline.com/docs/guides/pi). EVE's
+     * qty_per_cycle is a base value, not what a cycle makes: each cycle makes
+     * barWidth x qty / (1 + t x 0.012) x (1 + 0.8 x wave), barWidth = cycle seconds / 900,
+     * t = (cycle + 0.5) x barWidth. Checked against in-game program totals (within ~2%).
+     */
+    public const DECAY_FACTOR = 0.012;
+
+    public const NOISE_FACTOR = 0.8;
+
     /** Patch 60: the corp's usual program (6 d 20 h), when nothing else says how long programs run. */
     public const STANDARD_PROGRAM_HOURS = 164;
 
@@ -503,7 +513,7 @@ final class PiPlanner
             }
             $name = $this->types[$type]['name'] ?? (string) $extractor['product_name'];
             $line = $lines[$name] ?? ['type' => $type, 'per_hour' => 0, 'need' => $need[$type], 'heads' => 0, 'extractors' => 0, 'percent' => 0];
-            $line['per_hour'] += (int) round($extractor['qty'] * 3600 / $extractor['cycle_time']);
+            $line['per_hour'] += $this->perHour($extractor);
             $line['heads'] += (int) $extractor['heads'];
             $line['extractors']++;
             $lines[$name] = $line;
@@ -618,7 +628,7 @@ final class PiPlanner
             if ($this->notRunning($extractor) || $this->noNumbers($extractor) || (int) $extractor['expiry'] <= $this->now) {
                 continue;
             }
-            $out[] = ['type' => (int) $extractor['product'], 'name' => (string) $extractor['product_name'], 'tier' => 0, 'per_day' => (int) round($extractor['qty'] * 86400 / $extractor['cycle_time'])];
+            $out[] = ['type' => (int) $extractor['product'], 'name' => (string) $extractor['product_name'], 'tier' => 0, 'per_day' => $this->perHour($extractor) * 24];
         }
 
         return $out;
@@ -904,6 +914,46 @@ final class PiPlanner
         }
 
         return $counts;
+    }
+
+    /**
+     * Patch 61: units a whole program makes (CCP's formula), from EVE's base qty_per_cycle.
+     */
+    public static function programUnits(int $qty, int $cycleSeconds, int $durationSeconds): int
+    {
+        if ($qty <= 0 || $cycleSeconds <= 0 || $durationSeconds < $cycleSeconds) {
+            return 0;
+        }
+        $barWidth = $cycleSeconds / 900.0;
+        $phase = $qty ** 0.7;
+        $total = 0;
+        $cycles = intdiv($durationSeconds, $cycleSeconds);
+        for ($i = 0; $i < $cycles; $i++) {
+            $t = ($i + 0.5) * $barWidth;
+            $decay = $qty / (1 + $t * self::DECAY_FACTOR);
+            $wave = max((cos($phase + $t / 12) + cos($phase / 2 + $t * 0.2) + cos($t * 0.5)) / 3, 0.0);
+            $total += (int) ($barWidth * $decay * (1 + self::NOISE_FACTOR * $wave));
+        }
+
+        return $total;
+    }
+
+    /**
+     * Patch 61: an extractor's average units per hour over its program (or a standard 6 d 20 h
+     * program when EVE gives no start / end).
+     *
+     * @param  array<string, mixed>  $extractor
+     */
+    public function perHour(array $extractor): int
+    {
+        $qty = (int) ($extractor['qty'] ?? 0);
+        $cycle = (int) ($extractor['cycle_time'] ?? 0);
+        $install = $extractor['install'] ?? null;
+        $expiry = $extractor['expiry'] ?? null;
+        $duration = $install !== null && $expiry !== null && $expiry > $install ? (int) $expiry - (int) $install : self::STANDARD_PROGRAM_HOURS * 3600;
+        $units = self::programUnits($qty, $cycle, $duration);
+
+        return $units > 0 ? (int) round($units * 3600 / (intdiv($duration, $cycle) * $cycle)) : 0;
     }
 
     /** @param  array<string, mixed>  $extractor */

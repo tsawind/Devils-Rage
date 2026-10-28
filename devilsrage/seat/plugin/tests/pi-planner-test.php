@@ -13,9 +13,17 @@ $types = [
   3689 => ['name' => 'Mechanical Parts', 'tier' => 2], 2272 => ['name' => 'Heavy Metals', 'tier' => 0],
 ];
 $now = 1_800_000_000;
+// Patch 61: EVE's qty_per_cycle is a base value (CCP's formula); fixtures say what a line should make
+// per 30 minutes on average and $q finds the base value that gives it over the program.
+$q = function (int $per30, int $cycle, int $hours): int {
+    $want = $per30 * 2; $duration = $hours * 3600; $lo = 1; $hi = 2_000_000;
+    $rate = fn (int $qty): float => PiPlanner::programUnits($qty, $cycle, $duration) * 3600 / (intdiv($duration, $cycle) * $cycle);
+    while ($hi - $lo > 1) { $m = intdiv($lo + $hi, 2); if ($rate($m) < $want) { $lo = $m; } else { $hi = $m; } }
+    return abs($rate($lo) - $want) <= abs($rate($hi) - $want) ? $lo : $hi;
+};
 $h = 3600;
 $ex = fn (int $pin, int $type, string $name, int $qty, int $heads, ?int $expiry, int $len = 72, float $lat = 1.0, float $lon = 1.0, int $cycle = 1800) => [
-  'pin_id' => $pin, 'product' => $type, 'product_name' => $name, 'cycle_time' => $cycle, 'qty' => $qty,
+  'pin_id' => $pin, 'product' => $type, 'product_name' => $name, 'cycle_time' => $cycle, 'qty' => $q($qty, $cycle, $len),
   'heads' => $heads, 'lat' => $lat, 'lon' => $lon, 'install' => $expiry === null ? null : $expiry - $len * 3600, 'expiry' => $expiry];
 $basic = fn (int $pin, int $in, int $out) => ['pin_id' => $pin, 'kind' => 'basic', 'inputs' => [$in], 'outputs' => [$out]];
 $adv = fn (int $pin) => ['pin_id' => $pin, 'kind' => 'advanced', 'inputs' => [2398, 2399], 'outputs' => [3689]];
@@ -31,7 +39,7 @@ $planner = new PiPlanner($types, [], $now);
 $b = $planner->balance($p2);
 check('balance found', $b !== null);
 check('balance from Noble to Base', $b['from'] === 'Noble Metals' && $b['to'] === 'Base Metals');
-check('percentages 82 / 122', $b['lines']['Base Metals']['percent'] === 82 && $b['lines']['Noble Metals']['percent'] === 122);
+check('percentages 82 / 122 (got '.$b['lines']['Base Metals']['percent'].' / '.$b['lines']['Noble Metals']['percent'].')', abs($b['lines']['Base Metals']['percent'] - 82) <= 1 && abs($b['lines']['Noble Metals']['percent'] - 122) <= 1);
 // per head: base 1225, noble 1460. exact = (1.2167-0.8167)/(1225/12000+1460/12000)=0.4/0.22375=1.79 -> 2; room 2, spare 9
 check('move 2 heads (got '.$b['move'].')', $b['move'] === 2);
 $after = (9800 + 2 * 1225) / 12000; $afterN = (14600 - 2 * 1460) / 12000;
@@ -46,13 +54,13 @@ check('steps restart, balance, haul: '.implode(',', $kinds), $kinds === ['restar
 check('restart says both', $steps[0]['title'] === 'Restart both extractors' && $steps[0]['time_word'] === 'stops');
 
 // Balanced planet: no balance step.
-$even = $p2; $even['extractors'][0]['qty'] = 6000; $even['extractors'][1]['qty'] = 6100;
+$even = $p2; $even['extractors'][0]['qty'] = $q(6000, 1800, 72); $even['extractors'][1]['qty'] = $q(6100, 1800, 24);
 check('balanced -> no step', $planner->balance($even) === null);
 // Both over what factories need: nothing.
-$over = $p2; $over['extractors'][0]['qty'] = 7000; $over['extractors'][1]['qty'] = 9000;
+$over = $p2; $over['extractors'][0]['qty'] = $q(7000, 1800, 72); $over['extractors'][1]['qty'] = $q(9000, 1800, 24);
 check('both over -> no step', $planner->balance($over) === null);
 // Short line already has 10 heads: suggests another extractor.
-$fullP = $p2; $fullP['extractors'][0]['heads'] = 10; $fullP['extractors'][0]['qty'] = 5000;
+$fullP = $p2; $fullP['extractors'][0]['heads'] = 10; $fullP['extractors'][0]['qty'] = $q(5000, 1800, 72);
 $bf = $planner->balance($fullP);
 check('short line full -> move 0, full', $bf !== null && $bf['move'] === 0 && $bf['full'] === true);
 check('full line step text', str_contains($planner->steps($planner->planet($fullP))[1]['title'], 'Add an extractor'));
@@ -65,8 +73,8 @@ $ni = $planner->planet($nonum);
 check('no numbers -> submit step', in_array('submit', array_column($planner->steps($ni), 'kind'), true) && $ni['balance'] === null);
 
 // Depletion: earlier program same pin, same spot, same cycle, more per head.
-$hist = [1 => [['install' => $now - 30 * 86400, 'product' => 2267, 'cycle_time' => 1800, 'qty' => 7000, 'heads' => 8, 'lat' => 1.01, 'lon' => 0.99]],
-         2 => [['install' => $now - 30 * 86400, 'product' => 2270, 'cycle_time' => 1800, 'qty' => 7000, 'heads' => 10, 'lat' => 2.0, 'lon' => 2.0]]];
+$hist = [1 => [['install' => $now - 30 * 86400, 'product' => 2267, 'cycle_time' => 1800, 'qty' => $q(7000, 1800, 72), 'heads' => 8, 'lat' => 1.01, 'lon' => 0.99]],
+         2 => [['install' => $now - 30 * 86400, 'product' => 2270, 'cycle_time' => 1800, 'qty' => $q(7000, 1800, 72), 'heads' => 10, 'lat' => 2.0, 'lon' => 2.0]]];
 $dp = (new PiPlanner($types, $hist, $now))->depleted($p2['extractors']);
 check('depleted: only Base Metals (same spot), down 30%', count($dp) === 1 && $dp[0]['product_name'] === 'Base Metals' && $dp[0]['down'] === 30);
 
@@ -102,7 +110,7 @@ check('factory planet -> clear', $r2['characters'] === [] && count($r2['clear'])
 // ---------- Patch 59: raw buffers, piling up / running low, launch vs haul, fresh spots, worth ----------
 $gt = $types + [2310 => ['name' => 'Noble Gas', 'tier' => 0, 'volume' => 0.005], 2311 => ['name' => 'Reactive Gas', 'tier' => 0, 'volume' => 0.005],
   2392 => ['name' => 'Oxidizing Compound', 'tier' => 1], 3683 => ['name' => 'Oxygen', 'tier' => 1], 2317 => ['name' => 'Oxides', 'tier' => 2, 'volume' => 0.75]];
-$gx = fn (int $pin, int $type, string $name, int $qty) => ['pin_id' => $pin, 'product' => $type, 'product_name' => $name, 'cycle_time' => 1800, 'qty' => $qty,
+$gx = fn (int $pin, int $type, string $name, int $qty) => ['pin_id' => $pin, 'product' => $type, 'product_name' => $name, 'cycle_time' => 1800, 'qty' => $q($qty, 1800, 164),
   'heads' => 6, 'lat' => 1.0, 'lon' => 1.0, 'install' => $now - 100 * $h, 'expiry' => $now + 64 * $h];
 $gb = fn (int $pin, int $in, int $out) => ['pin_id' => $pin, 'kind' => 'basic', 'inputs' => [$in], 'outputs' => [$out]];
 $store = fn (int $pin, int $type, string $name, int $amount, ?int $was) => ['pin_id' => $pin, 'kind' => 'storage facility', 'capacity' => 12000, 'used' => $amount * 0.005,
@@ -119,7 +127,7 @@ $kinds59 = fn (array $steps): array => array_values(array_filter(array_column($s
 $only59 = fn (array $steps): array => array_values(array_filter($steps, fn (array $st): bool => $st['kind'] !== 'restart'));
 
 $lines = $gp->rawLines($gas);
-check('raw lines through storage: 12,000 / h each', $lines['Noble Gas']['need'] === 12000 && $lines['Reactive Gas']['per_hour'] === 12000);
+check('raw lines through storage: 12,000 / h each (got '.$lines['Reactive Gas']['per_hour'].')', $lines['Noble Gas']['need'] === 12000 && abs($lines['Reactive Gas']['per_hour'] - 12000) <= 10);
 $gi = $gp->planet($gas);
 check('steady buffers: nothing to do', $kinds59($gp->steps($gi)) === []);
 check('buffer trend 0 / h', $gi['buffers']['Noble Gas']['per_hour'] === 0);
@@ -139,7 +147,7 @@ $noHistory = $gas; $noHistory['storage'][1] = $store(8, 2310, 'Noble Gas', 20000
 check('no earlier reading: no trend', $gp->planet($noHistory)['buffers']['Noble Gas']['per_hour'] === null);
 
 // Balance + storage agree: the balance step says so and no separate pile / drain step.
-$both = $drain; $both['extractors'][1]['qty'] = 4000; $both['storage'][1] = $store(8, 2310, 'Noble Gas', 1900000, 1600000);
+$both = $drain; $both['extractors'][1]['qty'] = $q(4000, 1800, 164); $both['storage'][1] = $store(8, 2310, 'Noble Gas', 1900000, 1600000);
 $bs = $only59($gp->steps($gp->planet($both)));
 check('balance mentions storage (got '.implode(',', array_column($bs, 'kind')).')', array_column($bs, 'kind') === ['balance'] && str_contains($bs[0]['why'], 'storage agrees') && str_contains($bs[0]['why'], 'piling up'));
 
@@ -162,11 +170,11 @@ check('fresh spot 6% / 12 heads -> keep all', str_contains($gp->freshSpotAdvice(
 $prices = [2317 => ['buy' => 9000.0, 'sell' => 11000.0]];
 $v = $gp->value($gi, $prices);
 check('worth 240 Oxides / day: buy 2.16 m, split 2.4 m', $v['items'][0]['per_day'] === 240 && abs($v['buy'] - 2160000) < 1 && abs($v['split'] - 2400000) < 1 && abs($v['m3'] - 180) < 0.01);
-$short = $gas; $short['extractors'][1]['qty'] = 4500;
-check('short line (75%) -> 180 / day', $gp->value($gp->planet($short), $prices)['items'][0]['per_day'] === 180);
+$short = $gas; $short['extractors'][1]['qty'] = $q(4500, 1800, 164);
+check('short line (75%) -> 180 / day', abs($gp->value($gp->planet($short), $prices)['items'][0]['per_day'] - 180) <= 1);
 $rawOnly = $gas; $rawOnly['factories'] = [];
 $rv = $gp->value($gp->planet($rawOnly), [2310 => ['buy' => 100.0, 'sell' => 120.0]]);
-check('extraction-only planet sells raw (288,000 Noble Gas / day)', $rv['items'][0]['per_day'] === 288000 && abs($rv['buy'] - 28800000) < 1);
+check('extraction-only planet sells raw (~288,000 Noble Gas / day)', abs($rv['items'][0]['per_day'] - 288000) <= 240 && abs($rv['buy'] - $rv['items'][0]['per_day'] * 100) < 1);
 
 
 // Customs tax: on a fixed value per tier (P2 7,200), not the market price.
@@ -185,7 +193,7 @@ check('factory planet not opened for 30 days counts nothing', $gp->products($gp-
 
 // Patch 60: lining up timers without changing program lengths.
 $at = fn (int $id, int $stop) => ['character_id' => $id, 'planet_id' => 100 + $id, 'name' => 'J1 '.$id, 'type' => 'gas', 'level' => 5, 'system_id' => 1, 'last_update' => $now,
-  'extractors' => [['pin_id' => $id, 'product' => 2310, 'product_name' => 'Noble Gas', 'cycle_time' => 1800, 'qty' => 6000, 'heads' => 6, 'lat' => 1.0, 'lon' => 1.0, 'install' => $stop - 164 * $h, 'expiry' => $stop]],
+  'extractors' => [['pin_id' => $id, 'product' => 2310, 'product_name' => 'Noble Gas', 'cycle_time' => 1800, 'qty' => $q(6000, 1800, 164), 'heads' => 6, 'lat' => 1.0, 'lon' => 1.0, 'install' => $stop - 164 * $h, 'expiry' => $stop]],
   'factories' => [], 'storage' => []];
 $lu = $gp->run([
   1 => ['name' => 'Due', 'planets' => [$at(1, $now - 5 * $h)]],
@@ -212,6 +220,16 @@ $placed = $gp->placeCustoms([$gas, $other], [
 ], 35000);
 check('Oxides office -> planet 77, Mechanical Parts -> 78', ($placed['placed'][77]['used'] ?? 0) === 900.0 && ($placed['placed'][78]['used'] ?? 0) === 50.0);
 check('ambiguous and unknown offices unplaced', count($placed['unplaced']) === 2);
+
+
+// Patch 61: CCP's formula against Tsa's in-game program totals (one Barren extractor, 6 heads).
+$tsa = [[3600, 50, 1066479], [1800, 50, 691386], [3600, 99, 1536649], [7200, 50, 1549148], [7200, 99, 2024777]];
+foreach ($tsa as [$cycle, $cycles, $total]) {
+    $got = PiPlanner::programUnits(9062, $cycle, $cycle * $cycles);
+    check(sprintf('formula: %d cycles of %d min = %s (in game %s)', $cycles, $cycle / 60, number_format($got), number_format($total)), abs($got - $total) / $total < 0.025);
+}
+check('formula: same output at 2 days whatever the program length', abs(PiPlanner::programUnits(9062, 7200, 48 * 3600) - PiPlanner::programUnits(9062, 3600, 48 * 3600)) / 1044078 < 0.02);
+check('formula: nothing for an unset extractor', PiPlanner::programUnits(0, 7200, 86400) === 0 && PiPlanner::programUnits(5000, 0, 86400) === 0);
 
 echo $fails === 0 ? "\nALL PASSED\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);
