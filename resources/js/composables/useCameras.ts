@@ -1,5 +1,5 @@
 import MapCameraController from '@/actions/App/Http/Controllers/MapCameraController';
-import { activityByConnection, addActivation, liveActivations, type TActivation, type TCameraActivityKind, type TPipeActivity } from '@/lib/cameras/activations';
+import { activityByConnection, activityBySignature, addActivation, liveActivations, type TActivation, type TCameraActivityKind, type TPipeActivity } from '@/lib/cameras/activations';
 import { computed, ref, shallowRef } from 'vue';
 
 /**
@@ -17,6 +17,8 @@ export type TCamera = {
     detect: boolean;
     map_solarsystem_id: number | null;
     map_connection_id: number | null;
+    /** Patch 62b: a hole nobody has jumped yet (dotted pipe). */
+    signature_id: number | null;
     owner: string | null;
     character: string | null;
     mine: boolean;
@@ -28,6 +30,7 @@ export type TCameraEvent = {
     id: number;
     map_camera_id: number;
     map_connection_id: number | null;
+    signature_id: number | null;
     kind: TCameraActivityKind;
     strength: number;
     state: 'new' | 'confirmed' | 'dismissed';
@@ -45,6 +48,7 @@ export type TCameraActivityBroadcast = {
     camera_name: string;
     map_connection_id: number | null;
     map_solarsystem_id: number | null;
+    signature_id: number | null;
     kind: TCameraActivityKind;
     happened_at: string;
     heard_by: 'picture' | 'sound' | 'both';
@@ -84,6 +88,7 @@ function fromEvent(event: TCameraEvent): TActivation {
         cameraId: event.map_camera_id,
         cameraName: camera?.name ?? 'Camera',
         connectionId: event.map_connection_id,
+        signatureId: event.signature_id,
         solarsystemId: camera?.map_solarsystem_id ?? null,
         kind: event.kind,
         at: Date.parse(event.happened_at),
@@ -129,6 +134,7 @@ export function noteActivity(event: TCameraActivityBroadcast): void {
             cameraId: event.camera_id,
             cameraName: event.camera_name,
             connectionId: event.map_connection_id,
+            signatureId: event.signature_id,
             solarsystemId: event.map_solarsystem_id,
             kind: event.kind,
             at: Math.min(Date.parse(event.happened_at), Date.now()),
@@ -175,6 +181,17 @@ const pipeCameras = computed(() => {
     return result;
 });
 
+/** Patch 62b: dotted pipes (holes nobody has jumped yet), by signature. */
+const holeActivity = computed<Map<number, TPipeActivity>>(() => activityBySignature(activations.value, now.value));
+const holeCameras = computed(() => {
+    const result = new Map<number, TCamera[]>();
+    for (const camera of cameras.value) {
+        if (camera.signature_id === null || camera.map_connection_id !== null) continue;
+        result.set(camera.signature_id, [...(result.get(camera.signature_id) ?? []), camera]);
+    }
+    return result;
+});
+
 /** Live cameras pinned to each system on the map (map_solarsystem id). */
 const systemCameras = computed(() => {
     const result = new Map<number, TCamera[]>();
@@ -186,5 +203,5 @@ const systemCameras = computed(() => {
 });
 
 export function useCameras() {
-    return { mapId, mapSlug, enabled, member, cameras, events, activations, pipeActivity, pipeCameras, systemCameras, now };
+    return { mapId, mapSlug, enabled, member, cameras, events, activations, pipeActivity, pipeCameras, holeActivity, holeCameras, systemCameras, now };
 }

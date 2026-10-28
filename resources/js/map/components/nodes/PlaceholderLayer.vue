@@ -9,6 +9,8 @@ import { SHIP_SIZE_LETTERS } from '@/lib/shipSize';
 import { ANCHOR_OFFSET } from '@/map/core/coords';
 import { CORNER_RADIUS, elbowCorners, farStretchPoint, roundedElbowPath } from '@/map/core/geometry/paths';
 import EdgeBadges from '@/map/components/edges/EdgeBadges.vue';
+import EdgeCameraMarks from '@/map/components/edges/EdgeCameraMarks.vue';
+import { useCameras } from '@/composables/useCameras';
 import { badgeSize, type EdgeIndicator } from '@/map/components/edges/badgeWidth';
 import { openPlaceholderDetails } from '@/map/components/overlays/placeholderDetails';
 import { copyPlaceholderBookmark } from '@/map/holeBookmark';
@@ -37,6 +39,8 @@ const user = useUser();
 const routed = useTreeGeometries(store);
 const pillSpots = usePillSpots(store);
 const { canEdit } = usePermission();
+// Patch 62b: cameras on holes nobody has jumped yet.
+const { holeCameras, holeActivity } = useCameras();
 
 const FULL_WIDTH = 180;
 /** Patch 16: wider small boxes in rage lanes, so the note fits inside. */
@@ -382,6 +386,16 @@ const chips = computed(() => {
                         :watcher="watchers.get(item.nodeId) ?? null"
                         @open="(event) => openDetails(event, item.nodeId)"
                         @copy="() => copyBookmark(item)"
+                    />
+                    <!-- Patch 62b: a camera on this unjumped hole (📹) and its purple Activation -->
+                    <EdgeCameraMarks
+                        v-if="item.signatureId > 0 && (holeCameras.has(item.signatureId) || holeActivity.has(item.signatureId))"
+                        :signature-id="item.signatureId"
+                        :center="item.pill.center"
+                        :dot="item.pill.dot"
+                        :pill-width="badgeSize(item.pill.parts).width"
+                        :pill-height="badgeSize(item.pill.parts).height"
+                        :scale="store.scale.value"
                     />
                 </g>
             </template>

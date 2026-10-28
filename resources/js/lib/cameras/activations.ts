@@ -12,6 +12,8 @@ export type TActivation = {
     cameraId: number;
     cameraName: string;
     connectionId: number | null;
+    /** Patch 62b: a hole nobody has jumped yet (its signature; the dotted pipe). */
+    signatureId?: number | null;
     solarsystemId: number | null;
     kind: TCameraActivityKind;
     /** When it happened (ms since epoch, the camera's clock as the mapper stored it). */
@@ -42,16 +44,26 @@ export function liveActivations(list: readonly TActivation[], now: number): TAct
 
 /** The purple pill per pipe: how many, the newest, and the cloak countdown. */
 export function activityByConnection(list: readonly TActivation[], now: number): Map<number, TPipeActivity> {
+    return activityBy(list, now, (item) => item.connectionId);
+}
+
+/** Patch 62b: the same for dotted pipes (holes nobody has jumped yet), by signature. */
+export function activityBySignature(list: readonly TActivation[], now: number): Map<number, TPipeActivity> {
+    return activityBy(list, now, (item) => (item.connectionId === null ? (item.signatureId ?? null) : null));
+}
+
+function activityBy(list: readonly TActivation[], now: number, keyOf: (item: TActivation) => number | null): Map<number, TPipeActivity> {
     const result = new Map<number, TPipeActivity>();
     for (const item of liveActivations(list, now)) {
-        if (item.connectionId === null) continue;
-        const known = result.get(item.connectionId);
+        const key = keyOf(item);
+        if (key === null) continue;
+        const known = result.get(key);
         if (known) {
             known.count++;
             if (!known.cameras.includes(item.cameraName)) known.cameras.push(item.cameraName);
             continue;
         }
-        result.set(item.connectionId, { count: 1, newest: item, secondsLeft: secondsLeft(Math.min(item.at, now), now), cameras: [item.cameraName] });
+        result.set(key, { count: 1, newest: item, secondsLeft: secondsLeft(Math.min(item.at, now), now), cameras: [item.cameraName] });
     }
     return result;
 }

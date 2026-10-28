@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Events\Cameras\CamerasChangedEvent;
+
 use App\Enums\LifetimeStatus;
 use App\Enums\MassStatus;
 use App\Enums\ShipSize;
@@ -122,6 +124,18 @@ final class Signature extends Model
                 'mass_watch_open' => true,
                 'mass_watch_touched_at' => now(),
             ]);
+        });
+        // Patch 62b: a camera on this hole before anyone jumped it now watches the new pipe.
+        self::saved(function (Signature $signature): void {
+            if ($signature->map_connection_id === null || ! $signature->wasChanged('map_connection_id')) {
+                return;
+            }
+            $moved = MapCamera::query()->where('signature_id', $signature->id)->whereNull('map_connection_id')->update(['map_connection_id' => $signature->map_connection_id]);
+            MapCameraEvent::query()->where('signature_id', $signature->id)->whereNull('map_connection_id')->update(['map_connection_id' => $signature->map_connection_id]);
+            $mapId = MapCamera::query()->where('signature_id', $signature->id)->value('map_id');
+            if ($moved > 0 && $mapId !== null) {
+                CamerasChangedEvent::dispatch((int) $mapId);
+            }
         });
         // Patch 39: a hole number handed out is remembered by its system (numbers only count up).
         self::saved(function (Signature $signature): void {

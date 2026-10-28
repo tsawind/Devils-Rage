@@ -24,6 +24,7 @@ use Illuminate\Support\Str;
  * @property string $kind hole / structure / other / pi / screen
  * @property int|null $map_solarsystem_id
  * @property int|null $map_connection_id
+ * @property int|null $signature_id Patch 62b: a hole nobody has jumped yet (moves to its pipe once jumped)
  * @property string $path
  * @property string $quality
  * @property list<int>|null $guest_share_link_ids

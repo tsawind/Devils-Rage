@@ -24,7 +24,7 @@ import { computed, onBeforeUnmount, ref } from 'vue';
 const props = defineProps<{
     map: { id: number; slug: string; name: string };
     member: boolean;
-    places: { systems: { id: number; name: string }[]; connections: { id: number; name: string }[] };
+    places: { systems: { id: number; name: string }[]; connections: { id: number; name: string }[]; holes?: { id: number; name: string }[] };
 }>();
 
 const { cameras, events, pipeActivity } = useCameras();
@@ -51,8 +51,12 @@ const openClip = ref<number | null>(null);
 const shown = computed(() => cameras.value.filter((camera) => kindFilter.value === 'all' || camera.kind === kindFilter.value));
 const cameraName = (id: number) => cameras.value.find((camera) => camera.id === id)?.name ?? 'A camera (now off)';
 const pipeName = (id: number | null) => (id === null ? null : (props.places.connections.find((pipe) => pipe.id === id)?.name ?? null));
-const pinOf = (camera: { map_connection_id: number | null; map_solarsystem_id: number | null }) =>
-    pipeName(camera.map_connection_id) ?? props.places.systems.find((system) => system.id === camera.map_solarsystem_id)?.name ?? null;
+const pinOf = (camera: { map_connection_id: number | null; map_solarsystem_id: number | null; signature_id: number | null }) =>
+    pipeName(camera.map_connection_id) ??
+    props.places.holes?.find((hole) => hole.id === camera.signature_id)?.name ??
+    props.places.systems.find((system) => system.id === camera.map_solarsystem_id)?.name ??
+    null;
+const eventPlace = (event: TCameraEvent) => pipeName(event.map_connection_id) ?? props.places.holes?.find((hole) => hole.id === event.signature_id)?.name ?? null;
 const listed = computed(() => events.value.filter((event) => showDismissed.value || event.state !== 'dismissed'));
 
 const KIND_TEXT: Record<string, string> = { activation: '⚡ Activation', appeared: '＋ Ship(s) appeared', vanished: '－ Ship(s) left' };
@@ -160,7 +164,7 @@ const gridClass = computed(() => GRID[columns.value] ?? GRID[2]);
                         <span class="truncate text-muted-foreground">{{ cameraName(event.map_camera_id) }}</span>
                         <span class="ml-auto shrink-0 text-muted-foreground" :title="new Date(event.happened_at).toLocaleString()">{{ ago(event.happened_at) }}</span>
                     </div>
-                    <p v-if="pipeName(event.map_connection_id)" class="text-purple-300">{{ pipeName(event.map_connection_id) }}</p>
+                    <p v-if="eventPlace(event)" class="text-purple-300">{{ eventPlace(event) }}</p>
                     <button v-if="event.still_url && openClip !== event.id" type="button" class="relative overflow-hidden rounded" title="Play the clip" @click="openClip = event.id">
                         <img :src="event.still_url" alt="What the camera saw" class="aspect-video w-full object-cover" loading="lazy" />
                         <span v-if="event.clip_url" class="absolute inset-0 flex items-center justify-center bg-black/30 text-2xl text-white">▶</span>

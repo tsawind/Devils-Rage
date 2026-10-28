@@ -26,6 +26,7 @@ final class CameraActivityEvent implements ShouldBroadcastNow, ShouldDispatchAft
         public string $camera_name,
         public ?int $map_connection_id,
         public ?int $map_solarsystem_id,
+        public ?int $signature_id,
         public string $kind,
         public string $happened_at,
         public string $heard_by,

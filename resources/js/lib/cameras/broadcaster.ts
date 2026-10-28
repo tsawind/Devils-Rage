@@ -198,11 +198,15 @@ export class BoxCamera {
         this.lastFrame = now;
     }
 
-    /** Every beat: send a frame when it's due, and look for activity. */
-    beat(now: number, heard: boolean): void {
+    /**
+     * Every beat: send a frame when it's due, and look for activity. The sound is the whole
+     * computer's (every client mixed), so with several boxes listening it can't say which hole:
+     * then it only backs up what a box's picture saw ("both"); alone it counts by itself.
+     */
+    beat(now: number, heard: boolean, soundAlone = true): void {
         if (this.paused || !this.source.videoWidth) return;
         if (now - this.lastFrame >= 1000 / QUALITY[this.quality].fps) this.paint(now);
-        if (heard && this.listen) this.found({ kind: 'activation', strength: 70, heardBy: 'sound' });
+        if (heard && this.listen && (soundAlone || this.pending)) this.found({ kind: 'activation', strength: 70, heardBy: 'sound' });
         if (this.detect === 'off' || now - this.lastLook < 1000 / DETECT.fps) return;
         this.lastLook = now;
         const [, , , cropHeight] = this.crop();

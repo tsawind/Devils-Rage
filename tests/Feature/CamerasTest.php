@@ -10,6 +10,9 @@ use App\Models\Map;
 use App\Models\MapAccess;
 use App\Models\MapCamera;
 use App\Models\MapCameraEvent;
+use App\Models\MapConnection;
+use App\Models\MapSolarsystem;
+use App\Models\Signature;
 use App\Models\User;
 use App\Support\CameraPass;
 use Illuminate\Http\UploadedFile;
@@ -190,4 +193,35 @@ it('ends cameras that stopped checking in and removes expired clips', function (
     expect($camera->refresh()->status)->toBe('ended')
         ->and(MapCameraEvent::query()->count())->toBe(0);
     Storage::disk('local')->assertMissing('camera-events/old.webm');
+});
+
+it('watches a hole nobody has jumped yet, then follows it onto its new pipe', function () {
+    Event::fake([CameraActivityEvent::class, CamerasChangedEvent::class]);
+    $map = Map::factory()->create();
+    $daisy = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000005), 'alias' => 'Daisy']);
+    $hole = Signature::factory()->create(['map_solarsystem_id' => $daisy->id, 'signature_id' => 'ZDV-123']);
+    $owner = cameraPilot($map);
+    startCamera($map, $owner, ['signature_id' => $hole->id]);
+    $camera = MapCamera::query()->sole();
+    expect($camera->signature_id)->toBe($hole->id);
+
+    actingAs($owner);
+    postJson(route('map-cameras.events.store', $camera), ['kind' => 'activation'])->assertCreated();
+    Event::assertDispatched(CameraActivityEvent::class, fn (CameraActivityEvent $sent): bool => $sent->signature_id === $hole->id);
+
+    $alpha = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000006), 'alias' => 'A']);
+    $pipe = MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $daisy->id, 'to_map_solarsystem_id' => $alpha->id]);
+    $hole->update(['map_connection_id' => $pipe->id]);
+
+    expect($camera->refresh()->map_connection_id)->toBe($pipe->id)
+        ->and(MapCameraEvent::query()->sole()->map_connection_id)->toBe($pipe->id);
+});
+
+it('refuses a hole from another map', function () {
+    $map = Map::factory()->create();
+    $other = MapSolarsystem::factory()->for(Map::factory())->create(['solarsystem_id' => makeSolarsystem(31000009)]);
+    $hole = Signature::factory()->create(['map_solarsystem_id' => $other->id]);
+    actingAs(cameraPilot($map));
+
+    postJson(route('maps.cameras.store', $map), ['name' => 'x', 'kind' => 'hole', 'signature_id' => $hole->id])->assertUnprocessable();
 });

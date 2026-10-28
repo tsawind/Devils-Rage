@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $map_camera_id
  * @property int $map_id
  * @property int|null $map_connection_id
+ * @property int|null $signature_id Patch 62b: the unjumped hole the camera watched
  * @property string $kind activation / appeared / vanished
  * @property int $strength 0-100, how sure the camera was
  * @property string|null $clip_path

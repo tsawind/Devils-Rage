@@ -12,6 +12,7 @@ use App\Models\MapCameraEvent;
 use App\Models\MapConnection;
 use App\Models\MapShareLink;
 use App\Models\MapSolarsystem;
+use App\Models\Signature;
 use App\Models\User;
 use App\Support\CameraPass;
 use Illuminate\Http\JsonResponse;
@@ -40,7 +41,7 @@ final class MapCameraController extends Controller
         return Inertia::render('maps/Cameras', [
             'map' => ['id' => $map->id, 'slug' => $map->slug, 'name' => $map->name],
             'member' => $member,
-            'places' => $member ? $this->places($map) : ['systems' => [], 'connections' => []],
+            'places' => $member ? $this->places($map) : ['systems' => [], 'connections' => [], 'holes' => []],
         ]);
     }
 
@@ -57,7 +58,12 @@ final class MapCameraController extends Controller
         return Inertia::render('maps/CameraShare', [
             'map' => ['id' => $map->id, 'slug' => $map->slug, 'name' => $map->name],
             'places' => $this->places($map),
-            'characters' => $user->characters()->orderBy('name')->get(['id', 'name'])->map(fn (Character $character): array => ['id' => $character->id, 'name' => $character->name])->all(),
+            // Online characters first (the one whose window is being shared is almost always online).
+            'characters' => $user->characters()->with('characterStatus')->orderBy('name')->get()
+                ->sortByDesc(fn (Character $character): bool => (bool) $character->characterStatus?->is_online)
+                ->values()
+                ->map(fn (Character $character): array => ['id' => $character->id, 'name' => $character->name, 'online' => (bool) $character->characterStatus?->is_online])
+                ->all(),
             'share_links' => array_values(array_filter(MapShareLinkController::linksFor($map, $user), fn (array $link): bool => $link['kind'] === 'map')),
         ]);
     }
@@ -232,6 +238,7 @@ final class MapCameraController extends Controller
             'detect' => ['sometimes', 'boolean'],
             'map_solarsystem_id' => ['sometimes', 'nullable', 'integer', Rule::exists(MapSolarsystem::class, 'id')->where('map_id', $map->id)],
             'map_connection_id' => ['sometimes', 'nullable', 'integer', Rule::exists(MapConnection::class, 'id')->where('map_id', $map->id)],
+            'signature_id' => ['sometimes', 'nullable', 'integer', Rule::exists(Signature::class, 'id')->whereIn('map_solarsystem_id', $map->mapSolarsystems()->select('id'))],
             'guest_share_link_ids' => ['sometimes', 'nullable', 'array', 'max:20'],
             'guest_share_link_ids.*' => ['integer', Rule::exists(MapShareLink::class, 'id')->where('map_id', $map->id)],
             'character_id' => ['sometimes', 'nullable', 'integer'],
@@ -258,7 +265,7 @@ final class MapCameraController extends Controller
     /**
      * Systems and pipes a camera can be pinned to.
      *
-     * @return array{systems: list<array{id: int, name: string}>, connections: list<array{id: int, name: string}>}
+     * @return array{systems: list<array{id: int, name: string}>, connections: list<array{id: int, name: string}>, holes: list<array{id: int, name: string}>}
      */
     private function places(Map $map): array
     {
@@ -269,6 +276,18 @@ final class MapCameraController extends Controller
             'systems' => $systems->map(fn (MapSolarsystem $system): array => ['id' => $system->id, 'name' => (string) $names[$system->id]])->sortBy('name')->values()->all(),
             'connections' => $map->mapConnections()->get(['id', 'from_map_solarsystem_id', 'to_map_solarsystem_id'])
                 ->map(fn (MapConnection $connection): array => ['id' => $connection->id, 'name' => ($names[$connection->from_map_solarsystem_id] ?? '?').' → '.($names[$connection->to_map_solarsystem_id] ?? '?')])
+                ->sortBy('name')->values()->all(),
+            // Patch 62b: holes nobody has jumped yet (the dotted pipes): "Daisy → Alpha · ZDV (V753)".
+            'holes' => Signature::query()
+                ->whereIn('map_solarsystem_id', $systems->pluck('id'))
+                ->whereNull('map_connection_id')
+                ->whereRelation('signatureCategory', 'code', \App\Enums\SignatureCategory::Wormhole)
+                ->with('wormhole:id,name')
+                ->get()
+                ->map(fn (Signature $signature): array => [
+                    'id' => $signature->id,
+                    'name' => trim(($names[$signature->map_solarsystem_id] ?? '?').' → '.($signature->alias !== null && $signature->alias !== '' ? $signature->alias.' · ' : '').mb_strtoupper(mb_substr((string) $signature->signature_id, 0, 3)).($signature->wormhole !== null ? ' ('.$signature->wormhole->name.')' : '')),
+                ])
                 ->sortBy('name')->values()->all(),
         ];
     }
@@ -298,6 +317,7 @@ final class MapCameraController extends Controller
             'detect' => $camera->detect,
             'map_solarsystem_id' => $camera->map_solarsystem_id,
             'map_connection_id' => $camera->map_connection_id,
+            'signature_id' => $camera->signature_id,
             'owner' => $camera->owner_name,
             'character' => $camera->character_name,
             'mine' => $viewer instanceof User && $camera->user_id === $viewer->id,
@@ -315,6 +335,7 @@ final class MapCameraController extends Controller
             'id' => $event->id,
             'map_camera_id' => $event->map_camera_id,
             'map_connection_id' => $event->map_connection_id,
+            'signature_id' => $event->signature_id,
             'kind' => $event->kind,
             'strength' => $event->strength,
             'state' => $event->state,

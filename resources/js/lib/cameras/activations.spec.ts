@@ -1,4 +1,4 @@
-import { activityByConnection, activityLabel, addActivation, HOLD_CLOAK_SECONDS, liveActivations, secondsLeft, type TActivation } from '@/lib/cameras/activations';
+import { activityByConnection, activityBySignature, activityLabel, addActivation, HOLD_CLOAK_SECONDS, liveActivations, secondsLeft, type TActivation } from '@/lib/cameras/activations';
 import { describe, expect, it } from 'vitest';
 
 const now = Date.parse('2026-10-28T20:00:00Z');
@@ -38,6 +38,12 @@ describe('hole activations on the map', () => {
 
     it('a camera clock a little ahead counts as now', () => {
         expect(activityByConnection([at(-5)], now).get(7)?.secondsLeft).toBe(60);
+    });
+
+    it('a hole nobody has jumped yet gets its own pill, by signature', () => {
+        const list = [at(4, { connectionId: null, signatureId: 55 })];
+        expect(activityBySignature(list, now).get(55)?.count).toBe(1);
+        expect(activityByConnection(list, now).size).toBe(0);
     });
 
     it('ignores the same event twice and cameras not on a pipe', () => {

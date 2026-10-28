@@ -10,8 +10,10 @@ import { computed } from 'vue';
  * hole (click: its live picture). When a camera sees an activation, a purple "Activation"
  * pops above the pill for a minute with the jump-cloak countdown (×N when several).
  */
-const { connectionId, center, pillHeight, pillWidth, scale = 1, dot = false } = defineProps<{
-    connectionId: number;
+const { connectionId = null, signatureId = null, center, pillHeight, pillWidth, scale = 1, dot = false } = defineProps<{
+    connectionId?: number | null;
+    /** Patch 62b: a dotted pipe (hole nobody has jumped yet). */
+    signatureId?: number | null;
     center: Vec2;
     pillWidth: number;
     pillHeight: number;
@@ -19,9 +21,9 @@ const { connectionId, center, pillHeight, pillWidth, scale = 1, dot = false } = 
     dot?: boolean;
 }>();
 
-const { pipeActivity, pipeCameras } = useCameras();
-const activity = computed(() => pipeActivity.value.get(connectionId) ?? null);
-const cameras = computed(() => pipeCameras.value.get(connectionId) ?? []);
+const { pipeActivity, pipeCameras, holeActivity, holeCameras } = useCameras();
+const activity = computed(() => (connectionId !== null ? pipeActivity.value.get(connectionId) : signatureId !== null ? holeActivity.value.get(signatureId) : null) ?? null);
+const cameras = computed(() => (connectionId !== null ? pipeCameras.value.get(connectionId) : signatureId !== null ? holeCameras.value.get(signatureId) : null) ?? []);
 const label = computed(() => (activity.value ? activityLabel(activity.value) : ''));
 /** The first seconds after a jump: a ring pulses out from the popup. */
 const fresh = computed(() => (activity.value?.secondsLeft ?? 0) > 55);

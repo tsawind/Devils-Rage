@@ -22,8 +22,8 @@ import { computed, markRaw, onBeforeUnmount, reactive, ref, shallowRef, watch } 
 type TPlace = { id: number; name: string };
 const props = defineProps<{
     map: { id: number; slug: string; name: string };
-    places: { systems: TPlace[]; connections: TPlace[] };
-    characters: TPlace[];
+    places: { systems: TPlace[]; connections: TPlace[]; holes?: TPlace[] };
+    characters: (TPlace & { online?: boolean })[];
     share_links: { id: number; label: string | null; access: string; expires_at: string | null; permanent: boolean }[];
 }>();
 
@@ -94,7 +94,8 @@ async function pick(kind: 'window' | 'screen'): Promise<void> {
         const options = {
             video: { displaySurface: kind === 'window' ? 'window' : 'monitor', frameRate: 30 },
             // A browser can share sound only with the whole screen (not one window's).
-            audio: kind === 'screen' ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false } : false,
+            // Chrome offers "Share with system audio" for a window too; it's the whole computer's sound.
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
             systemAudio: kind === 'screen' ? 'include' : 'exclude',
             selfBrowserSurface: 'exclude',
             surfaceSwitching: 'include',
@@ -223,8 +224,9 @@ function learn(): void {
 }
 
 // ---- Cameras -----------------------------------------------------------------------------
-function pinFields(box: TBox): { map_connection_id: number | null; map_solarsystem_id: number | null } {
+function pinFields(box: TBox): { map_connection_id: number | null; map_solarsystem_id: number | null; signature_id: number | null } {
     const [kind, id] = box.pin.split(':');
+    if (kind === 'h') return { map_connection_id: null, map_solarsystem_id: null, signature_id: Number(id) };
     return { map_connection_id: kind === 'c' ? Number(id) : null, map_solarsystem_id: kind === 's' ? Number(id) : null };
 }
 
@@ -355,7 +357,8 @@ let lastLevels = 0;
 let lastHeartbeat = 0;
 const stopBeat = startBeat((now) => {
     const heard = ear.value?.listen(now) ?? false;
-    for (const run of runs.values()) run.camera.beat(now, heard);
+    const listening = [...runs.values()].filter((run) => run.camera.listen).length;
+    for (const run of runs.values()) run.camera.beat(now, heard, listening <= 1);
     if (now - lastLevels > 250) {
         lastLevels = now;
         levels.value = Object.fromEntries([...runs.entries()].map(([key, run]) => [key, run.camera.level]));
@@ -393,9 +396,9 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                 <div class="flex flex-wrap items-center gap-2">
                     <h1 class="mr-2 text-lg font-semibold">Share a camera <span class="text-sm font-normal text-muted-foreground">· {{ map.name }}</span></h1>
                     <Button size="sm" variant="outline" @click="pick('window')"><Video class="mr-1 size-4" /> An EVE window</Button>
-                    <Button size="sm" variant="outline" @click="pick('screen')"><Monitor class="mr-1 size-4" /> Whole screen (with sound)</Button>
+                    <Button size="sm" variant="outline" @click="pick('screen')"><Monitor class="mr-1 size-4" /> Whole screen</Button>
                     <select v-if="characters.length" v-model.number="characterId" class="h-8 rounded-md border border-border bg-background px-2 text-xs" title="Who is this client">
-                        <option v-for="character in characters" :key="character.id" :value="character.id">{{ character.name }}</option>
+                        <option v-for="character in characters" :key="character.id" :value="character.id">{{ character.online ? '● ' : '' }}{{ character.name }}{{ character.online ? ' (online)' : '' }}</option>
                     </select>
                     <span v-if="liveCount" class="ml-auto flex items-center gap-1 text-xs text-red-400"><span class="size-2 animate-pulse rounded-full bg-red-500" /> {{ liveCount }} live</span>
                 </div>
@@ -420,7 +423,7 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                 <div v-if="!source" class="flex flex-col gap-2 rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
                     <p class="font-medium text-foreground">Pick what to share, then draw boxes on it.</p>
                     <p>· <b>An EVE window</b>: one client. Draw a box over the hole in space, the overview, local or a structure; each box is its own camera on the map.</p>
-                    <p>· <b>Whole screen (with sound)</b>: the browser can only share sound with the whole screen, so pick this for the hole watch to listen for the activation sound.</p>
+                    <p>· <b>Sound</b>: tick “Share with system audio” in Chrome's picker. It's the whole computer's sound, every client mixed: mute the other EVE clients in Windows' Volume mixer (each client is listed there) so only the watching client is heard. With several boxes listening, the sound only backs up a jump a box's picture saw.</p>
                     <p>· Keep this tab open in its own window. Behind EVE is fine; minimised isn't. Nothing is sent to the game.</p>
                     <p v-if="boxes.length" class="text-xs">Your {{ boxes.length }} box{{ boxes.length === 1 ? '' : 'es' }} from last time come back when you share.</p>
                 </div>
@@ -460,6 +463,9 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                         <label>On the map</label>
                         <select v-model="box.pin" class="h-7 rounded border border-border bg-background px-1">
                             <option value="">Not pinned</option>
+                            <optgroup v-if="places.holes?.length" label="Holes not jumped yet (dotted)">
+                                <option v-for="hole in places.holes" :key="hole.id" :value="`h:${hole.id}`">{{ hole.name }}</option>
+                            </optgroup>
                             <optgroup label="Holes (pipes)">
                                 <option v-for="pipe in places.connections" :key="pipe.id" :value="`c:${pipe.id}`">{{ pipe.name }}</option>
                             </optgroup>
@@ -480,7 +486,7 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                         <label>Listen</label>
                         <label class="flex items-center gap-2" :class="audioTrack ? '' : 'opacity-50'">
                             <input v-model="box.listen" type="checkbox" :disabled="!audioTrack" />
-                            <span>{{ audioTrack ? 'Activation sound counts for this box' : 'Needs the whole screen with sound' }}</span>
+                            <span>{{ audioTrack ? 'Activation sound counts for this box' : 'Share again with “Share with system audio” on' }}</span>
                         </label>
                         <template v-if="share_links.length">
                             <label class="self-start">Guests</label>
@@ -502,7 +508,7 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                     <p class="font-semibold">Activation sound</p>
                     <p class="text-muted-foreground">
                         {{ learned ? 'Learned. Teach it again if it misses jumps or hears other things.' : 'Not learned yet: press Learn, then let a ship jump (or play the sound) within 30 s.' }}
-                        Comms in the same sound can set it off; turn EVE's other sounds down if so.
+                        Discord and other clients are in the same sound: mute what you can in Windows' Volume mixer (each EVE client has its own slider there).
                     </p>
                     <Button size="sm" variant="outline" class="h-7 self-start" :disabled="learning" @click="learn">{{ learning ? 'Listening… (30 s)' : 'Learn' }}</Button>
                 </div>
