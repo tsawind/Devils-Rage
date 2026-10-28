@@ -98,5 +98,87 @@ $fac = ['character_id' => 3, 'planet_id' => 30, 'name' => 'J1 IV', 'type' => 'te
   'extractors' => [], 'factories' => [$adv(50)], 'storage' => []];
 $r2 = $planner->run([3 => ['name' => 'Fac', 'planets' => [$fac]]]);
 check('factory planet -> clear', $r2['characters'] === [] && count($r2['clear']) === 1);
+
+// ---------- Patch 59: raw buffers, piling up / running low, launch vs haul, fresh spots, worth ----------
+$gt = $types + [2310 => ['name' => 'Noble Gas', 'tier' => 0, 'volume' => 0.01], 2311 => ['name' => 'Reactive Gas', 'tier' => 0, 'volume' => 0.01],
+  2392 => ['name' => 'Oxidizing Compound', 'tier' => 1], 3683 => ['name' => 'Oxygen', 'tier' => 1], 2317 => ['name' => 'Oxides', 'tier' => 2, 'volume' => 1.5]];
+$gx = fn (int $pin, int $type, string $name, int $qty) => ['pin_id' => $pin, 'product' => $type, 'product_name' => $name, 'cycle_time' => 1800, 'qty' => $qty,
+  'heads' => 6, 'lat' => 1.0, 'lon' => 1.0, 'install' => $now - 100 * $h, 'expiry' => $now + 64 * $h];
+$gb = fn (int $pin, int $in, int $out) => ['pin_id' => $pin, 'kind' => 'basic', 'inputs' => [$in], 'outputs' => [$out]];
+$store = fn (int $pin, int $type, string $name, int $amount, ?int $was) => ['pin_id' => $pin, 'kind' => 'storage facility', 'capacity' => 12000, 'used' => $amount * 0.01,
+  'contents' => $amount > 0 ? [['type_id' => $type, 'name' => $name, 'tier' => 0, 'amount' => $amount]] : [],
+  'previous' => $was === null ? null : ['at' => $now - 24 * $h, 'amounts' => $was > 0 ? [$type => $was] : []]];
+$gas = ['character_id' => 9, 'planet_id' => 77, 'name' => 'J145735 VIII', 'type' => 'gas', 'level' => 5, 'system_id' => 1, 'last_update' => $now,
+  'extractors' => [$gx(3, 2310, 'Noble Gas', 6000), $gx(10, 2311, 'Reactive Gas', 6000)],
+  'factories' => [$gb(5, 2311, 2392), $gb(7, 2311, 2392), $gb(6, 2310, 3683), $gb(9, 2310, 3683),
+    ['pin_id' => 2, 'kind' => 'advanced', 'inputs' => [2392, 3683], 'outputs' => [2317]], ['pin_id' => 4, 'kind' => 'advanced', 'inputs' => [2392, 3683], 'outputs' => [2317]]],
+  'storage' => [['pin_id' => 1, 'kind' => 'launchpad', 'capacity' => 10000, 'used' => 2000, 'contents' => []],
+    $store(8, 2310, 'Noble Gas', 500000, 500000), $store(11, 2311, 'Reactive Gas', 500000, 500000)]];
+$gp = new PiPlanner($gt, [], $now);
+$kinds59 = fn (array $steps): array => array_values(array_filter(array_column($steps, 'kind'), fn (string $k): bool => $k !== 'restart'));
+$only59 = fn (array $steps): array => array_values(array_filter($steps, fn (array $st): bool => $st['kind'] !== 'restart'));
+
+$lines = $gp->rawLines($gas);
+check('raw lines through storage: 12,000 / h each', $lines['Noble Gas']['need'] === 12000 && $lines['Reactive Gas']['per_hour'] === 12000);
+$gi = $gp->planet($gas);
+check('steady buffers: nothing to do', $kinds59($gp->steps($gi)) === []);
+check('buffer trend 0 / h', $gi['buffers']['Noble Gas']['per_hour'] === 0);
+
+$pile = $gas; $pile['storage'][1] = $store(8, 2310, 'Noble Gas', 1000000, 700000);
+$pi = $gp->planet($pile);
+check('piling: +12,500 / h', $pi['buffers']['Noble Gas']['per_hour'] === 12500);
+$ps = $only59($gp->steps($pi));
+check('piling step (got '.implode(',', array_column($ps, 'kind')).')', array_column($ps, 'kind') === ['pile'] && str_contains($ps[0]['title'], 'Noble Gas is piling up'));
+
+$drain = $gas; $drain['storage'][2] = $store(11, 2311, 'Reactive Gas', 24000, 72000);
+$ds = $only59($gp->steps($gp->planet($drain)));
+check('running low: -2,000 / h, dry in 12 h', array_column($ds, 'kind') === ['drain'] && str_contains($ds[0]['why'], '2,000 / h') && str_contains($ds[0]['why'], '12 h'));
+$emptied = $gas; $emptied['storage'][2] = $store(11, 2311, 'Reactive Gas', 0, 30000);
+check('emptied store still has a trend', $gp->planet($emptied)['buffers']['Reactive Gas']['per_hour'] === -1250);
+$noHistory = $gas; $noHistory['storage'][1] = $store(8, 2310, 'Noble Gas', 1000000, null);
+check('no earlier reading: no trend', $gp->planet($noHistory)['buffers']['Noble Gas']['per_hour'] === null);
+
+// Balance + storage agree: the balance step says so and no separate pile / drain step.
+$both = $drain; $both['extractors'][1]['qty'] = 4000; $both['storage'][1] = $store(8, 2310, 'Noble Gas', 900000, 600000);
+$bs = $only59($gp->steps($gp->planet($both)));
+check('balance mentions storage (got '.implode(',', array_column($bs, 'kind')).')', array_column($bs, 'kind') === ['balance'] && str_contains($bs[0]['why'], 'storage agrees') && str_contains($bs[0]['why'], 'piling up'));
+
+// Launchpad: launch to the customs office when it fits, haul when it doesn't.
+$full = $gas; $full['storage'][0]['used'] = 9500; $full['customs'] = ['used' => 20000.0, 'capacity' => 35000, 'contents' => []];
+$ls = $only59($gp->steps($gp->planet($full)));
+check('launch when the customs office has room', array_column($ls, 'kind') === ['launch'] && str_contains($ls[0]['why'], '15,000 m³ free'));
+$full['customs']['used'] = 30000.0;
+$hs = $only59($gp->steps($gp->planet($full)));
+check('haul when it does not', array_column($hs, 'kind') === ['haul'] && str_contains($hs[0]['why'], 'bring a hauler'));
+$full['storage'][1] = $store(8, 2310, 'Noble Gas', 1150000, 1150000);
+check('a full raw storage is not a haul', in_array('pile', array_column($gp->steps($gp->planet($full)), 'kind'), true));
+
+// Fresh spot: losing 1 of 12 heads pays from about 8%, 2 heads from about 17%.
+check('fresh spot 25% / 12 heads -> 10 heads ok', str_contains($gp->freshSpotAdvice(25, 12), 'only 10 heads'));
+check('fresh spot 12% / 12 heads -> 11 ok', str_contains($gp->freshSpotAdvice(12, 12), 'keep 11 heads'));
+check('fresh spot 6% / 12 heads -> keep all', str_contains($gp->freshSpotAdvice(6, 12), 'all 12 heads'));
+
+// Worth: 2 advanced x 5 Oxides / h = 240 / day, held back by a short line.
+$prices = [2317 => ['buy' => 9000.0, 'sell' => 11000.0]];
+$v = $gp->value($gi, $prices);
+check('worth 240 Oxides / day: buy 2.16 m, split 2.4 m', $v['items'][0]['per_day'] === 240 && abs($v['buy'] - 2160000) < 1 && abs($v['split'] - 2400000) < 1 && abs($v['m3'] - 360) < 0.01);
+$short = $gas; $short['extractors'][1]['qty'] = 4500;
+check('short line (75%) -> 180 / day', $gp->value($gp->planet($short), $prices)['items'][0]['per_day'] === 180);
+$rawOnly = $gas; $rawOnly['factories'] = [];
+$rv = $gp->value($gp->planet($rawOnly), [2310 => ['buy' => 100.0, 'sell' => 120.0]]);
+check('extraction-only planet sells raw (288,000 Noble Gas / day)', $rv['items'][0]['per_day'] === 288000 && abs($rv['buy'] - 28800000) < 1);
+
+// Customs offices go to the planet whose goods they hold.
+$other = $gas; $other['planet_id'] = 78; foreach ($other['factories'] as &$f) { $f['outputs'] = $f['kind'] === 'advanced' ? [3689] : $f['outputs']; } unset($f);
+$other['extractors'] = [$gx(3, 2267, 'Base Metals', 6000)];
+$placed = $gp->placeCustoms([$gas, $other], [
+  ['location_id' => 1, 'used' => 900.0, 'contents' => [['type_id' => 2317]]],
+  ['location_id' => 2, 'used' => 50.0, 'contents' => [['type_id' => 3689], ['type_id' => 2267]]],
+  ['location_id' => 3, 'used' => 10.0, 'contents' => [['type_id' => 2392]]],
+  ['location_id' => 4, 'used' => 10.0, 'contents' => [['type_id' => 9999]]],
+], 35000);
+check('Oxides office -> planet 77, Mechanical Parts -> 78', ($placed['placed'][77]['used'] ?? 0) === 900.0 && ($placed['placed'][78]['used'] ?? 0) === 50.0);
+check('ambiguous and unknown offices unplaced', count($placed['unplaced']) === 2);
+
 echo $fails === 0 ? "\nALL PASSED\n" : "\n$fails FAILED\n";
 exit($fails === 0 ? 0 : 1);

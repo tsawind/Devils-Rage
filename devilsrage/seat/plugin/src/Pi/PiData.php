@@ -20,6 +20,9 @@ final class PiData
     /** Storage room per kind of pin, in m3. */
     private const CAPACITY = ['launchpad' => 10000, 'storage facility' => 12000, 'command center' => 500];
 
+    /** Patch 59: a customs office holds this much per planet (per pilot). */
+    public const CUSTOMS_CAPACITY = 35000;
+
     /** EVE's group ids for PI commodities by tier, in case a volume doesn't say. */
     private const GROUP_TIER = [1042 => 1, 1034 => 2, 1040 => 3, 1041 => 4];
 
@@ -55,6 +58,7 @@ final class PiData
             ->keyBy(fn ($row): string => $row->character_id.':'.$row->extractor_id);
         $routes = DB::table('character_planet_routes')->whereIn('character_id', $characterIds)->get()->groupBy($key);
         $contents = DB::table('character_planet_contents')->whereIn('character_id', $characterIds)->get()->groupBy(fn ($row): string => $row->character_id.':'.$row->pin_id);
+        $earlier = $this->storageHistory($characterIds);
 
         $typeIds = $pins->flatten(1)->pluck('type_id')
             ->merge($extractors->pluck('product_type_id'))
@@ -109,10 +113,18 @@ final class PiData
                     $used = 0.0;
                     $held = [];
                     foreach ($contents->get($pinKey, collect()) as $content) {
-                        $used += (float) $content->amount * ($this->types[(int) $content->type_id]['volume'] ?? 0.0);
-                        $held[] = ['name' => $this->types[(int) $content->type_id]['name'] ?? 'Type '.$content->type_id, 'amount' => (int) $content->amount];
+                        $typeId = (int) $content->type_id;
+                        $used += (float) $content->amount * ($this->types[$typeId]['volume'] ?? 0.0);
+                        $held[] = ['type_id' => $typeId, 'name' => $this->types[$typeId]['name'] ?? 'Type '.$typeId, 'tier' => $this->types[$typeId]['tier'] ?? -1, 'amount' => (int) $content->amount];
                     }
-                    $result['storage'][] = ['pin_id' => (int) $pin->pin_id, 'kind' => $kind, 'capacity' => self::CAPACITY[$kind], 'used' => $used, 'contents' => $held];
+                    $result['storage'][] = [
+                        'pin_id' => (int) $pin->pin_id,
+                        'kind' => $kind,
+                        'capacity' => self::CAPACITY[$kind],
+                        'used' => $used,
+                        'contents' => $held,
+                        'previous' => $this->previousContents($earlier[$pinKey] ?? [], $result['last_update']),
+                    ];
                 }
             }
             $byCharacter[(int) $planet->character_id][] = $result;
@@ -122,6 +134,80 @@ final class PiData
         }
 
         return $byCharacter;
+    }
+
+    /**
+     * Patch 59: PI goods sitting in customs offices, per character, from SeAT's asset list.
+     * EVE lists items in a customs office under the office's own id, which isn't one of the
+     * pilot's items, a station or a structure; anything else with PI goods in it is left out.
+     *
+     * @param  list<int>  $characterIds
+     * @return array<int, list<array{location_id: int, used: float, contents: list<array{type_id: int, name: string, tier: int, amount: int}>}>>
+     */
+    public function customs(array $characterIds): array
+    {
+        if ($characterIds === []) {
+            return [];
+        }
+        $rows = DB::table('character_assets as a')
+            ->join('invTypes as t', 't.typeID', '=', 'a.type_id')
+            ->join('invGroups as g', 'g.groupID', '=', 't.groupID')
+            ->whereIn('a.character_id', $characterIds)
+            ->whereIn('g.categoryID', [42, 43])
+            ->whereIn('a.location_type', ['other', 'item'])
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('character_assets as c')->whereColumn('c.item_id', 'a.location_id'))
+            ->whereNotExists(fn ($q) => $q->selectRaw('1')->from('universe_structures as u')->whereColumn('u.structure_id', 'a.location_id'))
+            ->select('a.character_id', 'a.location_id', 'a.type_id', 'a.quantity')
+            ->get();
+        $this->loadTypes($rows->pluck('type_id')->map(fn ($id): int => (int) $id)->unique()->values()->all());
+
+        $offices = [];
+        foreach ($rows as $row) {
+            $typeId = (int) $row->type_id;
+            $office = &$offices[(int) $row->character_id][(int) $row->location_id];
+            $office ??= ['location_id' => (int) $row->location_id, 'used' => 0.0, 'contents' => []];
+            $office['used'] += (int) $row->quantity * ($this->types[$typeId]['volume'] ?? 0.0);
+            $office['contents'][] = ['type_id' => $typeId, 'name' => $this->types[$typeId]['name'] ?? 'Type '.$typeId, 'tier' => $this->types[$typeId]['tier'] ?? -1, 'amount' => (int) $row->quantity];
+            unset($office);
+        }
+
+        return array_map('array_values', $offices);
+    }
+
+    /**
+     * Patch 59: remembers what every launchpad / storage facility held each time a colony was
+     * opened in game (run hourly). An empty store is remembered too (type 0).
+     */
+    public function snapshotStorage(): int
+    {
+        $planets = DB::table('character_planets')->whereNotNull('last_update')->get(['character_id', 'planet_id', 'last_update']);
+        if ($planets->isEmpty()) {
+            return 0;
+        }
+        $pins = DB::table('character_planet_pins')->get(['character_id', 'planet_id', 'pin_id', 'type_id']);
+        $this->loadTypes($pins->pluck('type_id')->map(fn ($id): int => (int) $id)->unique()->values()->all());
+        $contents = DB::table('character_planet_contents')->get()->groupBy(fn ($row): string => $row->character_id.':'.$row->pin_id);
+        $seen = $planets->keyBy(fn ($row): string => $row->character_id.':'.$row->planet_id);
+
+        $rows = [];
+        foreach ($pins as $pin) {
+            $planet = $seen->get($pin->character_id.':'.$pin->planet_id);
+            if ($planet === null || ! isset(self::CAPACITY[$this->pinKind((int) $pin->type_id)])) {
+                continue;
+            }
+            $base = ['character_id' => $pin->character_id, 'planet_id' => $pin->planet_id, 'pin_id' => $pin->pin_id, 'seen_at' => $planet->last_update];
+            $rows[] = $base + ['type_id' => 0, 'amount' => 0];
+            foreach ($contents->get($pin->character_id.':'.$pin->pin_id, collect()) as $content) {
+                $rows[] = $base + ['type_id' => (int) $content->type_id, 'amount' => (int) $content->amount];
+            }
+        }
+        $added = 0;
+        foreach (array_chunk($rows, 500) as $chunk) {
+            $added += DB::table('devilsrage_pi_storage')->insertOrIgnore($chunk);
+        }
+        DB::table('devilsrage_pi_storage')->where('seen_at', '<', now()->subDays(30))->delete();
+
+        return $added;
     }
 
     /**
@@ -269,6 +355,44 @@ final class PiData
         DB::table('devilsrage_pi_runs')->where('install_time', '<', now()->subDays(180))->delete();
 
         return $count;
+    }
+
+    /**
+     * @param  list<int>  $characterIds
+     * @return array<string, array<string, array<int, int>>>  "character:pin" => seen_at => type id => amount
+     */
+    private function storageHistory(array $characterIds): array
+    {
+        $history = [];
+        $rows = DB::table('devilsrage_pi_storage')
+            ->whereIn('character_id', $characterIds)
+            ->where('seen_at', '>=', now()->subDays(30))
+            ->get(['character_id', 'pin_id', 'type_id', 'amount', 'seen_at']);
+        foreach ($rows as $row) {
+            $history[$row->character_id.':'.$row->pin_id][(string) $row->seen_at][(int) $row->type_id] = (int) $row->amount;
+        }
+
+        return $history;
+    }
+
+    /**
+     * The last time before $lastUpdate this store was seen, and what it held then.
+     *
+     * @param  array<string, array<int, int>>  $snapshots
+     * @return array{at: int, amounts: array<int, int>}|null
+     */
+    private function previousContents(array $snapshots, ?int $lastUpdate): ?array
+    {
+        $best = null;
+        foreach ($snapshots as $seenAt => $amounts) {
+            $at = Carbon::parse($seenAt, 'UTC')->getTimestamp();
+            if (($lastUpdate === null || $at < $lastUpdate) && ($best === null || $at > $best['at'])) {
+                unset($amounts[0]);
+                $best = ['at' => $at, 'amounts' => $amounts];
+            }
+        }
+
+        return $best;
     }
 
     /** @param  list<int>  $typeIds */

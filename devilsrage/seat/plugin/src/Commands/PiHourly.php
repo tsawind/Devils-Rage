@@ -24,8 +24,11 @@ class PiHourly extends Command
 
     public function handle(DiscordDm $dm, PiDigest $digest): int
     {
-        $new = (new PiData())->snapshot();
+        $data = new PiData();
+        $new = $data->snapshot();
         $this->line("Extractor programs recorded: {$new} new");
+        $stores = $data->snapshotStorage();
+        $this->line("Storage readings recorded: {$stores} new");
 
         $settings = AccountSetting::query()->whereIn('pi_alerts', ['due', 'stopped'])->get();
         foreach ($settings as $setting) {

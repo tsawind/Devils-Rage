@@ -1,8 +1,19 @@
 <!doctype html>
 {{-- Patch 50: the app's PI screen (works in a browser too). --}}
 @php
-  $kindLabel = ['restart' => 'Restart', 'balance' => 'Balance', 'move' => 'Move heads', 'submit' => 'Submit once', 'haul' => 'Haul', 'timer' => 'Same timer'];
-  $kindClass = ['restart' => 'bad', 'balance' => 'warn', 'move' => 'warn', 'submit' => 'muted', 'haul' => 'info', 'timer' => 'info'];
+  $kindLabel = ['restart' => 'Restart', 'balance' => 'Balance', 'move' => 'Move heads', 'submit' => 'Submit once', 'haul' => 'Haul', 'launch' => 'Launch', 'pile' => 'Piling up', 'drain' => 'Running low', 'timer' => 'Same timer'];
+  $kindClass = ['restart' => 'bad', 'balance' => 'warn', 'move' => 'warn', 'submit' => 'muted', 'haul' => 'info', 'launch' => 'info', 'pile' => 'warn', 'drain' => 'warn', 'timer' => 'info'];
+  $isk = function (float $v): string {
+      $a = abs($v);
+      return match (true) {
+          $a >= 1e9 => number_format($v / 1e9, 2).' b',
+          $a >= 1e6 => number_format($v / 1e6, 1).' m',
+          $a >= 1e3 => number_format($v / 1e3, 0).' k',
+          default => number_format($v, 0),
+      };
+  };
+  $valueTitle = fn (array $v, int $days = 1): string => 'Buy '.$isk($v['buy'] * $days).' · split '.$isk($v['split'] * $days).' · sell '.$isk($v['sell'] * $days).' ISK';
+  $meterColor = fn (int $pct): string => $pct >= 90 ? '#d6454c' : ($pct >= 70 ? '#e0a43a' : '#4f8f5c');
   $statusLabel = ['stopped' => ['Stopped', 'bad'], 'soon' => ['Stops soon', 'warn'], 'ok' => ['Running', 'ok'], 'factory' => ['Factories only', 'muted']];
   $setup = function (array $info): string {
       $p = $info['planet'];
@@ -171,8 +182,9 @@
   .toast { color: var(--ok); font-size: 12px; }
   .note { font-size: 12px; color: var(--muted); max-width: 860px; margin: 0; }
   .stores { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
-  .store { display: grid; grid-template-columns: 74px 54px auto; gap: 7px; align-items: center; font-size: 12.5px; white-space: nowrap; cursor: default; }
+  .store { display: grid; grid-template-columns: 112px 54px auto; gap: 7px; align-items: center; font-size: 12.5px; white-space: nowrap; cursor: default; }
   .store .meter { height: 6px; }
+  .store > span:first-child { overflow: hidden; text-overflow: ellipsis; }
   .tpl { padding: 13px 16px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #202027; }
   .tpl:first-of-type { border-top: 0; }
   .tpl .row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
@@ -309,7 +321,7 @@
     @endforeach
 
     @if($planetCount > 0)
-      <p class="note">Extractor stop times come straight from EVE. "Balance" compares each raw line with what its basic factories use (3,000 every 30 minutes each) and only appears when a factory line goes short. "Move heads" compares with earlier programs on the same spot, which we start recording now, so it needs a restart or two before it can say anything. Storage is as of the last time the planet was opened in game.</p>
+      <p class="note">Extractor stop times come straight from EVE. "Balance" compares each raw line with what its basic factories use (3,000 every 30 minutes each) and only appears when a factory line goes short. "Move heads" compares with earlier programs on the same spot, which we start recording now, so it needs a restart or two before it can say anything. "Piling up" / "Running low" watch the raw storage between extractor and factories (compared with the time before the colony was opened). "Launch" means the launchpad fits in the customs office, so no hauler is needed. Storage is as of the last time the planet was opened in game.</p>
     @endif
   </section>
 
@@ -319,16 +331,29 @@
       <div class="card stat"><div class="label">Colonies</div><div class="v">{{ $planetCount }}</div><div class="muted small">on {{ count($colonies) }} {{ count($colonies) === 1 ? 'character' : 'characters' }}</div></div>
       <div class="card stat" style="border-color: {{ $stoppedCount ? '#6b1a1f' : 'var(--line)' }}"><div class="label">Stopped now</div><div class="v">{{ $stoppedCount }}</div></div>
       <div class="card stat" style="border-color: {{ $soonCount ? '#6b4310' : 'var(--line)' }}"><div class="label">Stops within 24 h</div><div class="v">{{ $soonCount }}</div></div>
+      <div class="card stat" title="{{ $valueTitle($totals, 7) }} per week"><div class="label">Worth per day (split)</div><div class="v">{{ $isk($totals['split']) }}</div><div class="muted small">buy {{ $isk($totals['buy']) }} · sell {{ $isk($totals['sell']) }} · week {{ $isk($totals['split'] * 7) }}</div></div>
+      <div class="card stat"><div class="label">Waiting to move</div><div class="v">{{ number_format($totals['pad'] + $totals['customs']) }} m³</div><div class="muted small">launchpads {{ number_format($totals['pad']) }} · customs offices {{ number_format($totals['customs']) }}</div></div>
     </div>
     @foreach($colonies as $c)
       <section class="card">
         <div class="sect">
           <h2>{{ $c['name'] }}</h2>
           <span class="muted small">{{ count($c['planets']) }}@if($c['slots']) of {{ $c['slots'] }}@endif colonies</span>
+          <span class="grow"></span>
+          @php
+            $t = $c['totals'];
+            $free = $t['customs_capacity'] - $t['customs'];
+          @endphp
+          <span class="small" title="{{ $valueTitle($t) }} per day; {{ $valueTitle($t, 7) }} per week"><b>{{ $isk($t['split']) }}</b> <span class="muted">ISK / day split · {{ $isk($t['split'] * 7) }} / week</span></span>
+          <span class="small" title="Launchpads {{ number_format($t['pad']) }} m³, customs offices {{ number_format($t['customs']) }} of {{ number_format($t['customs_capacity']) }} m³">
+            @if($t['pad'] > 0 && $t['pad'] <= $free)<span class="chip ok">Just launch</span> <span class="muted">{{ number_format($t['pad']) }} m³ fits the customs offices</span>
+            @elseif($t['pad'] > 0)<span class="chip warn">Haul</span> <span class="muted">{{ number_format($t['pad'] + $t['customs']) }} m³ waiting, customs offices nearly full</span>
+            @else<span class="muted">Customs offices {{ number_format($t['customs']) }} m³</span>@endif
+          </span>
         </div>
         <div class="scroll">
           <table>
-            <thead><tr><th scope="col">Planet</th><th scope="col">Extractors</th><th scope="col">Making</th><th scope="col">Factories</th><th scope="col">Storage</th><th scope="col">Last opened in game</th><th scope="col"><span hidden>Copy</span></th></tr></thead>
+            <thead><tr><th scope="col">Planet</th><th scope="col">Extractors</th><th scope="col">Making</th><th scope="col">Factories</th><th scope="col">Storage</th><th scope="col">Customs office</th><th scope="col">Worth / day</th><th scope="col">Last opened in game</th><th scope="col"><span hidden>Copy</span></th></tr></thead>
             <tbody>
               @foreach($c['planets'] as $info)
                 <tr>
@@ -354,14 +379,33 @@
                       <div class="stores">
                         @foreach($info['stores'] as $store)
                           @php $pct = (int) round($store['fill'] * 100); @endphp
+                          @php
+                            $raw = $store['kind'] === 'storage facility' ? collect($store['contents'])->firstWhere('tier', 0) : null;
+                            $buffer = $raw ? ($info['buffers'][$raw['name']] ?? null) : null;
+                          @endphp
                           <div class="store" title="{{ $storeTitle($store) }}">
-                            <span>{{ $storeLabel[$store['kind']] ?? ucfirst($store['kind']) }}</span>
-                            <div class="meter"><i style="width: {{ min(100, $pct) }}%; background: {{ $pct >= 90 ? '#d6454c' : ($pct >= 70 ? '#e0a43a' : '#4f8f5c') }}"></i></div>
-                            <span>{{ $pct }}%</span>
+                            <span>{{ $raw ? $raw['name'] : ($storeLabel[$store['kind']] ?? ucfirst($store['kind'])) }}</span>
+                            <div class="meter"><i style="width: {{ min(100, $pct) }}%; background: {{ $meterColor($pct) }}"></i></div>
+                            <span>{{ $pct }}%@if($buffer && $buffer['per_hour'] !== null && $buffer['per_hour'] !== 0)
+                                <span style="color: {{ $buffer['per_hour'] > 0 ? 'var(--warn)' : 'var(--bad)' }}" title="Since the time before it was opened">{{ $buffer['per_hour'] > 0 ? '▲' : '▼' }} {{ number_format(abs($buffer['per_hour'])) }}/h</span>@endif</span>
                           </div>
                         @endforeach
                       </div>
                     @else — @endif
+                  </td>
+                  <td>
+                    @if($info['customs'])
+                      @php $cpct = (int) round(100 * $info['customs']['used'] / $info['customs']['capacity']); @endphp
+                      <div class="store" title="{{ $storeTitle($info['customs']) }}">
+                        <span>{{ number_format($info['customs']['used']) }} m³</span>
+                        <div class="meter"><i style="width: {{ min(100, $cpct) }}%; background: {{ $meterColor($cpct) }}"></i></div>
+                        <span>{{ $cpct }}%</span>
+                      </div>
+                    @else <span class="muted">—</span> @endif
+                  </td>
+                  <td style="white-space: nowrap" title="{{ $valueTitle($info['value'])."\n".collect($info['value']['items'])->map(fn (array $item): string => number_format($item['per_day']).' '.$item['name'].' / day')->implode("\n") }}">
+                    @if($info['value']['split'] > 0){{ $isk($info['value']['split']) }}@if($info['supply'] !== null && $info['supply'] < 0.995)<div class="small" style="color: var(--warn)">{{ (int) round($info['supply'] * 100) }}% (short raw)</div>@endif
+                    @else <span class="muted">—</span> @endif
                   </td>
                   <td class="muted">@if($info['planet']['last_update'])<span data-ts="{{ $info['planet']['last_update'] }}" data-fmt="ago"></span>@else — @endif</td>
                   <td style="text-align: right"><button type="button" class="btn sm" data-copy="{{ $info['planet']['name'] }}">Copy name</button></td>
@@ -375,7 +419,7 @@
     @if($withoutPi > 0)
       <p class="note">{{ $withoutPi }} other {{ $withoutPi === 1 ? 'character has' : 'characters have' }} no colonies on SeAT.</p>
     @endif
-    <p class="note">Stop times are exact. Storage and factory numbers are only as fresh as "last opened in game": EVE shares them when the colony is opened. Hover a storage bar to see what's in it.</p>
+    <p class="note">Stop times are exact. Storage and factory numbers are only as fresh as "last opened in game": EVE shares them when the colony is opened. Hover a bar to see what's in it. ▲ / ▼ is how a raw buffer changed per hour between the last two times the colony was opened. Customs office stock comes from your assets (SeAT refreshes them about hourly) and is matched to a planet by what's in it; each holds {{ number_format(\DevilsRage\Seat\Pi\PiData::CUSTOMS_CAPACITY) }} m³. Worth is the top product at {{ $priceSource }} prices, held back when a raw line is short, before customs tax.</p>
   </section>
 
   {{-- ============================== Templates (Patch 59) ============================== --}}
@@ -461,6 +505,7 @@
         <div class="card stat"><div class="label">Colonies</div><div class="v">{{ $corp['colonies'] }}</div></div>
         <div class="card stat" style="border-color: {{ $corp['stopped'] ? '#6b1a1f' : 'var(--line)' }}"><div class="label">Stopped now</div><div class="v">{{ $corp['stopped'] }}</div><div class="muted small">{{ $corp['soon'] }} more within 24 h</div></div>
         <div class="card stat"><div class="label">Unused colony slots</div><div class="v">{{ $corp['unused'] }}</div><div class="muted small">on characters already doing PI</div></div>
+        <div class="card stat" title="{{ $valueTitle($corp['value'], 7) }} per week"><div class="label">Corp PI per day (split)</div><div class="v">{{ $isk($corp['value']['split']) }}</div><div class="muted small">buy {{ $isk($corp['value']['buy']) }} · sell {{ $isk($corp['value']['sell']) }} · week {{ $isk($corp['value']['split'] * 7) }}</div></div>
       </div>
       <div class="two">
         <section class="card wide">
@@ -488,15 +533,25 @@
           <section class="card">
             <div class="sect"><h2>What the corp makes</h2><span class="muted small">per day, from running colonies</span></div>
             <table>
-              <thead><tr><th scope="col">Product</th><th scope="col">Tier</th><th scope="col" style="text-align: right; padding-right: 16px">Per day</th></tr></thead>
+              <thead><tr><th scope="col">Product</th><th scope="col">Tier</th><th scope="col" style="text-align: right">Per day</th><th scope="col" style="text-align: right; padding-right: 16px">ISK / day</th></tr></thead>
               <tbody>
                 @forelse($corp['products'] as $name => $p)
-                  <tr><td>{{ $name }}</td><td class="muted">{{ $p['tier'] === 0 ? 'Raw' : 'P'.$p['tier'] }}</td><td style="text-align: right; padding-right: 16px; font-variant-numeric: tabular-nums">{{ number_format($p['per_day']) }}</td></tr>
+                  <tr><td>{{ $name }}</td><td class="muted">{{ $p['tier'] === 0 ? 'Raw' : 'P'.$p['tier'] }}</td><td style="text-align: right; font-variant-numeric: tabular-nums">{{ number_format($p['per_day']) }}</td><td style="text-align: right; padding-right: 16px; font-variant-numeric: tabular-nums" title="{{ $valueTitle($p) }}">{{ $isk($p['split']) }}</td></tr>
                 @empty
-                  <tr><td colspan="3" class="muted">Nothing yet.</td></tr>
+                  <tr><td colspan="4" class="muted">Nothing yet.</td></tr>
                 @endforelse
               </tbody>
             </table>
+          </section>
+          <section class="card">
+            <div class="sect"><h2>Worth per pilot</h2><span class="muted small">ISK per day, split</span></div>
+            <table><tbody>
+              @forelse($corp['pilot_values'] as $pilotName => $split)
+                <tr><td>{{ $pilotName }}</td><td style="text-align: right; padding-right: 16px; font-variant-numeric: tabular-nums">{{ $isk($split) }}</td></tr>
+              @empty
+                <tr><td class="muted">Nothing yet.</td></tr>
+              @endforelse
+            </tbody></table>
           </section>
           <section class="card">
             <div class="sect"><h2>Busiest systems</h2></div>
@@ -508,7 +563,7 @@
           </section>
         </div>
       </div>
-      <p class="note">Corp members' characters that SeAT has a login for. Factory output assumes the factories run all the time.</p>
+      <p class="note">Corp members' characters that SeAT has a login for. Factory output assumes the factories run all the time, held back when a raw line is short. Worth at {{ $priceSource }} prices, before customs tax.</p>
     </section>
   @endif
 

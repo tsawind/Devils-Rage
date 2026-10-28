@@ -12,6 +12,7 @@ use DevilsRage\Seat\Pi\PiPlanner;
 use DevilsRage\Seat\Pi\PiTemplate;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\DiscordDm;
+use DevilsRage\Seat\Services\JitaPrices;
 use DevilsRage\Seat\Services\PersonName;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,7 +35,7 @@ use Warlof\Seat\Connector\Models\User as ConnectorUser;
  */
 class PiController extends Controller
 {
-    public function screen(): View
+    public function screen(JitaPrices $jita): View
     {
         $user = auth()->user();
         $ids = array_map('intval', $user->associatedCharacterIds());
@@ -44,6 +45,17 @@ class PiController extends Controller
         $planner = new PiPlanner($data->types(), $data->history($ids), $now);
         $order = $data->loginOrder((int) $user->id, $ids);
         $slots = $data->slots($ids);
+        $customs = $data->customs(array_map('intval', array_keys($planets)));
+        $unplaced = [];
+        foreach ($planets as $characterId => &$list) {
+            $offices = $planner->placeCustoms($list, $customs[$characterId] ?? [], PiData::CUSTOMS_CAPACITY);
+            foreach ($list as &$planet) {
+                $planet['customs'] = $offices['placed'][$planet['planet_id']] ?? null;
+            }
+            unset($planet);
+            $unplaced[$characterId] = $offices['unplaced'];
+        }
+        unset($list);
 
         $characters = [];
         $colonies = [];
@@ -62,8 +74,41 @@ class PiController extends Controller
             foreach ($colony['planets'] as &$info) {
                 $info['steps'] = $planner->steps($info);
             }
+            unset($info);
+            $colony['customs_unplaced'] = $unplaced[$colony['character_id']] ?? [];
         }
-        unset($colony, $info);
+        unset($colony);
+
+        $priceIds = [];
+        foreach ($colonies as $colony) {
+            foreach ($colony['planets'] as $info) {
+                foreach ($planner->products($info) as $item) {
+                    $priceIds[] = $item['type'];
+                }
+            }
+        }
+        $prices = $jita->get($priceIds);
+        $totals = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'pad' => 0.0, 'customs' => 0.0, 'customs_capacity' => 0];
+        foreach ($colonies as &$colony) {
+            $sum = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'pad' => 0.0, 'customs' => 0.0, 'customs_capacity' => count($colony['planets']) * PiData::CUSTOMS_CAPACITY];
+            foreach ($colony['planets'] as &$info) {
+                $info['value'] = $planner->value($info, $prices);
+                foreach (['buy', 'split', 'sell'] as $side) {
+                    $sum[$side] += $info['value'][$side];
+                }
+                $sum['pad'] += $info['launchpad']['used'] ?? 0.0;
+                $sum['customs'] += $info['customs']['used'] ?? 0.0;
+            }
+            unset($info);
+            foreach ($colony['customs_unplaced'] as $office) {
+                $sum['customs'] += $office['used'];
+            }
+            $colony['totals'] = $sum;
+            foreach ($sum as $key => $value) {
+                $totals[$key] += $value;
+            }
+        }
+        unset($colony);
 
         $setting = AccountSetting::query()->find($user->id);
         $leader = Gate::allows('devilsrage-leader');
@@ -72,6 +117,8 @@ class PiController extends Controller
         return view('devilsrage::pi.screen', [
             'run' => $planner->run($characters),
             'colonies' => $colonies,
+            'totals' => $totals,
+            'priceSource' => collect($prices)->contains(fn (array $p): bool => $p['source'] !== 'Jita 4-4 orders') ? 'Jita 4-4 orders, market average where Jita has none' : 'Jita 4-4 orders',
             'withoutPi' => count($order) - count($colonies),
             'now' => $now,
             'checked' => $checked ? Carbon::parse($checked, 'UTC')->getTimestamp() : null,
@@ -82,7 +129,7 @@ class PiController extends Controller
             ],
             'hasDiscord' => ConnectorUser::query()->where('connector_type', 'discord')->where('user_id', $user->id)->exists(),
             'leader' => $leader,
-            'corp' => $leader ? $this->corp($now) : null,
+            'corp' => $leader ? $this->corp($now, $jita) : null,
             'templates' => $this->templates((int) $user->id, $leader),
         ]);
     }
@@ -268,7 +315,7 @@ class PiController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function corp(int $now): array
+    private function corp(int $now, JitaPrices $jita): array
     {
         $ids = app(Corporation::class)->memberCharacterIds();
         $data = new PiData();
@@ -281,6 +328,7 @@ class PiController extends Controller
 
         $attention = [];
         $products = [];
+        $pilotItems = [];
         $systems = [];
         $pilots = [];
         $colonies = 0;
@@ -313,20 +361,33 @@ class PiController extends Controller
                         'last_update' => $planet['last_update'],
                     ];
                 }
-                if ($info['making'] !== null) {
-                    foreach ($info['making']['per_hour'] as $name => $perHour) {
-                        $products[$name] = ['tier' => $info['making']['tier'], 'per_day' => ($products[$name]['per_day'] ?? 0) + $perHour * 24];
-                    }
-                } elseif ($planet['factories'] === []) {
-                    foreach ($planet['extractors'] as $extractor) {
-                        if (! empty($extractor['qty']) && ! empty($extractor['cycle_time']) && $extractor['expiry'] !== null && $extractor['expiry'] > $now) {
-                            $name = $extractor['product_name'];
-                            $products[$name] = ['tier' => 0, 'per_day' => ($products[$name]['per_day'] ?? 0) + (int) round($extractor['qty'] * 86400 / $extractor['cycle_time'])];
-                        }
+                if ($info['making'] !== null || $planet['factories'] === []) {
+                    foreach ($planner->products($info) as $item) {
+                        $products[$item['name']] = ['type' => $item['type'], 'tier' => $item['tier'], 'per_day' => ($products[$item['name']]['per_day'] ?? 0) + $item['per_day']];
+                        $pilotItems[$pilot][$item['type']] = ($pilotItems[$pilot][$item['type']] ?? 0) + $item['per_day'];
                     }
                 }
             }
         }
+        $prices = $jita->get(array_column($products, 'type'));
+        $value = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0];
+        foreach ($products as $name => $product) {
+            $buy = $product['per_day'] * (float) ($prices[$product['type']]['buy'] ?? 0);
+            $sell = $product['per_day'] * (float) ($prices[$product['type']]['sell'] ?? 0);
+            $products[$name] += ['buy' => $buy, 'split' => ($buy + $sell) / 2, 'sell' => $sell];
+            $value['buy'] += $buy;
+            $value['sell'] += $sell;
+        }
+        $value['split'] = ($value['buy'] + $value['sell']) / 2;
+        $pilotValues = [];
+        foreach ($pilotItems as $pilotName => $items) {
+            $split = 0.0;
+            foreach ($items as $typeId => $perDay) {
+                $split += $perDay * ((float) ($prices[$typeId]['buy'] ?? 0) + (float) ($prices[$typeId]['sell'] ?? 0)) / 2;
+            }
+            $pilotValues[$pilotName] = $split;
+        }
+        arsort($pilotValues);
         usort($attention, fn (array $a, array $b): int => [$a['status'] === 'stopped' ? 0 : 1, $a['time'] ?? 0] <=> [$b['status'] === 'stopped' ? 0 : 1, $b['time'] ?? 0]);
         uasort($products, fn (array $a, array $b): int => [$b['tier'], $b['per_day']] <=> [$a['tier'], $a['per_day']]);
         arsort($systems);
@@ -342,6 +403,8 @@ class PiController extends Controller
             'unused' => $unused,
             'attention' => array_slice($attention, 0, 60),
             'products' => $products,
+            'value' => $value,
+            'pilot_values' => array_slice($pilotValues, 0, 15, true),
             'systems' => array_map(
                 fn ($systemId, int $count): array => ['name' => (string) ($systemNames[$systemId] ?? $systemId), 'count' => $count],
                 array_keys(array_slice($systems, 0, 10, true)),
