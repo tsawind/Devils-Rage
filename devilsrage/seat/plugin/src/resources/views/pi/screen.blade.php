@@ -15,6 +15,21 @@
   $valueTitle = fn (array $v, int $days = 1): string => 'Buy '.$isk($v['buy'] * $days).' · split '.$isk($v['split'] * $days).' · sell '.$isk($v['sell'] * $days).' ISK'
       .(isset($v['other_split']) ? ' · '.$otherHub.' split '.$isk($v['other_split'] * $days) : '')
       .(! empty($v['tax']) ? ' (after '.$isk($v['tax'] * $days).' customs tax)' : '');
+  $trainTime = function (int $seconds): string {
+      $d = intdiv($seconds, 86400);
+      $h = intdiv($seconds % 86400, 3600);
+      return $d > 0 ? $d.' d'.($h ? ' '.$h.' h' : '') : max(1, $h).' h';
+  };
+  $skillText = function (array $sk) use ($isk, $trainTime): string {
+      if ($sk['ready']) {
+          return 'Skills ready';
+      }
+      $what = [];
+      foreach ($sk['missing'] as $name => $level) {
+          $what[] = $name.' '.$level;
+      }
+      return 'Needs '.implode(', ', $what).': '.$sk['injectors'].' injector'.($sk['injectors'] === 1 ? '' : 's').' ('.$isk($sk['isk']).' ISK, about '.number_format($sk['plex']).' PLEX) or '.$trainTime($sk['seconds']).' of training';
+  };
   $meterColor = fn (int $pct): string => $pct >= 90 ? '#d6454c' : ($pct >= 70 ? '#e0a43a' : '#4f8f5c');
   $statusLabel = ['stopped' => ['Stopped', 'bad'], 'soon' => ['Stops soon', 'warn'], 'ok' => ['Running', 'ok'], 'factory' => ['Factories only', 'muted']];
   $setup = function (array $info): string {
@@ -355,6 +370,8 @@
         <div class="sect">
           <h2>{{ $c['name'] }}</h2>
           <span class="muted small">{{ count($c['planets']) }}@if($c['slots']) of {{ $c['slots'] }}@endif colonies</span>
+          @php $sk = $skillRows[$c['character_id']] ?? null; @endphp
+          @if($sk && ! $sk['ready'])<span class="chip warn" title="{{ $skillText($sk) }}">Below CC 5 / 5 planets</span>@endif
           <span class="grow"></span>
           @php
             $t = $c['totals'];
@@ -432,8 +449,24 @@
         </div>
       </section>
     @endforeach
-    @if($withoutPi > 0)
-      <p class="note">{{ $withoutPi }} other {{ $withoutPi === 1 ? 'character has' : 'characters have' }} no colonies on SeAT.</p>
+    @php $idle = array_filter($skillRows, fn (array $r): bool => $r['colonies'] === 0); @endphp
+    @if($idle !== [])
+      <section class="card">
+        <div class="sect"><h2>Characters not doing PI</h2><span class="muted small">what it takes to start (Command Center Upgrades 5, five planets), and what they'd add at your colonies' average of {{ $isk($perColony) }} a planet a day</span></div>
+        <div class="scroll"><table>
+          <thead><tr><th scope="col">Character</th><th scope="col">Skills</th><th scope="col" style="text-align: right">Could add / month</th><th scope="col" style="text-align: right; padding-right: 16px">Injectors pay back in</th></tr></thead>
+          <tbody>
+            @foreach($idle as $r)
+              <tr>
+                <td><b>{{ $r['name'] }}</b></td>
+                <td class="small" style="color: {{ $r['ready'] ? 'var(--ok)' : 'var(--warn)' }}">{{ $skillText($r) }}</td>
+                <td style="text-align: right; white-space: nowrap">{{ $r['per_day'] > 0 ? $isk($r['per_day'] * 30) : '—' }}</td>
+                <td style="text-align: right; padding-right: 16px; white-space: nowrap" class="muted">{{ $r['payback_days'] !== null ? (int) ceil($r['payback_days']).' days' : ($r['ready'] ? 'nothing to buy' : '—') }}</td>
+              </tr>
+            @endforeach
+          </tbody>
+        </table></div>
+      </section>
     @endif
     <p class="note">Stop times are exact. Storage and factory numbers are only as fresh as "last opened in game": EVE shares them when the colony is opened. Hover a bar to see what's in it. ▲ / ▼ is how a raw buffer changed per hour between the last two times the colony was opened. Customs office stock comes from your assets (SeAT refreshes them about hourly) and is matched to a planet by what's in it; each holds {{ number_format(\DevilsRage\Seat\Pi\PiData::CUSTOMS_CAPACITY) }} m³. Worth is the top product at {{ $priceSource }} prices (switch hubs at the top; hover shows the other), held back when a raw line is short, after {{ rtrim(rtrim(number_format($taxPercent, 2), '0'), '.') }}% customs tax on exporting it.</p>
   </section>
@@ -581,6 +614,7 @@
               @if($person['stopped'] > 0)<span class="chip bad">{{ $person['stopped'] }} stopped</span>@endif
               @if($person['soon'] > 0)<span class="chip warn">{{ $person['soon'] }} soon</span>@endif
               <span class="grow"></span>
+              @if($person['could_add'] > 0)<span class="muted small" title="With every character on Command Center Upgrades 5 and five planets">could add {{ $isk($person['could_add'] * 30) }} / month</span>@endif
               <b>{{ $isk($person['split']) }}</b>
             </summary>
             @foreach($person['corps'] as $group)
@@ -598,6 +632,8 @@
                           @elseif($row['colonies'] > 0)<span class="chip muted">No extractors</span>
                           @endif
                         </td>
+                        <td class="small">@if($row['skill'] && ! $row['skill']['ready'])<span style="color: var(--warn)" title="{{ $skillText($row['skill']) }}">{{ $row['skill']['injectors'] }} inj · {{ $isk($row['skill']['isk']) }}</span>@if($row['skill']['per_day'] > 0) <span class="muted">+{{ $isk($row['skill']['per_day'] * 30) }}/mo</span>@endif
+                          @elseif($row['skill'] && $row['skill']['per_day'] > 0)<span class="muted" title="{{ $row['skill']['extra_planets'] }} more planets">+{{ $isk($row['skill']['per_day'] * 30) }}/mo free</span>@endif</td>
                         <td style="text-align: right; padding-right: 16px; font-variant-numeric: tabular-nums">@if($row['split'] > 0){{ $isk($row['split']) }}@endif</td>
                       </tr>
                     @endforeach

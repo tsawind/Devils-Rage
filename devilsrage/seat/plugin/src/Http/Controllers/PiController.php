@@ -10,6 +10,7 @@ use DevilsRage\Seat\Models\Setting;
 use DevilsRage\Seat\Pi\PiData;
 use DevilsRage\Seat\Pi\PiDigest;
 use DevilsRage\Seat\Pi\PiPlanner;
+use DevilsRage\Seat\Pi\PiSkills;
 use DevilsRage\Seat\Pi\PiTemplate;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\DiscordDm;
@@ -39,7 +40,7 @@ class PiController extends Controller
     /** Patch 59: the customs tax rate on our offices, in percent (directors set it). */
     public const TAX_SETTING = 'pi_customs_tax';
 
-    public function screen(Request $request, JitaPrices $jita): View
+    public function screen(Request $request, JitaPrices $jita, PiSkills $piSkills): View
     {
         $hub = array_key_exists((string) $request->query('hub'), JitaPrices::HUBS) ? (string) $request->query('hub') : 'jita';
         $otherHub = $hub === 'jita' ? 'amarr' : 'jita';
@@ -120,6 +121,25 @@ class PiController extends Controller
         }
         unset($colony);
 
+        // Patch 60: skills for the corp's PI bar, what they'd cost and add (for every character, PI or not).
+        $running = 0;
+        foreach ($colonies as $colony) {
+            foreach ($colony['planets'] as $info) {
+                $running += $info['planet']['extractors'] !== [] && $info['value']['split'] > 0 ? 1 : 0;
+            }
+        }
+        $perColony = $running > 0 ? $totals['split'] / $running : 0.0;
+        $skillChecks = $piSkills->check(array_keys($order));
+        $counts = array_map(fn (array $c): int => count($c['planets']), array_column($colonies, null, 'character_id'));
+        $skillRows = [];
+        foreach ($order as $characterId => $name) {
+            if (! isset($skillChecks[$characterId])) {
+                continue;
+            }
+            $skillRows[$characterId] = $skillChecks[$characterId] + ['name' => $name, 'colonies' => $counts[$characterId] ?? 0]
+                + PiSkills::potential($skillChecks[$characterId], $counts[$characterId] ?? 0, $perColony);
+        }
+
         $setting = AccountSetting::query()->find($user->id);
         $leader = Gate::allows('devilsrage-leader');
         $checked = DB::table('character_planets')->whereIn('character_id', $ids)->max('updated_at');
@@ -128,6 +148,8 @@ class PiController extends Controller
             'run' => $planner->run($characters),
             'colonies' => $colonies,
             'totals' => $totals,
+            'skillRows' => $skillRows,
+            'perColony' => $perColony,
             'priceSource' => collect($prices)->contains(fn (array $p): bool => ! str_ends_with($p['source'], ' orders')) ? JitaPrices::HUBS[$hub]['name'].' orders, market average where it has none' : JitaPrices::HUBS[$hub]['name'].' orders',
             'hub' => $hub,
             'hubs' => array_map(fn (array $h): string => $h['name'], JitaPrices::HUBS),
@@ -143,7 +165,7 @@ class PiController extends Controller
             ],
             'hasDiscord' => ConnectorUser::query()->where('connector_type', 'discord')->where('user_id', $user->id)->exists(),
             'leader' => $leader,
-            'corp' => $leader ? $this->corp($now, $jita, $hub, $taxRate) : null,
+            'corp' => $leader ? $this->corp($now, $jita, $hub, $taxRate, $piSkills) : null,
             'templates' => $this->templates((int) $user->id, $leader),
         ]);
     }
@@ -346,7 +368,7 @@ class PiController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function corp(int $now, JitaPrices $jita, string $hub, float $taxRate): array
+    private function corp(int $now, JitaPrices $jita, string $hub, float $taxRate, PiSkills $piSkills): array
     {
         $corporation = app(Corporation::class);
         $memberIds = $corporation->memberCharacterIds();
@@ -463,11 +485,22 @@ class PiController extends Controller
 
             return $split;
         };
+        $running = 0;
+        foreach ($planets as $list) {
+            foreach ($list as $planet) {
+                $running += $planet['extractors'] !== [] ? 1 : 0;
+            }
+        }
+        $perColony = $running > 0 ? $value['split'] / $running : 0.0;
+        $skillChecks = $piSkills->check($ids);
         foreach ($people as &$person) {
+            $person['could_add'] = 0.0;
             foreach ($person['corps'] as &$corp) {
                 foreach ($corp['characters'] as &$row) {
                     $row['split'] = $splitOf($row['id']);
                     $person['split'] += $row['split'];
+                    $row['skill'] = isset($skillChecks[$row['id']]) ? $skillChecks[$row['id']] + PiSkills::potential($skillChecks[$row['id']], $row['colonies'], $perColony) : null;
+                    $person['could_add'] += $row['skill']['per_day'] ?? 0.0;
                 }
                 unset($row);
                 usort($corp['characters'], fn (array $a, array $b): int => [$b['colonies'] > 0, $a['name']] <=> [$a['colonies'] > 0, $b['name']]);
@@ -497,6 +530,7 @@ class PiController extends Controller
             'attention' => array_slice($attention, 0, 60),
             'products' => $products,
             'value' => $value,
+            'per_colony' => $perColony,
             'systems' => array_map(
                 fn ($systemId, int $count): array => ['name' => (string) ($systemNames[$systemId] ?? $systemId), 'count' => $count],
                 array_keys(array_slice($systems, 0, 10, true)),
