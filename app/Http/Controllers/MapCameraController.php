@@ -72,6 +72,7 @@ final class MapCameraController extends Controller
         $member = $user instanceof User && $user->can('update', $map);
         $link = $member ? null : $this->guestLink($map);
         abort_unless($member || $link instanceof MapShareLink, 403);
+        $linkId = $link instanceof MapShareLink ? $link->id : null;
 
         $cameras = MapCamera::query()
             ->where('map_id', $map->id)
@@ -79,7 +80,7 @@ final class MapCameraController extends Controller
             ->where('last_seen_at', '>', now()->subSeconds((int) config('cameras.stale_seconds')))
             ->orderBy('name')
             ->get()
-            ->filter(fn (MapCamera $camera): bool => $member || in_array($link?->id, $camera->guest_share_link_ids ?? [], true))
+            ->filter(fn (MapCamera $camera): bool => $member || in_array($linkId, $camera->guest_share_link_ids ?? [], true))
             ->values();
         $visible = $cameras->pluck('id')->all();
         $events = MapCameraEvent::query()
@@ -262,7 +263,7 @@ final class MapCameraController extends Controller
     private function places(Map $map): array
     {
         $systems = $map->mapSolarsystems()->with('solarsystem:id,name')->get();
-        $names = $systems->mapWithKeys(fn (MapSolarsystem $system): array => [$system->id => $system->alias ?: ($system->solarsystem?->name ?? '?')]);
+        $names = $systems->mapWithKeys(fn (MapSolarsystem $system): array => [$system->id => $system->alias ?: $system->solarsystem->name]);
 
         return [
             'systems' => $systems->map(fn (MapSolarsystem $system): array => ['id' => $system->id, 'name' => (string) $names[$system->id]])->sortBy('name')->values()->all(),

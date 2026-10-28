@@ -1,6 +1,5 @@
 import MapCameraController from '@/actions/App/Http/Controllers/MapCameraController';
 import { activityByConnection, addActivation, liveActivations, type TActivation, type TCameraActivityKind, type TPipeActivity } from '@/lib/cameras/activations';
-import { jsonFetch } from '@/lib/jsonFetch';
 import { computed, ref, shallowRef } from 'vue';
 
 /**
