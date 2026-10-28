@@ -2,7 +2,9 @@
 import SystemIntelController from '@/actions/App/Http/Controllers/SystemIntelController';
 import { Dialog, DialogDescription, DialogScrollContent, DialogTitle } from '@/components/ui/dialog';
 import usePermission from '@/composables/usePermission';
+import SystemIntelligence from '@/components/intel/SystemIntelligence.vue';
 import { jsonFetch } from '@/lib/jsonFetch';
+import type { TSystemIntelligence } from '@/types/models';
 import { readCopiedText } from '@/lib/structureText';
 import { driverHeaders } from '@/lib/windowDriver';
 import { useElementSize, useEventListener } from '@vueuse/core';
@@ -51,7 +53,7 @@ type TAssessment = {
     corporations: { name: string; kills: number; losses: number; days: number }[];
     ships: { name: string; count: number }[];
 };
-type TIntel = { structures: TStructure[]; entries: TEntry[]; assessment: TAssessment; kinds: string[]; states: string[] };
+type TIntel = { solarsystem_id: number; structures: TStructure[]; entries: TEntry[]; assessment: TAssessment; intelligence?: TSystemIntelligence; kinds: string[]; states: string[] };
 
 const { mapSolarsystemId, systemLabel } = defineProps<{ mapSolarsystemId: number; systemLabel: string }>();
 const open = defineModel<boolean>('open', { default: false });
@@ -119,18 +121,6 @@ function ago(iso: string): string {
     if (minutes < 48 * 60) return `${Math.round(minutes / 60)} h ago`;
     return `${Math.round(minutes / 1440)} d ago`;
 }
-function pad(hour: number): string {
-    return String(hour).padStart(2, '0');
-}
-
-const hourBars = computed(() => {
-    const hours = intel.value?.assessment.hours ?? [];
-    const max = Math.max(1, ...hours);
-    const peak = intel.value?.assessment.peak;
-    const inPeak = (hour: number) => (peak ? (hour - peak.from + 24) % 24 < 3 : false);
-    return hours.map((count, hour) => ({ hour, count, height: `${Math.max(2, Math.round((count / max) * 56))}px`, peak: inPeak(hour) }));
-});
-const resident = computed(() => intel.value?.assessment.corporations[0] ?? null);
 const structureName = (id: number | null) => {
     const structure = intel.value?.structures.find((candidate) => candidate.id === id);
     return structure ? `${KIND_LABELS[structure.kind] ?? structure.kind}${structure.name ? ` "${structure.name}"` : ''}` : null;
@@ -447,47 +437,10 @@ const KIND_BADGES: Record<string, string> = {
                 <div class="flex min-w-0 flex-col gap-4">
                     <section v-if="shows('who')" class="flex flex-col gap-2">
                         <h3 class="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                            Who lives here <span class="font-normal normal-case">· {{ intel.assessment.kills }} kills since {{ intel.assessment.since }}</span>
+                            Who lives here <span class="font-normal normal-case">· {{ (intel.intelligence ?? intel.assessment).kills }} kills since {{ (intel.intelligence ?? intel.assessment).since }}</span>
                         </h3>
-                        <div class="grid gap-2" :class="compact ? 'grid-cols-1' : 'sm:grid-cols-3'">
-                            <div class="flex flex-col gap-0.5 rounded-md border border-border bg-muted/30 p-2">
-                                <span class="text-[11px] text-muted-foreground">Seen most</span>
-                                <span class="truncate font-semibold">{{ resident?.name ?? 'nobody yet' }}</span>
-                                <span v-if="resident" class="text-[11px] text-muted-foreground"
-                                    >{{ resident.days }} days · {{ resident.kills }} kills · {{ resident.losses }} losses</span
-                                >
-                            </div>
-                            <div class="flex flex-col gap-0.5 rounded-md border border-border bg-muted/30 p-2">
-                                <span class="text-[11px] text-muted-foreground">Busiest (EVE time)</span>
-                                <span class="font-semibold">{{ intel.assessment.peak ? `${pad(intel.assessment.peak.from)}:00 – ${pad(intel.assessment.peak.to)}:00` : '—' }}</span>
-                            </div>
-                            <div class="flex flex-col gap-0.5 rounded-md border border-border bg-muted/30 p-2">
-                                <span class="text-[11px] text-muted-foreground">Fleet size</span>
-                                <span class="font-semibold">{{ intel.assessment.fleet ? `about ${intel.assessment.fleet.median}` : '—' }}</span>
-                                <span v-if="intel.assessment.fleet" class="text-[11px] text-muted-foreground">largest {{ intel.assessment.fleet.max }}</span>
-                            </div>
-                        </div>
-                        <div v-if="intel.assessment.kills" class="rounded-md border border-border bg-muted/30 p-2">
-                            <div class="flex h-14 items-end gap-0.5">
-                                <div
-                                    v-for="bar in hourBars"
-                                    :key="bar.hour"
-                                    class="flex-1 rounded-sm"
-                                    :class="bar.peak ? 'bg-red-500' : 'bg-neutral-600'"
-                                    :style="{ height: bar.height }"
-                                    :title="`${pad(bar.hour)}:00 EVE · ${bar.count} kill${bar.count === 1 ? '' : 's'}`"
-                                />
-                            </div>
-                            <div class="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
-                        </div>
-                        <div v-if="intel.assessment.corporations.length > 1 || intel.assessment.ships.length" class="flex flex-col gap-1 text-xs">
-                            <span v-if="intel.assessment.corporations.length > 1" class="text-muted-foreground"
-                                >Also here: {{ intel.assessment.corporations.slice(1).map((corp) => `${corp.name} (${corp.days} d)`).join(', ') }}</span
-                            >
-                            <span v-if="intel.assessment.ships.length" class="text-muted-foreground"
-                                >They fly: {{ intel.assessment.ships.map((ship) => `${ship.name} ×${ship.count}`).join(', ') }}</span
-                            >
-                        </div>
+                        <!-- Patch 58: residents / hunters / passers with the evidence, never counting us -->
+                        <SystemIntelligence v-if="intel.intelligence" :intel="intel.intelligence" :solarsystem-id="intel.solarsystem_id" />
                     </section>
 
                     <section v-if="shows('structures')" class="flex flex-col gap-2">

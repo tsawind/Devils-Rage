@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Support\DscanSummary;
 use App\Support\StructureScan;
 use App\Support\SystemAssessment;
+use App\Support\SystemIntelligence;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -47,9 +48,12 @@ final class SystemIntelController extends Controller
             ->get();
 
         return response()->json([
+            'solarsystem_id' => $mapSolarsystem->solarsystem_id,
             'structures' => $structures->map(fn (IntelStructure $structure): array => $this->structurePayload($structure))->all(),
             'entries' => $entries->map(fn (IntelEntry $entry): array => $this->entryPayload($mapSolarsystem, $entry))->all(),
             'assessment' => SystemAssessment::for($mapSolarsystem->solarsystem_id),
+            // Patch 58: residents / hunters / passers, never counting us.
+            'intelligence' => SystemIntelligence::for($mapSolarsystem->solarsystem_id, $mapSolarsystem->map),
             'kinds' => IntelStructure::KINDS,
             'states' => IntelStructure::STATES,
         ]);

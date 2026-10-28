@@ -216,11 +216,50 @@ export type TThreatEntity = {
     kills: number;
 };
 
+/** Patch 58: one group in a system, as SystemIntelligence sees it. */
+export type TIntelGroup = {
+    id: number;
+    type: 'alliance' | 'corporation';
+    name: string;
+    days: number;
+    kills: number;
+    losses: number;
+    first_seen: string;
+    last_seen: string;
+    ships: string[];
+    role?: 'resident' | 'former';
+    confidence?: 'sure' | 'likely';
+    evidence?: string;
+    killed_structures?: boolean;
+};
+
+/** Patch 58: who lives in a system, who hunts there and who passed through (never us). */
+export type TSystemIntelligence = {
+    kills: number;
+    since: string;
+    status: { label: string; tone: 'red' | 'amber' | 'gray' };
+    capitals: boolean;
+    last_hostile_at: string | null;
+    week: { kills: number; losses: number; days: number };
+    us: { kills: number; losses: number } | null;
+    residents: TIntelGroup[];
+    hunters: TIntelGroup[];
+    passers: TIntelGroup[];
+    basis: 'residents' | 'hostiles';
+    hours: number[];
+    peak: { from: number; to: number } | null;
+    quiet: { from: number; to: number } | null;
+    fleet: { median: number; low: number; high: number; max: number; max_at: string } | null;
+    ships: { name: string; count: number }[];
+};
+
 export type TThreatAnalysis = {
     solarsystem_id: number;
     threat_level: TThreatLevel;
     threat_data: TThreatEntity[];
     threat_analyzed_at: string | null;
+    map_solarsystem_id?: number;
+    intelligence?: TSystemIntelligence;
 };
 
 export type TThreatSearchSystem = {

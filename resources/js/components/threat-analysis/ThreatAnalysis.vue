@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { AllianceLogo, CorporationLogo } from '@/components/images';
+import SystemIntelligence from '@/components/intel/SystemIntelligence.vue';
+import { intelTarget } from '@/map/components/overlays/IntelDialogHost.vue';
+import { useShowMap } from '@/composables/useShowMap';
+import { displayAlias } from '@/lib/alias';
 import MapPanel from '@/components/ui/map-panel/MapPanel.vue';
 import MapPanelContent from '@/components/ui/map-panel/MapPanelContent.vue';
 import MapPanelHeader from '@/components/ui/map-panel/MapPanelHeader.vue';
@@ -40,6 +44,16 @@ function threatLevelBg(level: string): string {
     return colors[level] ?? 'bg-muted/50';
 }
 
+/** Patch 58: the system's intel window (structures, scans, the same picture in full). */
+const page = useShowMap();
+function openIntel(): void {
+    if (!threat_analysis?.map_solarsystem_id) return;
+    const selected = page.props.selected_map_solarsystem;
+    const name = selected?.solarsystem?.name ?? String(threat_analysis.solarsystem_id);
+    const alias = displayAlias(selected?.alias);
+    intelTarget.value = { id: threat_analysis.map_solarsystem_id, label: alias && alias !== name ? `${alias} · ${name}` : name };
+}
+
 function zkillboardUrl(type: string, id: number): string {
     return `https://zkillboard.com/${type}/${id}/`;
 }
@@ -77,8 +91,19 @@ function zkillboardUrl(type: string, id: number): string {
                         </a>
                     </div>
 
-                    <div v-if="threat_analysis.threat_data.length" class="space-y-1">
-                        <div class="text-xs font-medium text-muted-foreground">Top Entities</div>
+                    <!-- Patch 58: who lives here / hunts here / passed through, never counting us -->
+                    <SystemIntelligence v-if="threat_analysis.intelligence" :intel="threat_analysis.intelligence" :solarsystem-id="threat_analysis.solarsystem_id" :show-hours="false" />
+                    <button
+                        v-if="threat_analysis.map_solarsystem_id"
+                        type="button"
+                        class="rounded-md bg-red-900 px-3 py-1.5 text-xs font-semibold text-red-50 hover:bg-red-800"
+                        @click="openIntel"
+                    >
+                        Open intel
+                    </button>
+
+                    <details v-if="threat_analysis.threat_data.length" class="space-y-1" :open="!threat_analysis.intelligence">
+                        <summary class="cursor-pointer text-xs font-medium text-muted-foreground">Nightly top groups (everyone, us included)</summary>
                         <div
                             v-for="entity in threat_analysis.threat_data"
                             :key="entity.id"
@@ -123,9 +148,9 @@ function zkillboardUrl(type: string, id: number): string {
                                 </a>
                             </div>
                         </div>
-                    </div>
+                    </details>
 
-                    <div v-else class="text-xs text-muted-foreground">No significant activity detected.</div>
+                    <div v-else-if="!threat_analysis.intelligence" class="text-xs text-muted-foreground">No significant activity detected.</div>
 
                     <div v-if="analyzedTimeAgo()" class="text-2xs text-muted-foreground">Analyzed {{ analyzedTimeAgo() }}</div>
                 </div>
