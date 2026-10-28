@@ -144,6 +144,30 @@ case "$ACTION" in
         # The newest migrations and whether they ran.
         cd "$STACK" && "${C[@]}" exec -T app php artisan migrate:status 2>&1 | tail -n 6 | cut -c1-160
         ;;
+    capacity)
+        # Cameras plan: what the VPS has for a video relay. No addresses or secrets (public log).
+        echo "== CPU"
+        echo "cores: $(nproc) · $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//')"
+        echo "load (1/5/15 min): $(cut -d' ' -f1-3 /proc/loadavg)"
+        echo "== Memory and disk"
+        free -h | head -2
+        df -h / | tail -1
+        echo "== Network link"
+        for nic in /sys/class/net/*; do
+            name=$(basename "$nic"); [ "$name" = lo ] && continue
+            case "$name" in docker*|br-*|veth*) continue;; esac
+            echo "$name: $(cat "$nic/speed" 2>/dev/null || echo '?') Mb/s link"
+        done
+        if command -v vnstat >/dev/null 2>&1; then
+            echo "== Traffic this month (vnstat)"; vnstat -m 2>/dev/null | tail -n 5
+        else
+            echo "== Traffic: vnstat not installed (monthly totals unknown)"
+        fi
+        echo "== Firewall"
+        (sudo -n ufw status 2>/dev/null | head -n 1) || echo "ufw: not readable without a password"
+        echo "== Busiest containers right now"
+        docker stats --no-stream --format '{{.Name}}	{{.CPUPerc}}	{{.MemUsage}}' 2>/dev/null | sort -k2 -t$'\t' -rh | head -n 8
+        ;;
     update-gate)
         # Only fetches the newest scripts (this file included): no build, nothing restarts.
         cd "$REPO" && git pull --ff-only && git log --oneline -1
@@ -177,7 +201,7 @@ case "$ACTION" in
         ;;
     *)
         echo "!! Unknown action: $ACTION"
-        echo "   Allowed: status, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check, backup-check, seat-failed-jobs, mapper-migrations"
+        echo "   Allowed: status, capacity, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check, backup-check, seat-failed-jobs, mapper-migrations"
         exit 2
         ;;
 esac
