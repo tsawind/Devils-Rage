@@ -6,6 +6,7 @@ namespace DevilsRage\Seat\Http\Controllers;
 
 use DevilsRage\Seat\Models\AccountSetting;
 use DevilsRage\Seat\Models\PiTemplate as StoredTemplate;
+use DevilsRage\Seat\Models\Setting;
 use DevilsRage\Seat\Pi\PiData;
 use DevilsRage\Seat\Pi\PiDigest;
 use DevilsRage\Seat\Pi\PiPlanner;
@@ -35,8 +36,15 @@ use Warlof\Seat\Connector\Models\User as ConnectorUser;
  */
 class PiController extends Controller
 {
-    public function screen(JitaPrices $jita): View
+    /** Patch 59: the customs tax rate on our offices, in percent (directors set it). */
+    public const TAX_SETTING = 'pi_customs_tax';
+
+    public function screen(Request $request, JitaPrices $jita): View
     {
+        $hub = array_key_exists((string) $request->query('hub'), JitaPrices::HUBS) ? (string) $request->query('hub') : 'jita';
+        $otherHub = $hub === 'jita' ? 'amarr' : 'jita';
+        $taxPercent = $this->taxPercent();
+        $taxRate = $taxPercent / 100;
         $user = auth()->user();
         $ids = array_map('intval', $user->associatedCharacterIds());
         $data = new PiData();
@@ -87,13 +95,15 @@ class PiController extends Controller
                 }
             }
         }
-        $prices = $jita->get($priceIds);
-        $totals = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'pad' => 0.0, 'customs' => 0.0, 'customs_capacity' => 0];
+        $prices = $jita->get($priceIds, $hub);
+        $otherPrices = $jita->get($priceIds, $otherHub);
+        $totals = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'tax' => 0.0, 'other_split' => 0.0, 'pad' => 0.0, 'customs' => 0.0, 'customs_capacity' => 0];
         foreach ($colonies as &$colony) {
-            $sum = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'pad' => 0.0, 'customs' => 0.0, 'customs_capacity' => count($colony['planets']) * PiData::CUSTOMS_CAPACITY];
+            $sum = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'tax' => 0.0, 'other_split' => 0.0, 'pad' => 0.0, 'customs' => 0.0, 'customs_capacity' => count($colony['planets']) * PiData::CUSTOMS_CAPACITY];
             foreach ($colony['planets'] as &$info) {
-                $info['value'] = $planner->value($info, $prices);
-                foreach (['buy', 'split', 'sell'] as $side) {
+                $info['value'] = $planner->value($info, $prices, $taxRate);
+                $info['value']['other_split'] = $planner->value($info, $otherPrices, $taxRate)['split'];
+                foreach (['buy', 'split', 'sell', 'tax', 'other_split'] as $side) {
                     $sum[$side] += $info['value'][$side];
                 }
                 $sum['pad'] += $info['launchpad']['used'] ?? 0.0;
@@ -118,7 +128,11 @@ class PiController extends Controller
             'run' => $planner->run($characters),
             'colonies' => $colonies,
             'totals' => $totals,
-            'priceSource' => collect($prices)->contains(fn (array $p): bool => $p['source'] !== 'Jita 4-4 orders') ? 'Jita 4-4 orders, market average where Jita has none' : 'Jita 4-4 orders',
+            'priceSource' => collect($prices)->contains(fn (array $p): bool => ! str_ends_with($p['source'], ' orders')) ? JitaPrices::HUBS[$hub]['name'].' orders, market average where it has none' : JitaPrices::HUBS[$hub]['name'].' orders',
+            'hub' => $hub,
+            'hubs' => array_map(fn (array $h): string => $h['name'], JitaPrices::HUBS),
+            'otherHub' => JitaPrices::HUBS[$otherHub]['name'],
+            'taxPercent' => $taxPercent,
             'withoutPi' => count($order) - count($colonies),
             'now' => $now,
             'checked' => $checked ? Carbon::parse($checked, 'UTC')->getTimestamp() : null,
@@ -129,7 +143,7 @@ class PiController extends Controller
             ],
             'hasDiscord' => ConnectorUser::query()->where('connector_type', 'discord')->where('user_id', $user->id)->exists(),
             'leader' => $leader,
-            'corp' => $leader ? $this->corp($now, $jita) : null,
+            'corp' => $leader ? $this->corp($now, $jita, $hub, $taxRate) : null,
             'templates' => $this->templates((int) $user->id, $leader),
         ]);
     }
@@ -247,6 +261,23 @@ class PiController extends Controller
         return response()->json(['deleted' => true]);
     }
 
+    /** Patch 59: directors set the customs tax on our offices (0-100 %), used in every worth figure. */
+    public function saveTax(Request $request): JsonResponse
+    {
+        if (! Gate::allows('devilsrage-leader')) {
+            abort(403);
+        }
+        $data = $request->validate(['percent' => ['required', 'numeric', 'between:0,100']]);
+        Setting::write(self::TAX_SETTING, (string) round((float) $data['percent'], 2));
+
+        return response()->json(['saved' => true]);
+    }
+
+    private function taxPercent(): float
+    {
+        return max(0.0, min(100.0, (float) Setting::read(self::TAX_SETTING, '0')));
+    }
+
     /** "Send me a test": today's message right now, whatever it says. */
     public function testAlert(PiDigest $digest, DiscordDm $dm): JsonResponse
     {
@@ -315,7 +346,7 @@ class PiController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function corp(int $now, JitaPrices $jita): array
+    private function corp(int $now, JitaPrices $jita, string $hub, float $taxRate): array
     {
         $ids = app(Corporation::class)->memberCharacterIds();
         $data = new PiData();
@@ -369,21 +400,25 @@ class PiController extends Controller
                 }
             }
         }
-        $prices = $jita->get(array_column($products, 'type'));
-        $value = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0];
+        $prices = $jita->get(array_column($products, 'type'), $hub);
+        $tiers = array_column($products, 'tier', 'type');
+        $value = ['buy' => 0.0, 'split' => 0.0, 'sell' => 0.0, 'tax' => 0.0];
         foreach ($products as $name => $product) {
-            $buy = $product['per_day'] * (float) ($prices[$product['type']]['buy'] ?? 0);
-            $sell = $product['per_day'] * (float) ($prices[$product['type']]['sell'] ?? 0);
+            $tax = PiPlanner::exportTax($product['tier'], $product['per_day'], $taxRate);
+            $buy = $product['per_day'] * (float) ($prices[$product['type']]['buy'] ?? 0) - $tax;
+            $sell = $product['per_day'] * (float) ($prices[$product['type']]['sell'] ?? 0) - $tax;
             $products[$name] += ['buy' => $buy, 'split' => ($buy + $sell) / 2, 'sell' => $sell];
             $value['buy'] += $buy;
             $value['sell'] += $sell;
+            $value['tax'] += $tax;
         }
         $value['split'] = ($value['buy'] + $value['sell']) / 2;
         $pilotValues = [];
         foreach ($pilotItems as $pilotName => $items) {
             $split = 0.0;
             foreach ($items as $typeId => $perDay) {
-                $split += $perDay * ((float) ($prices[$typeId]['buy'] ?? 0) + (float) ($prices[$typeId]['sell'] ?? 0)) / 2;
+                $split += $perDay * ((float) ($prices[$typeId]['buy'] ?? 0) + (float) ($prices[$typeId]['sell'] ?? 0)) / 2
+                    - PiPlanner::exportTax((int) ($tiers[$typeId] ?? 0), $perDay, $taxRate);
             }
             $pilotValues[$pilotName] = $split;
         }

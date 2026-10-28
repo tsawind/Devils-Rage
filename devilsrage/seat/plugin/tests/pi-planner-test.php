@@ -168,6 +168,13 @@ $rawOnly = $gas; $rawOnly['factories'] = [];
 $rv = $gp->value($gp->planet($rawOnly), [2310 => ['buy' => 100.0, 'sell' => 120.0]]);
 check('extraction-only planet sells raw (288,000 Noble Gas / day)', $rv['items'][0]['per_day'] === 288000 && abs($rv['buy'] - 28800000) < 1);
 
+
+// Customs tax: on a fixed value per tier (P2 7,200), not the market price.
+$taxed = $gp->value($gi, $prices, 0.05);
+check('5% tax on 240 Oxides = 86,400 / day', abs($taxed['tax'] - 86400) < 0.01 && abs($taxed['split'] - (2400000 - 86400)) < 1 && abs($taxed['buy'] - (2160000 - 86400)) < 1);
+check('0% tax = no change', $gp->value($gi, $prices)['tax'] === 0.0);
+check('export tax per tier', PiPlanner::exportTax(4, 2, 0.10) === 240000.0 && PiPlanner::exportTax(0, 1000, 0.10) === 500.0 && PiPlanner::exportTax(2, 10, -1.0) === 0.0);
+
 // Customs offices go to the planet whose goods they hold.
 $other = $gas; $other['planet_id'] = 78; foreach ($other['factories'] as &$f) { $f['outputs'] = $f['kind'] === 'advanced' ? [3689] : $f['outputs']; } unset($f);
 $other['extractors'] = [$gx(3, 2267, 'Base Metals', 6000)];

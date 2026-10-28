@@ -30,6 +30,12 @@ final class PiPlanner
     /** Factory output per hour by the tier it makes (P1 20 per 30 min; P2 5, P3 3, P4 1 per hour). */
     public const OUTPUT_PER_HOUR = [1 => 40, 2 => 5, 3 => 3, 4 => 1];
 
+    /**
+     * Patch 59: what a customs office taxes per unit, whatever the market price (ISK). Exporting
+     * pays rate x this; importing pays half. P2 7,200 is confirmed; the rest is the usual table.
+     */
+    public const TAX_BASE = [0 => 5, 1 => 400, 2 => 7200, 3 => 60000, 4 => 1200000];
+
     /** Most heads one extractor can have. */
     public const MAX_HEADS = 10;
 
@@ -445,13 +451,14 @@ final class PiPlanner
 
     /**
      * Patch 59: the value of what a planet makes per day: its top product (or raw, for an
-     * extraction-only planet), held back by the shortest raw line. Prices are per unit.
+     * extraction-only planet), held back by the shortest raw line, after exporting it through
+     * the customs office at $taxRate (0.05 = 5%). Prices are per unit.
      *
      * @param  array<string, mixed>  $p  from planet()
      * @param  array<int, array{buy: float, sell: float}>  $prices
-     * @return array{items: list<array{type: int, name: string, tier: int, per_day: int}>, buy: float, split: float, sell: float, m3: float}
+     * @return array{items: list<array{type: int, name: string, tier: int, per_day: int}>, buy: float, split: float, sell: float, tax: float, m3: float}
      */
-    public function value(array $p, array $prices): array
+    public function value(array $p, array $prices, float $taxRate = 0.0): array
     {
         $items = [];
         foreach ($this->products($p) as $item) {
@@ -460,13 +467,21 @@ final class PiPlanner
         $buy = 0.0;
         $sell = 0.0;
         $m3 = 0.0;
+        $tax = 0.0;
         foreach ($items as $item) {
             $buy += $item['per_day'] * (float) ($prices[$item['type']]['buy'] ?? 0);
             $sell += $item['per_day'] * (float) ($prices[$item['type']]['sell'] ?? 0);
             $m3 += $item['per_day'] * (float) ($this->types[$item['type']]['volume'] ?? 0);
+            $tax += self::exportTax($item['tier'], $item['per_day'], $taxRate);
         }
 
-        return ['items' => $items, 'buy' => $buy, 'split' => ($buy + $sell) / 2, 'sell' => $sell, 'm3' => $m3];
+        return ['items' => $items, 'buy' => $buy - $tax, 'split' => ($buy + $sell) / 2 - $tax, 'sell' => $sell - $tax, 'tax' => $tax, 'm3' => $m3];
+    }
+
+    /** Patch 59: customs tax to export these units (importing costs half of this). */
+    public static function exportTax(int $tier, int $units, float $taxRate): float
+    {
+        return $units * (self::TAX_BASE[$tier] ?? 0) * max(0.0, $taxRate);
     }
 
     /**

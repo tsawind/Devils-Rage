@@ -12,7 +12,9 @@
           default => number_format($v, 0),
       };
   };
-  $valueTitle = fn (array $v, int $days = 1): string => 'Buy '.$isk($v['buy'] * $days).' · split '.$isk($v['split'] * $days).' · sell '.$isk($v['sell'] * $days).' ISK';
+  $valueTitle = fn (array $v, int $days = 1): string => 'Buy '.$isk($v['buy'] * $days).' · split '.$isk($v['split'] * $days).' · sell '.$isk($v['sell'] * $days).' ISK'
+      .(isset($v['other_split']) ? ' · '.$otherHub.' split '.$isk($v['other_split'] * $days) : '')
+      .(! empty($v['tax']) ? ' (after '.$isk($v['tax'] * $days).' customs tax)' : '');
   $meterColor = fn (int $pct): string => $pct >= 90 ? '#d6454c' : ($pct >= 70 ? '#e0a43a' : '#4f8f5c');
   $statusLabel = ['stopped' => ['Stopped', 'bad'], 'soon' => ['Stops soon', 'warn'], 'ok' => ['Running', 'ok'], 'factory' => ['Factories only', 'muted']];
   $setup = function (array $info): string {
@@ -118,6 +120,9 @@
   #pi-update { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; cursor: pointer; color: #c8c8d0; margin-left: 8px; }
   #pi-update:disabled { opacity: .5; cursor: default; }
   .tabs button.on { border-color: var(--red-hi); background: #2a0f12; color: #fff; }
+  .tabs a.hub { background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; color: #c8c8d0; text-decoration: none; font-size: 12px; }
+  .tabs a.hub.on { border-color: var(--red-hi); background: #2a0f12; color: #fff; }
+  input[type=number] { background: #101014; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; width: 90px; }
   .grow { flex: 1; }
   .muted { color: var(--muted); }
   .small { font-size: 12px; }
@@ -210,6 +215,11 @@
       <button type="button" data-tab="alerts">Alerts</button>
     </nav>
     <span class="grow"></span>
+    <nav class="tabs" aria-label="Prices from">
+      @foreach($hubs as $key => $hubName)
+        <a class="hub {{ $hub === $key ? 'on' : '' }}" href="?hub={{ $key }}" data-hub title="Worth at {{ $hubName }} prices">{{ ucfirst($key) }}</a>
+      @endforeach
+    </nav>
     @if($checked)
       <span class="muted small" title="SeAT updates each character's colonies from EVE on its own schedule">SeAT checked EVE <span data-ts="{{ $checked }}" data-fmt="ago"></span></span>
     @endif
@@ -331,7 +341,7 @@
       <div class="card stat"><div class="label">Colonies</div><div class="v">{{ $planetCount }}</div><div class="muted small">on {{ count($colonies) }} {{ count($colonies) === 1 ? 'character' : 'characters' }}</div></div>
       <div class="card stat" style="border-color: {{ $stoppedCount ? '#6b1a1f' : 'var(--line)' }}"><div class="label">Stopped now</div><div class="v">{{ $stoppedCount }}</div></div>
       <div class="card stat" style="border-color: {{ $soonCount ? '#6b4310' : 'var(--line)' }}"><div class="label">Stops within 24 h</div><div class="v">{{ $soonCount }}</div></div>
-      <div class="card stat" title="{{ $valueTitle($totals, 7) }} per week"><div class="label">Worth per day (split)</div><div class="v">{{ $isk($totals['split']) }}</div><div class="muted small">buy {{ $isk($totals['buy']) }} · sell {{ $isk($totals['sell']) }} · week {{ $isk($totals['split'] * 7) }}</div></div>
+      <div class="card stat" title="{{ $valueTitle($totals, 7) }} per week"><div class="label">Worth per day (split)</div><div class="v">{{ $isk($totals['split']) }}</div><div class="muted small">buy {{ $isk($totals['buy']) }} · sell {{ $isk($totals['sell']) }} · week {{ $isk($totals['split'] * 7) }}</div><div class="muted small">{{ $otherHub }}: {{ $isk($totals['other_split']) }}@if($taxPercent > 0) · after {{ rtrim(rtrim(number_format($taxPercent, 2), '0'), '.') }}% tax @endif</div></div>
       <div class="card stat"><div class="label">Waiting to move</div><div class="v">{{ number_format($totals['pad'] + $totals['customs']) }} m³</div><div class="muted small">launchpads {{ number_format($totals['pad']) }} · customs offices {{ number_format($totals['customs']) }}</div></div>
     </div>
     @foreach($colonies as $c)
@@ -419,7 +429,7 @@
     @if($withoutPi > 0)
       <p class="note">{{ $withoutPi }} other {{ $withoutPi === 1 ? 'character has' : 'characters have' }} no colonies on SeAT.</p>
     @endif
-    <p class="note">Stop times are exact. Storage and factory numbers are only as fresh as "last opened in game": EVE shares them when the colony is opened. Hover a bar to see what's in it. ▲ / ▼ is how a raw buffer changed per hour between the last two times the colony was opened. Customs office stock comes from your assets (SeAT refreshes them about hourly) and is matched to a planet by what's in it; each holds {{ number_format(\DevilsRage\Seat\Pi\PiData::CUSTOMS_CAPACITY) }} m³. Worth is the top product at {{ $priceSource }} prices, held back when a raw line is short, before customs tax.</p>
+    <p class="note">Stop times are exact. Storage and factory numbers are only as fresh as "last opened in game": EVE shares them when the colony is opened. Hover a bar to see what's in it. ▲ / ▼ is how a raw buffer changed per hour between the last two times the colony was opened. Customs office stock comes from your assets (SeAT refreshes them about hourly) and is matched to a planet by what's in it; each holds {{ number_format(\DevilsRage\Seat\Pi\PiData::CUSTOMS_CAPACITY) }} m³. Worth is the top product at {{ $priceSource }} prices (switch hubs at the top; hover shows the other), held back when a raw line is short, after {{ rtrim(rtrim(number_format($taxPercent, 2), '0'), '.') }}% customs tax on exporting it.</p>
   </section>
 
   {{-- ============================== Templates (Patch 59) ============================== --}}
@@ -563,7 +573,16 @@
           </section>
         </div>
       </div>
-      <p class="note">Corp members' characters that SeAT has a login for. Factory output assumes the factories run all the time, held back when a raw line is short. Worth at {{ $priceSource }} prices, before customs tax.</p>
+      <section class="card form" style="max-width: 720px">
+        <div><h2 style="margin: 0; font-size: 16px; font-weight: 600">Customs tax</h2>
+          <div class="muted small">The tax on our customs offices. Every worth figure takes it off (EVE taxes PI on a fixed value per tier, not the market price: P2 is 7,200 ISK a unit, so 5% costs 360 ISK per P2 exported).</div></div>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+          <label class="small" style="display: inline-flex; gap: 8px; align-items: center"><input type="number" id="tax" min="0" max="100" step="0.5" value="{{ $taxPercent }}"> %</label>
+          <button type="button" class="btn" id="tax-save">Save</button>
+          <span class="toast" id="tax-toast" role="status"></span>
+        </div>
+      </section>
+      <p class="note">Corp members' characters that SeAT has a login for. Factory output assumes the factories run all the time, held back when a raw line is short. Worth at {{ $priceSource }} prices, after {{ rtrim(rtrim(number_format($taxPercent, 2), '0'), '.') }}% customs tax.</p>
     </section>
   @endif
 
@@ -675,6 +694,14 @@
     const j = r && r.ok ? await r.json().catch(() => ({})) : {};
     document.getElementById('pi-update-said').textContent = j.message || 'Could not ask EVE, try again.';
     setTimeout(() => { update.disabled = false; }, 5000);
+  });
+  // Patch 59: price hub (keeps the tab you're on) and the customs tax.
+  document.querySelectorAll('a[data-hub]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); location.href = a.getAttribute('href') + location.hash; }));
+  const taxSave = document.getElementById('tax-save');
+  if (taxSave) taxSave.addEventListener('click', async () => {
+    const r = await post(@json(route('devilsrage.pi.tax')), { percent: Number(document.getElementById('tax').value) }).catch(() => null);
+    const t = document.getElementById('tax-toast');
+    if (r && r.ok) { t.textContent = 'Saved.'; setTimeout(() => location.reload(), 500); } else { t.textContent = 'Use 0 to 100.'; t.style.color = 'var(--bad)'; }
   });
   // Patch 59: templates.
   const tplToast = (text, bad) => { const t = document.getElementById('tpl-toast'); t.textContent = text; t.style.color = bad ? 'var(--bad)' : 'var(--ok)'; };
