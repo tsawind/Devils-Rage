@@ -60,9 +60,9 @@ it('tells residents, hunters, passers and us apart', function () {
     $map = Map::factory()->create();
     $ours = Character::factory()->has(MapAccess::factory(['permission' => Permission::Member])->for($map))->create();
     $us = (int) $ours->corporation_id;
-    $resident = Corporation::factory()->create(['name' => 'Holding Corp', 'ticker' => 'HOLD'])->id;
-    $hunter = Corporation::factory()->create(['name' => 'Roamers'])->id;
-    $passer = Corporation::factory()->create(['name' => 'Tourists'])->id;
+    $resident = (int) Corporation::factory()->create(['name' => 'Holding Corp', 'ticker' => 'HOLD'])->id;
+    $hunter = (int) Corporation::factory()->create(['name' => 'Roamers'])->id;
+    $passer = (int) Corporation::factory()->create(['name' => 'Tourists'])->id;
 
     intelligenceKill(1, 1, $resident, 28606, [$us, $us]);
     intelligenceKill(2, 2, $resident, 32880, [$hunter, $hunter, $hunter]);
@@ -90,8 +90,8 @@ it('calls a resident that lost its citadel and was not seen again evicted', func
     makeSolarsystem(31000600);
     intelligenceTypes();
     $map = Map::factory()->create();
-    $gone = Corporation::factory()->create(['name' => 'Old Residents'])->id;
-    $evictors = Corporation::factory()->create(['name' => 'Evictors'])->id;
+    $gone = (int) Corporation::factory()->create(['name' => 'Old Residents'])->id;
+    $evictors = (int) Corporation::factory()->create(['name' => 'Evictors'])->id;
 
     foreach ([20, 19, 18, 17] as $i => $daysAgo) {
         intelligenceKill(100 + $i, $daysAgo, $evictors, 12011, [$gone, $gone]);
@@ -109,7 +109,7 @@ it('counts the owner of a structure in our intel as living there', function () {
     makeSolarsystem(31000600);
     intelligenceTypes();
     $map = Map::factory()->create();
-    $owner = Corporation::factory()->create(['name' => 'E85 Holding Services', 'ticker' => 'E85'])->id;
+    $owner = (int) Corporation::factory()->create(['name' => 'E85 Holding Services', 'ticker' => 'E85'])->id;
     intelligenceKill(200, 2, 98_000_999, 12011, [$owner, $owner]);
     IntelStructure::query()->create(['map_id' => $map->id, 'solarsystem_id' => 31000600, 'kind' => 'fortizar', 'name' => 'Main Barracks', 'owner' => 'E85 Holding Services', 'state' => 'online', 'seen_at' => now()]);
 

@@ -66,8 +66,7 @@ final class SystemIntelligence
         $rows = [];
         $typeIds = [];
         foreach ($kills as $kill) {
-            $zkb = is_array($kill->zkb) ? $kill->zkb : [];
-            if (($zkb['npc'] ?? false) === true) {
+            if ((bool) data_get($kill->zkb, 'npc', false)) {
                 continue;
             }
             $data = json_decode((string) json_encode($kill->data), true) ?: [];
@@ -260,7 +259,7 @@ final class SystemIntelligence
         arsort($shipCounts);
 
         $hostiles = [...$residents, ...$hunters, ...$passers];
-        $lastHostile = array_reduce($hostiles, fn (?string $carry, array $entity): ?string => $carry === null || $entity['last_seen'] > $carry ? $entity['last_seen'] : $carry);
+        $lastHostile = array_reduce($hostiles, fn (?string $carry, array $entity): string => $carry === null || $entity['last_seen'] > $carry ? $entity['last_seen'] : $carry);
         $weekAgo = $now->subDays(7);
         $week = ['kills' => 0, 'losses' => 0, 'days' => []];
         foreach ($rows as $row) {
@@ -366,7 +365,7 @@ final class SystemIntelligence
     /**
      * Owners written on the map's structures in this system, lower case.
      *
-     * @return Collection<int, string>
+     * @return Collection<int, lowercase-string>
      */
     private static function structureOwners(?Map $map, int $solarsystemId): Collection
     {
