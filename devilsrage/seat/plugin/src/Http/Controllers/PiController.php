@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace DevilsRage\Seat\Http\Controllers;
 
 use DevilsRage\Seat\Models\AccountSetting;
+use DevilsRage\Seat\Models\PiTemplate as StoredTemplate;
 use DevilsRage\Seat\Pi\PiData;
 use DevilsRage\Seat\Pi\PiDigest;
 use DevilsRage\Seat\Pi\PiPlanner;
+use DevilsRage\Seat\Pi\PiTemplate;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\DiscordDm;
 use DevilsRage\Seat\Services\PersonName;
@@ -81,6 +83,7 @@ class PiController extends Controller
             'hasDiscord' => ConnectorUser::query()->where('connector_type', 'discord')->where('user_id', $user->id)->exists(),
             'leader' => $leader,
             'corp' => $leader ? $this->corp($now) : null,
+            'templates' => $this->templates((int) $user->id, $leader),
         ]);
     }
 
@@ -127,6 +130,76 @@ class PiController extends Controller
         return response()->json(['queued' => $queued, 'message' => sprintf('Asked EVE for %d character%s. Give it a minute, then reload.', $queued, $queued === 1 ? '' : 's')]);
     }
 
+    /**
+     * Patch 59: keep a colony template (pasted from EVE). Shared with everyone on our SeAT unless
+     * "shared" is off. The same template twice is kept once.
+     */
+    public function saveTemplate(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'body' => ['required', 'string', 'max:'.PiTemplate::MAX_BYTES],
+            'name' => ['nullable', 'string', 'max:80'],
+            'note' => ['nullable', 'string', 'max:500'],
+            'shared' => ['boolean'],
+        ]);
+        try {
+            $parsed = PiTemplate::parse($data['body']);
+        } catch (\InvalidArgumentException $error) {
+            return response()->json(['message' => $error->getMessage()], 422);
+        }
+        $userId = (int) auth()->id();
+        $fingerprint = PiTemplate::fingerprint($parsed);
+        $existing = StoredTemplate::query()->where('user_id', $userId)->where('fingerprint', $fingerprint)->first();
+        if ($existing !== null) {
+            return response()->json(['id' => $existing->id, 'message' => 'You already have this one: '.$existing->name.'.']);
+        }
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name === '') {
+            $summary = PiTemplate::summary($parsed, (new PiData())->typesFor(PiTemplate::typeIds($parsed)));
+            $name = mb_substr($summary['title'], 0, 80);
+        }
+        $template = StoredTemplate::query()->create([
+            'user_id' => $userId,
+            'name' => $name,
+            'note' => trim((string) ($data['note'] ?? '')) ?: null,
+            'body' => trim($data['body']),
+            'fingerprint' => $fingerprint,
+            'planet_type_id' => (int) $parsed['Pln'],
+            'shared' => (bool) ($data['shared'] ?? true),
+        ]);
+
+        return response()->json(['id' => $template->id, 'message' => 'Saved.']);
+    }
+
+    /** Patch 59: rename, change the note, or share / stop sharing one of your templates. */
+    public function updateTemplate(Request $request, int $template): JsonResponse
+    {
+        $stored = StoredTemplate::query()->where('user_id', auth()->id())->findOrFail($template);
+        $data = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:80'],
+            'note' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'shared' => ['sometimes', 'boolean'],
+        ]);
+        if (array_key_exists('note', $data)) {
+            $data['note'] = trim((string) $data['note']) ?: null;
+        }
+        $stored->fill($data)->save();
+
+        return response()->json(['saved' => true]);
+    }
+
+    /** Patch 59: delete a template (your own; directors can remove any shared one). */
+    public function deleteTemplate(int $template): JsonResponse
+    {
+        $stored = StoredTemplate::query()->findOrFail($template);
+        if ($stored->user_id !== (int) auth()->id() && ! Gate::allows('devilsrage-leader')) {
+            abort(403);
+        }
+        $stored->delete();
+
+        return response()->json(['deleted' => true]);
+    }
+
     /** "Send me a test": today's message right now, whatever it says. */
     public function testAlert(PiDigest $digest, DiscordDm $dm): JsonResponse
     {
@@ -135,6 +208,59 @@ class PiController extends Controller
         $message = $digest->message($user, $setting, true) ?? '';
 
         return response()->json(['sent' => $dm->send((int) $user->id, "(test) ".$message)]);
+    }
+
+    /**
+     * Patch 59: your templates and everyone else's shared ones, each described.
+     *
+     * @return array{mine: list<array<string, mixed>>, corp: list<array<string, mixed>>}
+     */
+    private function templates(int $userId, bool $leader): array
+    {
+        $rows = StoredTemplate::query()
+            ->where(fn ($query) => $query->where('user_id', $userId)->orWhere('shared', true))
+            ->orderByDesc('updated_at')
+            ->limit(500)
+            ->get();
+        $parsed = [];
+        $typeIds = [];
+        foreach ($rows as $row) {
+            try {
+                $parsed[$row->id] = PiTemplate::parse($row->body);
+                $typeIds = array_merge($typeIds, PiTemplate::typeIds($parsed[$row->id]));
+            } catch (\InvalidArgumentException) {
+                continue;
+            }
+        }
+        $types = (new PiData())->typesFor(array_values(array_unique($typeIds)));
+        $users = User::query()->whereIn('id', $rows->pluck('user_id')->unique()->values())->with('main_character')->get()->keyBy('id');
+
+        $mine = [];
+        $corp = [];
+        foreach ($rows as $row) {
+            if (! isset($parsed[$row->id])) {
+                continue;
+            }
+            $item = [
+                'id' => $row->id,
+                'name' => $row->name,
+                'note' => $row->note,
+                'body' => $row->body,
+                'shared' => $row->shared,
+                'by' => $users->has($row->user_id) ? PersonName::mainName($users[$row->user_id]) : '?',
+                'updated' => $row->updated_at?->getTimestamp(),
+                'can_delete' => $row->user_id === $userId || $leader,
+                'summary' => PiTemplate::summary($parsed[$row->id], $types),
+            ];
+            if ($row->user_id === $userId) {
+                $mine[] = $item;
+            } else {
+                $corp[] = $item;
+            }
+        }
+        usort($corp, fn (array $a, array $b): int => [$a['summary']['planet'], $a['name']] <=> [$b['summary']['planet'], $b['name']]);
+
+        return ['mine' => $mine, 'corp' => $corp];
     }
 
     /**

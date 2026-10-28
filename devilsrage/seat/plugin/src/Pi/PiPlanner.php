@@ -15,7 +15,7 @@ namespace DevilsRage\Seat\Pi;
  *   extractors: list of [pin_id, product, product_name, cycle_time (s)|null, qty|null,
  *                        heads, lat, lon, install (unix)|null, expiry (unix)|null]
  *   factories:  list of [pin_id, kind (basic|advanced|hightech), inputs: type ids, outputs: type ids]
- *   storage:    list of [pin_id, kind, capacity (m3), used (m3)]
+ *   storage:    list of [pin_id, kind, capacity (m3), used (m3), contents?: list of [name, amount]]
  * History (earlier extractor programs, kept by our hourly job): pin_id => list of
  *   [install, product, cycle_time, qty, heads, lat, lon]
  * Types: type id => [name, tier (0 = raw, 1-4 = P1-P4)]
@@ -112,6 +112,7 @@ final class PiPlanner
             'balance' => $balance,
             'depleted' => $this->depleted($extractors),
             'storage' => $storage,
+            'stores' => $this->stores($planet),
             'program_lengths' => array_values(array_map(
                 fn (array $e): int => (int) $e['expiry'] - (int) $e['install'],
                 array_filter($extractors, fn (array $e): bool => ! $this->notRunning($e) && $e['install'] !== null),
@@ -389,6 +390,41 @@ final class PiPlanner
             'Give every extractor the same program length',
             sprintf('Right now they run from %s to %s. With one length they all stop together, so %s needs one login per run.', $this->duration(min($lengths)), $this->duration(max($lengths)), $name),
         );
+    }
+
+    /**
+     * Patch 59: every launchpad and storage facility with how full it is (launchpads first). The
+     * command center only counts when there is nothing else.
+     *
+     * @param  array<string, mixed>  $planet
+     * @return list<array{kind: string, fill: float, used: float, capacity: float, contents: list<array{name: string, amount: int}>}>
+     */
+    public function stores(array $planet): array
+    {
+        $order = ['launchpad' => 0, 'storage facility' => 1, 'command center' => 2];
+        $stores = [];
+        foreach ($planet['storage'] ?? [] as $store) {
+            $capacity = (float) $store['capacity'];
+            if ($capacity <= 0) {
+                continue;
+            }
+            $contents = $store['contents'] ?? [];
+            usort($contents, fn (array $a, array $b): int => $b['amount'] <=> $a['amount']);
+            $stores[] = [
+                'kind' => (string) $store['kind'],
+                'fill' => (float) $store['used'] / $capacity,
+                'used' => (float) $store['used'],
+                'capacity' => $capacity,
+                'contents' => $contents,
+            ];
+        }
+        $real = array_values(array_filter($stores, fn (array $s): bool => $s['kind'] !== 'command center'));
+        if ($real !== []) {
+            $stores = $real;
+        }
+        usort($stores, fn (array $a, array $b): int => [$order[$a['kind']] ?? 3, -$a['fill']] <=> [$order[$b['kind']] ?? 3, -$b['fill']]);
+
+        return $stores;
     }
 
     /**

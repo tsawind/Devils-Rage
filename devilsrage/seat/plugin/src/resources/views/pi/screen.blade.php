@@ -27,6 +27,37 @@
       }
       return $out === [] ? 'none' : implode(', ', $out);
   };
+  $storeLabel = ['launchpad' => 'Launchpad', 'storage facility' => 'Storage', 'command center' => 'Command center'];
+  $storeTitle = function (array $store): string {
+      $lines = [number_format($store['used']).' of '.number_format($store['capacity']).' m³'];
+      foreach (array_slice($store['contents'], 0, 8) as $c) {
+          $lines[] = $c['name'].': '.number_format($c['amount']);
+      }
+      if ($store['contents'] === []) {
+          $lines[] = 'Empty';
+      }
+      return implode("\n", $lines);
+  };
+  $templateLine = function (array $t): string {
+      $parts = [];
+      $heads = array_map(fn (array $e): string => $e['heads'].' heads', $t['extractors']);
+      if ($heads !== []) {
+          $parts[] = count($heads).' '.(count($heads) === 1 ? 'extractor' : 'extractors').' ('.implode(', ', $heads).')';
+      }
+      foreach (['basic' => 'basic', 'advanced' => 'advanced', 'hightech' => 'high-tech'] as $k => $label) {
+          if ($t['factories'][$k] > 0) {
+              $parts[] = $t['factories'][$k].' '.$label;
+          }
+      }
+      if ($t['storage']['launchpad'] > 0) {
+          $parts[] = $t['storage']['launchpad'].' '.($t['storage']['launchpad'] === 1 ? 'launchpad' : 'launchpads');
+      }
+      if ($t['storage']['storage'] > 0) {
+          $parts[] = $t['storage']['storage'].' storage';
+      }
+      return implode(' · ', $parts);
+  };
+  $templatePlanets = collect($templates['corp'])->pluck('summary.planet')->unique()->sort()->values()->all();
   $planetCount = 0;
   $stoppedCount = 0;
   $soonCount = 0;
@@ -139,6 +170,18 @@
   select { background: #101014; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
   .toast { color: var(--ok); font-size: 12px; }
   .note { font-size: 12px; color: var(--muted); max-width: 860px; margin: 0; }
+  .stores { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+  .store { display: grid; grid-template-columns: 74px 54px auto; gap: 7px; align-items: center; font-size: 12.5px; white-space: nowrap; cursor: default; }
+  .store .meter { height: 6px; }
+  .tpl { padding: 13px 16px; display: flex; flex-direction: column; gap: 6px; border-top: 1px solid #202027; }
+  .tpl:first-of-type { border-top: 0; }
+  .tpl .row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .tpl .row b { font-size: 15px; font-weight: 600; }
+  .tpl .acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  textarea, input[type=text] { background: #101014; border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; }
+  textarea { min-height: 84px; font: 12px/1.4 ui-monospace, Consolas, monospace; resize: vertical; }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 640px) { .fields { grid-template-columns: 1fr; } }
   [hidden] { display: none !important; }
   @media (max-width: 640px) { .tag { width: 76px; } .lines { grid-template-columns: 1fr; } }
 </style>
@@ -150,6 +193,7 @@
     <nav class="tabs" aria-label="PI views">
       <button type="button" data-tab="run">PI run</button>
       <button type="button" data-tab="colonies">My colonies</button>
+      <button type="button" data-tab="templates">Templates</button>
       @if($leader)<button type="button" data-tab="corp">Corp overview</button>@endif
       <button type="button" data-tab="alerts">Alerts</button>
     </nav>
@@ -284,7 +328,7 @@
         </div>
         <div class="scroll">
           <table>
-            <thead><tr><th scope="col">Planet</th><th scope="col">Extractors</th><th scope="col">Making</th><th scope="col">Factories</th><th scope="col">Fullest storage</th><th scope="col">Last opened in game</th><th scope="col"><span hidden>Copy</span></th></tr></thead>
+            <thead><tr><th scope="col">Planet</th><th scope="col">Extractors</th><th scope="col">Making</th><th scope="col">Factories</th><th scope="col">Storage</th><th scope="col">Last opened in game</th><th scope="col"><span hidden>Copy</span></th></tr></thead>
             <tbody>
               @foreach($c['planets'] as $info)
                 <tr>
@@ -305,7 +349,20 @@
                     @endif
                   </td>
                   <td>{{ $factories($info['factory_counts']) }}</td>
-                  <td>{{ $info['storage'] ? round($info['storage']['fill'] * 100).'% '.$info['storage']['kind'] : '—' }}</td>
+                  <td>
+                    @if($info['stores'])
+                      <div class="stores">
+                        @foreach($info['stores'] as $store)
+                          @php $pct = (int) round($store['fill'] * 100); @endphp
+                          <div class="store" title="{{ $storeTitle($store) }}">
+                            <span>{{ $storeLabel[$store['kind']] ?? ucfirst($store['kind']) }}</span>
+                            <div class="meter"><i style="width: {{ min(100, $pct) }}%; background: {{ $pct >= 90 ? '#d6454c' : ($pct >= 70 ? '#e0a43a' : '#4f8f5c') }}"></i></div>
+                            <span>{{ $pct }}%</span>
+                          </div>
+                        @endforeach
+                      </div>
+                    @else — @endif
+                  </td>
                   <td class="muted">@if($info['planet']['last_update'])<span data-ts="{{ $info['planet']['last_update'] }}" data-fmt="ago"></span>@else — @endif</td>
                   <td style="text-align: right"><button type="button" class="btn sm" data-copy="{{ $info['planet']['name'] }}">Copy name</button></td>
                 </tr>
@@ -318,7 +375,82 @@
     @if($withoutPi > 0)
       <p class="note">{{ $withoutPi }} other {{ $withoutPi === 1 ? 'character has' : 'characters have' }} no colonies on SeAT.</p>
     @endif
-    <p class="note">Stop times are exact. Storage and factory numbers are only as fresh as "last opened in game": EVE shares them when the colony is opened.</p>
+    <p class="note">Stop times are exact. Storage and factory numbers are only as fresh as "last opened in game": EVE shares them when the colony is opened. Hover a storage bar to see what's in it.</p>
+  </section>
+
+  {{-- ============================== Templates (Patch 59) ============================== --}}
+  <section class="pane" id="pane-templates" aria-label="Templates">
+    <section class="card form">
+      <div><h2 style="margin: 0; font-size: 16px; font-weight: 600">Add a template</h2>
+        <div class="muted small">In EVE, open the colony, then Templates, and copy it to the clipboard. Paste it here (or pick a saved .json file).</div></div>
+      <textarea id="tpl-body" spellcheck="false" placeholder='{"CmdCtrLv": 5, "Cmt": "…", "P": [ … ] }' aria-label="Template from EVE"></textarea>
+      <div class="fields">
+        <label class="small">Name <span class="muted">(empty = named from what it makes)</span><input type="text" id="tpl-name" maxlength="80"></label>
+        <label class="small">Note <span class="muted">(optional, e.g. "standard P0→P2, 6 heads each")</span><input type="text" id="tpl-note" maxlength="500"></label>
+      </div>
+      <div style="display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap">
+        <button type="button" class="btn p" id="tpl-save">Save template</button>
+        <label class="btn">Choose file…<input type="file" id="tpl-file" accept=".json,application/json,text/plain" hidden></label>
+        <label class="opt" style="align-items: center"><input type="checkbox" id="tpl-shared" checked><span>Share with everyone on our SeAT</span></label>
+        <span class="toast" id="tpl-toast" role="status"></span>
+      </div>
+    </section>
+
+    @foreach(['mine' => 'My templates', 'corp' => 'Shared by others'] as $list => $heading)
+      <section class="card" id="tpl-{{ $list }}">
+        <div class="sect">
+          <h2>{{ $heading }}</h2>
+          <span class="muted small">{{ count($templates[$list]) }}</span>
+          @if($list === 'corp' && count($templatePlanets) > 1)
+            <span class="grow"></span>
+            <select id="tpl-planet" aria-label="Planet type">
+              <option value="">All planet types</option>
+              @foreach($templatePlanets as $planet)<option>{{ $planet }}</option>@endforeach
+            </select>
+          @endif
+        </div>
+        @forelse($templates[$list] as $t)
+          @php $sum = $t['summary']; @endphp
+          <div class="tpl" data-planet="{{ $sum['planet'] }}" data-id="{{ $t['id'] }}">
+            <div class="row">
+              <b class="tpl-name">{{ $t['name'] }}</b>
+              <span class="chip muted">{{ $sum['planet'] }} · CC {{ $sum['level'] }}</span>
+              @if($list === 'corp')<span class="muted small">by {{ $t['by'] }}</span>@endif
+              @if($list === 'mine' && ! $t['shared'])<span class="chip muted">Only you</span>@endif
+            </div>
+            <div class="small">
+              @if($sum['raw'] !== [] && $sum['makes'] !== []){{ implode(' + ', $sum['raw']) }} → {{ implode(', ', $sum['makes']) }} (P{{ $sum['tier'] }})
+              @elseif($sum['makes'] !== []){{ implode(', ', $sum['makes']) }} (P{{ $sum['tier'] }})
+              @elseif($sum['raw'] !== []){{ implode(' + ', $sum['raw']) }} (raw)
+              @endif
+            </div>
+            <div class="muted small">{{ $templateLine($sum) }}</div>
+            @if($t['note'])<div class="small tpl-note">{{ $t['note'] }}</div>@endif
+            @if($sum['comment'] !== '')<div class="muted small">In EVE: “{{ $sum['comment'] }}”</div>@endif
+            <div class="acts">
+              <button type="button" class="btn sm" data-copy-tpl="{{ $t['id'] }}" title="Copies it so EVE can import it">Copy for EVE</button>
+              <button type="button" class="btn sm" data-download-tpl="{{ $t['id'] }}">Download</button>
+              @if($list === 'mine')
+                <button type="button" class="btn sm" data-edit-tpl="{{ $t['id'] }}">Edit name / note</button>
+                <label class="small" style="display: inline-flex; gap: 5px; align-items: center"><input type="checkbox" data-share-tpl="{{ $t['id'] }}" @checked($t['shared'])> Shared</label>
+              @endif
+              @if($t['can_delete'])<button type="button" class="btn sm" data-delete-tpl="{{ $t['id'] }}">Delete</button>@endif
+            </div>
+            @if($list === 'mine')
+              <div class="fields" data-editor="{{ $t['id'] }}" hidden>
+                <label class="small">Name<input type="text" maxlength="80" value="{{ $t['name'] }}" data-field="name"></label>
+                <label class="small">Note<input type="text" maxlength="500" value="{{ $t['note'] }}" data-field="note"></label>
+                <div><button type="button" class="btn sm" data-save-tpl="{{ $t['id'] }}">Save</button></div>
+              </div>
+            @endif
+            <script type="application/json" data-body="{{ $t['id'] }}">{!! json_encode(['body' => $t['body'], 'name' => $t['name'], 'note' => $t['note']], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
+          </div>
+        @empty
+          <div class="tpl muted">{{ $list === 'mine' ? 'None yet. Paste one above.' : 'Nobody has shared one yet.' }}</div>
+        @endforelse
+      </section>
+    @endforeach
+    <p class="note">A template only fits the planet type it was made on, and needs the same command center level. Copy for EVE, then import it from EVE's Templates window on the colony.</p>
   </section>
 
   {{-- ============================== Corp overview ============================== --}}
@@ -488,6 +620,67 @@
     const j = r && r.ok ? await r.json().catch(() => ({})) : {};
     document.getElementById('pi-update-said').textContent = j.message || 'Could not ask EVE, try again.';
     setTimeout(() => { update.disabled = false; }, 5000);
+  });
+  // Patch 59: templates.
+  const tplToast = (text, bad) => { const t = document.getElementById('tpl-toast'); t.textContent = text; t.style.color = bad ? 'var(--bad)' : 'var(--ok)'; };
+  const tplData = (id) => JSON.parse(document.querySelector('[data-body="' + id + '"]').textContent);
+  const tplUrl = (id, suffix) => @json(route('devilsrage.pi.templates.update', ['template' => 0])).replace(/\/0$/, '/' + id) + (suffix || '');
+  const reloadOn = (tab) => { history.replaceState(null, '', '#' + tab); location.reload(); };
+  document.getElementById('tpl-file').addEventListener('change', async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) document.getElementById('tpl-body').value = await file.text();
+  });
+  document.getElementById('tpl-save').addEventListener('click', async () => {
+    const r = await post(@json(route('devilsrage.pi.templates.store')), {
+      body: document.getElementById('tpl-body').value,
+      name: document.getElementById('tpl-name').value,
+      note: document.getElementById('tpl-note').value,
+      shared: document.getElementById('tpl-shared').checked,
+    }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : {};
+    if (r && r.ok) { tplToast(j.message || 'Saved.'); setTimeout(() => reloadOn('templates'), 600); }
+    else tplToast((j && j.message) || 'Could not save, try again.', true);
+  });
+  document.querySelectorAll('[data-copy-tpl]').forEach((b) => b.addEventListener('click', async () => {
+    const was = b.textContent;
+    try { await navigator.clipboard.writeText(tplData(b.dataset.copyTpl).body); b.textContent = 'Copied, import it in EVE'; }
+    catch (e) { b.textContent = 'Copy failed'; }
+    setTimeout(() => { b.textContent = was; }, 1800);
+  }));
+  document.querySelectorAll('[data-download-tpl]').forEach((b) => b.addEventListener('click', () => {
+    const d = tplData(b.dataset.downloadTpl);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([d.body], { type: 'application/json' }));
+    a.download = (d.name.replace(/[^\w\- ]+/g, ' ').replace(/\s+/g, ' ').trim() || 'pi-template') + '.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }));
+  const tplSaid = (id, text) => { const b = document.querySelector('[data-copy-tpl="' + id + '"]'); if (b) { const was = b.textContent; b.textContent = text; setTimeout(() => { b.textContent = was; }, 2500); } };
+  const patch = async (id, body) => { const r = await post(tplUrl(id), body).catch(() => null); if (r && r.ok) reloadOn('templates'); else tplSaid(id, 'Could not save, try again'); };
+  document.querySelectorAll('[data-edit-tpl]').forEach((b) => b.addEventListener('click', () => {
+    const ed = document.querySelector('[data-editor="' + b.dataset.editTpl + '"]');
+    ed.hidden = !ed.hidden;
+    if (!ed.hidden) ed.querySelector('input').focus();
+  }));
+  document.querySelectorAll('[data-save-tpl]').forEach((b) => b.addEventListener('click', () => {
+    const ed = document.querySelector('[data-editor="' + b.dataset.saveTpl + '"]');
+    const name = ed.querySelector('[data-field="name"]').value.trim();
+    if (!name) { ed.querySelector('[data-field="name"]').focus(); return; }
+    patch(b.dataset.saveTpl, { name, note: ed.querySelector('[data-field="note"]').value });
+  }));
+  document.querySelectorAll('[data-share-tpl]').forEach((c) => c.addEventListener('change', () => patch(c.dataset.shareTpl, { shared: c.checked })));
+  document.querySelectorAll('[data-delete-tpl]').forEach((b) => b.addEventListener('click', async () => {
+    if (!b.dataset.armed) {
+      b.dataset.armed = '1'; b.textContent = 'Sure? Click again';
+      setTimeout(() => { delete b.dataset.armed; b.textContent = 'Delete'; }, 4000);
+      return;
+    }
+    const r = await post(tplUrl(b.dataset.deleteTpl, '/delete')).catch(() => null);
+    if (r && r.ok) reloadOn('templates'); else b.textContent = 'Could not delete';
+  }));
+  const tplPlanet = document.getElementById('tpl-planet');
+  if (tplPlanet) tplPlanet.addEventListener('change', () => {
+    document.querySelectorAll('#tpl-corp .tpl[data-planet]').forEach((el) => { el.hidden = tplPlanet.value !== '' && el.dataset.planet !== tplPlanet.value; });
   });
   const test = document.getElementById('test');
   test.addEventListener('click', async () => {

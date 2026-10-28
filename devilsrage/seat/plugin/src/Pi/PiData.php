@@ -107,10 +107,12 @@ final class PiData
                     ];
                 } elseif (isset(self::CAPACITY[$kind])) {
                     $used = 0.0;
+                    $held = [];
                     foreach ($contents->get($pinKey, collect()) as $content) {
                         $used += (float) $content->amount * ($this->types[(int) $content->type_id]['volume'] ?? 0.0);
+                        $held[] = ['name' => $this->types[(int) $content->type_id]['name'] ?? 'Type '.$content->type_id, 'amount' => (int) $content->amount];
                     }
-                    $result['storage'][] = ['pin_id' => (int) $pin->pin_id, 'kind' => $kind, 'capacity' => self::CAPACITY[$kind], 'used' => $used];
+                    $result['storage'][] = ['pin_id' => (int) $pin->pin_id, 'kind' => $kind, 'capacity' => self::CAPACITY[$kind], 'used' => $used, 'contents' => $held];
                 }
             }
             $byCharacter[(int) $planet->character_id][] = $result;
@@ -209,6 +211,19 @@ final class PiData
     }
 
     /**
+     * Patch 59: names and tiers of these types (for PI templates).
+     *
+     * @param  list<int>  $typeIds
+     * @return array<int, array{name: string, tier: int, volume: float}>
+     */
+    public function typesFor(array $typeIds): array
+    {
+        $this->loadTypes($typeIds);
+
+        return array_intersect_key($this->types, array_flip($typeIds));
+    }
+
+    /**
      * Records every extractor program SeAT knows about (run hourly). A program is one
      * install_time on one pin; numbers that arrive later fill in the same row.
      */
@@ -298,17 +313,6 @@ final class PiData
     /** extractor, basic, advanced, hightech, launchpad, storage facility, command center or other. */
     private function pinKind(int $typeId): string
     {
-        $name = strtolower($this->types[$typeId]['name'] ?? '');
-
-        return match (true) {
-            str_contains($name, 'extractor control unit') => 'extractor',
-            str_contains($name, 'basic industry facility') => 'basic',
-            str_contains($name, 'advanced industry facility') => 'advanced',
-            str_contains($name, 'high-tech production plant') => 'hightech',
-            str_contains($name, 'launchpad') || str_contains($name, 'launch pad') => 'launchpad',
-            str_contains($name, 'storage facility') => 'storage facility',
-            str_contains($name, 'command center') => 'command center',
-            default => 'other',
-        };
+        return PiTemplate::pinKind($this->types[$typeId]['name'] ?? '');
     }
 }

@@ -41,6 +41,10 @@ Route::group([
     Route::post('pi/alerts', [PiController::class, 'saveAlerts'])->name('devilsrage.pi.alerts');
     Route::post('pi/alerts/test', [PiController::class, 'testAlert'])->name('devilsrage.pi.alerts.test');
     Route::post('pi/update', [PiController::class, 'forceUpdate'])->name('devilsrage.pi.update');
+    // Patch 59: PI colony templates (kept and traded on the PI screen).
+    Route::post('pi/templates', [PiController::class, 'saveTemplate'])->name('devilsrage.pi.templates.store');
+    Route::post('pi/templates/{template}', [PiController::class, 'updateTemplate'])->whereNumber('template')->name('devilsrage.pi.templates.update');
+    Route::post('pi/templates/{template}/delete', [PiController::class, 'deleteTemplate'])->whereNumber('template')->name('devilsrage.pi.templates.delete');
     Route::post('accounts', [AccountsController::class, 'storeAccount'])->name('devilsrage.accounts.store');
     Route::post('accounts/share', [AccountsController::class, 'share'])->name('devilsrage.accounts.share');
     Route::post('accounts/name', [AccountsController::class, 'saveName'])->name('devilsrage.accounts.name');
