@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Models\IntelStructure;
 use App\Models\MapSolarsystem;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -37,6 +38,8 @@ final class SelectedMapSolarsystemResource extends JsonResource
             'map_connections' => $this->mapConnections->toResourceCollection(MapConnectionResource::class),
             'signatures' => $this->signatures->toResourceCollection(SignatureResource::class),
             'audits' => $this->details->audits->toResourceCollection(AuditResource::class),
+            // Patch 58b: a short list of the system's structures for the Notes panel (the intel has the rest).
+            'intel_structures' => IntelStructure::briefFor($this->map_id, $this->solarsystem_id),
         ];
     }
 

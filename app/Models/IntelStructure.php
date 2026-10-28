@@ -38,6 +38,35 @@ final class IntelStructure extends Model
 
     public const array STATES = ['online', 'low_power', 'abandoned', 'anchoring', 'armor_timer', 'hull_timer', 'offline', 'unanchoring', 'gone'];
 
+    /**
+     * Patch 58b: the system's structures in short for the Notes panel: timers first, then the
+     * latest seen; gone ones left out.
+     *
+     * @return list<array{id: int, kind: string, name: string|null, owner: string|null, state: string, timer_at: string|null, seen_at: string}>
+     */
+    public static function briefFor(int $mapId, int $solarsystemId): array
+    {
+        return self::query()
+            ->where('map_id', $mapId)
+            ->where('solarsystem_id', $solarsystemId)
+            ->where('state', '!=', 'gone')
+            ->orderByRaw("CASE WHEN state IN ('armor_timer', 'hull_timer') THEN 0 ELSE 1 END")
+            ->orderByDesc('seen_at')
+            ->limit(8)
+            ->get(['id', 'kind', 'name', 'owner', 'state', 'timer_at', 'seen_at'])
+            ->map(fn (self $structure): array => [
+                'id' => (int) $structure->id,
+                'kind' => $structure->kind,
+                'name' => $structure->name,
+                'owner' => $structure->owner,
+                'state' => $structure->state,
+                'timer_at' => $structure->timer_at?->toIso8601String(),
+                'seen_at' => $structure->seen_at->toIso8601String(),
+            ])
+            ->values()
+            ->all();
+    }
+
     protected function casts(): array
     {
         return [

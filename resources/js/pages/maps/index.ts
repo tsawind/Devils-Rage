@@ -386,6 +386,8 @@ export type TSelectedMapSolarsystemBase = Omit<TMapSolarsystemBase, 'signatures'
     notes: string | null;
     signatures: TSignature[];
     audits: TAudit[];
+    /** Patch 58b: the system's structures in short, for the Notes panel. */
+    intel_structures?: TIntelStructureBrief[];
     map_connections: TMapConnection[];
 };
 
@@ -458,4 +460,15 @@ export type TMapInfo = {
         id: number;
         name: string;
     };
+};
+
+/** Patch 58b: one structure in the Notes panel's short list. */
+export type TIntelStructureBrief = {
+    id: number;
+    kind: string;
+    name: string | null;
+    owner: string | null;
+    state: string;
+    timer_at: string | null;
+    seen_at: string;
 };

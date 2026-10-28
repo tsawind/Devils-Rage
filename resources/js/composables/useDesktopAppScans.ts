@@ -8,6 +8,7 @@ import { signatureParser } from '@/lib/SignatureParser';
 import { signatureToast as toast } from '@/lib/signatureToast';
 import { pasteSignatures } from '@/map/api';
 import { tryUseMapStore } from '@/map/store/mapStore';
+import { router } from '@inertiajs/vue3';
 import { useEventListener } from '@vueuse/core';
 
 /**
@@ -95,6 +96,8 @@ async function importInto(target: { id: number; alias?: string | null; solarsyst
         toast.error(`Couldn't add ${copy.character_name}'s structures to ${name}`);
         return;
     }
+    // Patch 58b: the Notes panel's short structure list catches up.
+    router.reload({ only: ['selected_map_solarsystem'] });
     const added = answer.structures.filter((structure) => answer.added.includes(structure.id));
     const label = (structure: { kind: string; name: string | null }) => `${structure.kind === 'pos' ? 'POS' : structure.kind[0].toUpperCase() + structure.kind.slice(1)}${structure.name ? ` (${structure.name})` : ''}`;
     if (!added.length) {

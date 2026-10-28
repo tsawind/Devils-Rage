@@ -223,3 +223,16 @@ it('patch 57: viewers cannot delete intel', function () {
     delete(route('map-solarsystems.intel.entries.destroy', [$system, $note['id']]))->assertForbidden();
     expect(IntelEntry::query()->find($note['id']))->not->toBeNull();
 });
+
+it('patch 58b: the selected system carries a short list of its structures for the Notes panel', function () {
+    $map = Map::factory()->create();
+    makeSolarsystem(31000508);
+    IntelStructure::query()->create(['map_id' => $map->id, 'solarsystem_id' => 31000508, 'kind' => 'fortizar', 'name' => 'J145735 - Old-Daisy', 'owner' => 'TDVS', 'state' => 'online', 'seen_at' => now()->subDay()]);
+    IntelStructure::query()->create(['map_id' => $map->id, 'solarsystem_id' => 31000508, 'kind' => 'astrahus', 'name' => 'Reffed', 'state' => 'armor_timer', 'timer_at' => now()->addDay(), 'seen_at' => now()->subDays(3)]);
+    IntelStructure::query()->create(['map_id' => $map->id, 'solarsystem_id' => 31000508, 'kind' => 'raitaru', 'name' => 'Dead', 'state' => 'gone', 'seen_at' => now()]);
+
+    $brief = IntelStructure::briefFor($map->id, 31000508);
+
+    expect(array_column($brief, 'name'))->toBe(['Reffed', 'J145735 - Old-Daisy'])
+        ->and($brief[1]['owner'])->toBe('TDVS');
+});

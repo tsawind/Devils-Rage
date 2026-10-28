@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import usePermission from '@/composables/usePermission';
 import type { TResolvedSelectedMapSolarsystem } from '@/pages/maps';
 import MapSolarsystems from '@/routes/map-solarsystems';
-import { useForm } from '@inertiajs/vue3';
+import { router, useForm } from '@inertiajs/vue3';
 import SystemIntelDialog from '@/components/intel/SystemIntelDialog.vue';
 import { displayAlias } from '@/lib/alias';
 import { Maximize2, Pencil } from 'lucide-vue-next';
@@ -25,6 +25,44 @@ const editing = ref(false);
 // Patch 55: the system's intel, opened big (structures, scans, screenshots, who lives there).
 const intelOpen = ref(false);
 const systemLabel = computed(() => [displayAlias(map_solarsystem.alias), map_solarsystem.solarsystem?.name].filter(Boolean).join(' · '));
+
+// Patch 58b: the system's structures in short, above the notes; click one for the intel.
+const structures = computed(() => map_solarsystem.intel_structures ?? []);
+const KIND_SHORT: Record<string, string> = {
+    astrahus: 'Astrahus',
+    fortizar: 'Fortizar',
+    keepstar: 'Keepstar',
+    raitaru: 'Raitaru',
+    azbel: 'Azbel',
+    sotiyo: 'Sotiyo',
+    athanor: 'Athanor',
+    tatara: 'Tatara',
+    pos: 'POS',
+    other: 'Structure',
+};
+const STATE_SHORT: Record<string, { label: string; klass: string }> = {
+    online: { label: 'online', klass: 'text-green-400' },
+    low_power: { label: 'low power', klass: 'text-amber-300' },
+    abandoned: { label: 'abandoned', klass: 'text-neutral-400' },
+    anchoring: { label: 'anchoring', klass: 'text-sky-300' },
+    armor_timer: { label: 'armor timer', klass: 'text-amber-300' },
+    hull_timer: { label: 'hull timer', klass: 'text-red-300' },
+    offline: { label: 'offline', klass: 'text-neutral-400' },
+    unanchoring: { label: 'unanchoring', klass: 'text-sky-300' },
+};
+/** The name without the system part EVE puts in front ("J145735 - Old-Daisy" → "Old-Daisy"). */
+const shortName = (name: string | null) => (name ?? '').replace(/^[A-Z0-9-]+ - /, '');
+function timerText(iso: string | null): string | null {
+    if (!iso) return null;
+    const minutes = Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
+    if (minutes <= 0) return 'out now';
+    const hours = Math.floor(minutes / 60);
+    return hours >= 24 ? `out in ${Math.floor(hours / 24)}d ${hours % 24}h` : `out in ${hours}h ${minutes % 60}m`;
+}
+// Changes made in the intel window show here once it closes.
+watch(intelOpen, (isOpen) => {
+    if (!isOpen) router.reload({ only: ['selected_map_solarsystem'] });
+});
 
 const form = useForm({
     notes: map_solarsystem.notes || '',
@@ -111,6 +149,21 @@ watch(
             </template>
         </MapPanelHeader>
         <MapPanelContent>
+            <div v-if="structures.length" class="flex flex-col gap-0.5 border-b border-border/50 px-3 py-1.5 text-[11px]">
+                <button
+                    v-for="structure in structures"
+                    :key="structure.id"
+                    type="button"
+                    class="flex min-w-0 items-baseline gap-1.5 rounded px-1 text-left hover:bg-muted/50"
+                    :title="`${KIND_SHORT[structure.kind] ?? structure.kind} ${structure.name ?? ''}${structure.owner ? ` (${structure.owner})` : ''}: open the intel`"
+                    @click="intelOpen = true"
+                >
+                    <span class="shrink-0 font-semibold text-foreground">{{ KIND_SHORT[structure.kind] ?? structure.kind }}</span>
+                    <span class="min-w-0 truncate text-muted-foreground">{{ shortName(structure.name) }}<template v-if="structure.owner"> · {{ structure.owner }}</template></span>
+                    <span class="ml-auto shrink-0" :class="STATE_SHORT[structure.state]?.klass ?? 'text-muted-foreground'">{{ STATE_SHORT[structure.state]?.label ?? structure.state }}</span>
+                    <span v-if="timerText(structure.timer_at)" class="shrink-0 font-mono text-amber-300">{{ timerText(structure.timer_at) }}</span>
+                </button>
+            </div>
             <Textarea
                 v-if="editing"
                 v-model="form.notes"
