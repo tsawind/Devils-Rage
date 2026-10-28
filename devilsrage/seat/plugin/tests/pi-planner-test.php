@@ -182,6 +182,25 @@ check('factory planet opened today counts', $gp->products($gp->planet($factoryOn
 $factoryOnly['last_update'] = $now - 30 * 86400;
 check('factory planet not opened for 30 days counts nothing', $gp->products($gp->planet($factoryOnly)) === []);
 
+
+// Patch 60: lining up timers without changing program lengths.
+$at = fn (int $id, int $stop) => ['character_id' => $id, 'planet_id' => 100 + $id, 'name' => 'J1 '.$id, 'type' => 'gas', 'level' => 5, 'system_id' => 1, 'last_update' => $now,
+  'extractors' => [['pin_id' => $id, 'product' => 2310, 'product_name' => 'Noble Gas', 'cycle_time' => 1800, 'qty' => 6000, 'heads' => 6, 'lat' => 1.0, 'lon' => 1.0, 'install' => $stop - 164 * $h, 'expiry' => $stop]],
+  'factories' => [], 'storage' => []];
+$lu = $gp->run([
+  1 => ['name' => 'Due', 'planets' => [$at(1, $now - 5 * $h)]],
+  2 => ['name' => 'Midweek', 'planets' => [$at(2, $now + 72 * $h)]],
+  3 => ['name' => 'Close', 'planets' => [$at(3, $now + 150 * $h)]],
+  4 => ['name' => 'InStep', 'planets' => [$at(4, $now + 166 * $h)]],
+]);
+check('next reset = now + 164 h', $lu['next_reset'] === $now + 164 * $h);
+check('midweek character joins the run to line up', array_column($lu['characters'], 'name') === ['Due', 'Midweek'] && ($lu['characters'][1]['align'] ?? false) === true && $lu['characters'][1]['visits'][0]['steps'][0]['kind'] === 'align');
+$byName = array_column($lu['clear'], null, 'name');
+check('14 h early: leave it until the next reset', ($byName['Close']['align']['kind'] ?? null) === 'later' && $byName['Close']['align']['hours'] === 14);
+check('in step: nothing said', $byName['InStep']['align'] === null);
+$quiet = $gp->run([2 => ['name' => 'Midweek', 'planets' => [$at(2, $now + 72 * $h)]]]);
+check('no run due: no line-up', $quiet['characters'] === [] && $quiet['next_reset'] === null && $quiet['clear'][0]['align'] === null);
+
 // Customs offices go to the planet whose goods they hold.
 $other = $gas; $other['planet_id'] = 78; foreach ($other['factories'] as &$f) { $f['outputs'] = $f['kind'] === 'advanced' ? [3689] : $f['outputs']; } unset($f);
 $other['extractors'] = [$gx(3, 2267, 'Base Metals', 6000)];

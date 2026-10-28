@@ -42,6 +42,15 @@ final class PiPlanner
      */
     public const FACTORY_ACTIVE_DAYS = 8;
 
+    /** Patch 60: the corp's usual program (6 d 20 h), when nothing else says how long programs run. */
+    public const STANDARD_PROGRAM_HOURS = 164;
+
+    /**
+     * Patch 60: a character that would sit stopped longer than this before the next reset gets
+     * "restart it now with this run"; shorter, "leave it until the next reset".
+     */
+    public const ALIGN_HOURS = 24;
+
     /** Most heads one extractor can have. */
     public const MAX_HEADS = 10;
 
@@ -187,7 +196,7 @@ final class PiPlanner
                 $nextStop = $nextStop === null ? $charNext : min($nextStop, $charNext);
             }
             if (! $isDue) {
-                $clear[] = ['character_id' => $characterId, 'name' => $character['name'], 'planets' => count($planets), 'next_stop' => $charNext];
+                $clear[] = ['character_id' => $characterId, 'name' => $character['name'], 'planets' => count($planets), 'next_stop' => $charNext, 'infos' => $planets, 'align' => null];
 
                 continue;
             }
@@ -227,7 +236,99 @@ final class PiPlanner
             ];
         }
 
-        return ['characters' => $due, 'clear' => $clear, 'minutes' => $minutes, 'deadline' => $deadline, 'next_stop' => $nextStop];
+        [$due, $clear, $minutes] = $this->lineUp($due, $clear, $minutes);
+        foreach ($clear as &$entry) {
+            unset($entry['infos']);
+        }
+        unset($entry);
+
+        return ['characters' => $due, 'clear' => $clear, 'minutes' => $minutes, 'deadline' => $deadline, 'next_stop' => $nextStop, 'next_reset' => $due === [] ? null : $this->nextReset($due)];
+    }
+
+    /**
+     * Patch 60: line the timers up without odd program lengths. Everyone in this run restarts now,
+     * so their next reset is one program from now. A character that isn't due but would stop well
+     * before that joins this run ("restart it now too"); one that stops a little before it is left
+     * until the next reset. Program lengths stay as they are.
+     *
+     * @param  list<array<string, mixed>>  $due
+     * @param  list<array<string, mixed>>  $clear
+     * @return array{0: list<array<string, mixed>>, 1: list<array<string, mixed>>, 2: int}
+     */
+    private function lineUp(array $due, array $clear, int $minutes): array
+    {
+        if ($due === []) {
+            return [$due, $clear, $minutes];
+        }
+        $reset = $this->nextReset($due);
+        $keep = [];
+        foreach ($clear as $entry) {
+            $stop = $entry['next_stop'];
+            $gap = $stop === null ? 0.0 : ($reset - $stop) / 3600;
+            if ($stop === null || $gap <= 4) {
+                $keep[] = $entry;
+
+                continue;
+            }
+            if ($gap <= self::ALIGN_HOURS) {
+                $entry['align'] = ['kind' => 'later', 'hours' => (int) round($gap)];
+                $keep[] = $entry;
+
+                continue;
+            }
+            $visits = [];
+            foreach ($entry['infos'] as $p) {
+                if ($p['planet']['extractors'] === []) {
+                    continue;
+                }
+                $visits[] = ['planet' => $p, 'steps' => [$this->step(
+                    'align',
+                    'Restart now with the others',
+                    sprintf('That is about %s before your next reset, so it would need a login of its own (or sit stopped). Restarting it now puts it on the same timer as the others.', $this->duration((int) round($gap * 3600))),
+                    $p['next_stop'],
+                    'stops',
+                )]];
+            }
+            if ($visits === []) {
+                $keep[] = $entry;
+
+                continue;
+            }
+            $minutes += 1 + 2 * count($visits);
+            $due[] = [
+                'character_id' => $entry['character_id'],
+                'name' => $entry['name'],
+                'visits' => $visits,
+                'timer' => null,
+                'minutes' => 1 + 2 * count($visits),
+                'align' => true,
+            ];
+        }
+
+        return [$due, $keep, $minutes];
+    }
+
+    /**
+     * When the characters in this run stop next if restarted now: now plus their usual program
+     * length (the most common one among them, or 6 d 20 h).
+     *
+     * @param  list<array<string, mixed>>  $due
+     */
+    private function nextReset(array $due): int
+    {
+        $lengths = [];
+        foreach ($due as $character) {
+            foreach ($character['visits'] as $visit) {
+                foreach ($visit['planet']['program_lengths'] as $length) {
+                    $hours = (int) round($length / 3600);
+                    $lengths[$hours] = ($lengths[$hours] ?? 0) + 1;
+                }
+            }
+        }
+        arsort($lengths);
+        $hours = $lengths === [] ? self::STANDARD_PROGRAM_HOURS : (int) array_key_first($lengths);
+
+        return $this->now + max(1, $hours) * 3600;
     }
 
     /**

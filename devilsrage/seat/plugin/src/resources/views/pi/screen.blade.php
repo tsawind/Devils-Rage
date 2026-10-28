@@ -1,8 +1,8 @@
 <!doctype html>
 {{-- Patch 50: the app's PI screen (works in a browser too). --}}
 @php
-  $kindLabel = ['restart' => 'Restart', 'balance' => 'Balance', 'move' => 'Move heads', 'submit' => 'Submit once', 'haul' => 'Haul', 'launch' => 'Launch', 'pile' => 'Piling up', 'drain' => 'Running low', 'timer' => 'Same timer'];
-  $kindClass = ['restart' => 'bad', 'balance' => 'warn', 'move' => 'warn', 'submit' => 'muted', 'haul' => 'info', 'launch' => 'info', 'pile' => 'warn', 'drain' => 'warn', 'timer' => 'info'];
+  $kindLabel = ['restart' => 'Restart', 'balance' => 'Balance', 'move' => 'Move heads', 'submit' => 'Submit once', 'haul' => 'Haul', 'launch' => 'Launch', 'pile' => 'Piling up', 'drain' => 'Running low', 'timer' => 'Same timer', 'align' => 'Line up'];
+  $kindClass = ['restart' => 'bad', 'balance' => 'warn', 'move' => 'warn', 'submit' => 'muted', 'haul' => 'info', 'launch' => 'info', 'pile' => 'warn', 'drain' => 'warn', 'timer' => 'info', 'align' => 'info'];
   $isk = function (float $v): string {
       $a = abs($v);
       return match (true) {
@@ -273,6 +273,9 @@
         <div class="grow">
           <div class="label">Your next PI run</div>
           <div class="big">{{ $stepCount }} {{ $stepCount === 1 ? 'thing' : 'things' }} on {{ count($run['characters']) }} {{ count($run['characters']) === 1 ? 'character' : 'characters' }} · about {{ $run['minutes'] }} min</div>
+          @if(! empty($run['next_reset']))
+            <div class="muted small">Restarted now, everyone here next stops around <span data-ts="{{ $run['next_reset'] }}" data-fmt="clock"></span>: that's your next reset.</div>
+          @endif
           @if($firstDue)
             <div class="muted">Do it before <span data-ts="{{ $firstDue['time'] }}" data-fmt="clock"></span> ({{ $firstDue['planet'] }} stops <span data-ts="{{ $firstDue['time'] }}" data-fmt="rel"></span>).</div>
           @else
@@ -289,7 +292,7 @@
           <div class="head">
             <span class="num">{{ $i + 1 }}</span>
             <img class="pic" src="https://images.evetech.net/characters/{{ $c['character_id'] }}/portrait?size=64" alt="">
-            <b>Log in {{ $c['name'] }}</b>
+            <b>Log in {{ $c['name'] }}</b>@if(! empty($c['align'])) <span class="chip muted" title="Not due yet, but it would stop well before your next reset">early, to line up</span>@endif
             <span class="grow"></span>
             <span class="muted small">{{ count($c['visits']) }} {{ count($c['visits']) === 1 ? 'planet' : 'planets' }} · about {{ $c['minutes'] }} min</span>
           </div>
@@ -348,6 +351,7 @@
         <span class="small" style="color: var(--ok)">Nothing to do.
           @if($c['next_stop']) {{ $c['planets'] === 1 ? 'Its planet runs' : 'All '.$c['planets'].' planets run' }} until <span data-ts="{{ $c['next_stop'] }}" data-fmt="clock"></span>.@endif
         </span>
+        @if(($c['align']['kind'] ?? null) === 'later')<span class="small muted">Stops about {{ $c['align']['hours'] }} h before your next reset: leave it and restart it with the others then.</span>@endif
       </div>
     @endforeach
 
