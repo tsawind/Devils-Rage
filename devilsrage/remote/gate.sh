@@ -149,6 +149,28 @@ case "$ACTION" in
         # the first run so the mapper picks up the camera pass secret.
         bash "$REPO/devilsrage/cameras/setup-cameras.sh"
         ;;
+    cameras-check)
+        # Patch 62: is the camera relay up and wired to the mapper? Read-only. Addresses masked (public log).
+        CAM="$HOME/devilsrage-cameras"
+        mask() { sed -E 's/([0-9]{1,3}\.){3}[0-9]{1,3}/[ip]/g; s/[0-9a-f]{0,4}(:[0-9a-f]{0,4}){3,7}/[ip]/gi; s/cam-[a-z0-9]{20,40}/cam-[id]/g; s/[A-Za-z0-9_-]{40,}/[masked]/g'; }
+        domain=$(grep -E '^CAMERAS_DOMAIN=' "$CAM/.env" 2>/dev/null | cut -d= -f2-)
+        echo "== Relay container"
+        (cd "$CAM" 2>/dev/null && docker compose ps --format 'table {{.Name}}\t{{.Status}}') || echo "!! Not installed: run deploy-cameras"
+        echo "== Port 8189 listening"
+        ss -lntu 2>/dev/null | grep -E ':8189\b' | awk '{print $1, $5}' | mask || echo "!! nothing on 8189"
+        echo "== Server firewall (ufw)"
+        if sudo -n true 2>/dev/null && command -v ufw >/dev/null 2>&1; then sudo -n ufw status | grep -E 'Status|8189' || true; else echo "(can't read ufw without a password)"; fi
+        echo "== Mapper settings"
+        cd "$STACK" && "${C[@]}" exec -T app php artisan tinker --execute="echo 'secret set: '.(config('cameras.secret') ? 'yes' : 'NO').PHP_EOL.'relay url: '.config('cameras.rtc_url').PHP_EOL;" 2>&1 | tail -2
+        if [ -n "$domain" ]; then
+            echo "== Mapper's relay check (expect 401 for an empty pass)"
+            curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{"action":"read","path":"cam-check"}' "https://$domain/api/cameras/relay-auth"
+            echo "== Through Traefik to the relay and back to the mapper (expect 401: relay up, asked the mapper, refused)"
+            curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/sdp' --data 'v=0' "https://$domain/rtc/cam-checkcheckcheckcheckcheck/whep"
+        fi
+        echo "== Relay log (last 25 lines, addresses masked)"
+        (cd "$CAM" 2>/dev/null && docker compose logs --no-color --tail 25 mediamtx 2>&1 | mask | cut -c1-220) || true
+        ;;
     capacity)
         # Cameras plan: what the VPS has for a video relay. No addresses or secrets (public log).
         echo "== CPU"
@@ -206,7 +228,7 @@ case "$ACTION" in
         ;;
     *)
         echo "!! Unknown action: $ACTION"
-        echo "   Allowed: status, capacity, deploy-cameras, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check, backup-check, seat-failed-jobs, mapper-migrations"
+        echo "   Allowed: status, capacity, deploy-cameras, cameras-check, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check, backup-check, seat-failed-jobs, mapper-migrations"
         exit 2
         ;;
 esac

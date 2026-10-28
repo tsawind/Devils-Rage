@@ -22,7 +22,8 @@ webrtcIPsFromInterfaces: no
 # The server's public name is set by MTX_WEBRTCADDITIONALHOSTS in ~/devilsrage-cameras/.env.
 
 # The mapper decides who may publish or watch (members; guests only where a camera allows
-# their link). MediaMTX passes the ?token= of the WHIP / WHEP request along.
+# their link). The browser sends its pass as "Authorization: Bearer" (and ?pass=); MediaMTX
+# hands both to the mapper.
 authMethod: http
 # authHTTPAddress comes from MTX_AUTHHTTPADDRESS in ~/devilsrage-cameras/.env (the mapper's URL).
 authHTTPExclude: []
