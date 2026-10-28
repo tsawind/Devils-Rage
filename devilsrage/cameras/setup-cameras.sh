@@ -38,6 +38,10 @@ fi
 sed -i '/^CAMERAS_RTC_URL=/d' "$MAPPER_ENV"
 echo "CAMERAS_RTC_URL=https://$domain/rtc" >> "$MAPPER_ENV"
 
+if [ ! -s /etc/ssl/certs/ca-certificates.crt ]; then
+    echo "!! /etc/ssl/certs/ca-certificates.crt is missing: the relay can't check the mapper's certificate (sudo apt install ca-certificates)."
+fi
+
 cd "$DIR"
 docker compose pull -q
 docker compose up -d

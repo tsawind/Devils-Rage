@@ -18,8 +18,14 @@ services:
     mem_limit: 384m
     env_file:
       - .env
+    environment:
+      # The image is built from nothing (no CA list), so it couldn't check the mapper's HTTPS
+      # certificate ("tls: failed to verify certificate") and every camera was refused.
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
     volumes:
       - ./mediamtx.yml:/mediamtx.yml:ro
+      # The server's own CA list, read only.
+      - /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro
     ports:
       - "8189:8189/udp"
       - "8189:8189/tcp"

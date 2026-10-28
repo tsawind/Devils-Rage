@@ -171,7 +171,7 @@ case "$ACTION" in
         echo "== Why the mapper refused cameras (last 8)"
         "${C[@]}" exec -T app sh -c 'ls -t storage/logs/*.log 2>/dev/null | head -2 | xargs -r grep -h "Cameras relay refused" 2>/dev/null | tail -n 8' | mask | cut -c1-300 || echo "(none)"
         echo "== Relay log (last 25 lines, addresses masked)"
-        (cd "$CAM" 2>/dev/null && docker compose logs --no-color --tail 25 mediamtx 2>&1 | mask | cut -c1-220) || true
+        (cd "$CAM" 2>/dev/null && docker compose logs --no-color --tail 25 mediamtx 2>&1 | mask | cut -c1-400) || true
         ;;
     capacity)
         # Cameras plan: what the VPS has for a video relay. No addresses or secrets (public log).
