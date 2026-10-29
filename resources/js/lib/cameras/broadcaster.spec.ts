@@ -1,4 +1,4 @@
-import { maskInCrop, sendSize, spreadsFor, stampTime } from '@/lib/cameras/broadcaster';
+import { maskInCrop, rowsFramesFor, sendSize, spreadsFor, stampTime } from '@/lib/cameras/broadcaster';
 import { describe, expect, it } from 'vitest';
 
 describe('camera box send size', () => {
@@ -21,7 +21,11 @@ describe('camera box send size', () => {
         expect(maskInCrop({ x: 0, y: 0, w: 0.1, h: 0.1 }, { x: 0.5, y: 0.5, w: 0.2, h: 0.2 })).toBeNull();
     });
 
-    it('turns sensitivity 1–10 into how far above the usual a change must be', () => {
-        expect([spreadsFor(1), spreadsFor(6), spreadsFor(10), spreadsFor(99)]).toEqual([12, 7, 3, 3]);
+    it('turns strictness 1–10 into how far above the usual a change must be', () => {
+        expect([spreadsFor(1), spreadsFor(6), spreadsFor(10), spreadsFor(99), spreadsFor(Number.NaN)]).toEqual([3, 9, 14, 14, 14]);
+    });
+
+    it('makes a stricter overview / scanner / local watch wait longer for a new count', () => {
+        expect([rowsFramesFor(1), rowsFramesFor(5), rowsFramesFor(10)]).toEqual([6, 12, 22]);
     });
 });

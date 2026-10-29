@@ -26,9 +26,22 @@ const ROW_KINDS: Partial<Record<TDetectMode, [THitKind, THitKind]>> = {
     local: ['local_in', 'local_out'],
 };
 
-/** Patch 62f: sensitivity 1 (only big changes) … 10 (the slightest): spreads above the usual. */
-export function spreadsFor(sensitivity: number): number {
-    return Math.max(2, 13 - Math.min(10, Math.max(1, Math.round(sensitivity))));
+/**
+ * Patch 62l: strictness 1 (the slightest change counts) … 10 (only a clear one): how many
+ * spreads above the usual a hole's wobble must be. (62f had it the other way round, as
+ * "sensitivity", and its 10 was the jumpiest.)
+ */
+export function spreadsFor(strictness: number): number {
+    return Math.round(2 + clampStrictness(strictness) * 1.2);
+}
+
+/** Patch 62l: and how many looks (8 a second) a new row count must hold on the overview, scanner or local. */
+export function rowsFramesFor(strictness: number): number {
+    return Math.max(6, DETECT.rowsSteadyFrames + (clampStrictness(strictness) - 5) * 2);
+}
+
+function clampStrictness(strictness: number): number {
+    return Math.min(10, Math.max(1, Math.round(Number.isFinite(strictness) ? strictness : 10)));
 }
 
 /** The part of `mask` that falls inside `crop`, in the crop's own 0–1 coordinates (null: none). */
@@ -199,19 +212,19 @@ export class BoxCamera {
     /** Patch 62e: burned into the picture's corner with the EVE time ("V753 · Daisy → Alpha"), so clips say what and when. */
     label = '';
 
-    private sensitivity: number;
+    private strictness: number;
 
     constructor(
         source: HTMLVideoElement,
         rect: TBoxRect,
-        options: { quality: TQuality; detect: TDetectMode; listen: boolean; audio: MediaStreamTrack | null; sensitivity?: number },
+        options: { quality: TQuality; detect: TDetectMode; listen: boolean; audio: MediaStreamTrack | null; strictness?: number },
     ) {
         this.source = source;
         this.rect = rect;
         this.quality = options.quality;
         this.detect = options.detect;
         this.listen = options.listen;
-        this.sensitivity = options.sensitivity ?? 6;
+        this.strictness = options.strictness ?? 10;
         this.draw = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D;
         this.lookDraw = this.look.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D;
         this.resize();
@@ -226,16 +239,17 @@ export class BoxCamera {
         const size = sendSize(this.rect, this.source.videoWidth || 1920, this.source.videoHeight || 1080, this.quality);
         this.canvas.width = size.width;
         this.canvas.height = size.height;
-        this.spike = new SpikeWatch({ spreads: spreadsFor(this.sensitivity) + (this.playing ? 3 : 0) });
-        this.rows = new RowWatch(this.playing ? DETECT.rowsSteadyFrames * 2 : DETECT.rowsSteadyFrames);
+        this.spike = new SpikeWatch({ spreads: spreadsFor(this.strictness) + (this.playing ? 3 : 0) });
+        this.rows = new RowWatch(rowsFramesFor(this.strictness) * (this.playing ? 2 : 1));
         this.previous = null;
     }
 
-    /** Patch 62f: a new sensitivity (1–10) starts the watch over with it. */
-    setSensitivity(sensitivity: number): void {
-        if (sensitivity === this.sensitivity) return;
-        this.sensitivity = sensitivity;
-        this.spike = new SpikeWatch({ spreads: spreadsFor(sensitivity) + (this.playing ? 3 : 0) });
+    /** Patch 62f: a new strictness (1–10) starts the hole watch over with it. */
+    setStrictness(strictness: number): void {
+        if (strictness === this.strictness) return;
+        this.strictness = strictness;
+        this.spike = new SpikeWatch({ spreads: spreadsFor(strictness) + (this.playing ? 3 : 0) });
+        this.rows.steadyFrames = rowsFramesFor(strictness) * (this.playing ? 2 : 1);
     }
 
     /**
@@ -249,8 +263,8 @@ export class BoxCamera {
     setPlaying(playing: boolean): void {
         if (playing === this.playing) return;
         this.playing = playing;
-        this.rows.steadyFrames = playing ? DETECT.rowsSteadyFrames * 2 : DETECT.rowsSteadyFrames;
-        this.spike.spreads = spreadsFor(this.sensitivity) + (playing ? 3 : 0);
+        this.rows.steadyFrames = rowsFramesFor(this.strictness) * (playing ? 2 : 1);
+        this.spike.spreads = spreadsFor(this.strictness) + (playing ? 3 : 0);
     }
 
     get isPlaying(): boolean {

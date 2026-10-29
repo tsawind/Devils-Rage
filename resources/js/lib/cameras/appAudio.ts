@@ -14,7 +14,16 @@ export function appHasClientAudio(): boolean {
 
 /** The app opens camera pages in a window of its own when asked (app 0.1.8-dev.55 and later). */
 export function appHasCameras(): boolean {
-    return (desktopApp() as TAppWithAudio | null)?.cameras === 2;
+    return Number((desktopApp() as TAppWithAudio | null)?.cameras ?? 0) >= 2;
+}
+
+/** Patch 62l: the app closes a camera window on the page's own Close button (app cameras 3+). */
+export function appClosesCameraWindow(): boolean {
+    return Number((desktopApp() as TAppWithAudio | null)?.cameras ?? 0) >= 3;
+}
+
+export function closeAppCameraWindow(): void {
+    appSignal('close-window');
 }
 
 /** Asks the app for its cameras / camera wall window. */
@@ -24,6 +33,9 @@ export function openAppCameraWindow(path: string): void {
 
 /** EVE clients open on this PC (character names). */
 export const appClients = ref<string[]>([]);
+/** Patch 62l: their windows' handles (app cameras 3+), to tell which shared window is which client. */
+export const appWindows = ref<{ name: string; handle: number }[]>([]);
+
 /** Loudness per client while listening (0-100). */
 export const appLevels = ref<Record<string, number>>({});
 /** The latest problem per client ("No EVE window for X is open"). */
@@ -49,8 +61,9 @@ function wire(): void {
     wired = true;
     const detail = <T>(event: Event) => (event as CustomEvent<T>).detail;
     window.addEventListener('devils-rage-app:audio-clients', (event) => {
-        const clients = detail<{ clients?: string[] }>(event)?.clients;
+        const { clients, windows } = detail<{ clients?: string[]; windows?: { name: string; handle: number }[] }>(event) ?? {};
         if (Array.isArray(clients)) appClients.value = clients.map(String);
+        if (Array.isArray(windows)) appWindows.value = windows.map((window) => ({ name: String(window.name), handle: Number(window.handle) }));
     });
     window.addEventListener('devils-rage-app:audio-level', (event) => {
         const { character, level } = detail<{ character: string; level: number }>(event) ?? {};

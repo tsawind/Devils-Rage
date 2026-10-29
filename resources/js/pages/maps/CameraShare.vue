@@ -11,7 +11,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import SeoHead from '@/layouts/SeoHead.vue';
 import { BoxCamera, SoundEar, startBeat, type TBoxRect, type TDetectMode, type THit } from '@/lib/cameras/broadcaster';
 import { QUALITY, type TQuality, type TRelayPass } from '@/lib/cameras/rtc';
-import { appActive, appClients, appAudioErrors, appHasClientAudio, appLevels, learnFromClient, listenToClients, onAppHeard, onAppLearned, playingClient, refreshAppClients } from '@/lib/cameras/appAudio';
+import { clientOfWindowLabel, DEFAULT_STRICTNESS, defaultSetup } from '@/lib/cameras/setups';
+import { appActive, appClients, appClosesCameraWindow, appAudioErrors, appHasClientAudio, appWindows, closeAppCameraWindow, appLevels, learnFromClient, listenToClients, onAppHeard, onAppLearned, playingClient, refreshAppClients } from '@/lib/cameras/appAudio';
 import { appSignal, inDesktopApp } from '@/lib/desktopApp';
 import { formFetch, jsonFetch } from '@/lib/jsonFetch';
 import { Monitor, Play, Pause, Plus, Square, Trash2, Video } from 'lucide-vue-next';
@@ -42,6 +43,10 @@ type TBox = TBoxRect & {
     role?: TRole;
     /** Watch areas: 1 (only big changes) … 10 (the slightest). */
     sensitivity?: number;
+    /** Patch 62l: 1 (the slightest change) … 10 (only a clear one); watch areas start at 10. */
+    strictness?: number;
+    /** Patch 62l: starts when the client's camera is turned on (default yes). */
+    auto?: boolean;
     key: string;
     name: string;
     kind: TKind;
@@ -94,7 +99,7 @@ const BOXES_KEY = `camera-boxes-${props.map.id}`;
  * client (read from the window title "EVE - <name>"), and in the app they listen to that
  * client's sound only, so one PC can watch several holes with several clients.
  */
-type TSource = { key: string; client: string; kind: 'window' | 'screen'; stream: MediaStream; label: string };
+type TSource = { key: string; client: string; kind: 'window' | 'screen'; stream: MediaStream; label: string; guessed?: boolean };
 const sources = shallowRef<TSource[]>([]);
 const currentKey = ref<string | null>(null);
 const currentSource = computed(() => sources.value.find((item) => item.key === currentKey.value) ?? sources.value[0] ?? null);
@@ -121,23 +126,48 @@ function clientFromStream(stream: MediaStream): string | null {
  * window got the same one (a second window replaced the first). Now: the window title when
  * there is one, else the first client (app) or character not shared yet; the tab's menu fixes it.
  */
-function nameForWindow(stream: MediaStream, kind: 'window' | 'screen'): string {
+function nameForWindow(stream: MediaStream, kind: 'window' | 'screen'): { client: string; guessed: boolean } {
     const titled = clientFromStream(stream);
-    if (titled) return titled;
-    if (kind === 'screen') return 'Screen';
+    if (titled) return { client: titled, guessed: false };
+    if (kind === 'screen') return { client: 'Screen', guessed: false };
+    // Patch 62l: the app knows each EVE window's handle, and the browser names the shared
+    // window by it: the client for sure.
+    const known = clientOfWindowLabel(stream.getVideoTracks()[0]?.label ?? '', appWindows.value);
+    if (known) return { client: known, guessed: false };
     const taken = new Set(sources.value.map((item) => item.client));
     const choices = [...appClients.value, characterName(), ...props.characters.map((character) => character.name)].filter(Boolean);
-    return choices.find((name) => !taken.has(name)) ?? `Window ${sources.value.length + 1}`;
+    return { client: choices.find((name) => !taken.has(name)) ?? `Window ${sources.value.length + 1}`, guessed: true };
 }
 /** Names a tab can be set to: the app's EVE clients and your characters. */
 const clientChoices = computed(() => [...new Set([...appClients.value, ...props.characters.map((character) => character.name)])]);
+/**
+ * Patch 62l: picking which client a window is switches to that client's setup (its own boxes,
+ * or the standard one the first time). 62g–k moved the boxes over instead, which mixed two
+ * clients' setups into one.
+ */
 function renameSource(item: TSource, client: string): void {
     if (!client || client === item.client || sources.value.some((other) => other.client === client)) return;
-    for (const box of boxes.value) {
-        if (box.client === item.client) box.client = client;
-    }
-    sources.value = sources.value.map((other) => (other.key === item.key ? { ...other, client } : other));
+    for (const box of boxes.value.filter((candidate) => candidate.client === item.client)) void stopBox(box);
+    sources.value = sources.value.map((other) => (other.key === item.key ? { ...other, client, guessed: false } : other));
+    if (!boxes.value.some((box) => box.client === client)) applyDefaultSetup(client);
+    selected.value = boxes.value.find((box) => box.client === client)?.key ?? selected.value;
     setUpEar();
+    if (rememberedOn()[client]) void setClientOn(client, true);
+}
+
+/** Patch 62l: the standard setup for a client shared the first time (or started over). */
+function applyDefaultSetup(client: string): void {
+    for (const template of defaultSetup()) {
+        boxes.value.push({
+            ...template,
+            key: Math.random().toString(36).slice(2, 10),
+            quality: '720p5',
+            pin: '',
+            guests: [],
+            client,
+        });
+    }
+    selected.value = boxes.value.find((box) => box.client === client)?.key ?? selected.value;
 }
 const sourceOf = (box: TBox): TSource | null => sources.value.find((item) => item.client === box.client) ?? null;
 /**
@@ -170,7 +200,7 @@ function startOver(): void {
     startingOver.value = false;
     for (const box of boxes.value.filter((item) => item.client === client)) void stopBox(box);
     boxes.value = boxes.value.filter((box) => box.client !== client);
-    addBox(true);
+    applyDefaultSetup(client);
 }
 const audioTrack = computed(() => source.value?.getAudioTracks()[0] ?? null);
 const characterId = ref<number | null>(props.characters[0]?.id ?? null);
@@ -202,13 +232,15 @@ const runs = reactive(new Map<string, TRun>());
 // ---- The picture --------------------------------------------------------------------------
 async function pick(kind: 'window' | 'screen'): Promise<void> {
     error.value = null;
+    if (clientAudio) refreshAppClients();
     try {
         const options = {
             video: { displaySurface: kind === 'window' ? 'window' : 'monitor', frameRate: 30 },
             // A browser can share sound only with the whole screen (not one window's).
             // Chrome offers "Share with system audio" for a window too; it's the whole computer's sound.
-            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-            systemAudio: kind === 'screen' ? 'include' : 'exclude',
+            // Patch 62l: the app hears each client by itself, so it asks for no sound (no toggle).
+            audio: clientAudio ? false : { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+            ...(clientAudio ? {} : { systemAudio: kind === 'screen' ? 'include' : 'exclude' }),
             selfBrowserSurface: 'exclude',
             surfaceSwitching: 'include',
         } as DisplayMediaStreamOptions;
@@ -217,13 +249,22 @@ async function pick(kind: 'window' | 'screen'): Promise<void> {
         // The same window (or titled client) again: its new picture replaces the old one.
         const titled = clientFromStream(stream);
         const existing = sources.value.find((item) => (label !== '' && item.label === label) || (titled !== null && item.client === titled));
-        const client = existing?.client ?? nameForWindow(stream, kind);
+        // The app's list of windows may still be on its way.
+        if (!existing && !titled && clientAudio && !clientOfWindowLabel(label, appWindows.value)) {
+            refreshAppClients();
+            await new Promise((resolve) => setTimeout(resolve, 700));
+        }
+        const named = existing ? { client: existing.client, guessed: Boolean(existing.guessed) } : nameForWindow(stream, kind);
+        const client = named.client;
         if (existing) closeSource(existing.key);
         const key = Math.random().toString(36).slice(2, 10);
-        sources.value = [...sources.value, { key, client, kind, stream, label }];
+        sources.value = [...sources.value, { key, client, kind, stream, label, guessed: named.guessed }];
         currentKey.value = key;
         stream.getVideoTracks()[0]?.addEventListener('ended', () => closeSource(key));
-        if (!boxes.value.some((box) => box.client === client)) addBox(true);
+        if (!boxes.value.some((box) => box.client === client)) {
+            if (kind === 'window') applyDefaultSetup(client);
+            else addBox(true);
+        }
         selected.value = boxes.value.find((box) => box.client === client)?.key ?? selected.value;
         setUpEar();
         // Patch 62k: a client that was on when its window closed comes back on.
@@ -241,12 +282,14 @@ async function pick(kind: 'window' | 'screen'): Promise<void> {
 // ---- Boxes ---------------------------------------------------------------------------------
 function addBox(whole = false, role: TRole = 'camera'): void {
     const key = Math.random().toString(36).slice(2, 10);
-    const count = boxes.value.filter((box) => roleOf(box) === role).length + 1;
+    const client = currentSource.value?.client ?? characterName();
+    const count = boxes.value.filter((box) => roleOf(box) === role && box.client === client).length + 1;
     const names: Record<TRole, string> = { camera: `Camera ${count}`, watch: `Watch ${count}`, hide: `Hidden ${count}` };
     boxes.value.push({
         key,
         role,
-        sensitivity: 6,
+        strictness: DEFAULT_STRICTNESS,
+        auto: true,
         name: whole ? (sourceKind.value === 'screen' ? 'Screen' : 'EVE client') : names[role],
         kind: role === 'watch' ? 'watch' : whole ? 'screen' : 'hole',
         quality: '720p5',
@@ -255,7 +298,7 @@ function addBox(whole = false, role: TRole = 'camera'): void {
         // Patch 62f: cameras stream; watching is what watch areas are for.
         detect: role === 'watch' ? 'flash' : 'off',
         listen: false,
-        client: currentSource.value?.client ?? characterName(),
+        client,
         ...(whole ? { x: 0, y: 0, w: 1, h: 1 } : { x: 0.35, y: 0.3, w: 0.3, h: 0.3 }),
     });
     selected.value = key;
@@ -399,6 +442,13 @@ function learnFromApp(character: string): void {
         if (appLearning.value === character) appLearning.value = null;
     }, 30_000);
 }
+/** Patch 62l: the app's camera window closes from here too (even when it's too busy to close itself). */
+const canCloseWindow = inDesktopApp() && appClosesCameraWindow();
+async function closeWindow(): Promise<void> {
+    await Promise.race([Promise.all(boxes.value.map((box) => stopBox(box))), new Promise((resolve) => setTimeout(resolve, 2000))]);
+    await jsonFetch(MapCameraClientController.report(props.map.slug).url, 'PUT', { clients: [] });
+    closeAppCameraWindow();
+}
 /** In the app, a window that can't be shared here can still be shared from the browser. */
 function openInBrowser(): void {
     appSignal(`open?url=${encodeURIComponent(window.location.href)}`);
@@ -448,7 +498,7 @@ async function startBox(box: TBox): Promise<void> {
         detect: box.detect,
         listen: box.listen,
         audio: box.kind === 'screen' ? (from.stream.getAudioTracks()[0] ?? null) : null,
-        sensitivity: box.sensitivity ?? 6,
+        strictness: box.strictness ?? DEFAULT_STRICTNESS,
     });
     camera.masks = hideRectsOf(box.client);
     const run: TRun = { camera: markRaw(camera), id: started.camera.id, state: 'starting', error: null, hits: 0, kinds: {}, lastHit: null };
@@ -538,7 +588,7 @@ watch(
             const run = runs.get(box.key);
             if (!run) continue;
             Object.assign(run.camera, { detect: box.detect, listen: box.listen, label: stampLabel(box) });
-            run.camera.setSensitivity(box.sensitivity ?? 6);
+            run.camera.setStrictness(box.strictness ?? DEFAULT_STRICTNESS);
             if (run.camera.quality !== box.quality) {
                 run.camera.quality = box.quality;
                 run.camera.resize();
@@ -622,7 +672,7 @@ async function setClientOn(client: string, on: boolean): Promise<void> {
     await nextTick();
     const element = videos.get(from.key);
     if (element) await whenReady(element);
-    for (const box of workingBoxes(client)) await startBox(box);
+    for (const box of workingBoxes(client).filter((item) => item.auto !== false)) await startBox(box);
 }
 
 /** Every camera and watch area of the client watches this hole ('' = not pinned). */
@@ -749,6 +799,7 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                         <option v-for="character in characters" :key="character.id" :value="character.id">{{ character.online ? '● ' : '' }}{{ character.name }}{{ character.online ? ' (online)' : '' }}</option>
                     </select>
                     <span v-if="liveCount" class="ml-auto flex items-center gap-1 text-xs text-red-400"><span class="size-2 animate-pulse rounded-full bg-red-500" /> {{ liveCount }} live</span>
+                    <Button v-if="canCloseWindow" size="sm" variant="outline" :class="liveCount ? '' : 'ml-auto'" title="Stop every camera and close this window" @click="closeWindow">Close window</Button>
                 </div>
                 <p v-if="error" class="rounded border border-red-800 bg-red-950/40 px-2 py-1 text-xs text-red-200">
                     {{ error }}
@@ -824,6 +875,9 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                         {{ startingOver ? 'Sure? Click again' : 'Start over' }}
                     </button>
                 </div>
+                <p v-if="currentSource?.guessed" class="flex flex-wrap items-center gap-2 rounded border border-amber-600 bg-amber-950/40 px-2 py-1 text-xs text-amber-100">
+                    Couldn't tell which client this window is, so it's called {{ currentSource.client }} for now. Pick the right one in the tab's menu (each client keeps its own boxes).
+                </p>
                 <p v-if="currentSource && homelessBoxes.length" class="flex flex-wrap items-center gap-2 rounded border border-amber-800 bg-amber-950/30 px-2 py-1 text-xs text-amber-100">
                     {{ homelessBoxes.length }} box{{ homelessBoxes.length === 1 ? '' : 'es' }} from before windows had their own (not tied to any client).
                     <button type="button" class="underline" @click="adoptHomeless">Give them to {{ currentSource.client }}</button>
@@ -921,10 +975,19 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                             </select>
                             <span />
                             <p class="text-[11px] text-muted-foreground">{{ WATCHES.find((item) => item.value === box.detect)?.hint }}</p>
-                            <label>Sensitivity</label>
+                            <label>Strictness</label>
                             <div class="flex items-center gap-2">
-                                <input v-model.number="box.sensitivity" type="range" min="1" max="10" step="1" class="flex-1" title="1: only big changes · 10: the slightest" />
-                                <span class="w-5 text-right">{{ box.sensitivity ?? 6 }}</span>
+                                <input
+                                    :value="box.strictness ?? DEFAULT_STRICTNESS"
+                                    type="range"
+                                    min="1"
+                                    max="10"
+                                    step="1"
+                                    class="flex-1"
+                                    title="1: the slightest change counts · 10: only a clear one (fewer false alarms)"
+                                    @input="(event) => (box.strictness = Number((event.target as HTMLInputElement).value))"
+                                />
+                                <span class="w-5 text-right">{{ box.strictness ?? DEFAULT_STRICTNESS }}</span>
                             </div>
                         </template>
                         <template v-else>
@@ -946,6 +1009,11 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                                 <option v-for="system in places.systems" :key="system.id" :value="`s:${system.id}`">{{ system.name }}</option>
                             </optgroup>
                         </select>
+                        <label>With camera</label>
+                        <label class="flex items-center gap-2" title="Turning this client's camera on (here, a pilot tab or the hole watcher) starts this box too">
+                            <input :checked="box.auto !== false" type="checkbox" @change="(event) => (box.auto = (event.target as HTMLInputElement).checked)" />
+                            <span>Starts when the camera turns on</span>
+                        </label>
                         <template v-if="roleOf(box) === 'camera'">
                             <label>Quality</label>
                             <select v-model="box.quality" class="h-7 rounded border border-border bg-background px-1">
