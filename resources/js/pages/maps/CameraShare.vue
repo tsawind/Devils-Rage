@@ -509,7 +509,7 @@ function boxStyle(box: TBox): Record<string, string> {
 const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', live: 'Live', paused: 'Paused', reconnecting: 'Reconnecting…', failed: 'Stopped' };
 /** Patch 62f: what a box's hits were, in words. */
 const HIT_LABEL: Record<string, string> = { activation: '⚡ activations', appeared: '＋ ships in', vanished: '－ ships out', scan_new: '＋ new results', scan_gone: '－ results gone', local_in: '＋ in local', local_out: '－ left local' };
-function hitSummary(run: TRun): string {
+function hitSummary(run: { kinds: Record<string, number> }): string {
     return Object.entries(run.kinds)
         .map(([kind, count]) => `${count} ${HIT_LABEL[kind] ?? kind}`)
         .join(' · ');
