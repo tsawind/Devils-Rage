@@ -16,7 +16,9 @@ SRC="$STACK/wormhole-systems/devilsrage/cameras"
 MAPPER_ENV="$STACK/.env"
 
 mkdir -p "$DIR"
+before=$(sha256sum "$DIR/mediamtx.yml" 2>/dev/null | cut -d' ' -f1 || true)
 cp "$SRC/docker-compose.yml" "$SRC/mediamtx.yml" "$DIR/"
+after=$(sha256sum "$DIR/mediamtx.yml" | cut -d' ' -f1)
 
 domain=$(grep -E '^APP_URL=' "$MAPPER_ENV" | head -1 | cut -d= -f2- | tr -d '"' | sed -E 's#^https?://##; s#/.*$##')
 if [ -z "$domain" ]; then
@@ -45,6 +47,12 @@ fi
 cd "$DIR"
 docker compose pull -q
 docker compose up -d
+# The settings file is mounted, so a change to it alone doesn't restart the relay: do it here
+# (live cameras drop for a few seconds and reconnect by themselves).
+if [ -n "$before" ] && [ "$before" != "$after" ]; then
+    echo "== Relay settings changed: restarting the relay"
+    docker compose restart mediamtx >/dev/null
+fi
 sleep 3
 echo "== Relay"
 docker compose ps --format 'table {{.Name}}\t{{.Status}}'
