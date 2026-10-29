@@ -290,7 +290,22 @@ export class BoxCamera {
         this.session?.stop();
         const quality = QUALITY[this.quality];
         this.session = await publish(relay, this.stream, { maxBitrate: quality.maxBitrate, maxFramerate: quality.fps }, () => this.onLost());
-        this.record();
+        // Patch 62m: coming back from standby keeps the clip it was already recording.
+        if (!this.recorder) this.record();
+    }
+
+    /**
+     * Patch 62m: stop streaming but keep watching and recording here (nobody is watching it);
+     * a clip still goes up when something happens.
+     */
+    standby(): void {
+        this.session?.stop();
+        this.session = null;
+        if (!this.recorder) this.record();
+    }
+
+    get streaming(): boolean {
+        return this.session !== null;
     }
 
     private crop(): [number, number, number, number] {

@@ -13,6 +13,7 @@ import {
     ContextMenuSubContent,
     ContextMenuSubTrigger,
 } from '@/components/ui/context-menu';
+import CameraClientMenu from '@/map/components/overlays/CameraClientMenu.vue';
 import WormholeOption from '@/components/signatures/WormholeOption.vue';
 import { armHole } from '@/composables/signatures/armHole';
 import { markStaticByHand, requestStaticCheck, staticConfirm } from '@/composables/signatures/useStaticCertainty';
@@ -294,6 +295,8 @@ function removeSignature(): void {
     <ContextMenuContent>
         <ContextMenuLabel class="font-mono text-xs text-muted-foreground">{{ placeholder.label || 'Not numbered yet' }} · {{ placeholder.detail }}</ContextMenuLabel>
         <ContextMenuSeparator />
+        <!-- Patch 62m: your clients' cameras on this hole (nobody has jumped it yet) -->
+        <CameraClientMenu v-if="canEdit" :pin="`h:${placeholder.signatureId}`" />
         <ContextMenuItem v-if="canEdit && parent" class="font-semibold text-pink-400" @select="ping()">
             <Megaphone class="size-4" />
             PING

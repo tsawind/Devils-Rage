@@ -58,7 +58,30 @@ const pinOf = (camera: { map_connection_id: number | null; map_solarsystem_id: n
     props.places.systems.find((system) => system.id === camera.map_solarsystem_id)?.name ??
     null;
 const eventPlace = (event: TCameraEvent) => pipeName(event.map_connection_id) ?? props.places.holes?.find((hole) => hole.id === event.signature_id)?.name ?? null;
-const listed = computed(() => events.value.filter((event) => showDismissed.value || event.state !== 'dismissed'));
+// Patch 62m: what to list (ships in / out can be many), and only activations get their picture
+// open; the rest are one line until clicked.
+type TEventFilter = 'all' | 'activation' | 'ships' | 'scan' | 'local';
+const eventFilter = ref<TEventFilter>('all');
+const FILTER_KINDS: Record<TEventFilter, string[] | null> = {
+    all: null,
+    activation: ['activation'],
+    ships: ['appeared', 'vanished'],
+    scan: ['scan_new', 'scan_gone'],
+    local: ['local_in', 'local_out'],
+};
+const listed = computed(() =>
+    events.value.filter((event) => (showDismissed.value || event.state !== 'dismissed') && (FILTER_KINDS[eventFilter.value]?.includes(event.kind) ?? true)),
+);
+const waiting = computed(() => listed.value.filter((event) => event.state === 'new'));
+const opened = ref<Record<number, boolean>>({});
+const showsPicture = (event: TCameraEvent): boolean => event.kind === 'activation' || event.kind === 'local_in' || Boolean(opened.value[event.id]);
+const dismissing = ref(false);
+async function dismissShown(): Promise<void> {
+    dismissing.value = true;
+    await jsonFetch(MapCameraEventController.dismiss(props.map.slug).url, 'POST', { ids: waiting.value.map((event) => event.id) });
+    dismissing.value = false;
+    await refreshCameras();
+}
 
 const KIND_TEXT: Record<string, string> = {
     activation: '⚡ Activation',
@@ -166,6 +189,25 @@ const gridClass = computed(() => GRID[columns.value] ?? GRID[2]);
                     <h2 class="text-sm font-semibold">Hole watch · last 24 h</h2>
                     <label class="ml-auto flex items-center gap-1 text-xs text-muted-foreground"><input v-model="showDismissed" type="checkbox" /> dismissed</label>
                 </div>
+                <div class="flex flex-wrap items-center gap-1 text-xs">
+                    <select v-model="eventFilter" class="h-7 rounded border border-border bg-background px-1">
+                        <option value="all">Everything</option>
+                        <option value="activation">⚡ Activations</option>
+                        <option value="ships">Ships in / out</option>
+                        <option value="scan">Probe scanner</option>
+                        <option value="local">Local</option>
+                    </select>
+                    <button
+                        v-if="member && waiting.length"
+                        type="button"
+                        class="ml-auto rounded border border-border px-2 py-1 hover:bg-muted disabled:opacity-50"
+                        :disabled="dismissing"
+                        title="Every one listed that nobody has answered yet: not a jump"
+                        @click="dismissShown"
+                    >
+                        Not a jump: all {{ waiting.length }} shown
+                    </button>
+                </div>
                 <p v-if="!listed.length" class="text-xs text-muted-foreground">Nothing seen yet. Cameras with the hole watch on report jumps here, each with a short clip.</p>
                 <div v-for="event in listed" :key="event.id" class="flex flex-col gap-1.5 rounded-md border p-2 text-xs" :class="event.state === 'dismissed' ? 'border-border opacity-50' : event.kind === 'activation' ? 'border-purple-800' : 'border-border'">
                     <div class="flex items-center gap-2">
@@ -174,12 +216,13 @@ const gridClass = computed(() => GRID[columns.value] ?? GRID[2]);
                         <span class="ml-auto shrink-0 text-muted-foreground" :title="new Date(event.happened_at).toLocaleString()">{{ stampTime(new Date(event.happened_at)).slice(11) }} EVE · {{ ago(event.happened_at) }}</span>
                     </div>
                     <p v-if="eventPlace(event)" class="text-purple-300">{{ eventPlace(event) }}</p>
-                    <button v-if="event.still_url && openClip !== event.id" type="button" class="relative overflow-hidden rounded" title="Play the clip" @click="openClip = event.id">
+                    <button v-if="!showsPicture(event) && (event.still_url || event.clip_url)" type="button" class="self-start text-muted-foreground underline" @click="opened = { ...opened, [event.id]: true }">📷 Show the picture</button>
+                    <button v-if="showsPicture(event) && event.still_url && openClip !== event.id" type="button" class="relative overflow-hidden rounded" title="Play the clip" @click="openClip = event.id">
                         <img :src="event.still_url" alt="What the camera saw" class="aspect-video w-full object-cover" loading="lazy" />
                         <span v-if="event.clip_url" class="absolute inset-0 flex items-center justify-center bg-black/30 text-2xl text-white">▶</span>
                     </button>
-                    <video v-if="event.clip_url && (openClip === event.id || !event.still_url)" :src="event.clip_url" class="aspect-video w-full rounded bg-black" controls preload="none" :autoplay="openClip === event.id" />
-                    <p v-if="!event.clip_url && !event.still_url" class="text-muted-foreground">Clip on its way…</p>
+                    <video v-if="showsPicture(event) && event.clip_url && (openClip === event.id || !event.still_url)" :src="event.clip_url" class="aspect-video w-full rounded bg-black" controls preload="none" :autoplay="openClip === event.id" />
+                    <p v-if="showsPicture(event) && !event.clip_url && !event.still_url" class="text-muted-foreground">Clip on its way…</p>
                     <div v-if="member" class="flex flex-wrap items-center gap-1">
                         <template v-if="event.state === 'new'">
                             <select class="h-6 rounded border border-border bg-background px-1" @change="mark(event, 'confirmed', { ship_class: ($event.target as HTMLSelectElement).value, side: 'hostile' })">

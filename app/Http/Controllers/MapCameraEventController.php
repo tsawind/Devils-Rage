@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Events\Cameras\CameraActivityEvent;
 use App\Events\Cameras\CamerasChangedEvent;
+use App\Models\Map;
 use App\Models\MapCamera;
 use App\Models\MapCameraEvent;
 use App\Models\MapConnectionJump;
@@ -152,6 +153,28 @@ final class MapCameraEventController extends Controller
         $mapCameraEvent->fill($data + ['handled_by_user_id' => $user->id])->save();
 
         return response()->json(['state' => $mapCameraEvent->state]);
+    }
+
+    /**
+     * Patch 62m: "Not a jump" for many at once (the wall's "Dismiss all shown"): only ones still
+     * waiting for an answer, only on this map.
+     */
+    public function dismiss(Request $request, Map $map): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        abort_unless($user->can('update', $map), 403);
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'max:500'],
+            'ids.*' => ['integer'],
+        ]);
+        $count = MapCameraEvent::query()
+            ->where('map_id', $map->id)
+            ->where('state', 'new')
+            ->whereIn('id', $data['ids'])
+            ->update(['state' => 'dismissed', 'handled_by_user_id' => $user->id]);
+
+        return response()->json(['dismissed' => $count]);
     }
 
     /** The clip or still, for members and the guests whose link the camera allows. */

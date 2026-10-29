@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Enums\Permission;
 use App\Events\Cameras\CameraActivityEvent;
 use App\Events\Cameras\CamerasChangedEvent;
+use App\Events\Cameras\CameraWantedEvent;
 use App\Models\Character;
 use App\Models\Map;
 use App\Models\MapAccess;
@@ -304,4 +305,48 @@ it('remembers that a hit came while the pilot was playing that client', function
     actingAs($owner);
     postJson(route('map-cameras.events.store', $watch), ['kind' => 'appeared', 'while_playing' => true])->assertCreated();
     getJson(route('maps.cameras.index', $map))->assertOk()->assertJsonPath('events.0.while_playing', true);
+});
+
+it('wakes a camera on standby when someone wants to watch it', function () {
+    Event::fake([CameraWantedEvent::class, CamerasChangedEvent::class]);
+    $map = Map::factory()->create();
+    $owner = cameraPilot($map);
+    startCamera($map, $owner);
+    $camera = MapCamera::query()->sole();
+    patchJson(route('map-cameras.update', $camera), ['status' => 'standby'])->assertOk();
+    expect($camera->refresh()->status)->toBe('standby');
+
+    actingAs(cameraPilot($map));
+    getJson(route('maps.cameras.index', $map))->assertOk()->assertJsonCount(1, 'cameras');
+    postJson(route('map-cameras.watch', $camera))->assertOk();
+    postJson(route('map-cameras.watch', $camera))->assertOk();
+
+    // Once, however many ask in the same 20 s; to the owner's own channel.
+    Event::assertDispatchedTimes(CameraWantedEvent::class, 1);
+    Event::assertDispatched(CameraWantedEvent::class, fn (CameraWantedEvent $sent): bool => $sent->camera_id === $camera->id && $sent->broadcastOn()[0]->name === "private-User.{$owner->id}");
+});
+
+it('dismisses many camera events at once, only waiting ones on this map', function () {
+    $map = Map::factory()->create();
+    $owner = cameraPilot($map);
+    startCamera($map, $owner);
+    $camera = MapCamera::query()->sole();
+    foreach (['appeared', 'vanished', 'activation'] as $kind) {
+        postJson(route('map-cameras.events.store', $camera), ['kind' => $kind])->assertCreated();
+    }
+    [$first, $second, $third] = MapCameraEvent::query()->orderBy('id')->get()->all();
+    $third->update(['state' => 'confirmed']);
+    $other = Map::factory()->create();
+    $elsewhere = MapCameraEvent::query()->create(['map_camera_id' => $camera->id, 'map_id' => $other->id, 'kind' => 'appeared', 'happened_at' => now(), 'expires_at' => now()->addDay()]);
+
+    postJson(route('maps.camera-events.dismiss', $map), ['ids' => [$first->id, $second->id, $third->id, $elsewhere->id]])
+        ->assertOk()
+        ->assertJsonPath('dismissed', 2);
+
+    expect($first->refresh()->state)->toBe('dismissed')
+        ->and($third->refresh()->state)->toBe('confirmed')
+        ->and($elsewhere->refresh()->state)->toBe('new');
+
+    actingAs(cameraPilot($map, Permission::Viewer));
+    postJson(route('maps.camera-events.dismiss', $map), ['ids' => [$first->id]])->assertForbidden();
 });

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useOnClient } from '@/composables/useOnClient';
 import useUser from '@/composables/useUser';
 import { getUserChannelName } from '@/const/channels';
-import { CameraControlEvent } from '@/const/events';
+import { CameraControlEvent, CameraWantedEvent } from '@/const/events';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SeoHead from '@/layouts/SeoHead.vue';
 import { BoxCamera, SoundEar, startBeat, type TBoxRect, type TDetectMode, type THit } from '@/lib/cameras/broadcaster';
@@ -47,6 +47,8 @@ type TBox = TBoxRect & {
     strictness?: number;
     /** Patch 62l: starts when the client's camera is turned on (default yes). */
     auto?: boolean;
+    /** Patch 62m: cameras: stream only while someone watches (default yes for new ones). */
+    onDemand?: boolean;
     key: string;
     name: string;
     kind: TKind;
@@ -62,7 +64,8 @@ type TBox = TBoxRect & {
 type TRun = {
     camera: BoxCamera;
     id: number;
-    state: 'starting' | 'live' | 'paused' | 'reconnecting' | 'failed';
+    /** Patch 62m: 'standby' = watching and recording here, streaming only while someone watches. */
+    state: 'starting' | 'live' | 'paused' | 'reconnecting' | 'failed' | 'standby';
     error: string | null;
     hits: number;
     /** Patch 62e: hits by kind (activation / appeared / vanished). */
@@ -161,7 +164,8 @@ function applyDefaultSetup(client: string): void {
         boxes.value.push({
             ...template,
             key: Math.random().toString(36).slice(2, 10),
-            quality: '720p5',
+            quality: '480p2',
+            onDemand: true,
             pin: '',
             guests: [],
             client,
@@ -292,7 +296,8 @@ function addBox(whole = false, role: TRole = 'camera'): void {
         auto: true,
         name: whole ? (sourceKind.value === 'screen' ? 'Screen' : 'EVE client') : names[role],
         kind: role === 'watch' ? 'watch' : whole ? 'screen' : 'hole',
-        quality: '720p5',
+        quality: '480p2',
+        onDemand: true,
         pin: '',
         guests: [],
         // Patch 62f: cameras stream; watching is what watch areas are for.
@@ -512,6 +517,13 @@ async function startBox(box: TBox): Promise<void> {
         setState(box.key, 'live');
         return;
     }
+    // Patch 62m: on demand: watch and record here; stream when a viewer asks (CameraWantedEvent).
+    if (box.onDemand) {
+        camera.standby();
+        setState(box.key, 'standby');
+        void jsonFetch(MapCameraController.update(run.id).url, 'PATCH', { status: 'standby' });
+        return;
+    }
     try {
         await camera.start(started.publish);
         setState(box.key, 'live');
@@ -703,6 +715,13 @@ const shareUser = useUser();
 useOnClient(() => {
     const me = shareUser.value?.id;
     if (!me) return;
+    // Patch 62m: someone wants to watch a camera on standby: stream it for a while.
+    useEcho<{ map_id: number; camera_id: number }>(getUserChannelName(me), CameraWantedEvent, (event) => {
+        if (event.map_id !== props.map.id) return;
+        for (const [key, run] of runs.entries()) {
+            if (run.id === event.camera_id) void wake(key);
+        }
+    });
     useEcho<{ map_id: number; client: string; on: boolean | null; pin: string | null }>(getUserChannelName(me), CameraControlEvent, (event) => {
         if (event.map_id !== props.map.id || !sources.value.some((item) => item.client === event.client)) return;
         if (event.pin !== null) setClientPin(event.client, event.pin);
@@ -714,6 +733,35 @@ onBeforeUnmount(() => {
     if (reportTimer) clearTimeout(reportTimer);
     void jsonFetch(MapCameraClientController.report(props.map.slug).url, 'PUT', { clients: [] });
 });
+
+// ---- Patch 62m: on demand ------------------------------------------------------------------
+/** How long a camera keeps streaming after the last viewer asked (viewers ask every minute). */
+const WANTED_MS = 150_000;
+const wantedAt = new Map<string, number>();
+async function wake(key: string): Promise<void> {
+    wantedAt.set(key, Date.now());
+    const run = runs.get(key);
+    if (!run || run.state !== 'standby') return;
+    setState(key, 'starting');
+    const answer = await jsonFetch<{ publish: TRelayPass | null }>(MapCameraController.update(run.id).url, 'PATCH', { reconnect: true, status: 'live' });
+    try {
+        if (!answer?.publish) throw new Error('no pass');
+        await run.camera.start(answer.publish);
+        setState(key, 'live');
+    } catch {
+        run.camera.standby();
+        setState(key, 'standby');
+    }
+}
+function restIdle(now: number): void {
+    for (const [key, run] of runs.entries()) {
+        const box = boxes.value.find((item) => item.key === key);
+        if (!box?.onDemand || run.state !== 'live' || now - (wantedAt.get(key) ?? 0) < WANTED_MS) continue;
+        run.camera.standby();
+        setState(key, 'standby');
+        void jsonFetch(MapCameraController.update(run.id).url, 'PATCH', { status: 'standby' });
+    }
+}
 
 // ---- The beat ----------------------------------------------------------------------------
 const levels = ref<Record<string, number>>({});
@@ -751,8 +799,9 @@ function beatOnce(now: number): void {
     if (now - lastHeartbeat > 30_000) {
         lastHeartbeat = now;
         if (sources.value.length) reportClients(false);
+        restIdle(Date.now());
         for (const run of runs.values()) {
-            if (run.state === 'live' || run.state === 'paused') void jsonFetch(MapCameraController.update(run.id).url, 'PATCH', { status: run.state });
+            if (run.state === 'live' || run.state === 'paused' || run.state === 'standby') void jsonFetch(MapCameraController.update(run.id).url, 'PATCH', { status: run.state });
         }
     }
 }
@@ -766,12 +815,26 @@ onBeforeUnmount(() => {
 
 const selectedBox = computed(() => boxes.value.find((box) => box.key === selected.value) ?? null);
 const liveCount = computed(() => [...runs.values()].filter((run) => run.state === 'live').length);
+/** Patch 62m: what's on, in words: streaming cameras, cameras on standby, watch areas. */
+const onSummary = computed(() => {
+    let streaming = 0;
+    let standby = 0;
+    let watching = 0;
+    for (const [key, run] of runs.entries()) {
+        const box = boxes.value.find((item) => item.key === key);
+        if (!box || run.state === 'failed') continue;
+        if (roleOf(box) === 'watch') watching++;
+        else if (run.state === 'standby') standby++;
+        else if (run.state === 'live') streaming++;
+    }
+    return [streaming && `${streaming} streaming`, standby && `${standby} on standby`, watching && `${watching} watching`].filter(Boolean).join(' · ');
+});
 
 function boxStyle(box: TBox): Record<string, string> {
     return { left: `${box.x * 100}%`, top: `${box.y * 100}%`, width: `${box.w * 100}%`, height: `${box.h * 100}%` };
 }
 
-const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', live: 'Live', paused: 'Paused', reconnecting: 'Reconnecting…', failed: 'Stopped' };
+const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', live: 'Live', paused: 'Paused', reconnecting: 'Reconnecting…', failed: 'Stopped', standby: 'Standby' };
 /** Patch 62f: what a box's hits were, in words. */
 const HIT_LABEL: Record<string, string> = { activation: '⚡ activations', appeared: '＋ ships in', vanished: '－ ships out', scan_new: '＋ new results', scan_gone: '－ results gone', local_in: '＋ in local', local_out: '－ left local' };
 function hitSummary(run: { kinds: Record<string, number> }): string {
@@ -798,8 +861,8 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                     <select v-if="characters.length && !sources.length" v-model.number="characterId" class="h-8 rounded-md border border-border bg-background px-2 text-xs" title="Whose client, when the window title doesn't say">
                         <option v-for="character in characters" :key="character.id" :value="character.id">{{ character.online ? '● ' : '' }}{{ character.name }}{{ character.online ? ' (online)' : '' }}</option>
                     </select>
-                    <span v-if="liveCount" class="ml-auto flex items-center gap-1 text-xs text-red-400"><span class="size-2 animate-pulse rounded-full bg-red-500" /> {{ liveCount }} live</span>
-                    <Button v-if="canCloseWindow" size="sm" variant="outline" :class="liveCount ? '' : 'ml-auto'" title="Stop every camera and close this window" @click="closeWindow">Close window</Button>
+                    <span v-if="onSummary" class="ml-auto flex items-center gap-1 text-xs text-red-400" title="Streaming: sent to the relay now · standby: watching and recording here, streams when someone watches · watching: watch areas (never streamed)"><span class="size-2 rounded-full bg-red-500" :class="liveCount ? 'animate-pulse' : 'opacity-40'" /> {{ onSummary }}</span>
+                    <Button v-if="canCloseWindow" size="sm" variant="outline" :class="onSummary ? '' : 'ml-auto'" title="Stop every camera and close this window" @click="closeWindow">Close window</Button>
                 </div>
                 <p v-if="error" class="rounded border border-red-800 bg-red-950/40 px-2 py-1 text-xs text-red-200">
                     {{ error }}
@@ -1015,6 +1078,11 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                             <span>Starts when the camera turns on</span>
                         </label>
                         <template v-if="roleOf(box) === 'camera'">
+                            <label>Stream</label>
+                            <label class="flex items-center gap-2" title="On: it watches and records here, and only sends the picture while someone has it open (clips still go up when something happens)">
+                                <input :checked="Boolean(box.onDemand)" type="checkbox" @change="(event) => (box.onDemand = (event.target as HTMLInputElement).checked)" />
+                                <span>Only while someone watches</span>
+                            </label>
                             <label>Quality</label>
                             <select v-model="box.quality" class="h-7 rounded border border-border bg-background px-1">
                                 <option v-for="(quality, key) in QUALITY" :key="key" :value="key">{{ quality.label }}</option>

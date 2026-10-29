@@ -25,7 +25,7 @@ final class PruneCamerasCommand extends AppCommand
     public function handle(): int
     {
         $stale = MapCamera::query()
-            ->whereIn('status', ['starting', 'live', 'paused'])
+            ->whereIn('status', MapCamera::ON_STATUSES)
             ->where(fn ($query) => $query->whereNull('last_seen_at')->orWhere('last_seen_at', '<', now()->subSeconds((int) config('cameras.stale_seconds') * 2)))
             ->get();
         foreach ($stale as $camera) {

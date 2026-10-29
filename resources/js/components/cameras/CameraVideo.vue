@@ -82,9 +82,18 @@ function disconnect(): void {
     session = null;
 }
 
-onMounted(connect);
+// Patch 62m: "still watching" every minute, so a camera that streams only while someone
+// watches keeps streaming (it goes back to standby a couple of minutes after the last viewer).
+let stillWatching: ReturnType<typeof setInterval> | null = null;
+onMounted(() => {
+    void connect();
+    stillWatching = setInterval(() => {
+        if (state.value === 'live') void askForPass();
+    }, 60_000);
+});
 onBeforeUnmount(() => {
     closed = true;
+    if (stillWatching) clearInterval(stillWatching);
     disconnect();
 });
 watch(
@@ -112,7 +121,7 @@ defineExpose({ pictureInPicture, video });
     <div class="relative size-full bg-black">
         <video ref="video" class="size-full object-contain" autoplay playsinline :muted="muted" @loadedmetadata="reportSize" @resize="reportSize" />
         <div v-if="state !== 'live'" class="absolute inset-0 flex items-center justify-center text-xs text-neutral-400">
-            <span v-if="state === 'connecting'" class="animate-pulse">Connecting…</span>
+            <span v-if="state === 'connecting'" class="animate-pulse">Connecting… (a camera on standby starts in a few seconds)</span>
             <span v-else-if="state === 'lost'" class="animate-pulse">Lost the picture, trying again…</span>
             <span v-else-if="state === 'busy'" class="animate-pulse">The mapper isn't answering (updating?), trying again…</span>
             <span v-else class="px-4 text-center">This camera is off: its share window closed or stopped sending. Trying again…</span>

@@ -19,6 +19,7 @@ import { openAddMass } from '@/map/actions/addMass';
 import { deleteMapConnection } from '@/map/actions/deleteMapConnection';
 import { updateMapConnection } from '@/map/actions/updateMapConnection';
 import { tryUseMapStore } from '@/map/store/mapStore';
+import CameraClientMenu from '@/map/components/overlays/CameraClientMenu.vue';
 import ConnectionHoleTypeMenu from '@/map/components/overlays/ConnectionHoleTypeMenu.vue';
 import ConnectionRelinkMenu from '@/map/components/overlays/ConnectionRelinkMenu.vue';
 import CopyConnectionNameMenu from '@/map/components/overlays/CopyConnectionNameMenu.vue';
@@ -121,6 +122,8 @@ function handleLifetimeChange(lifetime: AcceptableValue) {
             Watching
             <Check v-if="map_connection.mass_watched_at" class="ml-auto size-4" />
         </ContextMenuItem>
+        <!-- Patch 62m: your clients' cameras on this hole -->
+        <CameraClientMenu v-if="map_connection.type !== 'stargate'" :pin="`c:${map_connection.id}`" />
         <!-- Patch 40c: Brand new hole: seen in game "not significantly disrupted" -->
         <ContextMenuItem
             v-if="map_connection.type !== 'stargate'"

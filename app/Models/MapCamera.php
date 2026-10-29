@@ -44,7 +44,11 @@ final class MapCamera extends Model
     /** Patch 62f: 'watch' = a watch area: not streamed, only reports what it sees (and keeps short clips). */
     public const array KINDS = ['hole', 'structure', 'other', 'pi', 'screen', 'watch'];
 
-    public const array QUALITIES = ['720p5', '1080p10', '1080p30'];
+    /** Patch 62m: 480p2, the lightest (a whole client you only glance at). */
+    public const array QUALITIES = ['480p2', '720p5', '1080p10', '1080p30'];
+
+    /** Patch 62m: 'standby' = on, watching and recording at home, but only streams while someone watches. */
+    public const array ON_STATUSES = ['starting', 'live', 'paused', 'standby'];
 
     public static function newPath(): string
     {
@@ -54,7 +58,7 @@ final class MapCamera extends Model
     /** Live or paused, and checked in recently. */
     public function isOn(): bool
     {
-        return in_array($this->status, ['starting', 'live', 'paused'], true)
+        return in_array($this->status, self::ON_STATUSES, true)
             && $this->last_seen_at !== null
             && $this->last_seen_at->gt(now()->subSeconds((int) config('cameras.stale_seconds')));
     }

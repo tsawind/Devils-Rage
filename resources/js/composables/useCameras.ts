@@ -13,7 +13,8 @@ export type TCamera = {
     name: string;
     /** Patch 62f: 'watch' = a watch area (not streamed; only reports). */
     kind: 'hole' | 'structure' | 'other' | 'pi' | 'screen' | 'watch';
-    status: 'starting' | 'live' | 'paused';
+    /** Patch 62m: standby = on, streams only while someone watches. */
+    status: 'starting' | 'live' | 'paused' | 'standby';
     quality: string;
     detect: boolean;
     map_solarsystem_id: number | null;

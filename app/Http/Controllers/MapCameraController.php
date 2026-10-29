@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Events\Cameras\CamerasChangedEvent;
+use App\Events\Cameras\CameraWantedEvent;
 use App\Models\Character;
 use App\Models\Map;
 use App\Models\MapCamera;
@@ -19,6 +20,7 @@ use App\Support\CameraPass;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -85,7 +87,7 @@ final class MapCameraController extends Controller
 
         $cameras = MapCamera::query()
             ->where('map_id', $map->id)
-            ->whereIn('status', ['starting', 'live', 'paused'])
+            ->whereIn('status', MapCamera::ON_STATUSES)
             ->where('last_seen_at', '>', now()->subSeconds((int) config('cameras.stale_seconds')))
             ->orderBy('name')
             ->get()
@@ -150,7 +152,7 @@ final class MapCameraController extends Controller
         abort_unless($mapCamera->user_id === $user->id, 403);
         $data = $this->validated($request, $map, false);
         $status = $request->input('status');
-        if (in_array($status, ['live', 'paused'], true)) {
+        if (in_array($status, ['live', 'paused', 'standby'], true)) {
             $data['status'] = $status;
         }
         $mapCamera->fill($data);
@@ -192,6 +194,11 @@ final class MapCameraController extends Controller
         $allowed = $member || ($link instanceof MapShareLink && in_array($link->id, $mapCamera->guest_share_link_ids ?? [], true));
         abort_unless($allowed && $mapCamera->isOn(), 403);
         $who = $member ? 'user:'.$user->id : 'link:'.$link?->id;
+        // Patch 62m: a camera on standby starts streaming for its viewers (its share window
+        // stops again a couple of minutes after the last one leaves). Viewers ask again every minute.
+        if ($mapCamera->user_id !== null && Cache::add('camera-wanted:'.$mapCamera->id, true, 20)) {
+            CameraWantedEvent::dispatch($mapCamera->user_id, $mapCamera->map_id, $mapCamera->id);
+        }
 
         return response()->json([
             'url' => rtrim((string) config('cameras.rtc_url'), '/').'/'.$mapCamera->path.'/whep',

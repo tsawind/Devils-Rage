@@ -96,6 +96,8 @@ export async function watch(relay: TRelayPass, onStream: (stream: MediaStream) =
 
 /** Bits per second and frames per second for each quality (kept low: EVE is mostly still). */
 export const QUALITY = {
+    // Patch 62m: the lightest, for a whole client you only glance at (~0.25 Mbit/s).
+    '480p2': { width: 854, height: 480, fps: 2, maxBitrate: 250_000, label: '480p · 2 fps (lightest)' },
     '720p5': { width: 1280, height: 720, fps: 5, maxBitrate: 700_000, label: '720p · 5 fps (light)' },
     '1080p10': { width: 1920, height: 1080, fps: 10, maxBitrate: 1_800_000, label: '1080p · 10 fps' },
     '1080p30': { width: 1920, height: 1080, fps: 30, maxBitrate: 4_000_000, label: '1080p · 30 fps (heavy)' },

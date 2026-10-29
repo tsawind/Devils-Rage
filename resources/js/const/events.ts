@@ -40,3 +40,4 @@ export const CamerasChangedEvent = getEventName('Cameras', 'CamerasChangedEvent'
 // Patch 62k: your share window's clients, run from the map.
 export const CameraClientsChangedEvent = getEventName('Cameras', 'CameraClientsChangedEvent');
 export const CameraControlEvent = getEventName('Cameras', 'CameraControlEvent');
+export const CameraWantedEvent = getEventName('Cameras', 'CameraWantedEvent');

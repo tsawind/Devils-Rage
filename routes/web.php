@@ -293,11 +293,12 @@ Route::middleware('auth')->group(function () {
 
     // Patch 62: cameras (streaming an EVE window / screen through the video relay).
     Route::get('maps/{map}/cameras/share', [MapCameraController::class, 'share'])->name('maps.cameras.share');
-    Route::post('maps/{map}/cameras', [MapCameraController::class, 'store'])->middleware('throttle:30,1')->name('maps.cameras.store');
+    Route::post('maps/{map}/cameras', [MapCameraController::class, 'store'])->middleware('throttle:120,1')->name('maps.cameras.store');
     Route::patch('map-cameras/{mapCamera}', [MapCameraController::class, 'update'])->middleware('throttle:240,1')->name('map-cameras.update');
     Route::delete('map-cameras/{mapCamera}', [MapCameraController::class, 'destroy'])->name('map-cameras.destroy');
     Route::post('map-cameras/{mapCamera}/events', [MapCameraEventController::class, 'store'])->middleware('throttle:60,1')->name('map-cameras.events.store');
     Route::patch('map-camera-events/{mapCameraEvent}', [MapCameraEventController::class, 'update'])->name('map-camera-events.update');
+    Route::post('maps/{map}/camera-events/dismiss', [MapCameraEventController::class, 'dismiss'])->middleware('throttle:60,1')->name('maps.camera-events.dismiss');
     Route::post('map-camera-events/{mapCameraEvent}/files', [MapCameraEventController::class, 'attach'])->middleware('throttle:60,1')->name('map-camera-events.attach');
     // Patch 62k: your share window's clients, run from the map (pilot tabs, the hole watcher).
     Route::get('maps/{map}/camera-clients', [MapCameraClientController::class, 'index'])->middleware('throttle:120,1')->name('maps.camera-clients.index');
