@@ -545,7 +545,24 @@ async function report(key: string, hit: THit): Promise<void> {
 const levels = ref<Record<string, number>>({});
 let lastLevels = 0;
 let lastHeartbeat = 0;
+/** Patch 62i: how long a beat takes (ms, smoothed): over ~35 the PC can't keep up. */
+const beatCost = ref(0);
+const struggling = computed(() => beatCost.value > 35);
+let cost = 0;
+let costShown = 0;
 const stopBeat = startBeat((now) => {
+    const began = performance.now();
+    try {
+        beatOnce(now);
+    } finally {
+        cost = cost * 0.95 + (performance.now() - began) * 0.05;
+        if (now - costShown > 1000) {
+            costShown = now;
+            beatCost.value = Math.round(cost);
+        }
+    }
+});
+function beatOnce(now: number): void {
     const heard = ear.value?.listen(now) ?? false;
     // Patch 62h: the client you're playing wants stronger proof (it still watches).
     if (clientAudio) {
@@ -563,7 +580,7 @@ const stopBeat = startBeat((now) => {
             if (run.state === 'live' || run.state === 'paused') void jsonFetch(MapCameraController.update(run.id).url, 'PATCH', { status: run.state });
         }
     }
-});
+}
 
 onBeforeUnmount(() => {
     stopBeat();
@@ -611,6 +628,10 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                 <p v-if="error" class="rounded border border-red-800 bg-red-950/40 px-2 py-1 text-xs text-red-200">
                     {{ error }}
                     <button v-if="inDesktopApp()" type="button" class="ml-2 underline" @click="openInBrowser">Open in browser</button>
+                </p>
+
+                <p v-if="struggling" class="rounded border border-amber-700 bg-amber-950/40 px-2 py-1 text-xs text-amber-200">
+                    This PC is struggling to keep up ({{ beatCost }} ms a beat). Fewer boxes, smaller boxes or a lower quality will help; each live camera is its own video encoder.
                 </p>
 
                 <!-- Patch 62g: one tab per shared window (client); add as many as you run -->

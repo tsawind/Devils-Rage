@@ -50,7 +50,15 @@ export function startBeat(onBeat: (now: number) => void): () => void {
         const code = `let t=setInterval(()=>postMessage(0),${BEAT_MS});onmessage=()=>{clearInterval(t);close()}`;
         const url = URL.createObjectURL(new Blob([code], { type: 'text/javascript' }));
         const worker = new Worker(url);
-        worker.onmessage = () => onBeat(performance.now());
+        // Patch 62i: when a beat runs long the worker's ticks queue up; run one and drop the
+        // rest, or the page falls further behind until it hangs.
+        let last = 0;
+        worker.onmessage = () => {
+            const now = performance.now();
+            if (now - last < BEAT_MS * 0.6) return;
+            onBeat(now);
+            last = performance.now();
+        };
         stop = () => {
             worker.postMessage(0);
             worker.terminate();
@@ -249,18 +257,26 @@ export class BoxCamera {
         return this.playing;
     }
 
+    /**
+     * Patch 62i: only a box that can see an activation or a pilot in local keeps clips (the
+     * only hits that send one). Each clip recorder is two video encoders, so ships in / out
+     * and probe results boxes skip them: with several windows they were what froze the PC.
+     */
+    get keepsClips(): boolean {
+        return this.detect === 'flash' || this.detect === 'local' || this.listen;
+    }
+
     /** Patch 62f: a watch area isn't streamed, but keeps the last moments for a clip. */
     record(): void {
         this.recorder?.stop();
-        this.recorder = new ClipRecorder(this.stream);
+        this.recorder = this.keepsClips ? new ClipRecorder(this.stream) : null;
     }
 
     async start(relay: TRelayPass): Promise<void> {
         this.session?.stop();
         const quality = QUALITY[this.quality];
         this.session = await publish(relay, this.stream, { maxBitrate: quality.maxBitrate, maxFramerate: quality.fps }, () => this.onLost());
-        this.recorder?.stop();
-        this.recorder = new ClipRecorder(this.stream);
+        this.record();
     }
 
     private crop(): [number, number, number, number] {
