@@ -296,6 +296,8 @@ Route::middleware('auth')->group(function () {
     Route::post('maps/{map}/cameras', [MapCameraController::class, 'store'])->middleware('throttle:120,1')->name('maps.cameras.store');
     Route::patch('map-cameras/{mapCamera}', [MapCameraController::class, 'update'])->middleware('throttle:240,1')->name('map-cameras.update');
     Route::delete('map-cameras/{mapCamera}', [MapCameraController::class, 'destroy'])->name('map-cameras.destroy');
+    // Patch 62q: your own camera straight from your share window (WebRTC offer / answer passed along).
+    Route::post('map-cameras/{mapCamera}/direct', [MapCameraController::class, 'direct'])->middleware('throttle:120,1')->name('map-cameras.direct');
     Route::post('map-cameras/{mapCamera}/events', [MapCameraEventController::class, 'store'])->middleware('throttle:60,1')->name('map-cameras.events.store');
     Route::patch('map-camera-events/{mapCameraEvent}', [MapCameraEventController::class, 'update'])->name('map-camera-events.update');
     Route::post('maps/{map}/camera-events/dismiss', [MapCameraEventController::class, 'dismiss'])->middleware('throttle:60,1')->name('maps.camera-events.dismiss');

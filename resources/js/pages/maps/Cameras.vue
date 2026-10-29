@@ -10,6 +10,7 @@ import { useOnClient } from '@/composables/useOnClient';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SeoHead from '@/layouts/SeoHead.vue';
 import { activityLabel } from '@/lib/cameras/activations';
+import { groupIncidents, incidentSummary } from '@/lib/cameras/incidents';
 import { stampTime } from '@/lib/cameras/broadcaster';
 import { jsonFetch } from '@/lib/jsonFetch';
 import { playActivationTone } from '@/lib/rageSound';
@@ -73,8 +74,10 @@ const listed = computed(() =>
     events.value.filter((event) => (showDismissed.value || event.state !== 'dismissed') && (FILTER_KINDS[eventFilter.value]?.includes(event.kind) ?? true)),
 );
 const waiting = computed(() => listed.value.filter((event) => event.state === 'new'));
+// Patch 62p: one row per incident (what one client's triggers saw within a minute).
+const incidentRows = computed(() => groupIncidents(listed.value));
 const opened = ref<Record<number, boolean>>({});
-const showsPicture = (event: TCameraEvent): boolean => event.kind === 'activation' || event.kind === 'local_in' || Boolean(opened.value[event.id]);
+const showsPicture = (event: TCameraEvent): boolean => event.kind === 'activation' || event.kind === 'local_in' || Boolean(event.still_url) || Boolean(opened.value[event.id]);
 const dismissing = ref(false);
 async function dismissShown(): Promise<void> {
     dismissing.value = true;
@@ -209,11 +212,12 @@ const gridClass = computed(() => GRID[columns.value] ?? GRID[2]);
                     </button>
                 </div>
                 <p v-if="!listed.length" class="text-xs text-muted-foreground">Nothing seen yet. Cameras with the hole watch on report jumps here, each with a short clip.</p>
-                <div v-for="event in listed" :key="event.id" class="flex flex-col gap-1.5 rounded-md border p-2 text-xs" :class="event.state === 'dismissed' ? 'border-border opacity-50' : event.kind === 'activation' ? 'border-purple-800' : 'border-border'">
+                <div v-for="{ head: event, kinds } in incidentRows" :key="event.id" class="flex flex-col gap-1.5 rounded-md border p-2 text-xs" :class="event.state === 'dismissed' ? 'border-border opacity-50' : event.kind === 'activation' ? 'border-purple-800' : 'border-border'">
                     <div class="flex items-center gap-2">
-                        <span class="font-semibold" :class="event.kind === 'activation' ? 'text-fuchsia-300' : 'text-neutral-200'">{{ KIND_TEXT[event.kind] ?? event.kind }}</span>
+                        <span class="font-semibold" :class="kinds.activation ? 'text-fuchsia-300' : 'text-neutral-200'">{{ incidentSummary(kinds) || (KIND_TEXT[event.kind] ?? event.kind) }}</span>
                         <span class="truncate text-muted-foreground">{{ cameraName(event.map_camera_id) }}<template v-if="event.while_playing"> · while playing</template></span>
                         <span class="ml-auto shrink-0 text-muted-foreground" :title="new Date(event.happened_at).toLocaleString()">{{ stampTime(new Date(event.happened_at)).slice(11) }} EVE · {{ ago(event.happened_at) }}</span>
+                        <button v-if="member && event.state === 'new'" type="button" class="shrink-0 rounded px-1 text-muted-foreground hover:bg-muted hover:text-foreground" title="Not a jump (close)" @click="mark(event, 'dismissed')">✕</button>
                     </div>
                     <p v-if="eventPlace(event)" class="text-purple-300">{{ eventPlace(event) }}</p>
                     <button v-if="!showsPicture(event) && (event.still_url || event.clip_url)" type="button" class="self-start text-muted-foreground underline" @click="opened = { ...opened, [event.id]: true }">📷 Show the picture</button>

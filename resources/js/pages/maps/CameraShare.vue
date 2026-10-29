@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { useOnClient } from '@/composables/useOnClient';
 import useUser from '@/composables/useUser';
 import { getUserChannelName } from '@/const/channels';
-import { CameraControlEvent, CameraWantedEvent } from '@/const/events';
+import { CameraControlEvent, CameraDirectEvent, CameraWantedEvent } from '@/const/events';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SeoHead from '@/layouts/SeoHead.vue';
-import { BoxCamera, SoundEar, startBeat, type TBoxRect, type TDetectMode, type THit } from '@/lib/cameras/broadcaster';
+import { BoxCamera, ClientRecorder, SoundEar, startBeat, type TBoxRect, type TDetectMode, type THit } from '@/lib/cameras/broadcaster';
 import { QUALITY, type TQuality, type TRelayPass } from '@/lib/cameras/rtc';
 import { clientOfWindowLabel, DEFAULT_STRICTNESS, defaultSetup } from '@/lib/cameras/setups';
 import { appActive, appClients, appClosesCameraWindow, appAudioErrors, appHasClientAudio, appWindows, closeAppCameraWindow, appLevels, learnFromClient, listenToClients, onAppHeard, onAppLearned, playingClient, refreshAppClients } from '@/lib/cameras/appAudio';
@@ -346,6 +346,7 @@ watch(
     () => boxes.value.filter((box) => roleOf(box) === 'hide').map((box) => `${box.client}:${box.x}:${box.y}:${box.w}:${box.h}`).join('|'),
     () => {
         for (const [key, run] of runs.entries()) run.camera.masks = hideRectsOf(boxes.value.find((box) => box.key === key)?.client);
+        for (const [client, recorder] of recorders.entries()) recorder.masks = hideRectsOf(client);
     },
 );
 
@@ -537,6 +538,8 @@ async function startBox(box: TBox): Promise<void> {
         strictness: box.strictness ?? DEFAULT_STRICTNESS,
     });
     camera.masks = hideRectsOf(box.client);
+    camera.quiet = roleOf(box) === 'watch';
+    ensureRecorder(box.client ?? '', element);
     const run: TRun = { camera: markRaw(camera), id: started.camera.id, state: 'starting', error: null, hits: 0, kinds: {}, lastHit: null };
     camera.label = stampLabel(box);
     runs.set(box.key, run);
@@ -593,6 +596,8 @@ async function stopBox(box: TBox): Promise<void> {
     if (!run) return;
     runs.delete(box.key);
     run.camera.stop();
+    dropRecorder(box.client ?? '');
+    closeDirect(run.id);
     await jsonFetch(MapCameraController.destroy(run.id).url, 'DELETE');
 }
 
@@ -651,25 +656,71 @@ watch(
 );
 
 /** A jump: the map hears now; the clip and still follow a few seconds later. */
+/**
+ * Patch 62p: what one client's triggers see within a minute is one incident: the first event
+ * gets a picture and one clip of the whole client (its recorder), the rest point at it.
+ */
+const INCIDENT_MS = 60_000;
+/** Wait this long after an incident starts before cutting its clip, so it shows what followed. */
+const CLIP_AFTER_MS = 8_000;
+const incidents = new Map<string, { startedAt: number; waiting: Promise<number | null> }>();
+
 async function report(key: string, hit: THit): Promise<void> {
     const run = runs.get(key);
-    if (!run) return;
+    const box = boxes.value.find((item) => item.key === key);
+    if (!run || !box) return;
     runs.set(key, { ...run, hits: run.hits + 1, kinds: { ...run.kinds, [hit.kind]: (run.kinds[hit.kind] ?? 0) + 1 }, lastHit: `${hit.kind} · ${hit.heardBy}${hit.playing ? ' · while playing' : ''} · ${hit.at.toLocaleTimeString()}` });
-    const created = await jsonFetch<{ id: number }>(MapCameraEventController.store(run.id).url, 'POST', {
-        kind: hit.kind,
-        strength: hit.strength,
-        heard_by: hit.heardBy,
-        while_playing: Boolean(hit.playing),
-        happened_at: hit.at.toISOString(),
-    });
-    if (!created) return;
-    // Patch 62e: clips only for activations (ships in / out get the still), so a busy
-    // overview overnight can't fill the server.
-    const clip = hit.kind === 'activation' || hit.kind === 'local_in' ? await run.camera.clip() : null;
-    const files = new FormData();
-    if (clip) files.append('clip', clip, 'clip.webm');
-    if (hit.still) files.append('still', hit.still, 'still.jpg');
-    if (clip || hit.still) await formFetch(MapCameraEventController.attach(created.id).url, files);
+    const client = box.client ?? '';
+    const open = incidents.get(client);
+    const joins = open && Date.now() - open.startedAt < INCIDENT_MS;
+    const send = (incidentId: number | null) =>
+        jsonFetch<{ id: number }>(MapCameraEventController.store(run.id).url, 'POST', {
+            kind: hit.kind,
+            strength: hit.strength,
+            heard_by: hit.heardBy,
+            while_playing: Boolean(hit.playing),
+            happened_at: hit.at.toISOString(),
+            incident_id: incidentId,
+        });
+    if (joins && open) {
+        await send(await open.waiting);
+        return;
+    }
+    const recorder = recorders.get(client);
+    const still = recorder ? recorder.still() : Promise.resolve(hit.still);
+    const waiting = send(null).then((created) => created?.id ?? null);
+    incidents.set(client, { startedAt: Date.now(), waiting });
+    const id = await waiting;
+    if (id === null) return;
+    const picture = await still;
+    if (picture) {
+        const files = new FormData();
+        files.append('still', picture, 'still.jpg');
+        await formFetch(MapCameraEventController.attach(id).url, files);
+    }
+    if (!recorder) return;
+    await new Promise((resolve) => setTimeout(resolve, CLIP_AFTER_MS));
+    const clip = await recorder.clip();
+    if (clip) {
+        const files = new FormData();
+        files.append('clip', clip, 'clip.webm');
+        await formFetch(MapCameraEventController.attach(id).url, files);
+    }
+}
+
+/** Patch 62p: each client's whole-picture recorder, on while any of its boxes is on. */
+const recorders = new Map<string, ClientRecorder>();
+function ensureRecorder(client: string, element: HTMLVideoElement): void {
+    if (recorders.has(client)) return;
+    const recorder = new ClientRecorder(element);
+    recorder.masks = hideRectsOf(client);
+    recorder.label = client;
+    recorders.set(client, markRaw(recorder));
+}
+function dropRecorder(client: string): void {
+    if (boxes.value.some((box) => box.client === client && runs.has(box.key))) return;
+    recorders.get(client)?.stop();
+    recorders.delete(client);
 }
 
 // ---- Patch 62k: clients, run from the map ---------------------------------------------------
@@ -748,6 +799,13 @@ const shareUser = useUser();
 useOnClient(() => {
     const me = shareUser.value?.id;
     if (!me) return;
+    useEcho<{ camera_id: number; key: string; step: 'offer' | 'answer' | 'bye'; sdp: string }>(getUserChannelName(me), CameraDirectEvent, (event) => {
+        if (event.step === 'offer') void answerDirect(event.camera_id, event.key, event.sdp);
+        if (event.step === 'bye') {
+            directs.get(event.key)?.pc.close();
+            directs.delete(event.key);
+        }
+    });
     // Patch 62m: someone wants to watch a camera on standby: stream it for a while.
     useEcho<{ map_id: number; camera_id: number }>(getUserChannelName(me), CameraWantedEvent, (event) => {
         if (event.map_id !== props.map.id) return;
@@ -781,6 +839,53 @@ function adoptPin(cameraId: number, camera: TServerPin | undefined): void {
         const server = camera.map_connection_id !== null ? `c:${camera.map_connection_id}` : camera.signature_id !== null ? `h:${camera.signature_id}` : '';
         if (server && server !== box.pin) box.pin = server;
     }
+}
+
+// ---- Patch 62q: your own camera, straight to your own viewers -------------------------------
+// Your map (or wall) asks for your camera directly: the mapper passes the WebRTC offer and
+// answer along your own channel, and the picture goes window to window on this PC (or your
+// home network), not through the relay. If it doesn't connect, the viewer uses the relay.
+const directs = new Map<string, { pc: RTCPeerConnection; cameraId: number }>();
+function closeDirect(cameraId: number): void {
+    for (const [key, link] of directs.entries()) {
+        if (link.cameraId !== cameraId) continue;
+        link.pc.close();
+        directs.delete(key);
+    }
+}
+async function answerDirect(cameraId: number, key: string, offer: string): Promise<void> {
+    const run = [...runs.values()].find((candidate) => candidate.id === cameraId);
+    if (!run || run.camera.quiet) return;
+    directs.get(key)?.pc.close();
+    const pc = new RTCPeerConnection();
+    directs.set(key, { pc, cameraId });
+    pc.addEventListener('connectionstatechange', () => {
+        if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+            pc.close();
+            if (directs.get(key)?.pc === pc) directs.delete(key);
+        }
+    });
+    for (const track of run.camera.stream.getVideoTracks()) pc.addTrack(track, run.camera.stream);
+    try {
+        await pc.setRemoteDescription({ type: 'offer', sdp: offer });
+        await pc.setLocalDescription(await pc.createAnswer());
+        await gathered(pc);
+        await jsonFetch(MapCameraController.direct(cameraId).url, 'POST', { key, step: 'answer', sdp: pc.localDescription?.sdp ?? '' });
+    } catch {
+        pc.close();
+        directs.delete(key);
+    }
+}
+/** Wait for this PC's own addresses (no outside servers: it's for this PC / home network). */
+function gathered(pc: RTCPeerConnection): Promise<void> {
+    if (pc.iceGatheringState === 'complete') return Promise.resolve();
+    return new Promise((resolve) => {
+        const done = () => {
+            if (pc.iceGatheringState === 'complete') resolve();
+        };
+        pc.addEventListener('icegatheringstatechange', done);
+        setTimeout(resolve, 2000);
+    });
 }
 
 // ---- Patch 62m: on demand ------------------------------------------------------------------
@@ -841,6 +946,7 @@ function beatOnce(now: number): void {
     }
     const listening = [...runs.values()].filter((run) => run.camera.listen).length;
     for (const run of runs.values()) run.camera.beat(now, heard, listening <= 1);
+    for (const recorder of recorders.values()) recorder.beat(now);
     if (now - lastLevels > 250) {
         lastLevels = now;
         levels.value = Object.fromEntries([...runs.entries()].map(([key, run]) => [key, run.camera.level]));
@@ -860,6 +966,9 @@ function beatOnce(now: number): void {
 onBeforeUnmount(() => {
     stopBeat();
     stopAll();
+    for (const recorder of recorders.values()) recorder.stop();
+    recorders.clear();
+    for (const link of directs.values()) link.pc.close();
     ear.value?.close();
     for (const item of sources.value) item.stream.getTracks().forEach((track) => track.stop());
 });

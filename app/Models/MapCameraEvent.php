@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property int $map_camera_id
+ * @property int|null $incident_id Patch 62p: the incident (first event) this one is part of
  * @property int $map_id
  * @property int|null $map_connection_id
  * @property int|null $signature_id Patch 62b: the unjumped hole the camera watched

@@ -43,7 +43,16 @@ final class MapCameraEventController extends Controller
             'while_playing' => ['sometimes', 'boolean'],
             'clip' => ['sometimes', 'file', 'max:'.$maxKb, 'mimetypes:video/webm,video/mp4,video/x-matroska,application/octet-stream'],
             'still' => ['sometimes', 'file', 'max:'.$maxKb, 'mimes:jpg,jpeg,png,webp'],
+            'incident_id' => ['sometimes', 'nullable', 'integer'],
         ]);
+        // Patch 62p: part of an incident this pilot's cameras already reported (same map, the
+        // last few minutes); anything else starts its own.
+        $incident = isset($data['incident_id']) ? MapCameraEvent::query()
+            ->where('map_id', $mapCamera->map_id)
+            ->whereNull('incident_id')
+            ->where('happened_at', '>', now()->subMinutes(5))
+            ->whereHas('camera', fn ($query) => $query->where('user_id', $user->id))
+            ->find($data['incident_id']) : null;
         $folder = 'camera-events/'.$mapCamera->map_id;
         $clip = $request->file('clip');
         $still = $request->file('still');
@@ -54,6 +63,7 @@ final class MapCameraEventController extends Controller
 
         $event = MapCameraEvent::query()->create([
             'map_camera_id' => $mapCamera->id,
+            'incident_id' => $incident?->id,
             'map_id' => $mapCamera->map_id,
             'map_connection_id' => $mapCamera->map_connection_id,
             'signature_id' => $mapCamera->signature_id,
@@ -151,6 +161,10 @@ final class MapCameraEventController extends Controller
             abort_unless($jump instanceof MapConnectionJump, 422);
         }
         $mapCameraEvent->fill($data + ['handled_by_user_id' => $user->id])->save();
+        // Patch 62p: answering an incident answers everything in it.
+        if ($mapCameraEvent->incident_id === null) {
+            MapCameraEvent::query()->where('incident_id', $mapCameraEvent->id)->update(['state' => $mapCameraEvent->state, 'handled_by_user_id' => $user->id]);
+        }
 
         return response()->json(['state' => $mapCameraEvent->state]);
     }
@@ -171,7 +185,7 @@ final class MapCameraEventController extends Controller
         $count = MapCameraEvent::query()
             ->where('map_id', $map->id)
             ->where('state', 'new')
-            ->whereIn('id', $data['ids'])
+            ->where(fn ($query) => $query->whereIn('id', $data['ids'])->orWhereIn('incident_id', $data['ids']))
             ->update(['state' => 'dismissed', 'handled_by_user_id' => $user->id]);
 
         return response()->json(['dismissed' => $count]);

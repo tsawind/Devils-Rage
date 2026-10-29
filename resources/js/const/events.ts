@@ -41,3 +41,4 @@ export const CamerasChangedEvent = getEventName('Cameras', 'CamerasChangedEvent'
 export const CameraClientsChangedEvent = getEventName('Cameras', 'CameraClientsChangedEvent');
 export const CameraControlEvent = getEventName('Cameras', 'CameraControlEvent');
 export const CameraWantedEvent = getEventName('Cameras', 'CameraWantedEvent');
+export const CameraDirectEvent = getEventName('Cameras', 'CameraDirectEvent');

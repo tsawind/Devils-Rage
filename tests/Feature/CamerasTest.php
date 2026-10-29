@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\Permission;
 use App\Events\Cameras\CameraActivityEvent;
+use App\Events\Cameras\CameraDirectEvent;
 use App\Events\Cameras\CamerasChangedEvent;
 use App\Events\Cameras\CameraWantedEvent;
 use App\Models\Character;
@@ -393,4 +394,44 @@ it('keeps a pipe camera on its hole when the pipe is deleted and mapped again', 
     $again = MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $daisy->id, 'to_map_solarsystem_id' => $delta->id]);
     $hole->update(['map_connection_id' => $again->id]);
     expect($camera->refresh()->map_connection_id)->toBe($again->id);
+});
+
+it('puts one pilot\'s events of a minute into one incident, answered together', function () {
+    $map = Map::factory()->create();
+    $owner = cameraPilot($map);
+    startCamera($map, $owner, ['box_key' => 'hole']);
+    startCamera($map, $owner, ['box_key' => 'overview']);
+    [$hole, $overview] = MapCamera::query()->orderBy('id')->get()->all();
+
+    $first = postJson(route('map-cameras.events.store', $hole), ['kind' => 'activation'])->assertCreated()->json('id');
+    $second = postJson(route('map-cameras.events.store', $overview), ['kind' => 'appeared', 'incident_id' => $first])->assertCreated()->json('id');
+    expect(MapCameraEvent::query()->find($second)->incident_id)->toBe($first);
+
+    // Someone else's incident can't be joined.
+    $mate = cameraPilot($map);
+    startCamera($map, $mate, ['box_key' => 'x']);
+    $theirs = MapCamera::query()->where('user_id', $mate->id)->sole();
+    $stray = postJson(route('map-cameras.events.store', $theirs), ['kind' => 'appeared', 'incident_id' => $first])->assertCreated()->json('id');
+    expect(MapCameraEvent::query()->find($stray)->incident_id)->toBeNull();
+
+    actingAs($owner);
+    patchJson(route('map-camera-events.update', $first), ['state' => 'dismissed'])->assertOk();
+    expect(MapCameraEvent::query()->find($second)->state)->toBe('dismissed');
+    getJson(route('maps.cameras.index', $map))->assertOk()->assertJsonFragment(['id' => $second, 'incident_id' => $first]);
+});
+
+it('passes your own camera\'s direct link along your channel, and nobody else\'s', function () {
+    Event::fake([CameraDirectEvent::class, CamerasChangedEvent::class]);
+    $map = Map::factory()->create();
+    $owner = cameraPilot($map);
+    startCamera($map, $owner);
+    $camera = MapCamera::query()->sole();
+
+    postJson(route('map-cameras.direct', $camera), ['key' => 'abc', 'step' => 'offer', 'sdp' => "v=0\r\n"])->assertOk();
+    postJson(route('map-cameras.direct', $camera), ['key' => 'abc', 'step' => 'bye'])->assertOk();
+    postJson(route('map-cameras.direct', $camera), ['key' => 'abc', 'step' => 'offer'])->assertUnprocessable();
+    Event::assertDispatched(CameraDirectEvent::class, fn (CameraDirectEvent $sent): bool => $sent->step === 'offer' && $sent->broadcastOn()[0]->name === "private-User.{$owner->id}");
+
+    actingAs(cameraPilot($map));
+    postJson(route('map-cameras.direct', $camera), ['key' => 'abc', 'step' => 'offer', 'sdp' => 'x'])->assertForbidden();
 });

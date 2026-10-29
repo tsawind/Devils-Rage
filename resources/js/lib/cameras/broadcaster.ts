@@ -84,6 +84,90 @@ export function startBeat(onBeat: (now: number) => void): () => void {
     return stop;
 }
 
+/** The label and the EVE time (UTC) in the bottom-left corner of a picture, on a dark strip. */
+function stampCanvas(draw: CanvasRenderingContext2D, canvas: HTMLCanvasElement, label: string): void {
+    const time = `${stampTime(new Date())} EVE`;
+    const text = label ? `${label} · ${time}` : time;
+    const size = Math.max(11, Math.min(18, Math.round(canvas.height / 26)));
+    draw.font = `600 ${size}px ui-monospace, Consolas, monospace`;
+    const width = draw.measureText(text).width;
+    const pad = Math.round(size * 0.4);
+    draw.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    draw.fillRect(0, canvas.height - size - pad * 2, width + pad * 2, size + pad * 2);
+    draw.fillStyle = '#f5d0fe';
+    draw.textBaseline = 'bottom';
+    draw.fillText(text, pad, canvas.height - pad);
+}
+
+/**
+ * Patch 62p: one recorder per EVE client, of the whole client (hide areas blacked out), so a
+ * trigger's clip and picture show what happened (a ship landing), not the trigger's small box
+ * (the hole's swirl). It keeps the last moments at 720p, 5 fps, here on this PC; nothing goes
+ * anywhere unless something happens. Triggers themselves no longer record (fewer encoders).
+ */
+export const RECORD = { width: 1280, height: 720, fps: 5 } as const;
+export class ClientRecorder {
+    masks: TBoxRect[] = [];
+    label = '';
+    private readonly source: HTMLVideoElement;
+    private readonly canvas = document.createElement('canvas');
+    private readonly draw: CanvasRenderingContext2D;
+    private readonly stream: MediaStream;
+    private readonly track: CanvasCaptureMediaStreamTrack;
+    private readonly recorder: ClipRecorder;
+    private lastFrame = 0;
+
+    constructor(source: HTMLVideoElement) {
+        this.source = source;
+        this.draw = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D;
+        this.fit();
+        this.stream = this.canvas.captureStream(0);
+        this.track = this.stream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack;
+        this.paint();
+        this.recorder = new ClipRecorder(this.stream);
+    }
+
+    private fit(): void {
+        const size = sendSize({ x: 0, y: 0, w: 1, h: 1 }, this.source.videoWidth || 1920, this.source.videoHeight || 1080, '720p5');
+        if (this.canvas.width !== size.width || this.canvas.height !== size.height) {
+            this.canvas.width = size.width;
+            this.canvas.height = size.height;
+        }
+    }
+
+    private paint(): void {
+        if (this.source.videoWidth) {
+            this.fit();
+            this.draw.drawImage(this.source, 0, 0, this.canvas.width, this.canvas.height);
+        }
+        this.draw.fillStyle = '#000';
+        for (const mask of this.masks) this.draw.fillRect(mask.x * this.canvas.width, mask.y * this.canvas.height, Math.ceil(mask.w * this.canvas.width), Math.ceil(mask.h * this.canvas.height));
+        stampCanvas(this.draw, this.canvas, this.label);
+        this.track.requestFrame();
+    }
+
+    beat(now: number): void {
+        if (now - this.lastFrame < 1000 / RECORD.fps) return;
+        this.lastFrame = now;
+        this.paint();
+    }
+
+    /** The picture right now (JPEG). */
+    still(): Promise<Blob | null> {
+        return new Promise((resolve) => this.canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.82));
+    }
+
+    /** The clip around now (resolves a few seconds later). */
+    clip(): Promise<Blob | null> {
+        return this.recorder.cut();
+    }
+
+    stop(): void {
+        this.recorder.stop();
+        this.track.stop();
+    }
+}
+
 /** EVE time: UTC, 2026.10.29 04:27:13 like the game's own clock. */
 export function stampTime(when: Date): string {
     const two = (value: number) => String(value).padStart(2, '0');
@@ -186,7 +270,8 @@ export class BoxCamera {
     private readonly draw: CanvasRenderingContext2D;
     private readonly look = document.createElement('canvas');
     private readonly lookDraw: CanvasRenderingContext2D;
-    private readonly stream: MediaStream;
+    /** Patch 62q: also sent straight to your own viewers (direct link). */
+    readonly stream: MediaStream;
     private readonly track: CanvasCaptureMediaStreamTrack;
     private session: TRtcSession | null = null;
     private recorder: ClipRecorder | null = null;
@@ -277,8 +362,12 @@ export class BoxCamera {
      * and probe results boxes skip them: with several windows they were what froze the PC.
      */
     get keepsClips(): boolean {
-        return this.detect === 'flash' || this.detect === 'local' || this.listen;
+        // Patch 62p: the client's recorder (ClientRecorder) keeps the clips now.
+        return false;
     }
+
+    /** Patch 62p: a trigger isn't streamed or recorded, so it doesn't draw its picture either. */
+    quiet = false;
 
     /** Patch 62f: a watch area isn't streamed, but keeps the last moments for a clip. */
     record(): void {
@@ -329,7 +418,7 @@ export class BoxCamera {
      */
     beat(now: number, heard: boolean, soundAlone = true): void {
         if (this.paused || !this.source.videoWidth) return;
-        if (now - this.lastFrame >= 1000 / QUALITY[this.quality].fps) this.paint(now);
+        if (!this.quiet && now - this.lastFrame >= 1000 / QUALITY[this.quality].fps) this.paint(now);
         if (heard && this.listen && ((soundAlone && !this.playing) || this.pending)) this.found({ kind: 'activation', strength: 70, heardBy: 'sound' });
         if (this.detect === 'off' || now - this.lastLook < 1000 / DETECT.fps) return;
         this.lastLook = now;
@@ -383,17 +472,7 @@ export class BoxCamera {
 
     /** The label and the EVE time (UTC) in the bottom-left corner, on a dark strip. */
     private stamp(): void {
-        const time = `${stampTime(new Date())} EVE`;
-        const text = this.label ? `${this.label} · ${time}` : time;
-        const size = Math.max(11, Math.min(18, Math.round(this.canvas.height / 26)));
-        this.draw.font = `600 ${size}px ui-monospace, Consolas, monospace`;
-        const width = this.draw.measureText(text).width;
-        const pad = Math.round(size * 0.4);
-        this.draw.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        this.draw.fillRect(0, this.canvas.height - size - pad * 2, width + pad * 2, size + pad * 2);
-        this.draw.fillStyle = '#f5d0fe';
-        this.draw.textBaseline = 'bottom';
-        this.draw.fillText(text, pad, this.canvas.height - pad);
+        stampCanvas(this.draw, this.canvas, this.label);
     }
 
     /** Picture and sound within a moment of each other are one hit ("both"). */

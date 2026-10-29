@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import MapCameraController from '@/actions/App/Http/Controllers/MapCameraController';
+import { useCameras } from '@/composables/useCameras';
+import useUser from '@/composables/useUser';
+import { getUserChannelName } from '@/const/channels';
+import { CameraDirectEvent } from '@/const/events';
+import { jsonFetch } from '@/lib/jsonFetch';
 import { watch as watchRelay, type TRelayPass, type TRtcSession } from '@/lib/cameras/rtc';
 import { driverHeaders } from '@/lib/windowDriver';
+import { useEcho } from '@laravel/echo-vue';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 /**
@@ -23,9 +29,95 @@ let session: TRtcSession | null = null;
 let retry: ReturnType<typeof setTimeout> | null = null;
 let closed = false;
 
+// ---- Patch 62q: your own camera straight from your share window -----------------------------
+// No relay: your share window sends it window to window (this PC or your home network). The
+// mapper only passes the offer and answer along your own channel. Falls back to the relay.
+const { cameras } = useCameras();
+const user = useUser();
+const direct = ref(false);
+let directPc: RTCPeerConnection | null = null;
+let directKey = '';
+let answered: ((sdp: string) => void) | null = null;
+const userId = user.value?.id;
+if (userId) {
+    useEcho<{ camera_id: number; key: string; step: string; sdp: string }>(getUserChannelName(userId), CameraDirectEvent, (event) => {
+        if (event.step === 'answer' && event.key === directKey && answered) answered(event.sdp);
+    });
+}
+const isMine = () => cameras.value.find((camera) => camera.id === cameraId)?.mine === true;
+
+async function connectDirect(): Promise<boolean> {
+    if (!userId || !isMine() || typeof RTCPeerConnection === 'undefined') return false;
+    directKey = Math.random().toString(36).slice(2, 12);
+    const pc = new RTCPeerConnection();
+    directPc = pc;
+    pc.addTransceiver('video', { direction: 'recvonly' });
+    pc.addEventListener('track', (event) => {
+        const stream = event.streams[0] ?? new MediaStream([event.track]);
+        if (video.value && video.value.srcObject !== stream) video.value.srcObject = stream;
+    });
+    try {
+        await pc.setLocalDescription(await pc.createOffer());
+        await gathered(pc);
+        const answer = new Promise<string | null>((resolve) => {
+            answered = resolve;
+            setTimeout(() => resolve(null), 6000);
+        });
+        await jsonFetch(MapCameraController.direct(cameraId).url, 'POST', { key: directKey, step: 'offer', sdp: pc.localDescription?.sdp ?? '' });
+        const sdp = await answer;
+        answered = null;
+        if (!sdp || closed) throw new Error('no answer');
+        await pc.setRemoteDescription({ type: 'answer', sdp });
+        const connected = await new Promise<boolean>((resolve) => {
+            if (pc.connectionState === 'connected') resolve(true);
+            pc.addEventListener('connectionstatechange', () => {
+                if (pc.connectionState === 'connected') resolve(true);
+                if (pc.connectionState === 'failed') resolve(false);
+            });
+            setTimeout(() => resolve(pc.connectionState === 'connected'), 6000);
+        });
+        if (!connected) throw new Error('no link');
+        pc.addEventListener('connectionstatechange', () => {
+            if (directPc !== pc || closed) return;
+            if (pc.connectionState === 'failed' || pc.connectionState === 'closed' || pc.connectionState === 'disconnected') {
+                dropDirect();
+                state.value = 'lost';
+                retry = setTimeout(connect, 2000);
+            }
+        });
+        direct.value = true;
+        state.value = 'live';
+        return true;
+    } catch {
+        dropDirect();
+        return false;
+    }
+}
+
+function dropDirect(): void {
+    if (directPc) {
+        directPc.close();
+        if (directKey) void jsonFetch(MapCameraController.direct(cameraId).url, 'POST', { key: directKey, step: 'bye' });
+    }
+    directPc = null;
+    direct.value = false;
+}
+
+function gathered(pc: RTCPeerConnection): Promise<void> {
+    if (pc.iceGatheringState === 'complete') return Promise.resolve();
+    return new Promise((resolve) => {
+        pc.addEventListener('icegatheringstatechange', () => {
+            if (pc.iceGatheringState === 'complete') resolve();
+        });
+        setTimeout(resolve, 2000);
+    });
+}
+
 async function connect(): Promise<void> {
     if (closed) return;
     state.value = 'connecting';
+    if (await connectDirect()) return;
+    if (closed) return;
     const asked = await askForPass();
     if (closed) return;
     if (!('url' in asked)) {
@@ -80,6 +172,7 @@ function disconnect(): void {
     retry = null;
     session?.stop();
     session = null;
+    dropDirect();
 }
 
 // Patch 62m: "still watching" every minute, so a camera that streams only while someone
@@ -88,7 +181,7 @@ let stillWatching: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
     void connect();
     stillWatching = setInterval(() => {
-        if (state.value === 'live') void askForPass();
+        if (state.value === 'live' && !direct.value) void askForPass();
     }, 60_000);
 });
 onBeforeUnmount(() => {
@@ -114,12 +207,13 @@ async function pictureInPicture(): Promise<void> {
     }
 }
 
-defineExpose({ pictureInPicture, video });
+defineExpose({ pictureInPicture, video, direct });
 </script>
 
 <template>
     <div class="relative size-full bg-black">
         <video ref="video" class="size-full object-contain" autoplay playsinline :muted="muted" @loadedmetadata="reportSize" @resize="reportSize" />
+        <span v-if="state === 'live' && direct" class="pointer-events-none absolute top-1 right-1 rounded bg-emerald-900/80 px-1 text-[10px] text-emerald-100" title="Straight from your share window: not through the server">direct</span>
         <div v-if="state !== 'live'" class="absolute inset-0 flex items-center justify-center text-xs text-neutral-400">
             <span v-if="state === 'connecting'" class="animate-pulse">Connecting… (a camera on standby starts in a few seconds)</span>
             <span v-else-if="state === 'lost'" class="animate-pulse">Lost the picture, trying again…</span>

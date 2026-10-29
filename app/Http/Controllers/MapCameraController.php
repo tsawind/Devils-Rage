@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Events\Cameras\CameraDirectEvent;
 use App\Events\Cameras\CamerasChangedEvent;
 use App\Events\Cameras\CameraWantedEvent;
 use App\Models\Character;
@@ -219,6 +220,26 @@ final class MapCameraController extends Controller
     }
 
     /**
+     * Patch 62q: your own camera, straight from your share window (offer from the viewer,
+     * answer from the share window, or bye). Only the camera's owner; nothing is stored.
+     */
+    public function direct(Request $request, MapCamera $mapCamera): JsonResponse
+    {
+        abort_unless(CameraPass::enabled(), 404);
+        /** @var User $user */
+        $user = $request->user();
+        abort_unless($mapCamera->user_id === $user->id && $mapCamera->isOn(), 403);
+        $data = $request->validate([
+            'key' => ['required', 'string', 'alpha_num', 'max:40'],
+            'step' => ['required', Rule::in(['offer', 'answer', 'bye'])],
+            'sdp' => ['required_unless:step,bye', 'nullable', 'string', 'max:9000'],
+        ]);
+        CameraDirectEvent::dispatch($user->id, $mapCamera->id, (string) $data['key'], (string) $data['step'], (string) ($data['sdp'] ?? ''));
+
+        return response()->json(['sent' => true]);
+    }
+
+    /**
      * The relay (MediaMTX) asks whether a publish / watch may go ahead. Answers 200 or 401.
      * MediaMTX sends {user, password, token, ip, action, path, protocol, id, query}.
      */
@@ -427,6 +448,7 @@ final class MapCameraController extends Controller
         return [
             'id' => $event->id,
             'map_camera_id' => $event->map_camera_id,
+            'incident_id' => $event->incident_id,
             'map_connection_id' => $event->map_connection_id,
             'signature_id' => $event->signature_id,
             'kind' => $event->kind,

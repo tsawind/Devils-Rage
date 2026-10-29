@@ -31,6 +31,8 @@ export type TCamera = {
 export type TCameraEvent = {
     id: number;
     map_camera_id: number;
+    /** Patch 62p: the incident (first event) this one is part of. */
+    incident_id?: number | null;
     map_connection_id: number | null;
     signature_id: number | null;
     kind: TCameraActivityKind;
