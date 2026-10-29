@@ -14,6 +14,7 @@ use App\Models\MapShareLink;
 use App\Models\MapSolarsystem;
 use App\Models\Signature;
 use App\Models\User;
+use App\Support\Broadcasting\MapBroadcaster;
 use App\Support\CameraPass;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response as HttpResponse;
@@ -129,6 +130,7 @@ final class MapCameraController extends Controller
             'last_seen_at' => now(),
         ]);
         CamerasChangedEvent::dispatch($map->id);
+        $this->watchHole($camera);
 
         return response()->json([
             'camera' => $this->present($camera, $user),
@@ -154,6 +156,7 @@ final class MapCameraController extends Controller
         $mapCamera->fill($data);
         $changed = $mapCamera->isDirty();
         $mapCamera->fill(['last_seen_at' => now()])->save();
+        $this->watchHole($mapCamera);
         if ($changed) {
             CamerasChangedEvent::dispatch($map->id);
         }
@@ -281,6 +284,43 @@ final class MapCameraController extends Controller
             'url' => rtrim((string) config('cameras.rtc_url'), '/').'/'.$camera->path.'/whip',
             'pass' => CameraPass::make($camera->path, 'publish', 'user:'.$user->id),
         ];
+    }
+
+    /**
+     * Patch 62g: a camera or watch area that watches a hole puts that hole on Watching (the 👁
+     * on its pill and the watcher on everyone's map), when nobody is watching it yet; while it's
+     * on, it answers the watcher's "still on it?" for you.
+     */
+    private function watchHole(MapCamera $camera): void
+    {
+        if (! $camera->detect || ! $camera->isOn()) {
+            return;
+        }
+        $broadcaster = app(MapBroadcaster::class);
+        $who = $camera->owner_name ?? $camera->character_name;
+        if ($camera->map_connection_id !== null) {
+            $connection = MapConnection::query()->find($camera->map_connection_id);
+            if (! $connection instanceof MapConnection) {
+                return;
+            }
+            if ($connection->mass_watched_at === null) {
+                $connection->forceFill(['mass_watched_at' => now(), 'mass_watched_by_name' => $who, 'mass_watch_open' => true, 'mass_watch_touched_at' => now()])->save();
+            } elseif ($connection->mass_watch_touched_at === null || $connection->mass_watch_touched_at->lt(now()->subMinutes(10))) {
+                $connection->forceFill(['mass_watch_touched_at' => now()])->save();
+            } else {
+                return;
+            }
+            $broadcaster->connectionsUpserted($connection->map_id, MapConnection::query()->whereKey($connection->id)->with('signatures.signatureType', 'signatures.wormhole')->withJumpSummary()->get());
+
+            return;
+        }
+        if ($camera->signature_id !== null) {
+            $signature = Signature::query()->with('mapSolarsystem')->find($camera->signature_id);
+            if ($signature instanceof Signature && $signature->mass_watched_at === null) {
+                $signature->forceFill(['mass_watched_at' => now(), 'mass_watched_by_name' => $who])->save();
+                $broadcaster->signaturesChanged($signature->mapSolarsystem);
+            }
+        }
     }
 
     /**

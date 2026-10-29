@@ -19,6 +19,10 @@ import { jsonFetch } from '@/lib/jsonFetch';
 import { router, usePage } from '@inertiajs/vue3';
 import { useLocalStorage } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
+import MapCameraEventController from '@/actions/App/Http/Controllers/MapCameraEventController';
+import { refreshCameras, useCameras, type TCamera, type TCameraEvent } from '@/composables/useCameras';
+import { stampTime } from '@/lib/cameras/broadcaster';
+import { openCameraPreview } from '@/lib/cameras/preview';
 
 // Patch 39: the person behind a name (hover: main and character).
 const { label: pilotName } = usePilotNames();
@@ -169,6 +173,39 @@ watch(
     { immediate: true },
 );
 
+// ---- Patch 62g: the hole's cameras in its watcher ------------------------------------
+// A camera or watch area pinned to this hole shows here; what it saw in the last 15 min is
+// listed, and a jump it saw that nobody logged yet is linked to your next ship-class click.
+const { cameras: allCameras, events: cameraEvents } = useCameras();
+const CAMERA_EVENT_MINUTES = 15;
+const PENDING_MINUTES = 5;
+const CAMERA_TEXT: Record<string, string> = {
+    activation: '⚡ Jump seen',
+    appeared: '＋ Ship on the overview',
+    vanished: '－ Ship left the overview',
+    scan_new: '＋ New scan result',
+    scan_gone: '－ Scan result gone',
+    local_in: '＋ Pilot in local',
+    local_out: '－ Pilot left local',
+};
+function camerasOn(item: TWatched): TCamera[] {
+    return allCameras.value.filter((camera) => camera.map_connection_id === item.connection.id);
+}
+function recentCamera(item: TWatched): TCameraEvent[] {
+    return cameraEvents.value
+        .filter((event) => event.map_connection_id === item.connection.id && event.state !== 'dismissed' && now.value - Date.parse(event.happened_at) < CAMERA_EVENT_MINUTES * 60_000)
+        .slice(0, 4);
+}
+/** A jump a camera saw in the last few minutes that nobody has logged yet. */
+function pendingJump(item: TWatched): TCameraEvent | null {
+    return recentCamera(item).find((event) => event.kind === 'activation' && event.state === 'new' && Date.now() - Date.parse(event.happened_at) < PENDING_MINUTES * 60_000) ?? null;
+}
+async function settleCameraEvent(event: TCameraEvent, state: 'confirmed' | 'dismissed', extra: Record<string, string> = {}): Promise<void> {
+    await jsonFetch(MapCameraEventController.update(event.id).url, 'PATCH', { state, ...extra });
+    await refreshCameras();
+}
+const eveTime = (iso: string) => stampTime(new Date(iso)).slice(11);
+
 function count(connectionId: number, shipClass: TWatchClass): number {
     return counts.value[connectionId]?.[`${side.value}:${shipClass.key}`] ?? 0;
 }
@@ -176,6 +213,9 @@ function count(connectionId: number, shipClass: TWatchClass): number {
 function add(item: TWatched, shipClass: TWatchClass): void {
     if (!canEdit.value) return;
     const mass = watchJumpMass(shipClass);
+    // Patch 62g: the jump a camera saw on this hole is this one.
+    const seen = pendingJump(item);
+    if (seen) void settleCameraEvent(seen, 'confirmed', { ship_class: shipClass.key, side: side.value });
     router.post(
         MapConnectionJumpController.store().url,
         {
@@ -267,7 +307,8 @@ const mass = (kg: number) => formatMass(kg);
             <!-- Patch 40c: shrunk (double-click): a tiny chip -->
             <div
                 v-if="shrunk[String(item.connection.id)]"
-                class="pointer-events-auto absolute z-20 flex cursor-move items-center gap-1 rounded-full border border-sky-600/70 bg-neutral-950/95 px-2 py-px text-[11px] text-sky-200 shadow select-none"
+                class="pointer-events-auto absolute z-20 flex cursor-move items-center gap-1 rounded-full border bg-neutral-950/95 px-2 py-px text-[11px] text-sky-200 shadow select-none"
+                :class="pendingJump(item) ? 'animate-pulse border-fuchsia-500' : 'border-sky-600/70'"
                 :style="spotOf(item, 24)"
                 :title="`Watching ${item.nearName} → ${item.farName} · ${pilotName(item.connection.mass_watched_by_name)}. Double-click to open; drag to move.`"
                 @click.stop
@@ -367,6 +408,32 @@ const mass = (kg: number) => formatMass(kg);
                     >
                         <BracketIcon kind="typed" />
                     </button>
+                </div>
+
+                <!-- Patch 62g: this hole's cameras and what they saw -->
+                <div v-if="camerasOn(item).length || recentCamera(item).length" class="mt-1 rounded border px-1.5 py-1" :class="pendingJump(item) ? 'border-fuchsia-500 bg-fuchsia-950/50' : 'border-purple-800/70 bg-purple-950/30'">
+                    <div v-if="camerasOn(item).length" class="flex flex-wrap items-center gap-1">
+                        <template v-for="camera in camerasOn(item)" :key="camera.id">
+                            <button
+                                v-if="camera.kind !== 'watch'"
+                                type="button"
+                                class="rounded border border-purple-700 px-1 text-purple-200 hover:bg-purple-900"
+                                :title="`Watch ${camera.name} (${camera.owner ?? '?'})`"
+                                @click="(event: MouseEvent) => openCameraPreview(camera.id, event.clientX, event.clientY)"
+                            >
+                                📹 {{ camera.name }}
+                            </button>
+                            <span v-else class="rounded border border-sky-800 px-1 text-sky-300" :title="`${camera.owner ?? '?'} watches this hole`">👁 {{ camera.name }}</span>
+                        </template>
+                    </div>
+                    <div v-if="pendingJump(item)" class="mt-0.5 font-semibold text-fuchsia-200">⚡ Jump seen {{ eveTime(pendingJump(item)!.happened_at) }}: click a ship class above to log it</div>
+                    <div v-for="event in recentCamera(item)" :key="event.id" class="mt-0.5 flex items-center gap-1" :class="event.kind === 'activation' ? 'text-fuchsia-200' : 'text-neutral-300'">
+                        <span class="truncate">{{ CAMERA_TEXT[event.kind] ?? event.kind }}</span>
+                        <span class="shrink-0 text-neutral-500">{{ eveTime(event.happened_at) }}</span>
+                        <span v-if="event.state === 'confirmed'" class="shrink-0 text-emerald-400" :title="event.ship_class ?? ''">✓ logged</span>
+                        <a v-if="event.clip_url || event.still_url" :href="event.clip_url ?? event.still_url ?? undefined" target="_blank" rel="noopener" class="ml-auto shrink-0 text-purple-300 hover:underline">{{ event.clip_url ? 'clip' : 'still' }}</a>
+                        <button v-if="event.state === 'new' && canEdit" type="button" class="shrink-0 rounded px-1 text-neutral-500 hover:bg-neutral-800" :class="event.clip_url || event.still_url ? '' : 'ml-auto'" title="Not a jump" @click="settleCameraEvent(event, 'dismissed')">✕</button>
+                    </div>
                 </div>
 
                 <div v-if="item.hint && canEdit" class="mt-1 rounded border border-amber-500/60 bg-amber-950/60 px-1.5 py-1 text-amber-200">

@@ -83,9 +83,35 @@ const KINDS: { value: TKind; label: string; detect: TDetectMode }[] = [
 ];
 const BOXES_KEY = `camera-boxes-${props.map.id}`;
 
-const video = ref<HTMLVideoElement | null>(null);
-const source = shallowRef<MediaStream | null>(null);
-const sourceKind = ref<'window' | 'screen' | null>(null);
+/**
+ * Patch 62g: several EVE windows on one page, one per client. Each window's boxes belong to its
+ * client (read from the window title "EVE - <name>"), and in the app they listen to that
+ * client's sound only, so one PC can watch several holes with several clients.
+ */
+type TSource = { key: string; client: string; kind: 'window' | 'screen'; stream: MediaStream };
+const sources = shallowRef<TSource[]>([]);
+const currentKey = ref<string | null>(null);
+const currentSource = computed(() => sources.value.find((item) => item.key === currentKey.value) ?? sources.value[0] ?? null);
+const source = computed(() => currentSource.value?.stream ?? null);
+const sourceKind = computed(() => currentSource.value?.kind ?? null);
+const videos = new Map<string, HTMLVideoElement>();
+function setVideo(item: TSource, element: unknown): void {
+    if (!(element instanceof HTMLVideoElement)) return;
+    videos.set(item.key, element);
+    if (element.srcObject !== item.stream) {
+        element.srcObject = item.stream;
+        void element.play().catch(() => undefined);
+    }
+}
+/** "EVE - LuigiSquirrel" (the shared window's title) → "LuigiSquirrel". */
+function clientFromStream(stream: MediaStream): string | null {
+    const label = stream.getVideoTracks()[0]?.label ?? '';
+    const match = label.match(/EVE\s*-\s*(.+)$/);
+    return match ? match[1].trim() : null;
+}
+const sourceOf = (box: TBox): TSource | null => sources.value.find((item) => item.client === box.client) ?? null;
+/** The boxes of the window on show (boxes from before windows had owners join the first one). */
+const visibleBoxes = computed(() => boxes.value.filter((box) => !box.client || box.client === currentSource.value?.client));
 const audioTrack = computed(() => source.value?.getAudioTracks()[0] ?? null);
 const characterId = ref<number | null>(props.characters[0]?.id ?? null);
 const error = ref<string | null>(null);
@@ -127,19 +153,19 @@ async function pick(kind: 'window' | 'screen'): Promise<void> {
             surfaceSwitching: 'include',
         } as DisplayMediaStreamOptions;
         const stream = await navigator.mediaDevices.getDisplayMedia(options);
-        stopAll();
-        source.value?.getTracks().forEach((track) => track.stop());
-        source.value = stream;
-        sourceKind.value = kind;
-        stream.getVideoTracks()[0]?.addEventListener('ended', () => {
-            stopAll();
-            source.value = null;
-        });
-        if (video.value) {
-            video.value.srcObject = stream;
-            await video.value.play().catch(() => undefined);
+        const client = clientFromStream(stream) ?? (kind === 'screen' ? 'Screen' : characterName() || `Window ${sources.value.length + 1}`);
+        // The same client again: its new picture replaces the old one.
+        const existing = sources.value.find((item) => item.client === client);
+        if (existing) closeSource(existing.key);
+        const key = Math.random().toString(36).slice(2, 10);
+        sources.value = [...sources.value, { key, client, kind, stream }];
+        currentKey.value = key;
+        stream.getVideoTracks()[0]?.addEventListener('ended', () => closeSource(key));
+        for (const box of boxes.value) {
+            if (!box.client) box.client = client;
         }
-        if (!boxes.value.length) addBox(true);
+        if (!boxes.value.some((box) => box.client === client)) addBox(true);
+        selected.value = boxes.value.find((box) => box.client === client)?.key ?? selected.value;
         setUpEar();
     } catch (problem) {
         error.value =
@@ -168,7 +194,7 @@ function addBox(whole = false, role: TRole = 'camera'): void {
         // Patch 62f: cameras stream; watching is what watch areas are for.
         detect: role === 'watch' ? 'flash' : 'off',
         listen: false,
-        client: characterName(),
+        client: currentSource.value?.client ?? characterName(),
         ...(whole ? { x: 0, y: 0, w: 1, h: 1 } : { x: 0.35, y: 0.3, w: 0.3, h: 0.3 }),
     });
     selected.value = key;
@@ -344,20 +370,22 @@ function details(box: TBox) {
 }
 
 async function startBox(box: TBox): Promise<void> {
-    if (!video.value || !source.value || runs.has(box.key) || roleOf(box) === 'hide') return;
+    const from = sourceOf(box);
+    const element = from ? videos.get(from.key) : undefined;
+    if (!from || !element || runs.has(box.key) || roleOf(box) === 'hide') return;
     const started = await jsonFetch<{ camera: { id: number }; publish: TRelayPass }>(MapCameraController.store(props.map.slug).url, 'POST', {
         ...details(box),
-        character_id: characterId.value,
+        character_id: props.characters.find((character) => character.name === box.client)?.id ?? characterId.value,
     });
     if (!started) {
         error.value = 'The mapper wouldn’t start the camera (is the camera relay set up?).';
         return;
     }
-    const camera = new BoxCamera(video.value, { x: box.x, y: box.y, w: box.w, h: box.h }, {
+    const camera = new BoxCamera(element, { x: box.x, y: box.y, w: box.w, h: box.h }, {
         quality: box.quality,
         detect: box.detect,
         listen: box.listen,
-        audio: box.kind === 'screen' ? audioTrack.value : null,
+        audio: box.kind === 'screen' ? (from.stream.getAudioTracks()[0] ?? null) : null,
         sensitivity: box.sensitivity ?? 6,
     });
     camera.masks = hideRects.value;
@@ -416,6 +444,20 @@ async function stopBox(box: TBox): Promise<void> {
 function stopAll(): void {
     for (const box of boxes.value) void stopBox(box);
 }
+
+/** Stop sharing one window: its boxes stop, the others go on. */
+function closeSource(key: string): void {
+    const item = sources.value.find((candidate) => candidate.key === key);
+    if (!item) return;
+    for (const box of boxes.value) {
+        if (box.client === item.client) void stopBox(box);
+    }
+    item.stream.getTracks().forEach((track) => track.stop());
+    videos.delete(key);
+    sources.value = sources.value.filter((candidate) => candidate.key !== key);
+    if (currentKey.value === key) currentKey.value = sources.value[0]?.key ?? null;
+}
+const liveIn = (item: TSource) => boxes.value.filter((box) => box.client === item.client && runs.get(box.key)?.state === 'live').length;
 
 function togglePause(box: TBox): void {
     const run = runs.get(box.key);
@@ -496,7 +538,7 @@ onBeforeUnmount(() => {
     stopBeat();
     stopAll();
     ear.value?.close();
-    source.value?.getTracks().forEach((track) => track.stop());
+    for (const item of sources.value) item.stream.getTracks().forEach((track) => track.stop());
 });
 
 const selectedBox = computed(() => boxes.value.find((box) => box.key === selected.value) ?? null);
@@ -530,7 +572,7 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                     <h1 class="mr-2 text-lg font-semibold">Share a camera <span class="text-sm font-normal text-muted-foreground">· {{ map.name }}</span></h1>
                     <Button size="sm" variant="outline" @click="pick('window')"><Video class="mr-1 size-4" /> An EVE window</Button>
                     <Button size="sm" variant="outline" @click="pick('screen')"><Monitor class="mr-1 size-4" /> Whole screen</Button>
-                    <select v-if="characters.length" v-model.number="characterId" class="h-8 rounded-md border border-border bg-background px-2 text-xs" title="Who is this client">
+                    <select v-if="characters.length && !sources.length" v-model.number="characterId" class="h-8 rounded-md border border-border bg-background px-2 text-xs" title="Whose client, when the window title doesn't say">
                         <option v-for="character in characters" :key="character.id" :value="character.id">{{ character.online ? '● ' : '' }}{{ character.name }}{{ character.online ? ' (online)' : '' }}</option>
                     </select>
                     <span v-if="liveCount" class="ml-auto flex items-center gap-1 text-xs text-red-400"><span class="size-2 animate-pulse rounded-full bg-red-500" /> {{ liveCount }} live</span>
@@ -540,10 +582,35 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                     <button v-if="inDesktopApp()" type="button" class="ml-2 underline" @click="openInBrowser">Open in browser</button>
                 </p>
 
-                <div v-show="source" ref="stage" class="relative w-full touch-none overflow-hidden rounded-md border border-border bg-black select-none" @pointerdown.self="(event) => down(event)" @pointermove="move" @pointerup="up">
-                    <video ref="video" class="pointer-events-none block h-auto w-full" autoplay playsinline muted />
+                <!-- Patch 62g: one tab per shared window (client); add as many as you run -->
+                <div v-if="sources.length" class="flex flex-wrap items-center gap-1 text-xs">
                     <div
-                        v-for="box in boxes"
+                        v-for="item in sources"
+                        :key="item.key"
+                        class="flex items-center gap-1 rounded-md border px-2 py-1"
+                        :class="item.key === currentSource?.key ? 'border-fuchsia-600 bg-fuchsia-950/30 font-semibold' : 'border-border text-muted-foreground'"
+                    >
+                        <button type="button" class="flex items-center gap-1" @click="currentKey = item.key">
+                            <span v-if="liveIn(item)" class="size-1.5 rounded-full bg-red-500" />{{ item.client }}<span v-if="liveIn(item)" class="font-normal text-red-400">· {{ liveIn(item) }} on</span>
+                        </button>
+                        <button type="button" class="rounded px-0.5 text-muted-foreground hover:text-red-400" title="Stop sharing this window" @click="closeSource(item.key)">✕</button>
+                    </div>
+                    <button type="button" class="rounded-md border border-dashed border-border px-2 py-1 text-muted-foreground hover:text-foreground" title="Share another client's window too" @click="pick('window')">+ Another EVE window</button>
+                </div>
+
+                <div v-show="source" ref="stage" class="relative w-full touch-none overflow-hidden rounded-md border border-border bg-black select-none" @pointerdown.self="(event) => down(event)" @pointermove="move" @pointerup="up">
+                    <video
+                        v-for="item in sources"
+                        v-show="item.key === currentSource?.key"
+                        :key="item.key"
+                        :ref="(element) => setVideo(item, element)"
+                        class="pointer-events-none block h-auto w-full"
+                        autoplay
+                        playsinline
+                        muted
+                    />
+                    <div
+                        v-for="box in visibleBoxes"
                         :key="box.key"
                         class="absolute cursor-move"
                         :class="[selected === box.key ? ROLE_STYLE[roleOf(box)].selected : ROLE_STYLE[roleOf(box)].idle, runs.get(box.key)?.state === 'live' && roleOf(box) === 'camera' ? 'shadow-[0_0_0_1px_var(--color-red-500)]' : '']"
@@ -562,6 +629,7 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                     <p class="pl-3">📹 <b>Camera</b>: streamed to the map and recorded (the hole, a structure, the whole client).</p>
                     <p class="pl-3">👁 <b>Watch area</b>: not streamed, it only watches and reports: a small box tight on the hole (wobble), one on the overview (ships in / out), on the probe scanner (results change) or on local (pilots in / out).</p>
                     <p class="pl-3">⬛ <b>Hide area</b>: blacked out of every camera, still and clip.</p>
+                    <p>· <b>Several clients</b>: “+ Another EVE window” for each one. Every window keeps its own boxes, and in the app its boxes hear only that client.</p>
                     <p>· <b>Sound</b>: tick “Share with system audio” in Chrome's picker. It's the whole computer's sound, every client mixed: mute the other EVE clients in Windows' Volume mixer (each client is listed there) so only the watching client is heard. With several boxes listening, the sound only backs up a jump a box's picture saw.</p>
                     <p>· Keep this tab open in its own window. Behind EVE is fine; minimised isn't. Nothing is sent to the game.</p>
                     <p v-if="boxes.length" class="text-xs">Your {{ boxes.length }} box{{ boxes.length === 1 ? '' : 'es' }} from last time come back when you share.</p>
@@ -591,7 +659,7 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                     <Button size="sm" variant="ghost" class="h-6 self-start px-1" :disabled="!source" @click="addBox(false, drawRole)"><Plus class="mr-1 size-3.5" /> Add one in the middle</Button>
                 </div>
                 <div
-                    v-for="box in boxes"
+                    v-for="box in visibleBoxes"
                     :key="box.key"
                     class="flex flex-col gap-2 rounded-md border p-2 text-xs"
                     :class="selected === box.key ? 'border-fuchsia-600 bg-fuchsia-950/20' : 'border-border'"
@@ -658,14 +726,10 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                             </select>
                         </template>
                         <label>Listen</label>
-                        <div v-if="clientAudio" class="flex items-center gap-2">
-                            <input v-model="box.listen" type="checkbox" :disabled="!box.client" />
-                            <select v-model="box.client" class="h-7 min-w-0 flex-1 rounded border border-border bg-background px-1" title="This client's own sound only (the app records it by itself)" @focus="refreshAppClients()">
-                                <option value="">Pick a client…</option>
-                                <option v-for="client in appClients" :key="client" :value="client">{{ client }}'s client</option>
-                                <option v-if="box.client && !appClients.includes(box.client)" :value="box.client">{{ box.client }} (not open)</option>
-                            </select>
-                        </div>
+                        <label v-if="clientAudio" class="flex items-center gap-2" title="This window's client only: the app records that client's sound by itself">
+                            <input v-model="box.listen" type="checkbox" :disabled="!box.client" @change="refreshAppClients()" />
+                            <span>{{ box.client ? `${box.client}'s client sound` : 'Share a window first' }}<span v-if="box.client && appClients.length && !appClients.includes(box.client)" class="text-amber-300"> (no “EVE - {{ box.client }}” window found)</span></span>
+                        </label>
                         <label v-else class="flex items-center gap-2" :class="audioTrack ? '' : 'opacity-50'">
                             <input v-model="box.listen" type="checkbox" :disabled="!audioTrack" />
                             <span>{{ audioTrack ? 'Activation sound counts for this box' : 'Share again with “Share with system audio” on' }}</span>

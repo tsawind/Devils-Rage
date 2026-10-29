@@ -275,3 +275,21 @@ it('takes watch areas, which only report (probe scanner, local)', function () {
     postJson(route('map-cameras.events.store', $watch), ['kind' => 'teleported'])->assertUnprocessable();
     expect(MapCameraEvent::query()->pluck('kind')->all())->toBe(['scan_new', 'local_in']);
 });
+
+it('puts the hole a watching camera is pinned to on Watching, and keeps it there', function () {
+    Event::fake([CameraActivityEvent::class, CamerasChangedEvent::class]);
+    $map = Map::factory()->create();
+    $daisy = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000005), 'alias' => 'Daisy']);
+    $bravo = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000008), 'alias' => 'B']);
+    $pipe = MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $daisy->id, 'to_map_solarsystem_id' => $bravo->id]);
+    $owner = cameraPilot($map);
+
+    // A camera that only streams doesn't start a watch.
+    startCamera($map, $owner, ['map_connection_id' => $pipe->id, 'detect' => false]);
+    expect($pipe->refresh()->mass_watched_at)->toBeNull();
+
+    startCamera($map, $owner, ['kind' => 'watch', 'name' => 'Hole', 'map_connection_id' => $pipe->id, 'detect' => true]);
+    $pipe->refresh();
+    expect($pipe->mass_watched_at)->not->toBeNull()
+        ->and($pipe->mass_watched_by_name)->not->toBeNull();
+});
