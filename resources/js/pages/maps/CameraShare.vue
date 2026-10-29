@@ -82,7 +82,7 @@ const WATCHES: { value: TDetectMode; label: string; hint: string }[] = [
 const roleOf = (box: TBox): TRole => box.role ?? 'camera';
 const ROLE_CHOICES: { role: TRole; label: string; hint: string }[] = [
     { role: 'camera', label: '📹 Camera', hint: 'Streamed to the map and recorded' },
-    { role: 'watch', label: '👁 Watch area', hint: 'Not streamed: watches the hole, overview, probe scanner or local and reports' },
+    { role: 'watch', label: '👁 Trigger', hint: 'Not streamed: watches the hole, overview, probe scanner or local for a change and reports it' },
     { role: 'hide', label: '⬛ Hide area', hint: 'Blacked out of every camera, still and clip' },
 ];
 /** Patch 62f: what gets drawn when you drag on empty picture. */
@@ -288,7 +288,7 @@ function addBox(whole = false, role: TRole = 'camera'): void {
     const key = Math.random().toString(36).slice(2, 10);
     const client = currentSource.value?.client ?? characterName();
     const count = boxes.value.filter((box) => roleOf(box) === role && box.client === client).length + 1;
-    const names: Record<TRole, string> = { camera: `Camera ${count}`, watch: `Watch ${count}`, hide: `Hidden ${count}` };
+    const names: Record<TRole, string> = { camera: `Camera ${count}`, watch: `Trigger ${count}`, hide: `Hidden ${count}` };
     boxes.value.push({
         key,
         role,
@@ -827,7 +827,7 @@ const onSummary = computed(() => {
         else if (run.state === 'standby') standby++;
         else if (run.state === 'live') streaming++;
     }
-    return [streaming && `${streaming} streaming`, standby && `${standby} on standby`, watching && `${watching} watching`].filter(Boolean).join(' · ');
+    return [streaming && `${streaming} streaming`, standby && `${standby} on standby`, watching && `${watching} trigger${watching === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
 });
 
 function boxStyle(box: TBox): Record<string, string> {
@@ -861,7 +861,7 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                     <select v-if="characters.length && !sources.length" v-model.number="characterId" class="h-8 rounded-md border border-border bg-background px-2 text-xs" title="Whose client, when the window title doesn't say">
                         <option v-for="character in characters" :key="character.id" :value="character.id">{{ character.online ? '● ' : '' }}{{ character.name }}{{ character.online ? ' (online)' : '' }}</option>
                     </select>
-                    <span v-if="onSummary" class="ml-auto flex items-center gap-1 text-xs text-red-400" title="Streaming: sent to the relay now · standby: watching and recording here, streams when someone watches · watching: watch areas (never streamed)"><span class="size-2 rounded-full bg-red-500" :class="liveCount ? 'animate-pulse' : 'opacity-40'" /> {{ onSummary }}</span>
+                    <span v-if="onSummary" class="ml-auto flex items-center gap-1 text-xs text-red-400" title="Streaming: sent to the relay now · standby: watching and recording here, streams when someone watches · triggers: areas that only watch for a change and report it (never streamed)"><span class="size-2 rounded-full bg-red-500" :class="liveCount ? 'animate-pulse' : 'opacity-40'" /> {{ onSummary }}</span>
                     <Button v-if="canCloseWindow" size="sm" variant="outline" :class="onSummary ? '' : 'ml-auto'" title="Stop every camera and close this window" @click="closeWindow">Close window</Button>
                 </div>
                 <p v-if="error" class="rounded border border-red-800 bg-red-950/40 px-2 py-1 text-xs text-red-200">
@@ -976,7 +976,7 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                     <p class="font-medium text-foreground">Pick what to share, then draw boxes on it.</p>
                     <p>· <b>An EVE window</b>: one client. Then draw boxes on it:</p>
                     <p class="pl-3">📹 <b>Camera</b>: streamed to the map and recorded (the hole, a structure, the whole client).</p>
-                    <p class="pl-3">👁 <b>Watch area</b>: not streamed, it only watches and reports: a small box tight on the hole (wobble), one on the overview (ships in / out), on the probe scanner (results change) or on local (pilots in / out).</p>
+                    <p class="pl-3">👁 <b>Trigger</b>: not streamed, it only watches for a change and reports it: a small box tight on the hole (wobble), one on the overview (ships in / out), on the probe scanner (results change) or on local (pilots in / out).</p>
                     <p class="pl-3">⬛ <b>Hide area</b>: blacked out of every camera, still and clip.</p>
                     <p>· <b>Several clients</b>: “+ Another EVE window” for each one. Every window keeps its own boxes, and in the app its boxes hear only that client.</p>
                     <p>· <b>Sound</b>: tick “Share with system audio” in Chrome's picker. It's the whole computer's sound, every client mixed: mute the other EVE clients in Windows' Volume mixer (each client is listed there) so only the watching client is heard. With several boxes listening, the sound only backs up a jump a box's picture saw.</p>
@@ -1088,8 +1088,8 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                                 <option v-for="(quality, key) in QUALITY" :key="key" :value="key">{{ quality.label }}</option>
                             </select>
                             <label>Also watch</label>
-                            <select v-model="box.detect" class="h-7 rounded border border-border bg-background px-1" title="Watch areas do this better: draw a 👁 box over just the part to watch">
-                                <option value="off">Off (use watch areas)</option>
+                            <select v-model="box.detect" class="h-7 rounded border border-border bg-background px-1" title="Triggers do this better: draw a 👁 trigger over just the part to watch">
+                                <option value="off">Off (use triggers)</option>
                                 <option v-for="item in WATCHES" :key="item.value" :value="item.value">{{ item.label }}</option>
                             </select>
                         </template>
