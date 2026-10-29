@@ -17,7 +17,7 @@ MAPPER_ENV="$STACK/.env"
 
 mkdir -p "$DIR"
 before=$(sha256sum "$DIR/mediamtx.yml" 2>/dev/null | cut -d' ' -f1 || true)
-cp "$SRC/docker-compose.yml" "$SRC/mediamtx.yml" "$DIR/"
+cp -p "$SRC/docker-compose.yml" "$SRC/mediamtx.yml" "$DIR/"
 after=$(sha256sum "$DIR/mediamtx.yml" | cut -d' ' -f1)
 
 domain=$(grep -E '^APP_URL=' "$MAPPER_ENV" | head -1 | cut -d= -f2- | tr -d '"' | sed -E 's#^https?://##; s#/.*$##')
@@ -49,7 +49,10 @@ docker compose pull -q
 docker compose up -d
 # The settings file is mounted, so a change to it alone doesn't restart the relay: do it here
 # (live cameras drop for a few seconds and reconnect by themselves).
-if [ -n "$before" ] && [ "$before" != "$after" ]; then
+started=$(docker inspect -f '{{.State.StartedAt}}' "$(docker compose ps -q mediamtx)" 2>/dev/null | cut -c1-19 | tr 'T' ' ')
+changed_since_start=0
+if [ -n "$started" ] && [ "$(date -u -r "$DIR/mediamtx.yml" '+%F %T')" \> "$started" ]; then changed_since_start=1; fi
+if { [ -n "$before" ] && [ "$before" != "$after" ]; } || [ "$changed_since_start" = 1 ]; then
     echo "== Relay settings changed: restarting the relay"
     docker compose restart mediamtx >/dev/null
 fi
