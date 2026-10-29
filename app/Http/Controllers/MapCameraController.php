@@ -44,7 +44,7 @@ final class MapCameraController extends Controller
         return Inertia::render('maps/Cameras', [
             'map' => ['id' => $map->id, 'slug' => $map->slug, 'name' => $map->name],
             'member' => $member,
-            'places' => $member ? $this->places($map) : ['systems' => [], 'connections' => [], 'holes' => []],
+            'places' => $member ? self::placesFor($map) : ['systems' => [], 'connections' => [], 'holes' => []],
         ]);
     }
 
@@ -60,7 +60,7 @@ final class MapCameraController extends Controller
 
         return Inertia::render('maps/CameraShare', [
             'map' => ['id' => $map->id, 'slug' => $map->slug, 'name' => $map->name],
-            'places' => $this->places($map),
+            'places' => self::placesFor($map),
             // Online characters first (the one whose window is being shared is almost always online).
             'characters' => $user->characters()->with('characterStatus')->orderBy('name')->get()
                 ->sortByDesc(fn (Character $character): bool => (bool) $character->characterStatus?->is_online)
@@ -328,7 +328,7 @@ final class MapCameraController extends Controller
      *
      * @return array{systems: list<array{id: int, name: string}>, connections: list<array{id: int, name: string}>, holes: list<array{id: int, name: string}>}
      */
-    private function places(Map $map): array
+    public static function placesFor(Map $map): array
     {
         $systems = $map->mapSolarsystems()->with('solarsystem:id,name')->get();
         $names = $systems->mapWithKeys(fn (MapSolarsystem $system): array => [$system->id => $system->alias ?: $system->solarsystem->name]);

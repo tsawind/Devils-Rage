@@ -20,6 +20,7 @@ import { router, usePage } from '@inertiajs/vue3';
 import { useLocalStorage } from '@vueuse/core';
 import { computed, ref, watch } from 'vue';
 import MapCameraEventController from '@/actions/App/Http/Controllers/MapCameraEventController';
+import { controlCameraClient, useCameraClients, type TCameraClient } from '@/composables/useCameraClients';
 import { refreshCameras, useCameras, type TCamera, type TCameraEvent } from '@/composables/useCameras';
 import { stampTime } from '@/lib/cameras/broadcaster';
 import { openCameraPreview } from '@/lib/cameras/preview';
@@ -177,6 +178,20 @@ watch(
 // A camera or watch area pinned to this hole shows here; what it saw in the last 15 min is
 // listed, and a jump it saw that nobody logged yet is linked to your next ship-class click.
 const { cameras: allCameras, events: cameraEvents } = useCameras();
+// Patch 62k: your share window's clients: one click points a client's cameras at this hole.
+const { clients: cameraClients } = useCameraClients();
+const watchesHere = (client: TCameraClient, item: TWatched): boolean => client.on && client.pin === `c:${item.connection.id}`;
+function toggleClientHere(client: TCameraClient, item: TWatched): void {
+    if (watchesHere(client, item)) void controlCameraClient(client.name, { on: false });
+    else void controlCameraClient(client.name, { pin: `c:${item.connection.id}`, on: true });
+}
+/** Stop watching: your clients on this hole stop too. */
+function stopWatching(item: TWatched): void {
+    for (const client of cameraClients.value) {
+        if (watchesHere(client, item)) void controlCameraClient(client.name, { on: false });
+    }
+    setConnectionWatched(item.connection.id, false);
+}
 const CAMERA_EVENT_MINUTES = 15;
 const PENDING_MINUTES = 5;
 const CAMERA_TEXT: Record<string, string> = {
@@ -335,7 +350,7 @@ const mass = (kg: number) => formatMass(kg);
                     <span class="truncate font-semibold text-sky-200">👁 {{ item.nearName }} → {{ item.farName }}</span>
                     <span class="shrink-0 text-neutral-400">· {{ item.minutes }} min</span>
                     <button type="button" class="ml-auto rounded px-1 hover:bg-neutral-800" title="Shrink (or double-click the top line)" @click="toggleShrunk(item.connection.id)">⌄</button>
-                    <button v-if="canEdit" type="button" class="rounded px-1 hover:bg-neutral-800" title="Stop watching" @click="setConnectionWatched(item.connection.id, false)">✕</button>
+                    <button v-if="canEdit" type="button" class="rounded px-1 hover:bg-neutral-800" title="Stop watching" @click="stopWatching(item)">✕</button>
                 </div>
                 <div class="truncate text-neutral-500">watching: {{ pilotName(item.connection.mass_watched_by_name) }}</div>
                 <!-- Patch 40c: every jump logged: only the jumps logged from now count -->
@@ -410,6 +425,21 @@ const mass = (kg: number) => formatMass(kg);
                     </button>
                 </div>
 
+                <!-- Patch 62k: your clients' cameras: on this hole / off -->
+                <div v-if="cameraClients.length && canEdit" class="mt-1 flex flex-wrap items-center gap-1">
+                    <span class="text-neutral-500">📹</span>
+                    <button
+                        v-for="client in cameraClients"
+                        :key="client.name"
+                        type="button"
+                        class="rounded border px-1.5"
+                        :class="watchesHere(client, item) ? 'border-red-500 bg-red-950/60 text-red-200' : 'border-neutral-700 text-neutral-400 hover:text-neutral-200'"
+                        :title="watchesHere(client, item) ? `${client.name}'s camera watches this hole: click to turn it off` : `Point ${client.name}'s camera at this hole and turn it on${client.on && client.pin ? ' (it moves from where it is now)' : ''}`"
+                        @click="toggleClientHere(client, item)"
+                    >
+                        <span v-if="watchesHere(client, item)" class="mr-0.5 inline-block size-1.5 animate-pulse rounded-full bg-red-500" />{{ client.name }}
+                    </button>
+                </div>
                 <!-- Patch 62g: this hole's cameras and what they saw -->
                 <div v-if="camerasOn(item).length || recentCamera(item).length" class="mt-1 rounded border px-1.5 py-1" :class="pendingJump(item) ? 'border-fuchsia-500 bg-fuchsia-950/50' : 'border-purple-800/70 bg-purple-950/30'">
                     <div v-if="camerasOn(item).length" class="flex flex-wrap items-center gap-1">

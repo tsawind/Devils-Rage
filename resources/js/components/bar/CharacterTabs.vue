@@ -14,6 +14,7 @@ import {
     ContextMenuTrigger,
 } from '@/components/ui/context-menu';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { cameraClientFor, cameraPlaceName, controlCameraClient, refreshCameraClients, useCameraClients } from '@/composables/useCameraClients';
 import { useCharacterPills } from '@/composables/useCharacterPills';
 import { useStaticSolarsystems } from '@/composables/useStaticSolarsystems';
 import { useTrackedAlts } from '@/composables/useTrackedAlts';
@@ -31,7 +32,7 @@ import UserCharacters from '@/routes/user-characters';
 import type { AppPageProps } from '@/types';
 import type { TCharacter, TStringedSolarsystemClass } from '@/types/models';
 import { router, usePage } from '@inertiajs/vue3';
-import { AppWindow, ChevronDown, ExternalLink, Eye, Link2, PictureInPicture2, Plus, Repeat, X } from 'lucide-vue-next';
+import { AppWindow, ChevronDown, ExternalLink, Eye, Link2, PictureInPicture2, Plus, Repeat, Video, X } from 'lucide-vue-next';
 import { addCharacterTab, characterTabIds, draggedCharacter, isCharacterDrag, placeCharacterTab, removeCharacterTab, startCharacterDrag } from '@/lib/characterTabs';
 import { computed, ref } from 'vue';
 
@@ -54,6 +55,9 @@ const { map_solarsystems } = useMapSolarsystems();
 const { resolveSolarsystem } = useStaticSolarsystems();
 const { trackedIds, setTracked } = useTrackedAlts();
 const { altClipboard, altPrompts, setAltClipboard, setAltPrompts } = useCharacterPills();
+
+// Patch 62k: a character whose EVE window your share window has up runs its camera from here.
+const { places: cameraPlaces } = useCameraClients();
 
 /** One tab takes this many pixels. */
 const TAB_WIDTH = 136;
@@ -160,7 +164,7 @@ function openAs(character: TCharacter, how: TOpenHow): void {
         @dragleave.self="dropOn === 'end' && (dropOn = null)"
         @drop.prevent="onDrop($event, 'end')"
     >
-        <ContextMenu v-for="character in split.shown" :key="character.id">
+        <ContextMenu v-for="character in split.shown" :key="character.id" @update:open="(open: boolean) => open && cameraClientFor(character.name) && refreshCameraClients()">
             <ContextMenuTrigger as-child>
                 <button
                     type="button"
@@ -198,6 +202,12 @@ function openAs(character: TCharacter, how: TOpenHow): void {
                         <span class="truncate text-[11px] font-semibold">
                             {{ character.name }}
                             <span v-if="elsewhere.has(character.id)" :style="{ color: characterColor(character) }">↗</span>
+                            <span
+                                v-if="cameraClientFor(character.name)?.on"
+                                class="text-red-400"
+                                :title="`${character.name}'s camera is on${cameraClientFor(character.name)!.pin ? ` · watching ${cameraPlaceName(cameraClientFor(character.name)!.pin)}` : ''} (right-click to change)`"
+                                >●</span
+                            >
                             <span
                                 v-if="isPoppedOut(character.id)"
                                 role="button"
@@ -247,6 +257,34 @@ function openAs(character: TCharacter, how: TOpenHow): void {
                         <input type="color" class="absolute inset-0 cursor-pointer opacity-0" :value="characterColor(character)" @change="(event) => setColor(character, (event.target as HTMLInputElement).value)" />
                     </label>
                 </div>
+                <!-- Patch 62k: this character's camera (its window in your share window) -->
+                <template v-if="cameraClientFor(character.name)">
+                    <ContextMenuSeparator />
+                    <ContextMenuCheckboxItem
+                        class="text-xs"
+                        :model-value="cameraClientFor(character.name)!.on"
+                        @update:model-value="(value: boolean | 'indeterminate') => controlCameraClient(character.name, { on: value === true })"
+                        @select.prevent
+                    >
+                        <Video class="mr-1 size-3.5" /> Camera on
+                    </ContextMenuCheckboxItem>
+                    <ContextMenuSub>
+                        <ContextMenuSubTrigger class="text-xs">
+                            <span class="truncate">Watching: {{ cameraPlaceName(cameraClientFor(character.name)!.pin) || 'nothing' }}</span>
+                        </ContextMenuSubTrigger>
+                        <ContextMenuSubContent class="max-h-[60vh] w-72 overflow-y-auto">
+                            <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">Its cameras and watch areas follow this hole (and it goes on Watching)</ContextMenuLabel>
+                            <template v-if="cameraPlaces.holes.length">
+                                <ContextMenuLabel class="text-[10px] font-normal tracking-wide text-muted-foreground uppercase">Not jumped yet</ContextMenuLabel>
+                                <ContextMenuItem v-for="hole in cameraPlaces.holes" :key="`h${hole.id}`" class="text-xs" @select="controlCameraClient(character.name, { pin: `h:${hole.id}`, on: true })">{{ hole.name }}</ContextMenuItem>
+                            </template>
+                            <ContextMenuLabel class="text-[10px] font-normal tracking-wide text-muted-foreground uppercase">Pipes</ContextMenuLabel>
+                            <ContextMenuItem v-for="pipe in cameraPlaces.connections" :key="`c${pipe.id}`" class="text-xs" @select="controlCameraClient(character.name, { pin: `c:${pipe.id}`, on: true })">{{ pipe.name }}</ContextMenuItem>
+                            <ContextMenuSeparator />
+                            <ContextMenuItem class="text-xs text-muted-foreground" @select="controlCameraClient(character.name, { pin: '' })">Nothing pinned</ContextMenuItem>
+                        </ContextMenuSubContent>
+                    </ContextMenuSub>
+                </template>
                 <ContextMenuSeparator />
                 <ContextMenuCheckboxItem
                     class="text-xs"

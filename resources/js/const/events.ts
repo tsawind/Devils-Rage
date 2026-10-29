@@ -37,3 +37,6 @@ export const ServerStatusUpdatedEvent = getEventName('ServerStatusUpdatedEvent')
 // Patch 62: cameras.
 export const CameraActivityEvent = getEventName('Cameras', 'CameraActivityEvent');
 export const CamerasChangedEvent = getEventName('Cameras', 'CamerasChangedEvent');
+// Patch 62k: your share window's clients, run from the map.
+export const CameraClientsChangedEvent = getEventName('Cameras', 'CameraClientsChangedEvent');
+export const CameraControlEvent = getEventName('Cameras', 'CameraControlEvent');

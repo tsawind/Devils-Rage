@@ -25,9 +25,11 @@ import { useDisableTextSelection } from '@/composables/useDisableTextSelection';
 import { pulseKill } from '@/composables/useKillPulses';
 import { useMapBackground } from '@/composables/useMapBackground';
 import { useMapEffects } from '@/composables/useMapEffects';
-import { getMapChannelName } from '@/const/channels';
-import { CameraActivityEvent, CamerasChangedEvent, KillmailReceivedEvent, KnownHomeConnectedEvent } from '@/const/events';
+import { getMapChannelName, getUserChannelName } from '@/const/channels';
+import { CameraActivityEvent, CameraClientsChangedEvent, CamerasChangedEvent, KillmailReceivedEvent, KnownHomeConnectedEvent } from '@/const/events';
 import CameraPreview from '@/components/cameras/CameraPreview.vue';
+import useUser from '@/composables/useUser';
+import { refreshCameraClients, useCameraClients } from '@/composables/useCameraClients';
 import { noteActivity, refreshCamerasSoon, startCameraFeed, stopCameraFeed, type TCameraActivityBroadcast } from '@/composables/useCameras';
 import { playActivationTone } from '@/lib/rageSound';
 import { playTargetAcquired } from '@/lib/rageSound';
@@ -238,6 +240,7 @@ watch(
     },
 );
 
+const cameraUser = useUser();
 // Patch 62: cameras. A camera that sees a hole activate pops a purple Activation on its pipe
 // (60 s jump-cloak countdown) for everyone, with a soft tone.
 useOnClient(() => {
@@ -251,6 +254,14 @@ useOnClient(() => {
         if (event.kind === 'local_in') toast.warning(`👁 ${event.camera_name}: someone entered local`, { duration: 10_000 });
         if (event.kind === 'activation' && mapEffects.value.sounds) playActivationTone();
     });
+    // Patch 62k: your share window's clients (pilot tabs and the hole watcher run them).
+    const me = cameraUser.value?.id;
+    if (me) {
+        useCameraClients(map.slug);
+        useEcho<{ map_id: number }>(getUserChannelName(me), CameraClientsChangedEvent, (event) => {
+            if (event.map_id === map.id) void refreshCameraClients();
+        });
+    }
 });
 
 // Patch 43: a system marked as someone's home was connected: a notice that stays, and a sound.

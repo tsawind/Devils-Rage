@@ -1,7 +1,12 @@
 <script setup lang="ts">
+import MapCameraClientController from '@/actions/App/Http/Controllers/MapCameraClientController';
 import MapCameraController from '@/actions/App/Http/Controllers/MapCameraController';
 import MapCameraEventController from '@/actions/App/Http/Controllers/MapCameraEventController';
 import { Button } from '@/components/ui/button';
+import { useOnClient } from '@/composables/useOnClient';
+import useUser from '@/composables/useUser';
+import { getUserChannelName } from '@/const/channels';
+import { CameraControlEvent } from '@/const/events';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SeoHead from '@/layouts/SeoHead.vue';
 import { BoxCamera, SoundEar, startBeat, type TBoxRect, type TDetectMode, type THit } from '@/lib/cameras/broadcaster';
@@ -10,7 +15,8 @@ import { appActive, appClients, appAudioErrors, appHasClientAudio, appLevels, le
 import { appSignal, inDesktopApp } from '@/lib/desktopApp';
 import { formFetch, jsonFetch } from '@/lib/jsonFetch';
 import { Monitor, Play, Pause, Plus, Square, Trash2, Video } from 'lucide-vue-next';
-import { computed, markRaw, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
+import { useEcho } from '@laravel/echo-vue';
+import { computed, markRaw, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 
 /**
  * Patch 62: "Share a camera". Pick an EVE window (or the whole screen, which can bring its
@@ -134,8 +140,38 @@ function renameSource(item: TSource, client: string): void {
     setUpEar();
 }
 const sourceOf = (box: TBox): TSource | null => sources.value.find((item) => item.client === box.client) ?? null;
-/** The boxes of the window on show (boxes from before windows had owners join the first one). */
-const visibleBoxes = computed(() => boxes.value.filter((box) => !box.client || box.client === currentSource.value?.client));
+/**
+ * The boxes of the window on show. Patch 62k: each client keeps its own boxes; boxes from
+ * before windows had owners no longer join whichever window comes first (that mixed two
+ * clients' setups together): they wait in "Boxes from before" until you give them a home.
+ */
+const visibleBoxes = computed(() => boxes.value.filter((box) => box.client && box.client === currentSource.value?.client));
+const homelessBoxes = computed(() => boxes.value.filter((box) => !box.client));
+function adoptHomeless(): void {
+    const client = currentSource.value?.client;
+    if (!client) return;
+    for (const box of boxes.value) {
+        if (!box.client) box.client = client;
+    }
+}
+function dropHomeless(): void {
+    boxes.value = boxes.value.filter((box) => box.client);
+}
+/** Patch 62k: this window's boxes all go (two clicks), to set it up again from nothing. */
+const startingOver = ref(false);
+function startOver(): void {
+    const client = currentSource.value?.client;
+    if (!client) return;
+    if (!startingOver.value) {
+        startingOver.value = true;
+        setTimeout(() => (startingOver.value = false), 4000);
+        return;
+    }
+    startingOver.value = false;
+    for (const box of boxes.value.filter((item) => item.client === client)) void stopBox(box);
+    boxes.value = boxes.value.filter((box) => box.client !== client);
+    addBox(true);
+}
 const audioTrack = computed(() => source.value?.getAudioTracks()[0] ?? null);
 const characterId = ref<number | null>(props.characters[0]?.id ?? null);
 const error = ref<string | null>(null);
@@ -187,12 +223,11 @@ async function pick(kind: 'window' | 'screen'): Promise<void> {
         sources.value = [...sources.value, { key, client, kind, stream, label }];
         currentKey.value = key;
         stream.getVideoTracks()[0]?.addEventListener('ended', () => closeSource(key));
-        for (const box of boxes.value) {
-            if (!box.client) box.client = client;
-        }
         if (!boxes.value.some((box) => box.client === client)) addBox(true);
         selected.value = boxes.value.find((box) => box.client === client)?.key ?? selected.value;
         setUpEar();
+        // Patch 62k: a client that was on when its window closed comes back on.
+        if (rememberedOn()[client]) void setClientOn(client, true);
     } catch (problem) {
         error.value =
             problem instanceof Error && problem.name === 'NotAllowedError'
@@ -226,14 +261,15 @@ function addBox(whole = false, role: TRole = 'camera'): void {
     selected.value = key;
 }
 
-/** Patch 62f: hide areas, blacked out of every camera, still and clip. */
-const hideRects = computed<TBoxRect[]>(() => boxes.value.filter((box) => roleOf(box) === 'hide').map((box) => ({ x: box.x, y: box.y, w: box.w, h: box.h })));
+/** Patch 62f: hide areas, blacked out of every camera, still and clip. Patch 62k: of the same window only. */
+function hideRectsOf(client: string | undefined): TBoxRect[] {
+    return boxes.value.filter((box) => roleOf(box) === 'hide' && box.client === client).map((box) => ({ x: box.x, y: box.y, w: box.w, h: box.h }));
+}
 watch(
-    hideRects,
-    (masks) => {
-        for (const run of runs.values()) run.camera.masks = masks;
+    () => boxes.value.filter((box) => roleOf(box) === 'hide').map((box) => `${box.client}:${box.x}:${box.y}:${box.w}:${box.h}`).join('|'),
+    () => {
+        for (const [key, run] of runs.entries()) run.camera.masks = hideRectsOf(boxes.value.find((box) => box.key === key)?.client);
     },
-    { deep: true },
 );
 
 function removeBox(box: TBox): void {
@@ -414,7 +450,7 @@ async function startBox(box: TBox): Promise<void> {
         audio: box.kind === 'screen' ? (from.stream.getAudioTracks()[0] ?? null) : null,
         sensitivity: box.sensitivity ?? 6,
     });
-    camera.masks = hideRects.value;
+    camera.masks = hideRectsOf(box.client);
     const run: TRun = { camera: markRaw(camera), id: started.camera.id, state: 'starting', error: null, hits: 0, kinds: {}, lastHit: null };
     camera.label = stampLabel(box);
     runs.set(box.key, run);
@@ -541,6 +577,94 @@ async function report(key: string, hit: THit): Promise<void> {
     if (clip || hit.still) await formFetch(MapCameraEventController.attach(created.id).url, files);
 }
 
+// ---- Patch 62k: clients, run from the map ---------------------------------------------------
+// Each shared window is a client. The map's pilot tabs and hole watcher turn a client's cameras
+// on / off and pick the hole it watches; the asks come over your own channel, and this page
+// reports how its clients stand.
+const ON_KEY = `camera-clients-on-${props.map.id}`;
+function rememberedOn(): Record<string, boolean> {
+    try {
+        const stored = JSON.parse(window.localStorage.getItem(ON_KEY) ?? '{}');
+        return stored && typeof stored === 'object' ? (stored as Record<string, boolean>) : {};
+    } catch {
+        return {};
+    }
+}
+function rememberOn(client: string, on: boolean): void {
+    try {
+        window.localStorage.setItem(ON_KEY, JSON.stringify({ ...rememberedOn(), [client]: on }));
+    } catch {
+        // Remembered for this visit only.
+    }
+}
+const workingBoxes = (client: string): TBox[] => boxes.value.filter((box) => box.client === client && roleOf(box) !== 'hide');
+const clientOn = (client: string): boolean => workingBoxes(client).some((box) => runs.has(box.key));
+const clientPin = (client: string): string => workingBoxes(client).find((box) => box.pin)?.pin ?? '';
+
+/** The picture has its size (a camera made before that would get the wrong shape). */
+async function whenReady(element: HTMLVideoElement): Promise<void> {
+    if (element.videoWidth > 0) return;
+    await new Promise<void>((resolve) => {
+        const done = () => resolve();
+        element.addEventListener('loadedmetadata', done, { once: true });
+        setTimeout(done, 4000);
+    });
+}
+
+async function setClientOn(client: string, on: boolean): Promise<void> {
+    rememberOn(client, on);
+    if (!on) {
+        await Promise.all(workingBoxes(client).map((box) => stopBox(box)));
+        return;
+    }
+    const from = sources.value.find((item) => item.client === client);
+    if (!from) return;
+    await nextTick();
+    const element = videos.get(from.key);
+    if (element) await whenReady(element);
+    for (const box of workingBoxes(client)) await startBox(box);
+}
+
+/** Every camera and watch area of the client watches this hole ('' = not pinned). */
+function setClientPin(client: string, pin: string): void {
+    for (const box of workingBoxes(client)) box.pin = pin;
+}
+
+const clientReport = computed(() =>
+    sources.value.map((item) => ({
+        name: item.client,
+        on: clientOn(item.client),
+        pin: clientPin(item.client),
+        boxes: workingBoxes(item.client).length,
+        live: workingBoxes(item.client).filter((box) => runs.get(box.key)?.state === 'live').length,
+    })),
+);
+let reportTimer: ReturnType<typeof setTimeout> | null = null;
+function reportClients(soon = true): void {
+    if (reportTimer) clearTimeout(reportTimer);
+    reportTimer = setTimeout(
+        () => void jsonFetch(MapCameraClientController.report(props.map.slug).url, 'PUT', { clients: clientReport.value }),
+        soon ? 400 : 0,
+    );
+}
+watch(() => JSON.stringify(clientReport.value), () => reportClients());
+
+const shareUser = useUser();
+useOnClient(() => {
+    const me = shareUser.value?.id;
+    if (!me) return;
+    useEcho<{ map_id: number; client: string; on: boolean | null; pin: string | null }>(getUserChannelName(me), CameraControlEvent, (event) => {
+        if (event.map_id !== props.map.id || !sources.value.some((item) => item.client === event.client)) return;
+        if (event.pin !== null) setClientPin(event.client, event.pin);
+        if (event.on !== null) void setClientOn(event.client, event.on);
+        reportClients();
+    });
+});
+onBeforeUnmount(() => {
+    if (reportTimer) clearTimeout(reportTimer);
+    void jsonFetch(MapCameraClientController.report(props.map.slug).url, 'PUT', { clients: [] });
+});
+
 // ---- The beat ----------------------------------------------------------------------------
 const levels = ref<Record<string, number>>({});
 let lastLevels = 0;
@@ -576,6 +700,7 @@ function beatOnce(now: number): void {
     }
     if (now - lastHeartbeat > 30_000) {
         lastHeartbeat = now;
+        if (sources.value.length) reportClients(false);
         for (const run of runs.values()) {
             if (run.state === 'live' || run.state === 'paused') void jsonFetch(MapCameraController.update(run.id).url, 'PATCH', { status: run.state });
         }
@@ -660,6 +785,50 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                     </div>
                     <button type="button" class="rounded-md border border-dashed border-border px-2 py-1 text-muted-foreground hover:text-foreground" title="Share another client's window too" @click="pick('window')">+ Another EVE window</button>
                 </div>
+
+                <!-- Patch 62k: the whole client at once (the map's pilot tab and hole watcher do the same) -->
+                <div v-if="currentSource" class="flex flex-wrap items-center gap-2 rounded-md border border-border px-2 py-1.5 text-xs">
+                    <span class="font-semibold">{{ currentSource.client }}</span>
+                    <button
+                        type="button"
+                        class="rounded px-2 py-0.5 font-semibold text-white disabled:opacity-40"
+                        :class="clientOn(currentSource.client) ? 'bg-neutral-700 hover:bg-neutral-600' : 'bg-red-700 hover:bg-red-600'"
+                        :disabled="!workingBoxes(currentSource.client).length"
+                        :title="clientOn(currentSource.client) ? 'Stop every camera and watch area of this window' : 'Start every camera and watch area of this window'"
+                        @click="setClientOn(currentSource.client, !clientOn(currentSource.client))"
+                    >
+                        {{ clientOn(currentSource.client) ? 'Turn off' : 'Turn on' }}
+                    </button>
+                    <label class="flex items-center gap-1">
+                        Watching
+                        <select
+                            :value="clientPin(currentSource.client)"
+                            class="h-7 max-w-64 rounded border border-border bg-background px-1"
+                            title="Every camera and watch area of this window follows this hole (and the hole goes on Watching)"
+                            @change="(event) => setClientPin(currentSource?.client ?? '', (event.target as HTMLSelectElement).value)"
+                        >
+                            <option value="">Nothing pinned</option>
+                            <optgroup v-if="places.holes?.length" label="Holes not jumped yet (dotted)">
+                                <option v-for="hole in places.holes" :key="hole.id" :value="`h:${hole.id}`">{{ hole.name }}</option>
+                            </optgroup>
+                            <optgroup label="Holes (pipes)">
+                                <option v-for="pipe in places.connections" :key="pipe.id" :value="`c:${pipe.id}`">{{ pipe.name }}</option>
+                            </optgroup>
+                            <optgroup label="Systems">
+                                <option v-for="system in places.systems" :key="system.id" :value="`s:${system.id}`">{{ system.name }}</option>
+                            </optgroup>
+                        </select>
+                    </label>
+                    <span class="text-muted-foreground">The map's pilot tab and hole watcher can do this too.</span>
+                    <button type="button" class="ml-auto rounded border border-border px-2 py-0.5 text-muted-foreground hover:text-red-400" title="Remove every box of this window and start again" @click="startOver">
+                        {{ startingOver ? 'Sure? Click again' : 'Start over' }}
+                    </button>
+                </div>
+                <p v-if="currentSource && homelessBoxes.length" class="flex flex-wrap items-center gap-2 rounded border border-amber-800 bg-amber-950/30 px-2 py-1 text-xs text-amber-100">
+                    {{ homelessBoxes.length }} box{{ homelessBoxes.length === 1 ? '' : 'es' }} from before windows had their own (not tied to any client).
+                    <button type="button" class="underline" @click="adoptHomeless">Give them to {{ currentSource.client }}</button>
+                    <button type="button" class="underline" @click="dropHomeless">Delete them</button>
+                </p>
 
                 <div v-show="source" ref="stage" class="relative w-full touch-none overflow-hidden rounded-md border border-border bg-black select-none" @pointerdown.self="(event) => down(event)" @pointermove="move" @pointerup="up">
                     <video
