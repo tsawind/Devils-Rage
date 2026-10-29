@@ -6,6 +6,8 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import SeoHead from '@/layouts/SeoHead.vue';
 import { BoxCamera, SoundEar, startBeat, type TBoxRect, type TDetectMode, type THit } from '@/lib/cameras/broadcaster';
 import { QUALITY, type TQuality, type TRelayPass } from '@/lib/cameras/rtc';
+import { appClients, appAudioErrors, appHasClientAudio, appLevels, learnFromClient, listenToClients, onAppHeard, onAppLearned, refreshAppClients } from '@/lib/cameras/appAudio';
+import { appSignal, inDesktopApp } from '@/lib/desktopApp';
 import { formFetch, jsonFetch } from '@/lib/jsonFetch';
 import { Monitor, Play, Pause, Plus, Square, Trash2, Video } from 'lucide-vue-next';
 import { computed, markRaw, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
@@ -38,6 +40,8 @@ type TBox = TBoxRect & {
     guests: number[];
     detect: TDetectMode;
     listen: boolean;
+    /** Patch 62d: in the desktop app, whose client's own sound this box listens to. */
+    client?: string;
 };
 type TRun = {
     camera: BoxCamera;
@@ -116,7 +120,12 @@ async function pick(kind: 'window' | 'screen'): Promise<void> {
         if (!boxes.value.length) addBox(true);
         setUpEar();
     } catch (problem) {
-        error.value = problem instanceof Error && problem.name === 'NotAllowedError' ? null : 'Couldn’t start sharing (Chrome or Edge work best).';
+        error.value =
+            problem instanceof Error && problem.name === 'NotAllowedError'
+                ? null
+                : inDesktopApp()
+                  ? 'The app couldn’t open the window picker here. Use “Open in browser” for now.'
+                  : 'Couldn’t start sharing (Chrome or Edge work best).';
     }
 }
 
@@ -133,6 +142,7 @@ function addBox(whole = false): void {
         guests: [],
         detect: whole ? 'off' : 'flash',
         listen: false,
+        client: characterName(),
         ...(whole ? { x: 0, y: 0, w: 1, h: 1 } : { x: 0.35, y: 0.3, w: 0.3, h: 0.3 }),
     });
     selected.value = key;
@@ -221,6 +231,53 @@ function learn(): void {
     ear.value?.learn();
     learning.value = true;
     setTimeout(() => (learning.value = false), 30_000);
+}
+
+// Patch 62d: in the desktop app, each box can listen to one EVE client's own sound (the app
+// records that client by itself), so a sound is never credited to the wrong hole.
+const clientAudio = appHasClientAudio();
+const appLearning = ref<string | null>(null);
+function characterName(): string {
+    return props.characters.find((character) => character.id === characterId.value)?.name ?? '';
+}
+if (clientAudio) {
+    refreshAppClients();
+    const offHeard = onAppHeard((character) => {
+        for (const box of boxes.value) {
+            if (box.listen && box.client === character) runs.get(box.key)?.camera.hear();
+        }
+    });
+    const offLearned = onAppLearned(() => {
+        appLearning.value = null;
+        learned.value = true;
+    });
+    onBeforeUnmount(() => {
+        offHeard();
+        offLearned();
+        listenToClients([]);
+    });
+}
+/** The clients to listen to: every running box with Listen on. */
+watch(
+    () =>
+        [...runs.keys()].flatMap((key) => {
+            const box = boxes.value.find((item) => item.key === key);
+            return box?.listen && box.client ? [box.client] : [];
+        }),
+    (wanted) => {
+        if (clientAudio) listenToClients(wanted);
+    },
+);
+function learnFromApp(character: string): void {
+    learnFromClient(character);
+    appLearning.value = character;
+    setTimeout(() => {
+        if (appLearning.value === character) appLearning.value = null;
+    }, 30_000);
+}
+/** In the app, a window that can't be shared here can still be shared from the browser. */
+function openInBrowser(): void {
+    appSignal(`open?url=${encodeURIComponent(window.location.href)}`);
 }
 
 // ---- Cameras -----------------------------------------------------------------------------
@@ -402,7 +459,10 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                     </select>
                     <span v-if="liveCount" class="ml-auto flex items-center gap-1 text-xs text-red-400"><span class="size-2 animate-pulse rounded-full bg-red-500" /> {{ liveCount }} live</span>
                 </div>
-                <p v-if="error" class="rounded border border-red-800 bg-red-950/40 px-2 py-1 text-xs text-red-200">{{ error }}</p>
+                <p v-if="error" class="rounded border border-red-800 bg-red-950/40 px-2 py-1 text-xs text-red-200">
+                    {{ error }}
+                    <button v-if="inDesktopApp()" type="button" class="ml-2 underline" @click="openInBrowser">Open in browser</button>
+                </p>
 
                 <div v-show="source" ref="stage" class="relative w-full touch-none overflow-hidden rounded-md border border-border bg-black select-none" @pointerdown.self="(event) => down(event)" @pointermove="move" @pointerup="up">
                     <video ref="video" class="pointer-events-none block h-auto w-full" autoplay playsinline muted />
@@ -484,10 +544,29 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                             <option value="rows">Ships in / out (box on the overview)</option>
                         </select>
                         <label>Listen</label>
-                        <label class="flex items-center gap-2" :class="audioTrack ? '' : 'opacity-50'">
+                        <div v-if="clientAudio" class="flex items-center gap-2">
+                            <input v-model="box.listen" type="checkbox" :disabled="!box.client" />
+                            <select v-model="box.client" class="h-7 min-w-0 flex-1 rounded border border-border bg-background px-1" title="This client's own sound only (the app records it by itself)" @focus="refreshAppClients()">
+                                <option value="">Pick a client…</option>
+                                <option v-for="client in appClients" :key="client" :value="client">{{ client }}'s client</option>
+                                <option v-if="box.client && !appClients.includes(box.client)" :value="box.client">{{ box.client }} (not open)</option>
+                            </select>
+                        </div>
+                        <label v-else class="flex items-center gap-2" :class="audioTrack ? '' : 'opacity-50'">
                             <input v-model="box.listen" type="checkbox" :disabled="!audioTrack" />
                             <span>{{ audioTrack ? 'Activation sound counts for this box' : 'Share again with “Share with system audio” on' }}</span>
                         </label>
+                        <template v-if="clientAudio && box.listen && box.client">
+                            <span />
+                            <div class="flex items-center gap-2">
+                                <span class="h-1.5 flex-1 overflow-hidden rounded bg-muted" :title="`${box.client}'s client sound`"><span class="block h-full bg-sky-500 transition-all" :style="{ width: `${appLevels[box.client ?? ''] ?? 0}%` }" /></span>
+                                <button type="button" class="rounded border border-border px-1.5 text-[11px] hover:bg-muted disabled:opacity-50" :disabled="appLearning !== null || !runs.get(box.key)" :title="runs.get(box.key) ? 'The next loud moment in this client is the activation sound' : 'Go live first'" @click="learnFromApp(box.client ?? '')">
+                                    {{ appLearning === box.client ? 'Listening… (30 s)' : 'Learn' }}
+                                </button>
+                            </div>
+                            <span v-if="appAudioErrors[box.client ?? '']" />
+                            <p v-if="appAudioErrors[box.client ?? '']" class="text-red-300">{{ appAudioErrors[box.client ?? ''] }}</p>
+                        </template>
                         <template v-if="share_links.length">
                             <label class="self-start">Guests</label>
                             <div class="flex flex-col gap-0.5">
@@ -504,7 +583,13 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                     </div>
                     <p v-if="runs.get(box.key)?.hits" class="text-purple-300">⚡ {{ runs.get(box.key)!.hits }} seen · last {{ runs.get(box.key)!.lastHit }}</p>
                 </div>
-                <div v-if="audioTrack" class="flex flex-col gap-1 rounded-md border border-border p-2 text-xs">
+                <div v-if="clientAudio" class="flex flex-col gap-1 rounded-md border border-border p-2 text-xs">
+                    <p class="font-semibold">Activation sound (app)</p>
+                    <p class="text-muted-foreground">
+                        Each box listens to its own client only, so Discord and the other clients can't set it off. {{ learned ? 'Learned.' : 'Teach it once: Go live, press Learn on a listening box, then let a ship jump (or play the sound) within 30 s.' }}
+                    </p>
+                </div>
+                <div v-else-if="audioTrack" class="flex flex-col gap-1 rounded-md border border-border p-2 text-xs">
                     <p class="font-semibold">Activation sound</p>
                     <p class="text-muted-foreground">
                         {{ learned ? 'Learned. Teach it again if it misses jumps or hears other things.' : 'Not learned yet: press Learn, then let a ship jump (or play the sound) within 30 s.' }}

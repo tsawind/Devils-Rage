@@ -233,6 +233,14 @@ export class BoxCamera {
         this.previous = grey;
     }
 
+    /**
+     * Patch 62d: the desktop app heard the activation sound in this box's own client (one
+     * client's sound only, so it counts by itself).
+     */
+    hear(): void {
+        if (this.listen && !this.paused) this.found({ kind: 'activation', strength: 75, heardBy: 'sound' });
+    }
+
     /** Picture and sound within a moment of each other are one hit ("both"). */
     private found(hit: Omit<THit, 'at' | 'still'>): void {
         if (this.pending) {
