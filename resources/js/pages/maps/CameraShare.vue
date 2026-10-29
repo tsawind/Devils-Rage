@@ -88,7 +88,7 @@ const BOXES_KEY = `camera-boxes-${props.map.id}`;
  * client (read from the window title "EVE - <name>"), and in the app they listen to that
  * client's sound only, so one PC can watch several holes with several clients.
  */
-type TSource = { key: string; client: string; kind: 'window' | 'screen'; stream: MediaStream };
+type TSource = { key: string; client: string; kind: 'window' | 'screen'; stream: MediaStream; label: string };
 const sources = shallowRef<TSource[]>([]);
 const currentKey = ref<string | null>(null);
 const currentSource = computed(() => sources.value.find((item) => item.key === currentKey.value) ?? sources.value[0] ?? null);
@@ -108,6 +108,30 @@ function clientFromStream(stream: MediaStream): string | null {
     const label = stream.getVideoTracks()[0]?.label ?? '';
     const match = label.match(/EVE\s*-\s*(.+)$/);
     return match ? match[1].trim() : null;
+}
+/**
+ * Patch 62i: which client a newly shared window is. Chrome / the app name the picture
+ * "window:1234:0", not "EVE - Name", so the name came from the character menu and every
+ * window got the same one (a second window replaced the first). Now: the window title when
+ * there is one, else the first client (app) or character not shared yet; the tab's menu fixes it.
+ */
+function nameForWindow(stream: MediaStream, kind: 'window' | 'screen'): string {
+    const titled = clientFromStream(stream);
+    if (titled) return titled;
+    if (kind === 'screen') return 'Screen';
+    const taken = new Set(sources.value.map((item) => item.client));
+    const choices = [...appClients.value, characterName(), ...props.characters.map((character) => character.name)].filter(Boolean);
+    return choices.find((name) => !taken.has(name)) ?? `Window ${sources.value.length + 1}`;
+}
+/** Names a tab can be set to: the app's EVE clients and your characters. */
+const clientChoices = computed(() => [...new Set([...appClients.value, ...props.characters.map((character) => character.name)])]);
+function renameSource(item: TSource, client: string): void {
+    if (!client || client === item.client || sources.value.some((other) => other.client === client)) return;
+    for (const box of boxes.value) {
+        if (box.client === item.client) box.client = client;
+    }
+    sources.value = sources.value.map((other) => (other.key === item.key ? { ...other, client } : other));
+    setUpEar();
 }
 const sourceOf = (box: TBox): TSource | null => sources.value.find((item) => item.client === box.client) ?? null;
 /** The boxes of the window on show (boxes from before windows had owners join the first one). */
@@ -153,12 +177,14 @@ async function pick(kind: 'window' | 'screen'): Promise<void> {
             surfaceSwitching: 'include',
         } as DisplayMediaStreamOptions;
         const stream = await navigator.mediaDevices.getDisplayMedia(options);
-        const client = clientFromStream(stream) ?? (kind === 'screen' ? 'Screen' : characterName() || `Window ${sources.value.length + 1}`);
-        // The same client again: its new picture replaces the old one.
-        const existing = sources.value.find((item) => item.client === client);
+        const label = stream.getVideoTracks()[0]?.label ?? '';
+        // The same window (or titled client) again: its new picture replaces the old one.
+        const titled = clientFromStream(stream);
+        const existing = sources.value.find((item) => (label !== '' && item.label === label) || (titled !== null && item.client === titled));
+        const client = existing?.client ?? nameForWindow(stream, kind);
         if (existing) closeSource(existing.key);
         const key = Math.random().toString(36).slice(2, 10);
-        sources.value = [...sources.value, { key, client, kind, stream }];
+        sources.value = [...sources.value, { key, client, kind, stream, label }];
         currentKey.value = key;
         stream.getVideoTracks()[0]?.addEventListener('ended', () => closeSource(key));
         for (const box of boxes.value) {
@@ -599,6 +625,16 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                             <span v-if="liveIn(item)" class="size-1.5 rounded-full bg-red-500" />{{ item.client }}<span v-if="liveIn(item)" class="font-normal text-red-400">· {{ liveIn(item) }} on</span>
                             <span v-if="appActive.character === item.client && appActive.idleMs < 3000" class="font-normal text-amber-300" title="You're playing this client: its watch areas still watch, but want stronger proof (your mouse and D-scan come and go; a ship that lands stays)">· you're playing</span>
                         </button>
+                        <select
+                            v-if="item.key === currentSource?.key && item.kind === 'window' && clientChoices.length"
+                            class="rounded border border-border bg-background px-1 py-0 text-[11px] font-normal"
+                            title="Which client this window is (its boxes, sound and camera names follow)"
+                            :value="item.client"
+                            @change="(event) => renameSource(item, (event.target as HTMLSelectElement).value)"
+                        >
+                            <option v-if="!clientChoices.includes(item.client)" :value="item.client">{{ item.client }}</option>
+                            <option v-for="name in clientChoices" :key="name" :value="name" :disabled="name !== item.client && sources.some((other) => other.client === name)">{{ name }}</option>
+                        </select>
                         <button type="button" class="rounded px-0.5 text-muted-foreground hover:text-red-400" title="Stop sharing this window" @click="closeSource(item.key)">✕</button>
                     </div>
                     <button type="button" class="rounded-md border border-dashed border-border px-2 py-1 text-muted-foreground hover:text-foreground" title="Share another client's window too" @click="pick('window')">+ Another EVE window</button>
