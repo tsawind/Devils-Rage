@@ -400,7 +400,16 @@ class PiController extends Controller
         $setting = AccountSetting::query()->firstOrNew(['user_id' => $user->id]);
         $message = $digest->message($user, $setting, true) ?? '';
 
-        return response()->json(['sent' => $dm->send((int) $user->id, "(test) ".$message)]);
+        $problem = $dm->trySend((int) $user->id, '(test) '.$message);
+        $why = match (true) {
+            $problem === null => null,
+            $problem === 'not_linked' => 'Your Discord isn\'t linked to SeAT yet: SeAT → Connector → Identities, link Discord, then try again.',
+            $problem === 'dms_closed' => 'Discord won\'t let the bot DM you: in the corp Discord server, Privacy Settings → turn on Direct Messages (and be on that server).',
+            $problem === 'no_bot' => 'The corp bot isn\'t set up in SeAT (Connector → Settings). Ask a director.',
+            default => 'Discord said no ('.$problem.'). Try again in a minute.',
+        };
+
+        return response()->json(['sent' => $problem === null, 'why' => $why]);
     }
 
     /**

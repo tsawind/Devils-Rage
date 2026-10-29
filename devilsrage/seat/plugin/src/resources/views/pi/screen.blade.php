@@ -859,7 +859,7 @@
     test.disabled = true;
     const r = await post(@json(route('devilsrage.pi.alerts.test'))).catch(() => null);
     const j = r && r.ok ? await r.json().catch(() => ({})) : {};
-    toast(j.sent ? 'Sent. Check your Discord DMs.' : 'Could not send the DM.', !j.sent);
+    toast(j.sent ? 'Sent. Check your Discord DMs.' : ('Could not send the DM. ' + (j.why || '')).trim(), !j.sent);
     test.disabled = false;
   });
 })();

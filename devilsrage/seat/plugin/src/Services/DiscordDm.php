@@ -17,12 +17,24 @@ final class DiscordDm
 
     public function send(int $seatUserId, string $content): bool
     {
+        return $this->trySend($seatUserId, $content) === null;
+    }
+
+    /**
+     * Patch 62i: sends, and says why not (null when it went): no bot, no linked Discord, or
+     * what Discord answered (DMs closed, not on the corp server…).
+     */
+    public function trySend(int $seatUserId, string $content): ?string
+    {
         $discordId = ConnectorUser::query()
             ->where('connector_type', 'discord')
             ->where('user_id', $seatUserId)
             ->value('connector_id');
+        if ($discordId === null) {
+            return 'not_linked';
+        }
 
-        return $discordId !== null && $this->sendTo((string) $discordId, $content);
+        return $this->trySendTo((string) $discordId, $content);
     }
 
     /**
@@ -31,21 +43,40 @@ final class DiscordDm
      */
     public function sendTo(string $discordId, string $content): bool
     {
+        return $this->trySendTo($discordId, $content) === null;
+    }
+
+    /**
+     * Patch 62i: null when sent; else 'no_bot', 'dms_closed' (Discord 50007: DMs from server
+     * members off, or no server shared with the bot), or 'discord_<status>'.
+     */
+    public function trySendTo(string $discordId, string $content): ?string
+    {
         $token = $this->token();
         if ($token === null) {
-            return false;
+            return 'no_bot';
         }
 
-        $request = Http::withHeaders(['Authorization' => 'Bot '.$token])->acceptJson()->timeout(10);
-        $channel = $request->post(self::API.'/users/@me/channels', ['recipient_id' => $discordId]);
-        if (! $channel->successful()) {
-            return false;
+        try {
+            $request = Http::withHeaders(['Authorization' => 'Bot '.$token])->acceptJson()->timeout(10);
+            $channel = $request->post(self::API.'/users/@me/channels', ['recipient_id' => $discordId]);
+            if (! $channel->successful()) {
+                return self::why($channel->status(), $channel->json('code'));
+            }
+            $sent = $request->post(self::API.'/channels/'.$channel->json('id').'/messages', [
+                'content' => mb_substr($content, 0, 1900),
+                'allowed_mentions' => ['parse' => []],
+            ]);
+        } catch (\Throwable) {
+            return 'discord_unreachable';
         }
 
-        return $request->post(self::API.'/channels/'.$channel->json('id').'/messages', [
-            'content' => mb_substr($content, 0, 1900),
-            'allowed_mentions' => ['parse' => []],
-        ])->successful();
+        return $sent->successful() ? null : self::why($sent->status(), $sent->json('code'));
+    }
+
+    private static function why(int $status, mixed $code): string
+    {
+        return (int) $code === 50007 ? 'dms_closed' : 'discord_'.$status;
     }
 
     /**
