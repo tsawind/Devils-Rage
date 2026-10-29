@@ -11,7 +11,8 @@ import { computed, ref, shallowRef } from 'vue';
 export type TCamera = {
     id: number;
     name: string;
-    kind: 'hole' | 'structure' | 'other' | 'pi' | 'screen';
+    /** Patch 62f: 'watch' = a watch area (not streamed; only reports). */
+    kind: 'hole' | 'structure' | 'other' | 'pi' | 'screen' | 'watch';
     status: 'starting' | 'live' | 'paused';
     quality: string;
     detect: boolean;
@@ -175,6 +176,7 @@ const pipeActivity = computed<Map<number, TPipeActivity>>(() => activityByConnec
 const pipeCameras = computed(() => {
     const result = new Map<number, TCamera[]>();
     for (const camera of cameras.value) {
+        if (camera.kind === 'watch') continue;
         if (camera.map_connection_id === null) continue;
         result.set(camera.map_connection_id, [...(result.get(camera.map_connection_id) ?? []), camera]);
     }
@@ -186,6 +188,7 @@ const holeActivity = computed<Map<number, TPipeActivity>>(() => activityBySignat
 const holeCameras = computed(() => {
     const result = new Map<number, TCamera[]>();
     for (const camera of cameras.value) {
+        if (camera.kind === 'watch') continue;
         if (camera.signature_id === null || camera.map_connection_id !== null) continue;
         result.set(camera.signature_id, [...(result.get(camera.signature_id) ?? []), camera]);
     }
@@ -196,6 +199,7 @@ const holeCameras = computed(() => {
 const systemCameras = computed(() => {
     const result = new Map<number, TCamera[]>();
     for (const camera of cameras.value) {
+        if (camera.kind === 'watch') continue;
         if (camera.map_solarsystem_id === null) continue;
         result.set(camera.map_solarsystem_id, [...(result.get(camera.map_solarsystem_id) ?? []), camera]);
     }

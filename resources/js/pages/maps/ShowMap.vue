@@ -246,6 +246,9 @@ useOnClient(() => {
     useEcho(getMapChannelName(map.id), CamerasChangedEvent, () => refreshCamerasSoon());
     useEcho<TCameraActivityBroadcast>(getMapChannelName(map.id), CameraActivityEvent, (event) => {
         noteActivity(event);
+        // Patch 62f: watch areas on the probe scanner and local: a short notice for arrivals.
+        if (event.kind === 'scan_new') toast.info(`👁 ${event.camera_name}: new probe scanner result`, { duration: 8000 });
+        if (event.kind === 'local_in') toast.warning(`👁 ${event.camera_name}: someone entered local`, { duration: 10_000 });
         if (event.kind === 'activation' && mapEffects.value.sounds) playActivationTone();
     });
 });

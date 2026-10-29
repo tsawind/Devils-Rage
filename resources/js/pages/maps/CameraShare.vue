@@ -29,8 +29,13 @@ const props = defineProps<{
     share_links: { id: number; label: string | null; access: string; expires_at: string | null; permanent: boolean }[];
 }>();
 
-type TKind = 'hole' | 'structure' | 'other' | 'pi' | 'screen';
+type TKind = 'hole' | 'structure' | 'other' | 'pi' | 'screen' | 'watch';
+/** Patch 62f: a camera (streamed), a watch area (only watches and reports) or a hide area (blacked out). */
+type TRole = 'camera' | 'watch' | 'hide';
 type TBox = TBoxRect & {
+    role?: TRole;
+    /** Watch areas: 1 (only big changes) … 10 (the slightest). */
+    sensitivity?: number;
     key: string;
     name: string;
     kind: TKind;
@@ -53,6 +58,21 @@ type TRun = {
     kinds: Record<string, number>;
     lastHit: string | null;
 };
+
+const WATCHES: { value: TDetectMode; label: string; hint: string }[] = [
+    { value: 'flash', label: 'Hole wobble / flash', hint: 'A small box tight around the wormhole in space: a jump makes it wobble.' },
+    { value: 'rows', label: 'Overview: ships in / out', hint: 'A box over the overview list only (not its tabs or header).' },
+    { value: 'scan', label: 'Probe scanner: results change', hint: 'A box over the probe scanner’s results list.' },
+    { value: 'local', label: 'Local: pilots in / out', hint: 'A box over local’s member list.' },
+];
+const roleOf = (box: TBox): TRole => box.role ?? 'camera';
+const ROLE_CHOICES: { role: TRole; label: string; hint: string }[] = [
+    { role: 'camera', label: '📹 Camera', hint: 'Streamed to the map and recorded' },
+    { role: 'watch', label: '👁 Watch area', hint: 'Not streamed: watches the hole, overview, probe scanner or local and reports' },
+    { role: 'hide', label: '⬛ Hide area', hint: 'Blacked out of every camera, still and clip' },
+];
+/** Patch 62f: what gets drawn when you drag on empty picture. */
+const drawRole = ref<TRole>('camera');
 
 const KINDS: { value: TKind; label: string; detect: TDetectMode }[] = [
     { value: 'hole', label: 'Hole (in space)', detect: 'flash' },
@@ -132,23 +152,37 @@ async function pick(kind: 'window' | 'screen'): Promise<void> {
 }
 
 // ---- Boxes ---------------------------------------------------------------------------------
-function addBox(whole = false): void {
+function addBox(whole = false, role: TRole = 'camera'): void {
     const key = Math.random().toString(36).slice(2, 10);
-    const kind: TKind = whole ? 'screen' : 'hole';
+    const count = boxes.value.filter((box) => roleOf(box) === role).length + 1;
+    const names: Record<TRole, string> = { camera: `Camera ${count}`, watch: `Watch ${count}`, hide: `Hidden ${count}` };
     boxes.value.push({
         key,
-        name: whole ? (sourceKind.value === 'screen' ? 'Screen' : 'EVE client') : `Camera ${boxes.value.length + 1}`,
-        kind,
+        role,
+        sensitivity: 6,
+        name: whole ? (sourceKind.value === 'screen' ? 'Screen' : 'EVE client') : names[role],
+        kind: role === 'watch' ? 'watch' : whole ? 'screen' : 'hole',
         quality: '720p5',
         pin: '',
         guests: [],
-        detect: whole ? 'off' : 'flash',
+        // Patch 62f: cameras stream; watching is what watch areas are for.
+        detect: role === 'watch' ? 'flash' : 'off',
         listen: false,
         client: characterName(),
         ...(whole ? { x: 0, y: 0, w: 1, h: 1 } : { x: 0.35, y: 0.3, w: 0.3, h: 0.3 }),
     });
     selected.value = key;
 }
+
+/** Patch 62f: hide areas, blacked out of every camera, still and clip. */
+const hideRects = computed<TBoxRect[]>(() => boxes.value.filter((box) => roleOf(box) === 'hide').map((box) => ({ x: box.x, y: box.y, w: box.w, h: box.h })));
+watch(
+    hideRects,
+    (masks) => {
+        for (const run of runs.values()) run.camera.masks = masks;
+    },
+    { deep: true },
+);
 
 function removeBox(box: TBox): void {
     void stopBox(box);
@@ -175,7 +209,7 @@ function down(event: PointerEvent, box: TBox | null = null, mode: 'move' | 'size
     if (!source.value) return;
     const at = point(event);
     if (!box) {
-        addBox();
+        addBox(false, drawRole.value);
         box = boxes.value[boxes.value.length - 1];
         Object.assign(box, { x: at.x, y: at.y, w: 0.01, h: 0.01 });
         drag = { mode: 'new', box, startX: at.x, startY: at.y, rect: { x: at.x, y: at.y, w: 0, h: 0 } };
@@ -205,7 +239,7 @@ function up(): void {
     if (!drag) return;
     const { box } = drag;
     if (drag.mode === 'new' && (box.w < 0.02 || box.h < 0.02)) boxes.value = boxes.value.filter((item) => item.key !== box.key);
-    else if (box.kind === 'screen' && (box.w < 1 || box.h < 1)) setKind(box, 'other');
+    else if (roleOf(box) === 'camera' && box.kind === 'screen' && (box.w < 1 || box.h < 1)) setKind(box, 'other');
     const run = runs.get(box.key);
     if (run) {
         run.camera.rect = { x: box.x, y: box.y, w: box.w, h: box.h };
@@ -298,11 +332,19 @@ function pinFields(box: TBox): { map_connection_id: number | null; map_solarsyst
 }
 
 function details(box: TBox) {
-    return { name: box.name || 'Camera', kind: box.kind, quality: box.quality, detect: box.detect !== 'off' || box.listen, guest_share_link_ids: box.guests, ...pinFields(box) };
+    const watching = roleOf(box) === 'watch';
+    return {
+        name: box.name || (watching ? 'Watch' : 'Camera'),
+        kind: watching ? 'watch' : box.kind === 'watch' ? 'hole' : box.kind,
+        quality: box.quality,
+        detect: watching || box.detect !== 'off' || box.listen,
+        guest_share_link_ids: box.guests,
+        ...pinFields(box),
+    };
 }
 
 async function startBox(box: TBox): Promise<void> {
-    if (!video.value || !source.value || runs.has(box.key)) return;
+    if (!video.value || !source.value || runs.has(box.key) || roleOf(box) === 'hide') return;
     const started = await jsonFetch<{ camera: { id: number }; publish: TRelayPass }>(MapCameraController.store(props.map.slug).url, 'POST', {
         ...details(box),
         character_id: characterId.value,
@@ -316,12 +358,20 @@ async function startBox(box: TBox): Promise<void> {
         detect: box.detect,
         listen: box.listen,
         audio: box.kind === 'screen' ? audioTrack.value : null,
+        sensitivity: box.sensitivity ?? 6,
     });
+    camera.masks = hideRects.value;
     const run: TRun = { camera: markRaw(camera), id: started.camera.id, state: 'starting', error: null, hits: 0, kinds: {}, lastHit: null };
     camera.label = stampLabel(box);
     runs.set(box.key, run);
     camera.onHit = (hit) => void report(box.key, hit);
     camera.onLost = () => void reconnect(box.key);
+    // Patch 62f: a watch area only watches (and keeps the last moments for a clip): nothing is streamed.
+    if (roleOf(box) === 'watch') {
+        camera.record();
+        setState(box.key, 'live');
+        return;
+    }
     try {
         await camera.start(started.publish);
         setState(box.key, 'live');
@@ -384,6 +434,7 @@ watch(
             const run = runs.get(box.key);
             if (!run) continue;
             Object.assign(run.camera, { detect: box.detect, listen: box.listen, label: stampLabel(box) });
+            run.camera.setSensitivity(box.sensitivity ?? 6);
             if (run.camera.quality !== box.quality) {
                 run.camera.quality = box.quality;
                 run.camera.resize();
@@ -414,7 +465,7 @@ async function report(key: string, hit: THit): Promise<void> {
     if (!created) return;
     // Patch 62e: clips only for activations (ships in / out get the still), so a busy
     // overview overnight can't fill the server.
-    const clip = hit.kind === 'activation' ? await run.camera.clip() : null;
+    const clip = hit.kind === 'activation' || hit.kind === 'local_in' ? await run.camera.clip() : null;
     const files = new FormData();
     if (clip) files.append('clip', clip, 'clip.webm');
     if (hit.still) files.append('still', hit.still, 'still.jpg');
@@ -456,6 +507,18 @@ function boxStyle(box: TBox): Record<string, string> {
 }
 
 const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', live: 'Live', paused: 'Paused', reconnecting: 'Reconnecting…', failed: 'Stopped' };
+/** Patch 62f: what a box's hits were, in words. */
+const HIT_LABEL: Record<string, string> = { activation: '⚡ activations', appeared: '＋ ships in', vanished: '－ ships out', scan_new: '＋ new results', scan_gone: '－ results gone', local_in: '＋ in local', local_out: '－ left local' };
+function hitSummary(run: TRun): string {
+    return Object.entries(run.kinds)
+        .map(([kind, count]) => `${count} ${HIT_LABEL[kind] ?? kind}`)
+        .join(' · ');
+}
+const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }> = {
+    camera: { idle: 'border-2 border-purple-500/80', selected: 'border-2 border-fuchsia-400 bg-fuchsia-500/10', tag: 'bg-purple-900/90 text-purple-100' },
+    watch: { idle: 'border-2 border-dashed border-sky-400/80', selected: 'border-2 border-dashed border-sky-300 bg-sky-500/10', tag: 'bg-sky-900/90 text-sky-100' },
+    hide: { idle: 'border border-neutral-500 bg-black', selected: 'border-2 border-neutral-300 bg-black', tag: 'bg-neutral-800 text-neutral-200' },
+};
 </script>
 
 <template>
@@ -482,20 +545,23 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                     <div
                         v-for="box in boxes"
                         :key="box.key"
-                        class="absolute cursor-move border-2"
-                        :class="[selected === box.key ? 'border-fuchsia-400 bg-fuchsia-500/10' : 'border-purple-500/80', runs.get(box.key)?.state === 'live' ? 'shadow-[0_0_0_1px_var(--color-red-500)]' : '']"
+                        class="absolute cursor-move"
+                        :class="[selected === box.key ? ROLE_STYLE[roleOf(box)].selected : ROLE_STYLE[roleOf(box)].idle, runs.get(box.key)?.state === 'live' && roleOf(box) === 'camera' ? 'shadow-[0_0_0_1px_var(--color-red-500)]' : '']"
                         :style="boxStyle(box)"
                         @pointerdown.stop="(event) => down(event, box)"
                     >
-                        <span class="absolute -top-5 left-0 rounded bg-purple-900/90 px-1 text-[10px] whitespace-nowrap text-purple-100">
-                            <span v-if="runs.get(box.key)?.state === 'live'" class="mr-1 inline-block size-1.5 rounded-full bg-red-500" />{{ box.name }}
+                        <span class="absolute -top-5 left-0 rounded px-1 text-[10px] whitespace-nowrap" :class="ROLE_STYLE[roleOf(box)].tag">
+                            <span v-if="runs.get(box.key)?.state === 'live'" class="mr-1 inline-block size-1.5 rounded-full" :class="roleOf(box) === 'watch' ? 'bg-sky-400' : 'bg-red-500'" />{{ roleOf(box) === 'watch' ? '👁 ' : roleOf(box) === 'hide' ? '⬛ ' : '📹 ' }}{{ box.name }}
                         </span>
                         <span class="absolute right-0 bottom-0 size-3 cursor-se-resize bg-fuchsia-400" @pointerdown.stop="(event) => down(event, box, 'size')" />
                     </div>
                 </div>
                 <div v-if="!source" class="flex flex-col gap-2 rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
                     <p class="font-medium text-foreground">Pick what to share, then draw boxes on it.</p>
-                    <p>· <b>An EVE window</b>: one client. Draw a box over the hole in space, the overview, local or a structure; each box is its own camera on the map.</p>
+                    <p>· <b>An EVE window</b>: one client. Then draw boxes on it:</p>
+                    <p class="pl-3">📹 <b>Camera</b>: streamed to the map and recorded (the hole, a structure, the whole client).</p>
+                    <p class="pl-3">👁 <b>Watch area</b>: not streamed, it only watches and reports: a small box tight on the hole (wobble), one on the overview (ships in / out), on the probe scanner (results change) or on local (pilots in / out).</p>
+                    <p class="pl-3">⬛ <b>Hide area</b>: blacked out of every camera, still and clip.</p>
                     <p>· <b>Sound</b>: tick “Share with system audio” in Chrome's picker. It's the whole computer's sound, every client mixed: mute the other EVE clients in Windows' Volume mixer (each client is listed there) so only the watching client is heard. With several boxes listening, the sound only backs up a jump a box's picture saw.</p>
                     <p>· Keep this tab open in its own window. Behind EVE is fine; minimised isn't. Nothing is sent to the game.</p>
                     <p v-if="boxes.length" class="text-xs">Your {{ boxes.length }} box{{ boxes.length === 1 ? '' : 'es' }} from last time come back when you share.</p>
@@ -504,9 +570,25 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
 
             <aside class="flex w-full shrink-0 flex-col gap-2 lg:w-96">
                 <div class="flex items-center gap-2">
-                    <h2 class="text-sm font-semibold">Cameras</h2>
-                    <Button size="sm" variant="ghost" class="ml-auto h-7" :disabled="!source" @click="addBox()"><Plus class="mr-1 size-3.5" /> Box</Button>
-                    <Button size="sm" variant="ghost" class="h-7" :disabled="!source" @click="addBox(true)">Whole picture</Button>
+                    <h2 class="text-sm font-semibold">Boxes</h2>
+                    <Button size="sm" variant="ghost" class="ml-auto h-7" :disabled="!source" @click="addBox(true)">Whole picture</Button>
+                </div>
+                <div class="flex flex-col gap-1 rounded-md border border-border p-2 text-xs">
+                    <span class="text-muted-foreground">Drag on the picture to draw a…</span>
+                    <div class="flex overflow-hidden rounded border border-border">
+                        <button
+                            v-for="choice in ROLE_CHOICES"
+                            :key="choice.role"
+                            type="button"
+                            class="flex-1 px-2 py-1"
+                            :class="drawRole === choice.role ? 'bg-muted font-semibold' : 'text-muted-foreground'"
+                            :title="choice.hint"
+                            @click="drawRole = choice.role"
+                        >
+                            {{ choice.label }}
+                        </button>
+                    </div>
+                    <Button size="sm" variant="ghost" class="h-6 self-start px-1" :disabled="!source" @click="addBox(false, drawRole)"><Plus class="mr-1 size-3.5" /> Add one in the middle</Button>
                 </div>
                 <div
                     v-for="box in boxes"
@@ -524,15 +606,33 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                             </button>
                             <button type="button" class="rounded p-1 text-red-400 hover:bg-muted" title="Stop" @click.stop="stopBox(box)"><Square class="size-3.5" /></button>
                         </template>
+                        <span v-else-if="roleOf(box) === 'hide'" class="text-[11px] text-muted-foreground">hidden from all</span>
+                        <button v-else-if="roleOf(box) === 'watch'" type="button" class="rounded bg-sky-700 px-2 py-1 font-semibold text-white hover:bg-sky-600 disabled:opacity-40" :disabled="!source" @click.stop="startBox(box)">Watch</button>
                         <button v-else type="button" class="rounded bg-red-700 px-2 py-1 font-semibold text-white hover:bg-red-600 disabled:opacity-40" :disabled="!source" @click.stop="startBox(box)">Go live</button>
                         <button type="button" class="rounded p-1 text-muted-foreground hover:bg-muted hover:text-red-400" title="Remove the box" @click.stop="removeBox(box)"><Trash2 class="size-3.5" /></button>
                     </div>
                     <p v-if="runs.get(box.key)?.error" class="text-red-300">{{ runs.get(box.key)!.error }}</p>
-                    <div v-if="selected === box.key" class="grid grid-cols-[5.5rem_1fr] items-center gap-x-2 gap-y-1.5">
-                        <label>What it shows</label>
-                        <select :value="box.kind" class="h-7 rounded border border-border bg-background px-1" @change="setKind(box, ($event.target as HTMLSelectElement).value as TKind)">
-                            <option v-for="kind in KINDS" :key="kind.value" :value="kind.value">{{ kind.label }}</option>
-                        </select>
+                    <p v-if="selected === box.key && roleOf(box) === 'hide'" class="text-muted-foreground">Blacked out of every camera, still and clip (drag it over what nobody should see).</p>
+                    <div v-if="selected === box.key && roleOf(box) !== 'hide'" class="grid grid-cols-[5.5rem_1fr] items-center gap-x-2 gap-y-1.5">
+                        <template v-if="roleOf(box) === 'watch'">
+                            <label>Watch for</label>
+                            <select v-model="box.detect" class="h-7 rounded border border-border bg-background px-1">
+                                <option v-for="item in WATCHES" :key="item.value" :value="item.value">{{ item.label }}</option>
+                            </select>
+                            <span />
+                            <p class="text-[11px] text-muted-foreground">{{ WATCHES.find((item) => item.value === box.detect)?.hint }}</p>
+                            <label>Sensitivity</label>
+                            <div class="flex items-center gap-2">
+                                <input v-model.number="box.sensitivity" type="range" min="1" max="10" step="1" class="flex-1" title="1: only big changes · 10: the slightest" />
+                                <span class="w-5 text-right">{{ box.sensitivity ?? 6 }}</span>
+                            </div>
+                        </template>
+                        <template v-else>
+                            <label>What it shows</label>
+                            <select :value="box.kind" class="h-7 rounded border border-border bg-background px-1" @change="setKind(box, ($event.target as HTMLSelectElement).value as TKind)">
+                                <option v-for="kind in KINDS" :key="kind.value" :value="kind.value">{{ kind.label }}</option>
+                            </select>
+                        </template>
                         <label>On the map</label>
                         <select v-model="box.pin" class="h-7 rounded border border-border bg-background px-1">
                             <option value="">Not pinned</option>
@@ -546,16 +646,17 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                                 <option v-for="system in places.systems" :key="system.id" :value="`s:${system.id}`">{{ system.name }}</option>
                             </optgroup>
                         </select>
-                        <label>Quality</label>
-                        <select v-model="box.quality" class="h-7 rounded border border-border bg-background px-1">
-                            <option v-for="(quality, key) in QUALITY" :key="key" :value="key">{{ quality.label }}</option>
-                        </select>
-                        <label>Hole watch</label>
-                        <select v-model="box.detect" class="h-7 rounded border border-border bg-background px-1">
-                            <option value="off">Off</option>
-                            <option value="flash">Jump flash (box on the hole)</option>
-                            <option value="rows">Ships in / out (box on the overview)</option>
-                        </select>
+                        <template v-if="roleOf(box) === 'camera'">
+                            <label>Quality</label>
+                            <select v-model="box.quality" class="h-7 rounded border border-border bg-background px-1">
+                                <option v-for="(quality, key) in QUALITY" :key="key" :value="key">{{ quality.label }}</option>
+                            </select>
+                            <label>Also watch</label>
+                            <select v-model="box.detect" class="h-7 rounded border border-border bg-background px-1" title="Watch areas do this better: draw a 👁 box over just the part to watch">
+                                <option value="off">Off (use watch areas)</option>
+                                <option v-for="item in WATCHES" :key="item.value" :value="item.value">{{ item.label }}</option>
+                            </select>
+                        </template>
                         <label>Listen</label>
                         <div v-if="clientAudio" class="flex items-center gap-2">
                             <input v-model="box.listen" type="checkbox" :disabled="!box.client" />
@@ -580,7 +681,7 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                             <span v-if="appAudioErrors[box.client ?? '']" />
                             <p v-if="appAudioErrors[box.client ?? '']" class="text-red-300">{{ appAudioErrors[box.client ?? ''] }}</p>
                         </template>
-                        <template v-if="share_links.length">
+                        <template v-if="share_links.length && roleOf(box) === 'camera'">
                             <label class="self-start">Guests</label>
                             <div class="flex flex-col gap-0.5">
                                 <label v-for="link in share_links" :key="link.id" class="flex items-center gap-2">
@@ -590,12 +691,12 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                             </div>
                         </template>
                     </div>
-                    <div v-if="runs.get(box.key) && box.detect === 'flash'" class="flex items-center gap-2">
+                    <div v-if="runs.get(box.key) && box.detect === 'flash'" class="flex items-center gap-2" title="How much it's changing right now; a jump should stand far above the usual">
                         <span class="text-muted-foreground">Movement</span>
                         <span class="h-1.5 flex-1 overflow-hidden rounded bg-muted"><span class="block h-full bg-fuchsia-500 transition-all" :style="{ width: `${levels[box.key] ?? 0}%` }" /></span>
                     </div>
                     <p v-if="runs.get(box.key)?.hits" class="text-purple-300">
-                        ⚡ {{ runs.get(box.key)!.kinds.activation ?? 0 }} activations · ＋{{ runs.get(box.key)!.kinds.appeared ?? 0 }} in · －{{ runs.get(box.key)!.kinds.vanished ?? 0 }} out · last {{ runs.get(box.key)!.lastHit }}
+                        {{ hitSummary(runs.get(box.key)!) }} · last {{ runs.get(box.key)!.lastHit }}
                     </p>
                 </div>
                 <div v-if="clientAudio" class="flex flex-col gap-1 rounded-md border border-border p-2 text-xs">

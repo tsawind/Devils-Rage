@@ -15,6 +15,8 @@ import { computed } from 'vue';
 const { mapSlug, canShare = false } = defineProps<{ mapSlug: string; canShare?: boolean }>();
 const { enabled, cameras, pipeActivity } = useCameras();
 const busy = computed(() => pipeActivity.value.size > 0);
+// Patch 62f: watch areas have no picture to show.
+const videoCameras = computed(() => cameras.value.filter((camera) => camera.kind !== 'watch'));
 
 /**
  * Patch 62c: the desktop app shows our pages itself and can't pick a window to share yet, so
@@ -44,19 +46,19 @@ const KIND_LABEL: Record<string, string> = { hole: 'Hole', structure: 'Structure
             <button
                 type="button"
                 class="relative flex items-center gap-1 rounded border border-border/50 bg-background p-1.5 text-muted-foreground hover:border-border hover:text-foreground"
-                :aria-label="`Cameras (${cameras.length} on)`"
-                :title="`Cameras (${cameras.length} on)`"
+                :aria-label="`Cameras (${videoCameras.length} on)`"
+                :title="`Cameras (${videoCameras.length} on)`"
             >
-                <Video class="size-4" :class="cameras.length ? 'text-purple-400' : ''" />
-                <span v-if="cameras.length" class="text-[11px] leading-none font-semibold text-purple-300">{{ cameras.length }}</span>
+                <Video class="size-4" :class="videoCameras.length ? 'text-purple-400' : ''" />
+                <span v-if="videoCameras.length" class="text-[11px] leading-none font-semibold text-purple-300">{{ videoCameras.length }}</span>
                 <span v-if="busy" class="absolute -top-0.5 -right-0.5 size-2 animate-ping rounded-full bg-fuchsia-500" />
             </button>
         </PopoverTrigger>
         <PopoverContent class="w-80 max-w-[95vw] p-3" align="start">
             <p class="mb-2 text-sm font-semibold">Cameras</p>
-            <div v-if="cameras.length" class="mb-3 flex max-h-64 flex-col gap-1 overflow-auto">
+            <div v-if="videoCameras.length" class="mb-3 flex max-h-64 flex-col gap-1 overflow-auto">
                 <button
-                    v-for="camera in cameras"
+                    v-for="camera in videoCameras"
                     :key="camera.id"
                     type="button"
                     class="flex items-center gap-2 rounded px-2 py-1 text-left text-xs hover:bg-muted"

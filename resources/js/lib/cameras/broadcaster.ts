@@ -11,8 +11,35 @@ import { publish, QUALITY, type TQuality, type TRelayPass, type TRtcSession } fr
  * playing EVE), so the beat comes from a small worker, which isn't slowed.
  */
 export type TBoxRect = { x: number; y: number; w: number; h: number };
-export type TDetectMode = 'off' | 'flash' | 'rows';
-export type THit = { kind: 'activation' | 'appeared' | 'vanished'; strength: number; heardBy: 'picture' | 'sound' | 'both'; at: Date; still: Blob | null };
+/**
+ * Patch 62f: what a box watches for. flash = the hole in space wobbles / flashes (a jump);
+ * rows = ships on the overview; scan = probe scanner results; local = pilots in local.
+ */
+export type TDetectMode = 'off' | 'flash' | 'rows' | 'scan' | 'local';
+export type THitKind = 'activation' | 'appeared' | 'vanished' | 'scan_new' | 'scan_gone' | 'local_in' | 'local_out';
+export type THit = { kind: THitKind; strength: number; heardBy: 'picture' | 'sound' | 'both'; at: Date; still: Blob | null };
+
+/** Row counting modes and what more / fewer rows means. */
+const ROW_KINDS: Partial<Record<TDetectMode, [THitKind, THitKind]>> = {
+    rows: ['appeared', 'vanished'],
+    scan: ['scan_new', 'scan_gone'],
+    local: ['local_in', 'local_out'],
+};
+
+/** Patch 62f: sensitivity 1 (only big changes) … 10 (the slightest): spreads above the usual. */
+export function spreadsFor(sensitivity: number): number {
+    return Math.max(2, 13 - Math.min(10, Math.max(1, Math.round(sensitivity))));
+}
+
+/** The part of `mask` that falls inside `crop`, in the crop's own 0–1 coordinates (null: none). */
+export function maskInCrop(mask: TBoxRect, crop: TBoxRect): TBoxRect | null {
+    const left = Math.max(mask.x, crop.x);
+    const top = Math.max(mask.y, crop.y);
+    const right = Math.min(mask.x + mask.w, crop.x + crop.w);
+    const bottom = Math.min(mask.y + mask.h, crop.y + crop.h);
+    if (right <= left || bottom <= top || crop.w <= 0 || crop.h <= 0) return null;
+    return { x: (left - crop.x) / crop.w, y: (top - crop.y) / crop.h, w: (right - left) / crop.w, h: (bottom - top) / crop.h };
+}
 
 const BEAT_MS = 50;
 
@@ -154,6 +181,8 @@ export class BoxCamera {
     quality: TQuality;
     detect: TDetectMode;
     listen: boolean;
+    /** Patch 62f: hide areas (whole-picture 0–1 coordinates), blacked out of the picture, stills and clips. */
+    masks: TBoxRect[] = [];
     paused = false;
     /** How much the picture is changing right now (for the meter), 0–100. */
     level = 0;
@@ -162,12 +191,19 @@ export class BoxCamera {
     /** Patch 62e: burned into the picture's corner with the EVE time ("V753 · Daisy → Alpha"), so clips say what and when. */
     label = '';
 
-    constructor(source: HTMLVideoElement, rect: TBoxRect, options: { quality: TQuality; detect: TDetectMode; listen: boolean; audio: MediaStreamTrack | null }) {
+    private sensitivity: number;
+
+    constructor(
+        source: HTMLVideoElement,
+        rect: TBoxRect,
+        options: { quality: TQuality; detect: TDetectMode; listen: boolean; audio: MediaStreamTrack | null; sensitivity?: number },
+    ) {
         this.source = source;
         this.rect = rect;
         this.quality = options.quality;
         this.detect = options.detect;
         this.listen = options.listen;
+        this.sensitivity = options.sensitivity ?? 6;
         this.draw = this.canvas.getContext('2d', { alpha: false }) as CanvasRenderingContext2D;
         this.lookDraw = this.look.getContext('2d', { willReadFrequently: true }) as CanvasRenderingContext2D;
         this.resize();
@@ -182,9 +218,22 @@ export class BoxCamera {
         const size = sendSize(this.rect, this.source.videoWidth || 1920, this.source.videoHeight || 1080, this.quality);
         this.canvas.width = size.width;
         this.canvas.height = size.height;
-        this.spike = new SpikeWatch();
+        this.spike = new SpikeWatch({ spreads: spreadsFor(this.sensitivity) });
         this.rows = new RowWatch();
         this.previous = null;
+    }
+
+    /** Patch 62f: a new sensitivity (1–10) starts the watch over with it. */
+    setSensitivity(sensitivity: number): void {
+        if (sensitivity === this.sensitivity) return;
+        this.sensitivity = sensitivity;
+        this.spike = new SpikeWatch({ spreads: spreadsFor(sensitivity) });
+    }
+
+    /** Patch 62f: a watch area isn't streamed, but keeps the last moments for a clip. */
+    record(): void {
+        this.recorder?.stop();
+        this.recorder = new ClipRecorder(this.stream);
     }
 
     async start(relay: TRelayPass): Promise<void> {
@@ -203,6 +252,7 @@ export class BoxCamera {
 
     private paint(now: number): void {
         if (this.source.videoWidth) this.draw.drawImage(this.source, ...this.crop(), 0, 0, this.canvas.width, this.canvas.height);
+        this.hide();
         this.stamp();
         this.track.requestFrame();
         this.lastFrame = now;
@@ -221,7 +271,7 @@ export class BoxCamera {
         this.lastLook = now;
         const [, , , cropHeight] = this.crop();
         const width = DETECT.width;
-        const height = this.detect === 'rows' ? Math.max(16, Math.min(256, Math.round(cropHeight / 4))) : DETECT.height;
+        const height = this.detect === 'flash' ? DETECT.height : Math.max(16, Math.min(256, Math.round(cropHeight / 4)));
         if (this.look.width !== width || this.look.height !== height) {
             this.look.width = width;
             this.look.height = height;
@@ -238,9 +288,11 @@ export class BoxCamera {
             const change = this.rows.push(countRows(grey, width, height));
             this.level = 0;
             // Patch 62e: one report, then quiet a while (a fleet landing is one event, not ten).
+            const [more, fewer]: [THitKind, THitKind] = ROW_KINDS[this.detect] ?? ['appeared', 'vanished'];
             if (change !== 0 && now >= this.rowsQuietUntil) {
                 this.rowsQuietUntil = now + DETECT.rowsCooldownMs;
-                this.found({ kind: change > 0 ? 'appeared' : 'vanished', strength: Math.min(100, Math.abs(change) * 25), heardBy: 'picture' });
+                // strength carries how many rows (25 a row), so the wall can say "+2".
+                this.found({ kind: change > 0 ? more : fewer, strength: Math.min(100, Math.abs(change) * 25), heardBy: 'picture' });
             }
         }
         this.previous = grey;
@@ -252,6 +304,16 @@ export class BoxCamera {
      */
     hear(): void {
         if (this.listen && !this.paused) this.found({ kind: 'activation', strength: 75, heardBy: 'sound' });
+    }
+
+    /** Patch 62f: hide areas, solid black (blur can still be read). */
+    private hide(): void {
+        if (!this.masks.length) return;
+        this.draw.fillStyle = '#000';
+        for (const mask of this.masks) {
+            const part = maskInCrop(mask, this.rect);
+            if (part) this.draw.fillRect(part.x * this.canvas.width, part.y * this.canvas.height, Math.ceil(part.w * this.canvas.width), Math.ceil(part.h * this.canvas.height));
+        }
     }
 
     /** The label and the EVE time (UTC) in the bottom-left corner, on a dark strip. */

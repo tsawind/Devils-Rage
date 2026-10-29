@@ -41,7 +41,8 @@ use Illuminate\Support\Str;
  */
 final class MapCamera extends Model
 {
-    public const array KINDS = ['hole', 'structure', 'other', 'pi', 'screen'];
+    /** Patch 62f: 'watch' = a watch area: not streamed, only reports what it sees (and keeps short clips). */
+    public const array KINDS = ['hole', 'structure', 'other', 'pi', 'screen', 'watch'];
 
     public const array QUALITIES = ['720p5', '1080p10', '1080p30'];
 

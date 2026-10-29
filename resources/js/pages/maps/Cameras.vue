@@ -49,7 +49,7 @@ const kindFilter = ref<'all' | 'hole' | 'other' | 'structure' | 'pi' | 'screen'>
 const showDismissed = ref(false);
 const openClip = ref<number | null>(null);
 
-const shown = computed(() => cameras.value.filter((camera) => kindFilter.value === 'all' || camera.kind === kindFilter.value));
+const shown = computed(() => cameras.value.filter((camera) => camera.kind !== 'watch' && (kindFilter.value === 'all' || camera.kind === kindFilter.value)));
 const cameraName = (id: number) => cameras.value.find((camera) => camera.id === id)?.name ?? 'A camera (now off)';
 const pipeName = (id: number | null) => (id === null ? null : (props.places.connections.find((pipe) => pipe.id === id)?.name ?? null));
 const pinOf = (camera: { map_connection_id: number | null; map_solarsystem_id: number | null; signature_id: number | null }) =>
@@ -60,7 +60,15 @@ const pinOf = (camera: { map_connection_id: number | null; map_solarsystem_id: n
 const eventPlace = (event: TCameraEvent) => pipeName(event.map_connection_id) ?? props.places.holes?.find((hole) => hole.id === event.signature_id)?.name ?? null;
 const listed = computed(() => events.value.filter((event) => showDismissed.value || event.state !== 'dismissed'));
 
-const KIND_TEXT: Record<string, string> = { activation: '⚡ Activation', appeared: '＋ Ship(s) appeared', vanished: '－ Ship(s) left' };
+const KIND_TEXT: Record<string, string> = {
+    activation: '⚡ Activation',
+    appeared: '＋ Ship(s) appeared',
+    vanished: '－ Ship(s) left',
+    scan_new: '＋ New scan result(s)',
+    scan_gone: '－ Scan result(s) gone',
+    local_in: '＋ Pilot(s) in local',
+    local_out: '－ Pilot(s) left local',
+};
 const SHIP_CLASSES = ['frigate', 'destroyer', 'cruiser', 'battlecruiser', 'battleship', 'industrial', 'capital'];
 
 function ago(iso: string): string {

@@ -33,7 +33,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 final class MapCameraEvent extends Model
 {
-    public const array KINDS = ['activation', 'appeared', 'vanished'];
+    /** Patch 62f: scan_new / scan_gone (probe scanner results), local_in / local_out (local members). */
+    public const array KINDS = ['activation', 'appeared', 'vanished', 'scan_new', 'scan_gone', 'local_in', 'local_out'];
 
     /**
      * @return BelongsTo<MapCamera, $this>

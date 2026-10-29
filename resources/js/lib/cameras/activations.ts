@@ -5,7 +5,7 @@
  */
 export const HOLD_CLOAK_SECONDS = 60;
 
-export type TCameraActivityKind = 'activation' | 'appeared' | 'vanished';
+export type TCameraActivityKind = 'activation' | 'appeared' | 'vanished' | 'scan_new' | 'scan_gone' | 'local_in' | 'local_out';
 
 export type TActivation = {
     eventId: number;

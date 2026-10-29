@@ -261,3 +261,17 @@ it('keeps the still but not the clip once clips fill their share of the disk', f
     expect($event->clip_path)->toBeNull()
         ->and($event->still_path)->not->toBeNull();
 });
+
+it('takes watch areas, which only report (probe scanner, local)', function () {
+    Event::fake([CameraActivityEvent::class, CamerasChangedEvent::class]);
+    $map = Map::factory()->create();
+    $owner = cameraPilot($map);
+    startCamera($map, $owner, ['kind' => 'watch', 'name' => 'Probe scanner']);
+    $watch = MapCamera::query()->sole();
+
+    actingAs($owner);
+    postJson(route('map-cameras.events.store', $watch), ['kind' => 'scan_new', 'strength' => 25])->assertCreated();
+    postJson(route('map-cameras.events.store', $watch), ['kind' => 'local_in'])->assertCreated();
+    postJson(route('map-cameras.events.store', $watch), ['kind' => 'teleported'])->assertUnprocessable();
+    expect(MapCameraEvent::query()->pluck('kind')->all())->toBe(['scan_new', 'local_in']);
+});

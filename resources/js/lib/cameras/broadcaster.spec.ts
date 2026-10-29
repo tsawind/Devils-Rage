@@ -1,4 +1,4 @@
-import { sendSize, stampTime } from '@/lib/cameras/broadcaster';
+import { maskInCrop, sendSize, spreadsFor, stampTime } from '@/lib/cameras/broadcaster';
 import { describe, expect, it } from 'vitest';
 
 describe('camera box send size', () => {
@@ -13,5 +13,15 @@ describe('camera box send size', () => {
 
     it('stamps EVE time (UTC) like the game clock', () => {
         expect(stampTime(new Date(Date.UTC(2026, 9, 29, 4, 7, 3)))).toBe('2026.10.29 04:07:03');
+    });
+
+    it('places a hide area inside a camera box, or nowhere when they don\'t meet', () => {
+        const part = maskInCrop({ x: 0.5, y: 0.5, w: 0.5, h: 0.5 }, { x: 0.25, y: 0.25, w: 0.5, h: 0.5 })!;
+        expect([part.x, part.y, part.w, part.h]).toEqual([0.5, 0.5, 0.5, 0.5]);
+        expect(maskInCrop({ x: 0, y: 0, w: 0.1, h: 0.1 }, { x: 0.5, y: 0.5, w: 0.2, h: 0.2 })).toBeNull();
+    });
+
+    it('turns sensitivity 1–10 into how far above the usual a change must be', () => {
+        expect([spreadsFor(1), spreadsFor(6), spreadsFor(10), spreadsFor(99)]).toEqual([12, 7, 3, 3]);
     });
 });
