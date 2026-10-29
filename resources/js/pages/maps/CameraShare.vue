@@ -49,6 +49,8 @@ type TRun = {
     state: 'starting' | 'live' | 'paused' | 'reconnecting' | 'failed';
     error: string | null;
     hits: number;
+    /** Patch 62e: hits by kind (activation / appeared / vanished). */
+    kinds: Record<string, number>;
     lastHit: string | null;
 };
 
@@ -281,6 +283,14 @@ function openInBrowser(): void {
 }
 
 // ---- Cameras -----------------------------------------------------------------------------
+/** Patch 62e: what's burned into the picture: the camera's name and where it's pinned. */
+function stampLabel(box: TBox): string {
+    const [kind, id] = box.pin.split(':');
+    const list = kind === 'h' ? props.places.holes : kind === 'c' ? props.places.connections : kind === 's' ? props.places.systems : [];
+    const where = (list ?? []).find((place) => place.id === Number(id))?.name;
+    return [box.name, where].filter(Boolean).join(' · ');
+}
+
 function pinFields(box: TBox): { map_connection_id: number | null; map_solarsystem_id: number | null; signature_id: number | null } {
     const [kind, id] = box.pin.split(':');
     if (kind === 'h') return { map_connection_id: null, map_solarsystem_id: null, signature_id: Number(id) };
@@ -307,7 +317,8 @@ async function startBox(box: TBox): Promise<void> {
         listen: box.listen,
         audio: box.kind === 'screen' ? audioTrack.value : null,
     });
-    const run: TRun = { camera: markRaw(camera), id: started.camera.id, state: 'starting', error: null, hits: 0, lastHit: null };
+    const run: TRun = { camera: markRaw(camera), id: started.camera.id, state: 'starting', error: null, hits: 0, kinds: {}, lastHit: null };
+    camera.label = stampLabel(box);
     runs.set(box.key, run);
     camera.onHit = (hit) => void report(box.key, hit);
     camera.onLost = () => void reconnect(box.key);
@@ -372,7 +383,7 @@ watch(
         for (const box of boxes.value) {
             const run = runs.get(box.key);
             if (!run) continue;
-            Object.assign(run.camera, { detect: box.detect, listen: box.listen });
+            Object.assign(run.camera, { detect: box.detect, listen: box.listen, label: stampLabel(box) });
             if (run.camera.quality !== box.quality) {
                 run.camera.quality = box.quality;
                 run.camera.resize();
@@ -393,7 +404,7 @@ watch(
 async function report(key: string, hit: THit): Promise<void> {
     const run = runs.get(key);
     if (!run) return;
-    runs.set(key, { ...run, hits: run.hits + 1, lastHit: `${hit.kind} · ${hit.heardBy} · ${hit.at.toLocaleTimeString()}` });
+    runs.set(key, { ...run, hits: run.hits + 1, kinds: { ...run.kinds, [hit.kind]: (run.kinds[hit.kind] ?? 0) + 1 }, lastHit: `${hit.kind} · ${hit.heardBy} · ${hit.at.toLocaleTimeString()}` });
     const created = await jsonFetch<{ id: number }>(MapCameraEventController.store(run.id).url, 'POST', {
         kind: hit.kind,
         strength: hit.strength,
@@ -401,7 +412,9 @@ async function report(key: string, hit: THit): Promise<void> {
         happened_at: hit.at.toISOString(),
     });
     if (!created) return;
-    const clip = await run.camera.clip();
+    // Patch 62e: clips only for activations (ships in / out get the still), so a busy
+    // overview overnight can't fill the server.
+    const clip = hit.kind === 'activation' ? await run.camera.clip() : null;
     const files = new FormData();
     if (clip) files.append('clip', clip, 'clip.webm');
     if (hit.still) files.append('still', hit.still, 'still.jpg');
@@ -581,7 +594,9 @@ const STATE_LABEL: Record<TRun['state'], string> = { starting: 'Starting…', li
                         <span class="text-muted-foreground">Movement</span>
                         <span class="h-1.5 flex-1 overflow-hidden rounded bg-muted"><span class="block h-full bg-fuchsia-500 transition-all" :style="{ width: `${levels[box.key] ?? 0}%` }" /></span>
                     </div>
-                    <p v-if="runs.get(box.key)?.hits" class="text-purple-300">⚡ {{ runs.get(box.key)!.hits }} seen · last {{ runs.get(box.key)!.lastHit }}</p>
+                    <p v-if="runs.get(box.key)?.hits" class="text-purple-300">
+                        ⚡ {{ runs.get(box.key)!.kinds.activation ?? 0 }} activations · ＋{{ runs.get(box.key)!.kinds.appeared ?? 0 }} in · －{{ runs.get(box.key)!.kinds.vanished ?? 0 }} out · last {{ runs.get(box.key)!.lastHit }}
+                    </p>
                 </div>
                 <div v-if="clientAudio" class="flex flex-col gap-1 rounded-md border border-border p-2 text-xs">
                     <p class="font-semibold">Activation sound (app)</p>

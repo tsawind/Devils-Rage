@@ -34,9 +34,14 @@ export const DETECT = {
     /** …by this much grey. */
     rowContrast: 40,
     /** Text rows thinner than this (pixels in the grey picture of the box) are noise. */
-    minRowHeight: 1,
-    /** A new row count has to hold for this many frames. */
-    rowsSteadyFrames: 4,
+    minRowHeight: 2,
+    /** A gap this thin inside a row (between two lines of one letter) doesn't split it. */
+    rowGap: 1,
+    /** Patch 62e: a new row count has to hold this long (1.5 s at 8 looks a second): numbers
+     *  changing in the distance / speed columns made the count flicker ("161 seen"). */
+    rowsSteadyFrames: 12,
+    /** After reporting ships in / out, wait this long before the next report. */
+    rowsCooldownMs: 8000,
     /** Sound: analyser size and how close a sound must be to the learned one (0–1). */
     fftSize: 2048,
     soundMatch: 0.82,
@@ -115,19 +120,27 @@ export class SpikeWatch {
 export function countRows(grey: ArrayLike<number>, width: number, height: number): number {
     let rows = 0;
     let run = 0;
+    let gap = 0;
+    const close = () => {
+        if (run >= DETECT.minRowHeight) rows++;
+        run = 0;
+        gap = 0;
+    };
     for (let y = 0; y < height; y++) {
         let busy = 0;
         for (let x = 1; x < width; x++) {
             if (Math.abs(grey[y * width + x] - grey[y * width + x - 1]) >= DETECT.rowContrast) busy++;
         }
         if (busy / Math.max(1, width - 1) >= DETECT.rowBusyShare) {
-            run++;
+            run += gap + 1;
+            gap = 0;
+        } else if (run > 0 && gap < DETECT.rowGap) {
+            gap++;
         } else {
-            if (run >= DETECT.minRowHeight) rows++;
-            run = 0;
+            close();
         }
     }
-    if (run >= DETECT.minRowHeight) rows++;
+    close();
     return rows;
 }
 

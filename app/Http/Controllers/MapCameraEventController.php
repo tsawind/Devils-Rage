@@ -57,7 +57,7 @@ final class MapCameraEventController extends Controller
             'signature_id' => $mapCamera->signature_id,
             'kind' => $data['kind'],
             'strength' => (int) ($data['strength'] ?? 0),
-            'clip_path' => $clip !== null ? $clip->storeAs($folder, Str::uuid()->toString().'.webm', self::DISK) : null,
+            'clip_path' => $clip !== null && self::roomForClips() ? $clip->storeAs($folder, Str::uuid()->toString().'.webm', self::DISK) : null,
             'still_path' => $still !== null ? $still->storeAs($folder, Str::uuid()->toString().'.jpg', self::DISK) : null,
             'state' => 'new',
             'happened_at' => $happened,
@@ -98,7 +98,7 @@ final class MapCameraEventController extends Controller
         $folder = 'camera-events/'.$camera->map_id;
         foreach (['clip' => 'webm', 'still' => 'jpg'] as $which => $extension) {
             $file = $request->file($which);
-            if ($file === null) {
+            if ($file === null || ($which === 'clip' && ! self::roomForClips())) {
                 continue;
             }
             $column = $which.'_path';
@@ -112,6 +112,20 @@ final class MapCameraEventController extends Controller
         CamerasChangedEvent::dispatch($camera->map_id);
 
         return response()->json(['id' => $mapCameraEvent->id]);
+    }
+
+    /**
+     * Patch 62e: whether clips still fit under cameras.max_storage_mb (all maps together).
+     */
+    private static function roomForClips(): bool
+    {
+        $disk = Storage::disk(self::DISK);
+        $used = 0;
+        foreach ($disk->allFiles('camera-events') as $file) {
+            $used += $disk->size($file);
+        }
+
+        return $used < (int) config('cameras.max_storage_mb') * 1024 * 1024;
     }
 
     /**

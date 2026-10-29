@@ -8,10 +8,12 @@ rtsp: no
 rtmp: no
 hls: no
 srt: no
+# MoQ (Media over QUIC) is on by default in newer MediaMTX; we don't use it.
+moq: no
 
 webrtc: yes
 webrtcAddress: :8889
-webrtcAllowOrigin: '*'
+webrtcAllowOrigins: ['*']
 # Video goes over port 8189: UDP first, TCP when a home network blocks UDP.
 webrtcLocalUDPAddress: :8189
 webrtcLocalTCPAddress: :8189

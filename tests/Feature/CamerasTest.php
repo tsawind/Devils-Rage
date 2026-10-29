@@ -239,3 +239,25 @@ it('answers the relay yes with an empty body, whichever way the browser sent the
     postJson(route('api.cameras.relay-auth'), ['query' => 'pass='.urlencode($pass)] + $ask)->assertOk();
     postJson(route('api.cameras.relay-auth'), $ask)->assertUnauthorized()->assertJsonPath('error', 'no pass');
 });
+
+it('keeps the still but not the clip once clips fill their share of the disk', function () {
+    Storage::fake('local');
+    Event::fake([CameraActivityEvent::class, CamerasChangedEvent::class]);
+    config(['cameras.max_storage_mb' => 1]);
+    Storage::disk('local')->put('camera-events/1/old.webm', str_repeat('x', 1024 * 1024 + 1));
+    $map = Map::factory()->create();
+    $owner = cameraPilot($map);
+    startCamera($map, $owner);
+    $camera = MapCamera::query()->sole();
+
+    actingAs($owner);
+    $id = postJson(route('map-cameras.events.store', $camera), ['kind' => 'activation'])->assertCreated()->json('id');
+    postJson(route('map-camera-events.attach', $id), [
+        'clip' => UploadedFile::fake()->create('clip.webm', 100, 'video/webm'),
+        'still' => UploadedFile::fake()->image('still.jpg'),
+    ])->assertOk();
+
+    $event = MapCameraEvent::query()->findOrFail($id);
+    expect($event->clip_path)->toBeNull()
+        ->and($event->still_path)->not->toBeNull();
+});

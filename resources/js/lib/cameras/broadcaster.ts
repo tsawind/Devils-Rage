@@ -36,6 +36,12 @@ export function startBeat(onBeat: (now: number) => void): () => void {
     return stop;
 }
 
+/** EVE time: UTC, 2026.10.29 04:27:13 like the game's own clock. */
+export function stampTime(when: Date): string {
+    const two = (value: number) => String(value).padStart(2, '0');
+    return `${when.getUTCFullYear()}.${two(when.getUTCMonth() + 1)}.${two(when.getUTCDate())} ${two(when.getUTCHours())}:${two(when.getUTCMinutes())}:${two(when.getUTCSeconds())}`;
+}
+
 /** The size the box is sent at: its own size, shrunk to fit the quality, even numbers. */
 export function sendSize(rect: TBoxRect, sourceWidth: number, sourceHeight: number, quality: TQuality): { width: number; height: number } {
     const width = Math.max(2, rect.w * sourceWidth);
@@ -138,6 +144,7 @@ export class BoxCamera {
     private recorder: ClipRecorder | null = null;
     private lastFrame = 0;
     private lastLook = 0;
+    private rowsQuietUntil = 0;
     private previous: Uint8Array | null = null;
     private spike = new SpikeWatch();
     private rows = new RowWatch();
@@ -152,6 +159,8 @@ export class BoxCamera {
     level = 0;
     onHit: (hit: THit) => void = () => undefined;
     onLost: () => void = () => undefined;
+    /** Patch 62e: burned into the picture's corner with the EVE time ("V753 · Daisy → Alpha"), so clips say what and when. */
+    label = '';
 
     constructor(source: HTMLVideoElement, rect: TBoxRect, options: { quality: TQuality; detect: TDetectMode; listen: boolean; audio: MediaStreamTrack | null }) {
         this.source = source;
@@ -194,6 +203,7 @@ export class BoxCamera {
 
     private paint(now: number): void {
         if (this.source.videoWidth) this.draw.drawImage(this.source, ...this.crop(), 0, 0, this.canvas.width, this.canvas.height);
+        this.stamp();
         this.track.requestFrame();
         this.lastFrame = now;
     }
@@ -227,8 +237,11 @@ export class BoxCamera {
         } else {
             const change = this.rows.push(countRows(grey, width, height));
             this.level = 0;
-            if (change > 0) this.found({ kind: 'appeared', strength: Math.min(100, change * 25), heardBy: 'picture' });
-            if (change < 0) this.found({ kind: 'vanished', strength: Math.min(100, -change * 25), heardBy: 'picture' });
+            // Patch 62e: one report, then quiet a while (a fleet landing is one event, not ten).
+            if (change !== 0 && now >= this.rowsQuietUntil) {
+                this.rowsQuietUntil = now + DETECT.rowsCooldownMs;
+                this.found({ kind: change > 0 ? 'appeared' : 'vanished', strength: Math.min(100, Math.abs(change) * 25), heardBy: 'picture' });
+            }
         }
         this.previous = grey;
     }
@@ -239,6 +252,21 @@ export class BoxCamera {
      */
     hear(): void {
         if (this.listen && !this.paused) this.found({ kind: 'activation', strength: 75, heardBy: 'sound' });
+    }
+
+    /** The label and the EVE time (UTC) in the bottom-left corner, on a dark strip. */
+    private stamp(): void {
+        const time = `${stampTime(new Date())} EVE`;
+        const text = this.label ? `${this.label} · ${time}` : time;
+        const size = Math.max(11, Math.min(18, Math.round(this.canvas.height / 26)));
+        this.draw.font = `600 ${size}px ui-monospace, Consolas, monospace`;
+        const width = this.draw.measureText(text).width;
+        const pad = Math.round(size * 0.4);
+        this.draw.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        this.draw.fillRect(0, this.canvas.height - size - pad * 2, width + pad * 2, size + pad * 2);
+        this.draw.fillStyle = '#f5d0fe';
+        this.draw.textBaseline = 'bottom';
+        this.draw.fillText(text, pad, this.canvas.height - pad);
     }
 
     /** Picture and sound within a moment of each other are one hit ("both"). */

@@ -10,6 +10,7 @@ import { useOnClient } from '@/composables/useOnClient';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SeoHead from '@/layouts/SeoHead.vue';
 import { activityLabel } from '@/lib/cameras/activations';
+import { stampTime } from '@/lib/cameras/broadcaster';
 import { jsonFetch } from '@/lib/jsonFetch';
 import { playActivationTone } from '@/lib/rageSound';
 import { useEcho } from '@laravel/echo-vue';
@@ -162,7 +163,7 @@ const gridClass = computed(() => GRID[columns.value] ?? GRID[2]);
                     <div class="flex items-center gap-2">
                         <span class="font-semibold" :class="event.kind === 'activation' ? 'text-fuchsia-300' : 'text-neutral-200'">{{ KIND_TEXT[event.kind] ?? event.kind }}</span>
                         <span class="truncate text-muted-foreground">{{ cameraName(event.map_camera_id) }}</span>
-                        <span class="ml-auto shrink-0 text-muted-foreground" :title="new Date(event.happened_at).toLocaleString()">{{ ago(event.happened_at) }}</span>
+                        <span class="ml-auto shrink-0 text-muted-foreground" :title="new Date(event.happened_at).toLocaleString()">{{ stampTime(new Date(event.happened_at)).slice(11) }} EVE · {{ ago(event.happened_at) }}</span>
                     </div>
                     <p v-if="eventPlace(event)" class="text-purple-300">{{ eventPlace(event) }}</p>
                     <button v-if="event.still_url && openClip !== event.id" type="button" class="relative overflow-hidden rounded" title="Play the clip" @click="openClip = event.id">

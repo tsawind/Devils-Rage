@@ -37,7 +37,9 @@ describe('hole watch: picture', () => {
 
 describe('hole watch: overview rows', () => {
     it('counts rows of text', () => {
-        expect(countRows(overview(40, 30, [3, 4, 10, 11, 20]), 40, 30)).toBe(3);
+        expect(countRows(overview(40, 30, [3, 4, 10, 11, 20, 21]), 40, 30)).toBe(3);
+        // A one-pixel gap inside a row (two lines of the same text) is still one row; a single stray line is noise.
+        expect(countRows(overview(40, 30, [3, 5, 6, 15]), 40, 30)).toBe(1);
         expect(countRows(overview(40, 30, []), 40, 30)).toBe(0);
     });
 

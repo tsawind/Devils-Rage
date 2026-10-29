@@ -23,4 +23,8 @@ return [
 
     /* Biggest clip / still a camera may upload (kilobytes). */
     'max_clip_kb' => 12_000,
+
+    /* Patch 62e: all clips together may use this much of the server's disk; past it, events
+       keep their still but not the clip (the disk is shared with the mapper and SeAT). */
+    'max_storage_mb' => (int) env('CAMERAS_MAX_STORAGE_MB', 1500),
 ];
