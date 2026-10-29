@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import MapCameraController from '@/actions/App/Http/Controllers/MapCameraController';
-import { jsonFetch } from '@/lib/jsonFetch';
 import { watch as watchRelay, type TRelayPass, type TRtcSession } from '@/lib/cameras/rtc';
+import { driverHeaders } from '@/lib/windowDriver';
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 /**
@@ -11,7 +11,9 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 const { cameraId, muted = true } = defineProps<{ cameraId: number; muted?: boolean }>();
 
 const video = ref<HTMLVideoElement | null>(null);
-const state = ref<'connecting' | 'live' | 'lost' | 'refused'>('connecting');
+// Patch 62i: 'off' is the mapper saying no (the camera stopped, or not yours to watch);
+// 'busy' is the mapper not answering (e.g. while it updates), which used to read as "not allowed".
+const state = ref<'connecting' | 'live' | 'lost' | 'off' | 'busy'>('connecting');
 let session: TRtcSession | null = null;
 let retry: ReturnType<typeof setTimeout> | null = null;
 let closed = false;
@@ -19,13 +21,14 @@ let closed = false;
 async function connect(): Promise<void> {
     if (closed) return;
     state.value = 'connecting';
-    const relay = await jsonFetch<TRelayPass>(MapCameraController.watch(cameraId).url, 'POST');
+    const asked = await askForPass();
     if (closed) return;
-    if (!relay) {
-        state.value = 'refused';
-        retry = setTimeout(connect, 15_000);
+    if (!('url' in asked)) {
+        state.value = asked.refused ? 'off' : 'busy';
+        retry = setTimeout(connect, asked.refused ? 15_000 : 5000);
         return;
     }
+    const relay = asked;
     try {
         session = await watchRelay(
             relay,
@@ -44,6 +47,26 @@ async function connect(): Promise<void> {
     } catch {
         state.value = 'lost';
         retry = setTimeout(connect, 5000);
+    }
+}
+
+function xsrfToken(): string {
+    const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+}
+
+/** The watch pass, or why not: refused (403 / 404) or no answer (anything else). */
+async function askForPass(): Promise<TRelayPass | { refused: boolean }> {
+    try {
+        const response = await fetch(MapCameraController.watch(cameraId).url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': xsrfToken(), ...driverHeaders() },
+        });
+        if (response.ok) return (await response.json()) as TRelayPass;
+        return { refused: response.status === 403 || response.status === 404 };
+    } catch {
+        return { refused: false };
     }
 }
 
@@ -86,7 +109,8 @@ defineExpose({ pictureInPicture, video });
         <div v-if="state !== 'live'" class="absolute inset-0 flex items-center justify-center text-xs text-neutral-400">
             <span v-if="state === 'connecting'" class="animate-pulse">Connecting…</span>
             <span v-else-if="state === 'lost'" class="animate-pulse">Lost the picture, trying again…</span>
-            <span v-else>Not allowed to watch this one (or it just stopped)</span>
+            <span v-else-if="state === 'busy'" class="animate-pulse">The mapper isn't answering (updating?), trying again…</span>
+            <span v-else class="px-4 text-center">This camera is off: its share window closed or stopped sending. Trying again…</span>
         </div>
     </div>
 </template>
