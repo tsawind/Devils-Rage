@@ -168,6 +168,8 @@ case "$ACTION" in
             echo "== Through Traefik to the relay and back to the mapper (expect 401: relay up, asked the mapper, refused)"
             curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/sdp' --data 'v=0' "https://$domain/rtc/cam-checkcheckcheckcheckcheck/whep"
         fi
+        echo "== Hole watch, last 24 h (counts only)"
+        "${C[@]}" exec -T app php artisan tinker --execute="\$e = App\\Models\\MapCameraEvent::query()->where('expires_at', '>', now()); echo 'events: ', (clone \$e)->count(), PHP_EOL; foreach ((clone \$e)->selectRaw('kind, count(*) as n, sum(clip_path is not null) as clips, min(happened_at) as first, max(happened_at) as last')->groupBy('kind')->get() as \$r) { echo \$r->kind, ': ', \$r->n, ' (', \$r->clips, ' with clip) ', \$r->first, ' .. ', \$r->last, PHP_EOL; } \$b = 0; foreach (Illuminate\\Support\\Facades\\Storage::disk('local')->allFiles('camera-events') as \$f) { \$b += Illuminate\\Support\\Facades\\Storage::disk('local')->size(\$f); } echo 'clip storage: ', round(\$b / 1048576), ' MB', PHP_EOL;" 2>&1 | tail -6
         echo "== Why the mapper refused cameras (last 8)"
         "${C[@]}" exec -T app sh -c 'ls -t storage/logs/*.log 2>/dev/null | head -2 | xargs -r grep -h "Cameras relay refused" 2>/dev/null | tail -n 8' | mask | cut -c1-300 || echo "(none)"
         echo "== Relay log (last 25 lines, addresses masked)"
