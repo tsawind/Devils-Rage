@@ -3,7 +3,7 @@ import MapCameraController from '@/actions/App/Http/Controllers/MapCameraControl
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useCameras } from '@/composables/useCameras';
 import { openCameraPreview } from '@/lib/cameras/preview';
-import { appHasCameras } from '@/lib/cameras/appAudio';
+import { appHasCameras, openAppCameraWindow } from '@/lib/cameras/appAudio';
 import { appSignal, inDesktopApp } from '@/lib/desktopApp';
 import { Video } from 'lucide-vue-next';
 import { computed } from 'vue';
@@ -20,9 +20,16 @@ const busy = computed(() => pipeActivity.value.size > 0);
  * Patch 62c: the desktop app shows our pages itself and can't pick a window to share yet, so
  * there "Share a camera" (and the wall, so the map stays) open in the normal browser (the app's open-in-browser signal).
  */
-// Patch 62d: an app that has its own cameras window (and hears each client) keeps them.
-const inApp = inDesktopApp() && !appHasCameras();
+// Patch 62d: an app with its own cameras window (and per-client sound) opens them there; an
+// older app sends them to the browser.
+const appWindow = appHasCameras();
+const inApp = inDesktopApp() && !appWindow;
 function inBrowser(event: MouseEvent, path: string): void {
+    if (appWindow) {
+        event.preventDefault();
+        openAppCameraWindow(path);
+        return;
+    }
     if (!inApp) return;
     event.preventDefault();
     appSignal(`open?url=${encodeURIComponent(new URL(path, window.location.origin).href)}`);

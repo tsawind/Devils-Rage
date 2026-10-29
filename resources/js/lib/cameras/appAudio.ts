@@ -6,14 +6,20 @@ import { ref } from 'vue';
  * with Windows' process loopback and listens for the activation sound there). The page asks
  * through app signals and hears back through window events; nothing here records anything.
  */
-type TAppWithAudio = { clientAudio?: boolean; cameras?: boolean };
+type TAppWithAudio = { clientAudio?: boolean; cameras?: boolean | number };
 
 export function appHasClientAudio(): boolean {
     return Boolean((desktopApp() as TAppWithAudio | null)?.clientAudio);
 }
 
+/** The app opens camera pages in a window of its own when asked (app 0.1.8-dev.55 and later). */
 export function appHasCameras(): boolean {
-    return Boolean((desktopApp() as TAppWithAudio | null)?.cameras);
+    return (desktopApp() as TAppWithAudio | null)?.cameras === 2;
+}
+
+/** Asks the app for its cameras / camera wall window. */
+export function openAppCameraWindow(path: string): void {
+    appSignal(`cameras?url=${encodeURIComponent(new URL(path, window.location.origin).href)}`);
 }
 
 /** EVE clients open on this PC (character names). */
