@@ -9,6 +9,11 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
  * video; tries again on its own when the link drops. Muted unless asked.
  */
 const { cameraId, muted = true } = defineProps<{ cameraId: number; muted?: boolean }>();
+// Patch 62i: the picture's own size (for cropping windows).
+const emit = defineEmits<{ size: [width: number, height: number] }>();
+function reportSize(): void {
+    if (video.value && video.value.videoWidth > 0) emit('size', video.value.videoWidth, video.value.videoHeight);
+}
 
 const video = ref<HTMLVideoElement | null>(null);
 // Patch 62i: 'off' is the mapper saying no (the camera stopped, or not yours to watch);
@@ -105,7 +110,7 @@ defineExpose({ pictureInPicture, video });
 
 <template>
     <div class="relative size-full bg-black">
-        <video ref="video" class="size-full object-contain" autoplay playsinline :muted="muted" />
+        <video ref="video" class="size-full object-contain" autoplay playsinline :muted="muted" @loadedmetadata="reportSize" @resize="reportSize" />
         <div v-if="state !== 'live'" class="absolute inset-0 flex items-center justify-center text-xs text-neutral-400">
             <span v-if="state === 'connecting'" class="animate-pulse">Connecting…</span>
             <span v-else-if="state === 'lost'" class="animate-pulse">Lost the picture, trying again…</span>

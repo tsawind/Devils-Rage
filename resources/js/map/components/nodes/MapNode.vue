@@ -216,9 +216,11 @@ onBeforeUnmount(() => {
         class="pointer-events-none absolute hover:z-20 data-[active=true]:z-10"
         :data-active="isActive"
     >
-        <div class="pointer-events-auto origin-top-left" @pointerenter="handlePointerEnter" @pointerleave="handlePointerLeave" @click.capture="handlePopoutClick">
+        <!-- Patch 62i: only the scaled card takes the mouse. This wrapper keeps the card's 100% size,
+             so below 100% zoom it covered the systems next to it (the active one is on top). -->
+        <div class="pointer-events-none origin-top-left" @pointerenter="handlePointerEnter" @pointerleave="handlePointerLeave" @click.capture="handlePopoutClick">
             <div
-                class="group relative origin-top-left"
+                class="group pointer-events-auto relative origin-top-left"
                 :style="{
                     scale: store.scale.value,
                 }"
