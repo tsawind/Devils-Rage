@@ -293,3 +293,15 @@ it('puts the hole a watching camera is pinned to on Watching, and keeps it there
     expect($pipe->mass_watched_at)->not->toBeNull()
         ->and($pipe->mass_watched_by_name)->not->toBeNull();
 });
+
+it('remembers that a hit came while the pilot was playing that client', function () {
+    Event::fake([CameraActivityEvent::class, CamerasChangedEvent::class]);
+    $map = Map::factory()->create();
+    $owner = cameraPilot($map);
+    startCamera($map, $owner, ['kind' => 'watch', 'name' => 'Overview']);
+    $watch = MapCamera::query()->sole();
+
+    actingAs($owner);
+    postJson(route('map-cameras.events.store', $watch), ['kind' => 'appeared', 'while_playing' => true])->assertCreated();
+    getJson(route('maps.cameras.index', $map))->assertOk()->assertJsonPath('events.0.while_playing', true);
+});

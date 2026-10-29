@@ -399,6 +399,7 @@ final class MapCameraController extends Controller
             'signature_id' => $event->signature_id,
             'kind' => $event->kind,
             'strength' => $event->strength,
+            'while_playing' => $event->while_playing,
             'state' => $event->state,
             'ship_class' => $event->ship_class,
             'side' => $event->side,

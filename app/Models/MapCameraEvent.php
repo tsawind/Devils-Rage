@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $signature_id Patch 62b: the unjumped hole the camera watched
  * @property string $kind activation / appeared / vanished
  * @property int $strength 0-100, how sure the camera was
+ * @property bool $while_playing Patch 62h: seen while the pilot was playing that client
  * @property string|null $clip_path
  * @property string|null $still_path
  * @property string $state new / confirmed / dismissed
@@ -50,6 +51,7 @@ final class MapCameraEvent extends Model
     protected function casts(): array
     {
         return [
+            'while_playing' => 'boolean',
             'strength' => 'integer',
             'happened_at' => 'immutable_datetime',
             'expires_at' => 'immutable_datetime',

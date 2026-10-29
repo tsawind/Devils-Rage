@@ -170,7 +170,7 @@ const gridClass = computed(() => GRID[columns.value] ?? GRID[2]);
                 <div v-for="event in listed" :key="event.id" class="flex flex-col gap-1.5 rounded-md border p-2 text-xs" :class="event.state === 'dismissed' ? 'border-border opacity-50' : event.kind === 'activation' ? 'border-purple-800' : 'border-border'">
                     <div class="flex items-center gap-2">
                         <span class="font-semibold" :class="event.kind === 'activation' ? 'text-fuchsia-300' : 'text-neutral-200'">{{ KIND_TEXT[event.kind] ?? event.kind }}</span>
-                        <span class="truncate text-muted-foreground">{{ cameraName(event.map_camera_id) }}</span>
+                        <span class="truncate text-muted-foreground">{{ cameraName(event.map_camera_id) }}<template v-if="event.while_playing"> · while playing</template></span>
                         <span class="ml-auto shrink-0 text-muted-foreground" :title="new Date(event.happened_at).toLocaleString()">{{ stampTime(new Date(event.happened_at)).slice(11) }} EVE · {{ ago(event.happened_at) }}</span>
                     </div>
                     <p v-if="eventPlace(event)" class="text-purple-300">{{ eventPlace(event) }}</p>

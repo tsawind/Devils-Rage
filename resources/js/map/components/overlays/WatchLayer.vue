@@ -428,7 +428,7 @@ const mass = (kg: number) => formatMass(kg);
                     </div>
                     <div v-if="pendingJump(item)" class="mt-0.5 font-semibold text-fuchsia-200">⚡ Jump seen {{ eveTime(pendingJump(item)!.happened_at) }}: click a ship class above to log it</div>
                     <div v-for="event in recentCamera(item)" :key="event.id" class="mt-0.5 flex items-center gap-1" :class="event.kind === 'activation' ? 'text-fuchsia-200' : 'text-neutral-300'">
-                        <span class="truncate">{{ CAMERA_TEXT[event.kind] ?? event.kind }}</span>
+                        <span class="truncate" :title="event.while_playing ? 'Seen while the pilot was playing that client' : undefined">{{ CAMERA_TEXT[event.kind] ?? event.kind }}<template v-if="event.while_playing"> (playing)</template></span>
                         <span class="shrink-0 text-neutral-500">{{ eveTime(event.happened_at) }}</span>
                         <span v-if="event.state === 'confirmed'" class="shrink-0 text-emerald-400" :title="event.ship_class ?? ''">✓ logged</span>
                         <a v-if="event.clip_url || event.still_url" :href="event.clip_url ?? event.still_url ?? undefined" target="_blank" rel="noopener" class="ml-auto shrink-0 text-purple-300 hover:underline">{{ event.clip_url ? 'clip' : 'still' }}</a>

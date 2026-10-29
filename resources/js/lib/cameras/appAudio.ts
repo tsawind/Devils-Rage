@@ -33,6 +33,16 @@ const listening = new Set<string>();
 const heardHandlers = new Set<(character: string) => void>();
 const learnedHandlers = new Set<(character: string) => void>();
 
+/** Patch 62h: the client in front and how long since the last mouse / key input (from the app). */
+export const appActive = ref<{ character: string | null; idleMs: number; at: number }>({ character: null, idleMs: Number.POSITIVE_INFINITY, at: 0 });
+/** You count as playing a client for this long after your last input in it. */
+export const PLAYING_MS = 3000;
+/** Whether you're playing this client right now. */
+export function playingClient(character: string | undefined, now = Date.now()): boolean {
+    const active = appActive.value;
+    return Boolean(character) && active.character === character && now - active.at < 2000 && active.idleMs < PLAYING_MS;
+}
+
 let wired = false;
 function wire(): void {
     if (wired || typeof window === 'undefined') return;
@@ -53,6 +63,10 @@ function wire(): void {
     window.addEventListener('devils-rage-app:learned', (event) => {
         const character = detail<{ character: string }>(event)?.character;
         if (character) learnedHandlers.forEach((handler) => handler(character));
+    });
+    window.addEventListener('devils-rage-app:active', (event) => {
+        const { character, idleMs } = detail<{ character: string | null; idleMs: number }>(event) ?? {};
+        appActive.value = { character: character ?? null, idleMs: Number(idleMs ?? Number.POSITIVE_INFINITY), at: Date.now() };
     });
     window.addEventListener('devils-rage-app:audio-error', (event) => {
         const { character, message } = detail<{ character: string; message: string }>(event) ?? {};

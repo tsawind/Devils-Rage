@@ -6,7 +6,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import SeoHead from '@/layouts/SeoHead.vue';
 import { BoxCamera, SoundEar, startBeat, type TBoxRect, type TDetectMode, type THit } from '@/lib/cameras/broadcaster';
 import { QUALITY, type TQuality, type TRelayPass } from '@/lib/cameras/rtc';
-import { appClients, appAudioErrors, appHasClientAudio, appLevels, learnFromClient, listenToClients, onAppHeard, onAppLearned, refreshAppClients } from '@/lib/cameras/appAudio';
+import { appActive, appClients, appAudioErrors, appHasClientAudio, appLevels, learnFromClient, listenToClients, onAppHeard, onAppLearned, playingClient, refreshAppClients } from '@/lib/cameras/appAudio';
 import { appSignal, inDesktopApp } from '@/lib/desktopApp';
 import { formFetch, jsonFetch } from '@/lib/jsonFetch';
 import { Monitor, Play, Pause, Plus, Square, Trash2, Video } from 'lucide-vue-next';
@@ -497,11 +497,12 @@ watch(
 async function report(key: string, hit: THit): Promise<void> {
     const run = runs.get(key);
     if (!run) return;
-    runs.set(key, { ...run, hits: run.hits + 1, kinds: { ...run.kinds, [hit.kind]: (run.kinds[hit.kind] ?? 0) + 1 }, lastHit: `${hit.kind} · ${hit.heardBy} · ${hit.at.toLocaleTimeString()}` });
+    runs.set(key, { ...run, hits: run.hits + 1, kinds: { ...run.kinds, [hit.kind]: (run.kinds[hit.kind] ?? 0) + 1 }, lastHit: `${hit.kind} · ${hit.heardBy}${hit.playing ? ' · while playing' : ''} · ${hit.at.toLocaleTimeString()}` });
     const created = await jsonFetch<{ id: number }>(MapCameraEventController.store(run.id).url, 'POST', {
         kind: hit.kind,
         strength: hit.strength,
         heard_by: hit.heardBy,
+        while_playing: Boolean(hit.playing),
         happened_at: hit.at.toISOString(),
     });
     if (!created) return;
@@ -520,6 +521,10 @@ let lastLevels = 0;
 let lastHeartbeat = 0;
 const stopBeat = startBeat((now) => {
     const heard = ear.value?.listen(now) ?? false;
+    // Patch 62h: the client you're playing wants stronger proof (it still watches).
+    if (clientAudio) {
+        for (const box of boxes.value) runs.get(box.key)?.camera.setPlaying(playingClient(box.client));
+    }
     const listening = [...runs.values()].filter((run) => run.camera.listen).length;
     for (const run of runs.values()) run.camera.beat(now, heard, listening <= 1);
     if (now - lastLevels > 250) {
@@ -592,6 +597,7 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                     >
                         <button type="button" class="flex items-center gap-1" @click="currentKey = item.key">
                             <span v-if="liveIn(item)" class="size-1.5 rounded-full bg-red-500" />{{ item.client }}<span v-if="liveIn(item)" class="font-normal text-red-400">· {{ liveIn(item) }} on</span>
+                            <span v-if="appActive.character === item.client && appActive.idleMs < 3000" class="font-normal text-amber-300" title="You're playing this client: its watch areas still watch, but want stronger proof (your mouse and D-scan come and go; a ship that lands stays)">· you're playing</span>
                         </button>
                         <button type="button" class="rounded px-0.5 text-muted-foreground hover:text-red-400" title="Stop sharing this window" @click="closeSource(item.key)">✕</button>
                     </div>

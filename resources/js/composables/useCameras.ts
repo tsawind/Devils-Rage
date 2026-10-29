@@ -34,6 +34,8 @@ export type TCameraEvent = {
     signature_id: number | null;
     kind: TCameraActivityKind;
     strength: number;
+    /** Patch 62h: seen while the pilot was playing that client. */
+    while_playing?: boolean;
     state: 'new' | 'confirmed' | 'dismissed';
     ship_class: string | null;
     side: 'hostile' | 'friendly' | null;

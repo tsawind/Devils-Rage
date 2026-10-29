@@ -77,7 +77,8 @@ export class SpikeWatch {
     private variance = 0;
     private seen = 0;
     private quietUntil = 0;
-    private readonly spreads: number;
+    /** Patch 62h: settable (stricter while you play the client). */
+    spreads: number;
     private readonly minimum: number;
     private readonly rate: number;
     private readonly warmup: number;
@@ -149,7 +150,8 @@ export class RowWatch {
     private known: number | null = null;
     private candidate: number | null = null;
     private held = 0;
-    private readonly steadyFrames: number;
+    /** Patch 62h: settable (longer while you play the client). */
+    steadyFrames: number;
 
     constructor(steadyFrames: number = DETECT.rowsSteadyFrames) {
         this.steadyFrames = steadyFrames;

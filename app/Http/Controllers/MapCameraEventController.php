@@ -39,6 +39,7 @@ final class MapCameraEventController extends Controller
             'strength' => ['sometimes', 'integer', 'between:0,100'],
             'happened_at' => ['sometimes', 'date'],
             'heard_by' => ['sometimes', Rule::in(['picture', 'sound', 'both'])],
+            'while_playing' => ['sometimes', 'boolean'],
             'clip' => ['sometimes', 'file', 'max:'.$maxKb, 'mimetypes:video/webm,video/mp4,video/x-matroska,application/octet-stream'],
             'still' => ['sometimes', 'file', 'max:'.$maxKb, 'mimes:jpg,jpeg,png,webp'],
         ]);
@@ -57,6 +58,7 @@ final class MapCameraEventController extends Controller
             'signature_id' => $mapCamera->signature_id,
             'kind' => $data['kind'],
             'strength' => (int) ($data['strength'] ?? 0),
+            'while_playing' => (bool) ($data['while_playing'] ?? false),
             'clip_path' => $clip !== null && self::roomForClips() ? $clip->storeAs($folder, Str::uuid()->toString().'.webm', self::DISK) : null,
             'still_path' => $still !== null ? $still->storeAs($folder, Str::uuid()->toString().'.jpg', self::DISK) : null,
             'state' => 'new',

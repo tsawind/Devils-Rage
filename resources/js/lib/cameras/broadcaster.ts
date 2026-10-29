@@ -17,7 +17,7 @@ export type TBoxRect = { x: number; y: number; w: number; h: number };
  */
 export type TDetectMode = 'off' | 'flash' | 'rows' | 'scan' | 'local';
 export type THitKind = 'activation' | 'appeared' | 'vanished' | 'scan_new' | 'scan_gone' | 'local_in' | 'local_out';
-export type THit = { kind: THitKind; strength: number; heardBy: 'picture' | 'sound' | 'both'; at: Date; still: Blob | null };
+export type THit = { kind: THitKind; strength: number; heardBy: 'picture' | 'sound' | 'both'; at: Date; still: Blob | null; playing?: boolean };
 
 /** Row counting modes and what more / fewer rows means. */
 const ROW_KINDS: Partial<Record<TDetectMode, [THitKind, THitKind]>> = {
@@ -218,8 +218,8 @@ export class BoxCamera {
         const size = sendSize(this.rect, this.source.videoWidth || 1920, this.source.videoHeight || 1080, this.quality);
         this.canvas.width = size.width;
         this.canvas.height = size.height;
-        this.spike = new SpikeWatch({ spreads: spreadsFor(this.sensitivity) });
-        this.rows = new RowWatch();
+        this.spike = new SpikeWatch({ spreads: spreadsFor(this.sensitivity) + (this.playing ? 3 : 0) });
+        this.rows = new RowWatch(this.playing ? DETECT.rowsSteadyFrames * 2 : DETECT.rowsSteadyFrames);
         this.previous = null;
     }
 
@@ -227,7 +227,26 @@ export class BoxCamera {
     setSensitivity(sensitivity: number): void {
         if (sensitivity === this.sensitivity) return;
         this.sensitivity = sensitivity;
-        this.spike = new SpikeWatch({ spreads: spreadsFor(sensitivity) });
+        this.spike = new SpikeWatch({ spreads: spreadsFor(sensitivity) + (this.playing ? 3 : 0) });
+    }
+
+    /**
+     * Patch 62h: you're playing this client (the app says it's in front and you just used the
+     * mouse or keys). Watching goes on, so a real jump or ship still counts, but it wants
+     * stronger proof: your mouse over the overview and D-scan's flash come and go, a ship that
+     * lands stays. Rows must hold twice as long, the hole a bit more, and a sound alone
+     * (D-scan's) needs the picture to agree.
+     */
+    private playing = false;
+    setPlaying(playing: boolean): void {
+        if (playing === this.playing) return;
+        this.playing = playing;
+        this.rows.steadyFrames = playing ? DETECT.rowsSteadyFrames * 2 : DETECT.rowsSteadyFrames;
+        this.spike.spreads = spreadsFor(this.sensitivity) + (playing ? 3 : 0);
+    }
+
+    get isPlaying(): boolean {
+        return this.playing;
     }
 
     /** Patch 62f: a watch area isn't streamed, but keeps the last moments for a clip. */
@@ -266,7 +285,7 @@ export class BoxCamera {
     beat(now: number, heard: boolean, soundAlone = true): void {
         if (this.paused || !this.source.videoWidth) return;
         if (now - this.lastFrame >= 1000 / QUALITY[this.quality].fps) this.paint(now);
-        if (heard && this.listen && (soundAlone || this.pending)) this.found({ kind: 'activation', strength: 70, heardBy: 'sound' });
+        if (heard && this.listen && ((soundAlone && !this.playing) || this.pending)) this.found({ kind: 'activation', strength: 70, heardBy: 'sound' });
         if (this.detect === 'off' || now - this.lastLook < 1000 / DETECT.fps) return;
         this.lastLook = now;
         const [, , , cropHeight] = this.crop();
@@ -303,7 +322,8 @@ export class BoxCamera {
      * client's sound only, so it counts by itself).
      */
     hear(): void {
-        if (this.listen && !this.paused) this.found({ kind: 'activation', strength: 75, heardBy: 'sound' });
+        // While you play the client, its sound alone (D-scan) only backs up what the picture saw.
+        if (this.listen && !this.paused && (!this.playing || this.pending)) this.found({ kind: 'activation', strength: 75, heardBy: 'sound' });
     }
 
     /** Patch 62f: hide areas, solid black (blur can still be read). */
@@ -340,7 +360,7 @@ export class BoxCamera {
             }
             return;
         }
-        this.pending = { ...hit, at: new Date(), still: null };
+        this.pending = { ...hit, at: new Date(), still: null, playing: this.playing };
         const waiting = this.pending;
         this.canvas.toBlob(
             (blob) => {
