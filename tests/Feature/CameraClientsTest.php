@@ -32,7 +32,7 @@ function clientPilot(Map $map, Permission $permission = Permission::Member): Use
 
 function oneClient(array $extra = []): array
 {
-    return ['clients' => [['name' => 'LuigiSquirrel', 'on' => false, 'pin' => '', 'boxes' => 3, 'live' => 0] + $extra]];
+    return ['clients' => [$extra + ['name' => 'LuigiSquirrel', 'on' => false, 'pin' => '', 'boxes' => 3, 'live' => 0]]];
 }
 
 it('keeps what the share window reports and tells your maps once it changes', function () {
