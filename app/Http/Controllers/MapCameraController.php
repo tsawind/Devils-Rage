@@ -136,11 +136,12 @@ final class MapCameraController extends Controller
         // Patch 62n: the same box shared again is the same camera (same id, so the map's open
         // windows and the wall pick it up again).
         $camera = $boxKey !== '' ? MapCamera::query()->where('map_id', $map->id)->where('user_id', $user->id)->where('box_key', $boxKey)->latest('id')->first() : null;
-        if ($camera instanceof MapCamera) {
-            $camera->fill($fields)->save();
-        } else {
-            $camera = MapCamera::query()->create($fields + ['path' => MapCamera::newPath(), 'box_key' => $boxKey !== '' ? $boxKey : null]);
+        if (! $camera instanceof MapCamera) {
+            $camera = new MapCamera(['path' => MapCamera::newPath(), 'box_key' => $boxKey !== '' ? $boxKey : null]);
         }
+        $camera->fill($fields);
+        $this->rememberHole($camera);
+        $camera->save();
         CamerasChangedEvent::dispatch($map->id);
         $this->watchHole($camera);
 
@@ -166,6 +167,7 @@ final class MapCameraController extends Controller
             $data['status'] = $status;
         }
         $mapCamera->fill($data);
+        $this->rememberHole($mapCamera);
         $changed = $mapCamera->isDirty();
         $mapCamera->fill(['last_seen_at' => now()])->save();
         $this->watchHole($mapCamera);
@@ -308,6 +310,19 @@ final class MapCameraController extends Controller
      * on its pill and the watcher on everyone's map), when nobody is watching it yet; while it's
      * on, it answers the watcher's "still on it?" for you.
      */
+    /**
+     * Patch 62o: a camera on a pipe also remembers the pipe's signature, so when the pipe is
+     * deleted and the hole mapped again (a new pipe), it follows the hole (Signature's saved
+     * hook) instead of losing its pin.
+     */
+    private function rememberHole(MapCamera $camera): void
+    {
+        if ($camera->map_connection_id === null || $camera->signature_id !== null) {
+            return;
+        }
+        $camera->signature_id = Signature::query()->where('map_connection_id', $camera->map_connection_id)->value('id');
+    }
+
     private function watchHole(MapCamera $camera): void
     {
         if (! $camera->detect || ! $camera->isOn()) {

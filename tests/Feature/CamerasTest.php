@@ -370,3 +370,27 @@ it('brings the same camera back when the same box is shared again', function () 
     $mate = cameraPilot($map);
     expect(startCamera($map, $mate, ['box_key' => 'abc123'])['camera']['id'])->not->toBe($first);
 });
+
+it('keeps a pipe camera on its hole when the pipe is deleted and mapped again', function () {
+    Event::fake([CameraActivityEvent::class, CamerasChangedEvent::class]);
+    $map = Map::factory()->create();
+    $daisy = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000005), 'alias' => 'Daisy']);
+    $delta = MapSolarsystem::factory()->for($map)->create(['solarsystem_id' => makeSolarsystem(31000007), 'alias' => 'D']);
+    $pipe = MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $daisy->id, 'to_map_solarsystem_id' => $delta->id]);
+    $hole = Signature::factory()->create(['map_solarsystem_id' => $daisy->id, 'signature_id' => 'CFL-960', 'map_connection_id' => $pipe->id]);
+    $owner = cameraPilot($map);
+    startCamera($map, $owner, ['map_connection_id' => $pipe->id]);
+    $camera = MapCamera::query()->sole();
+    expect($camera->signature_id)->toBe($hole->id);
+
+    // Delta hidden: the hole stays as an unjumped signature, the pipe goes.
+    $hole->update(['map_connection_id' => null]);
+    $pipe->delete();
+    expect($camera->refresh()->map_connection_id)->toBeNull()
+        ->and($camera->signature_id)->toBe($hole->id);
+
+    // Jumped again: a new pipe, and the camera is on it.
+    $again = MapConnection::factory()->create(['map_id' => $map->id, 'from_map_solarsystem_id' => $daisy->id, 'to_map_solarsystem_id' => $delta->id]);
+    $hole->update(['map_connection_id' => $again->id]);
+    expect($camera->refresh()->map_connection_id)->toBe($again->id);
+});

@@ -624,9 +624,11 @@ function togglePause(box: TBox): void {
 
 /** Changes to a running box go to the mapper (name, pin, guests) and the camera (box, quality, watch). */
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let boxesChangedAt = 0;
 watch(
     boxes,
     () => {
+        boxesChangedAt = Date.now();
         for (const box of boxes.value) {
             const run = runs.get(box.key);
             if (!run) continue;
@@ -765,6 +767,22 @@ onBeforeUnmount(() => {
     void jsonFetch(MapCameraClientController.report(props.map.slug).url, 'PUT', { clients: [] });
 });
 
+// ---- Patch 62o: the mapper moved a camera ----------------------------------------------------
+// A pipe deleted and its hole mapped again is a new pipe: the mapper moves the camera onto it
+// (it remembers the hole); the box follows, so its next change doesn't send the old pipe.
+type TServerPin = { id: number; map_connection_id: number | null; signature_id: number | null };
+function adoptPin(cameraId: number, camera: TServerPin | undefined): void {
+    // A change you just made wins (the mapper hears about it a moment later).
+    if (!camera || Date.now() - boxesChangedAt < 5000) return;
+    for (const [key, run] of runs.entries()) {
+        if (run.id !== cameraId) continue;
+        const box = boxes.value.find((item) => item.key === key);
+        if (!box || !(box.pin.startsWith('c:') || box.pin.startsWith('h:'))) continue;
+        const server = camera.map_connection_id !== null ? `c:${camera.map_connection_id}` : camera.signature_id !== null ? `h:${camera.signature_id}` : '';
+        if (server && server !== box.pin) box.pin = server;
+    }
+}
+
 // ---- Patch 62m: on demand ------------------------------------------------------------------
 /** How long a camera keeps streaming after the last viewer asked (viewers ask every minute). */
 const WANTED_MS = 150_000;
@@ -832,7 +850,9 @@ function beatOnce(now: number): void {
         if (sources.value.length) reportClients(false);
         restIdle(Date.now());
         for (const run of runs.values()) {
-            if (run.state === 'live' || run.state === 'paused' || run.state === 'standby') void jsonFetch(MapCameraController.update(run.id).url, 'PATCH', { status: run.state });
+            if (run.state === 'live' || run.state === 'paused' || run.state === 'standby') {
+                void jsonFetch<{ camera: TServerPin }>(MapCameraController.update(run.id).url, 'PATCH', { status: run.state }).then((answer) => adoptPin(run.id, answer?.camera));
+            }
         }
     }
 }

@@ -270,7 +270,7 @@ function openAs(character: TCharacter, how: TOpenHow): void {
                     </ContextMenuCheckboxItem>
                     <ContextMenuSub>
                         <ContextMenuSubTrigger class="text-xs">
-                            <span class="truncate">Watching: {{ cameraPlaceName(cameraClientFor(character.name)!.pin) || 'nothing' }}</span>
+                            <span class="truncate">Watching: {{ cameraClientFor(character.name)!.pin ? cameraPlaceName(cameraClientFor(character.name)!.pin) || 'a hole no longer on the map' : 'nothing' }}</span>
                         </ContextMenuSubTrigger>
                         <ContextMenuSubContent class="max-h-[60vh] w-72 overflow-y-auto">
                             <ContextMenuLabel class="text-[11px] font-normal text-muted-foreground">Its cameras and watch areas follow this hole (and it goes on Watching)</ContextMenuLabel>
