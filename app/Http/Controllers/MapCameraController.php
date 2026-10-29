@@ -121,16 +121,26 @@ final class MapCameraController extends Controller
         $data = $this->validated($request, $map, true);
 
         $character = $user->characters()->find($request->integer('character_id')) ?? $user->active_character;
-        $camera = MapCamera::query()->create($data + [
+        $request->validate(['box_key' => ['sometimes', 'nullable', 'string', 'max:40', 'alpha_num']]);
+        $boxKey = (string) $request->input('box_key', '');
+        $fields = $data + [
             'map_id' => $map->id,
             'user_id' => $user->id,
             'character_id' => $character?->id,
             'character_name' => $character?->name,
             'owner_name' => $character instanceof Character ? ($character->seat_main_name ?? $character->name) : $user->name,
-            'path' => MapCamera::newPath(),
             'status' => 'starting',
+            'ended_at' => null,
             'last_seen_at' => now(),
-        ]);
+        ];
+        // Patch 62n: the same box shared again is the same camera (same id, so the map's open
+        // windows and the wall pick it up again).
+        $camera = $boxKey !== '' ? MapCamera::query()->where('map_id', $map->id)->where('user_id', $user->id)->where('box_key', $boxKey)->latest('id')->first() : null;
+        if ($camera instanceof MapCamera) {
+            $camera->fill($fields)->save();
+        } else {
+            $camera = MapCamera::query()->create($fields + ['path' => MapCamera::newPath(), 'box_key' => $boxKey !== '' ? $boxKey : null]);
+        }
         CamerasChangedEvent::dispatch($map->id);
         $this->watchHole($camera);
 

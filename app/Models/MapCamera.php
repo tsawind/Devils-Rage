@@ -26,6 +26,7 @@ use Illuminate\Support\Str;
  * @property int|null $map_connection_id
  * @property int|null $signature_id Patch 62b: a hole nobody has jumped yet (moves to its pipe once jumped)
  * @property string $path
+ * @property string|null $box_key Patch 62n: the share page's box (sharing it again brings this camera back)
  * @property string $quality
  * @property list<int>|null $guest_share_link_ids
  * @property string $status starting / live / paused / ended

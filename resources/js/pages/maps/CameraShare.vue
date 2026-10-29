@@ -234,7 +234,34 @@ const selected = ref<string | null>(boxes.value[0]?.key ?? null);
 const runs = reactive(new Map<string, TRun>());
 
 // ---- The picture --------------------------------------------------------------------------
-async function pick(kind: 'window' | 'screen'): Promise<void> {
+/**
+ * Patch 62n: the clients shared last time, so after closing this window (or the app) they come
+ * back with a click each (the browser always asks which window; it can't pick one by itself).
+ */
+const SHARED_KEY = `camera-shared-${props.map.id}`;
+function loadShared(): string[] {
+    try {
+        const stored = JSON.parse(window.localStorage.getItem(SHARED_KEY) ?? '[]');
+        return Array.isArray(stored) ? stored.map(String) : [];
+    } catch {
+        return [];
+    }
+}
+watch(
+    () => sources.value.filter((item) => item.kind === 'window').map((item) => item.client),
+    (clients) => {
+        try {
+            window.localStorage.setItem(SHARED_KEY, JSON.stringify(clients));
+        } catch {
+            // Remembered for this visit only.
+        }
+    },
+);
+/** Shared before, not shared yet this time. */
+const loadSharedOnce = loadShared();
+const toShareAgain = computed(() => loadSharedOnce.filter((client) => !sources.value.some((item) => item.client === client)));
+
+async function pick(kind: 'window' | 'screen', expected: string | null = null): Promise<void> {
     error.value = null;
     if (clientAudio) refreshAppClients();
     try {
@@ -258,7 +285,9 @@ async function pick(kind: 'window' | 'screen'): Promise<void> {
             refreshAppClients();
             await new Promise((resolve) => setTimeout(resolve, 700));
         }
-        const named = existing ? { client: existing.client, guessed: Boolean(existing.guessed) } : nameForWindow(stream, kind);
+        let named = existing ? { client: existing.client, guessed: Boolean(existing.guessed) } : nameForWindow(stream, kind);
+        // Patch 62n: "Share X's window again": when it can't tell, it's the one you clicked for.
+        if (expected && named.guessed && !sources.value.some((item) => item.client === expected)) named = { client: expected, guessed: false };
         const client = named.client;
         if (existing) closeSource(existing.key);
         const key = Math.random().toString(36).slice(2, 10);
@@ -493,6 +522,8 @@ async function startBox(box: TBox): Promise<void> {
     const started = await jsonFetch<{ camera: { id: number }; publish: TRelayPass }>(MapCameraController.store(props.map.slug).url, 'POST', {
         ...details(box),
         character_id: props.characters.find((character) => character.name === box.client)?.id ?? characterId.value,
+        // Patch 62n: the same box again is the same camera on the map.
+        box_key: box.key.replace(/[^a-z0-9]/gi, '').slice(0, 40),
     });
     if (!started) {
         error.value = 'The mapper wouldn’t start the camera (is the camera relay set up?).';
@@ -971,6 +1002,14 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                         </span>
                         <span class="absolute right-0 bottom-0 size-3 cursor-se-resize bg-fuchsia-400" @pointerdown.stop="(event) => down(event, box, 'size')" />
                     </div>
+                </div>
+                <!-- Patch 62n: what was shared last time, a click each (each client's boxes and on / off come back with it) -->
+                <div v-if="toShareAgain.length" class="flex flex-wrap items-center gap-2 rounded-md border border-purple-800 bg-purple-950/30 px-3 py-2 text-xs">
+                    <span class="font-semibold text-purple-100">Last time:</span>
+                    <Button v-for="client in toShareAgain" :key="client" size="sm" variant="outline" class="h-7" :title="`Opens the window picker: pick EVE - ${client}`" @click="pick('window', client)">
+                        <Video class="mr-1 size-3.5" /> {{ client }}
+                    </Button>
+                    <span class="text-muted-foreground">Pick that client's EVE window in the picker; its boxes, and its camera if it was on, come back.</span>
                 </div>
                 <div v-if="!source" class="flex flex-col gap-2 rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
                     <p class="font-medium text-foreground">Pick what to share, then draw boxes on it.</p>

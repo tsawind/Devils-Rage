@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Storage;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\artisan;
+use function Pest\Laravel\deleteJson;
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\patchJson;
 use function Pest\Laravel\postJson;
@@ -349,4 +350,23 @@ it('dismisses many camera events at once, only waiting ones on this map', functi
 
     actingAs(cameraPilot($map, Permission::Viewer));
     postJson(route('maps.camera-events.dismiss', $map), ['ids' => [$first->id]])->assertForbidden();
+});
+
+it('brings the same camera back when the same box is shared again', function () {
+    $map = Map::factory()->create();
+    $owner = cameraPilot($map);
+    $first = startCamera($map, $owner, ['box_key' => 'abc123'])['camera']['id'];
+    deleteJson(route('map-cameras.destroy', $first))->assertOk();
+
+    $again = startCamera($map, $owner, ['box_key' => 'abc123'])['camera']['id'];
+    $other = startCamera($map, $owner, ['box_key' => 'zzz999'])['camera']['id'];
+
+    expect($again)->toBe($first)
+        ->and($other)->not->toBe($first)
+        ->and(MapCamera::query()->find($first)->status)->toBe('starting')
+        ->and(MapCamera::query()->find($first)->ended_at)->toBeNull();
+
+    // Someone else's box with the same key is their own camera.
+    $mate = cameraPilot($map);
+    expect(startCamera($map, $mate, ['box_key' => 'abc123'])['camera']['id'])->not->toBe($first);
 });

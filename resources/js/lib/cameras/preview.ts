@@ -1,5 +1,5 @@
 import { validCrop, type TCrop } from '@/lib/cameras/crop';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 export { cropFromCorners, cropPlacement, type TCrop } from '@/lib/cameras/crop';
 
@@ -14,7 +14,34 @@ const LAYOUT_KEY = 'dr.cameraPreviewLayout';
 const DEFAULT_WIDTH = 384;
 export const MIN_WIDTH = 200;
 
-export const cameraPreviews = ref<TPreview[]>([]);
+/**
+ * Patch 62n: the open windows are remembered too, so they come back after a reload, and a
+ * camera that stops and starts again (same box shared again: same camera) reopens in place.
+ */
+const OPEN_KEY = 'dr.cameraPreviewsOpen';
+function loadOpen(): TPreview[] {
+    try {
+        const stored = JSON.parse(window.localStorage.getItem(OPEN_KEY) ?? '[]');
+        if (!Array.isArray(stored)) return [];
+        return stored
+            .filter((item): item is TPreview => item && typeof item === 'object' && Number.isInteger(item.cameraId))
+            .map((item) => ({ cameraId: item.cameraId, x: Number(item.x) || 40, y: Number(item.y) || 80, width: Math.max(MIN_WIDTH, Number(item.width) || DEFAULT_WIDTH), crop: validCrop(item.crop ?? null), z: 1 }));
+    } catch {
+        return [];
+    }
+}
+export const cameraPreviews = ref<TPreview[]>(typeof window === 'undefined' ? [] : loadOpen());
+watch(
+    cameraPreviews,
+    (open) => {
+        try {
+            window.localStorage.setItem(OPEN_KEY, JSON.stringify(open));
+        } catch {
+            // Remembered for this visit only.
+        }
+    },
+    { deep: true },
+);
 let top = 1;
 
 type TLayout = Record<string, { width: number; crop: TCrop | null }>;
