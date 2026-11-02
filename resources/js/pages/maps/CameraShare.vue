@@ -859,6 +859,7 @@ async function answerDirect(cameraId: number, key: string, offer: string): Promi
     directs.get(key)?.pc.close();
     const pc = new RTCPeerConnection();
     directs.set(key, { pc, cameraId });
+    // Patch 62r: the answer follows the viewer's offer (VP8 only), so it stays small enough to pass along.
     pc.addEventListener('connectionstatechange', () => {
         if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
             pc.close();

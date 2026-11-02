@@ -35,6 +35,8 @@ let closed = false;
 const { cameras } = useCameras();
 const user = useUser();
 const direct = ref(false);
+/** Patch 62r: why it went through the relay instead (shown on the picture). */
+const directWhy = ref<string | null>(null);
 let directPc: RTCPeerConnection | null = null;
 let directKey = '';
 let answered: ((sdp: string) => void) | null = null;
@@ -51,7 +53,15 @@ async function connectDirect(): Promise<boolean> {
     directKey = Math.random().toString(36).slice(2, 12);
     const pc = new RTCPeerConnection();
     directPc = pc;
-    pc.addTransceiver('video', { direction: 'recvonly' });
+    const transceiver = pc.addTransceiver('video', { direction: 'recvonly' });
+    // Patch 62r: VP8 only (what the share window sends): Chrome's full codec list made the
+    // offer too big to pass along, so it always fell back to the relay.
+    try {
+        const codecs = (RTCRtpReceiver.getCapabilities('video')?.codecs ?? []).filter((codec) => /^video\/(vp8|rtx)$/i.test(codec.mimeType));
+        if (codecs.length) transceiver.setCodecPreferences(codecs);
+    } catch {
+        // Older browsers: the full list.
+    }
     pc.addEventListener('track', (event) => {
         const stream = event.streams[0] ?? new MediaStream([event.track]);
         if (video.value && video.value.srcObject !== stream) video.value.srcObject = stream;
@@ -63,10 +73,11 @@ async function connectDirect(): Promise<boolean> {
             answered = resolve;
             setTimeout(() => resolve(null), 6000);
         });
-        await jsonFetch(MapCameraController.direct(cameraId).url, 'POST', { key: directKey, step: 'offer', sdp: pc.localDescription?.sdp ?? '' });
+        const sent = await jsonFetch<{ sent: boolean }>(MapCameraController.direct(cameraId).url, 'POST', { key: directKey, step: 'offer', sdp: pc.localDescription?.sdp ?? '' });
+        if (!sent) throw new Error(`the mapper didn't pass the offer on (${(pc.localDescription?.sdp ?? '').length} bytes)`);
         const sdp = await answer;
         answered = null;
-        if (!sdp || closed) throw new Error('no answer');
+        if (!sdp || closed) throw new Error('your share window didn\'t answer (reload it?)');
         await pc.setRemoteDescription({ type: 'answer', sdp });
         const connected = await new Promise<boolean>((resolve) => {
             if (pc.connectionState === 'connected') resolve(true);
@@ -76,7 +87,7 @@ async function connectDirect(): Promise<boolean> {
             });
             setTimeout(() => resolve(pc.connectionState === 'connected'), 6000);
         });
-        if (!connected) throw new Error('no link');
+        if (!connected) throw new Error('the two windows couldn\'t connect');
         pc.addEventListener('connectionstatechange', () => {
             if (directPc !== pc || closed) return;
             if (pc.connectionState === 'failed' || pc.connectionState === 'closed' || pc.connectionState === 'disconnected') {
@@ -86,9 +97,11 @@ async function connectDirect(): Promise<boolean> {
             }
         });
         direct.value = true;
+        directWhy.value = null;
         state.value = 'live';
         return true;
-    } catch {
+    } catch (problem) {
+        directWhy.value = problem instanceof Error ? problem.message : 'failed';
         dropDirect();
         return false;
     }
@@ -214,6 +227,7 @@ defineExpose({ pictureInPicture, video, direct });
     <div class="relative size-full bg-black">
         <video ref="video" class="size-full object-contain" autoplay playsinline :muted="muted" @loadedmetadata="reportSize" @resize="reportSize" />
         <span v-if="state === 'live' && direct" class="pointer-events-none absolute top-1 right-1 rounded bg-emerald-900/80 px-1 text-[10px] text-emerald-100" title="Straight from your share window: not through the server">direct</span>
+        <span v-else-if="state === 'live' && directWhy" class="absolute top-1 right-1 rounded bg-neutral-900/80 px-1 text-[10px] text-neutral-300" :title="`Your own camera, through the server: ${directWhy}`">relay</span>
         <div v-if="state !== 'live'" class="absolute inset-0 flex items-center justify-center text-xs text-neutral-400">
             <span v-if="state === 'connecting'" class="animate-pulse">Connecting… (a camera on standby starts in a few seconds)</span>
             <span v-else-if="state === 'lost'" class="animate-pulse">Lost the picture, trying again…</span>

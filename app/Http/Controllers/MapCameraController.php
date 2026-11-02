@@ -232,7 +232,7 @@ final class MapCameraController extends Controller
         $data = $request->validate([
             'key' => ['required', 'string', 'alpha_num', 'max:40'],
             'step' => ['required', Rule::in(['offer', 'answer', 'bye'])],
-            'sdp' => ['required_unless:step,bye', 'nullable', 'string', 'max:9000'],
+            'sdp' => ['required_unless:step,bye', 'nullable', 'string', 'max:20000'],
         ]);
         CameraDirectEvent::dispatch($user->id, $mapCamera->id, (string) $data['key'], (string) $data['step'], (string) ($data['sdp'] ?? ''));
 
