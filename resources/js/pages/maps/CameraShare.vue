@@ -11,13 +11,14 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import SeoHead from '@/layouts/SeoHead.vue';
 import { BoxCamera, ClientRecorder, SoundEar, startBeat, type TBoxRect, type TDetectMode, type THit } from '@/lib/cameras/broadcaster';
 import { QUALITY, type TQuality, type TRelayPass } from '@/lib/cameras/rtc';
+import { appCaptures, appClientFeed, appEveWindows, type TAppFeed, type TAppWindow, type TFeedStatus } from '@/lib/cameras/appCapture';
 import { clientOfWindowLabel, DEFAULT_STRICTNESS, defaultSetup } from '@/lib/cameras/setups';
 import { appActive, appClients, appClosesCameraWindow, appAudioErrors, appHasClientAudio, appWindows, closeAppCameraWindow, appLevels, learnFromClient, listenToClients, onAppHeard, onAppLearned, playingClient, refreshAppClients } from '@/lib/cameras/appAudio';
 import { appSignal, inDesktopApp } from '@/lib/desktopApp';
 import { formFetch, jsonFetch } from '@/lib/jsonFetch';
 import { Monitor, Play, Pause, Plus, Square, Trash2, Video } from 'lucide-vue-next';
 import { useEcho } from '@laravel/echo-vue';
-import { computed, markRaw, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
 
 /**
  * Patch 62: "Share a camera". Pick an EVE window (or the whole screen, which can bring its
@@ -288,20 +289,8 @@ async function pick(kind: 'window' | 'screen', expected: string | null = null): 
         let named = existing ? { client: existing.client, guessed: Boolean(existing.guessed) } : nameForWindow(stream, kind);
         // Patch 62n: "Share X's window again": when it can't tell, it's the one you clicked for.
         if (expected && named.guessed && !sources.value.some((item) => item.client === expected)) named = { client: expected, guessed: false };
-        const client = named.client;
         if (existing) closeSource(existing.key);
-        const key = Math.random().toString(36).slice(2, 10);
-        sources.value = [...sources.value, { key, client, kind, stream, label, guessed: named.guessed }];
-        currentKey.value = key;
-        stream.getVideoTracks()[0]?.addEventListener('ended', () => closeSource(key));
-        if (!boxes.value.some((box) => box.client === client)) {
-            if (kind === 'window') applyDefaultSetup(client);
-            else addBox(true);
-        }
-        selected.value = boxes.value.find((box) => box.client === client)?.key ?? selected.value;
-        setUpEar();
-        // Patch 62k: a client that was on when its window closed comes back on.
-        if (rememberedOn()[client]) void setClientOn(client, true);
+        addSource({ client: named.client, kind, stream, label, guessed: named.guessed });
     } catch (problem) {
         error.value =
             problem instanceof Error && problem.name === 'NotAllowedError'
@@ -311,6 +300,68 @@ async function pick(kind: 'window' | 'screen', expected: string | null = null): 
                   : 'Couldn’t start sharing (Chrome or Edge work best).';
     }
 }
+
+/** A shared window (or the app's picture of a client) becomes a tab with its client's boxes. */
+function addSource(item: Omit<TSource, 'key'>): string {
+    const key = Math.random().toString(36).slice(2, 10);
+    const client = item.client;
+    sources.value = [...sources.value, { ...item, key }];
+    currentKey.value = key;
+    item.stream.getVideoTracks()[0]?.addEventListener('ended', () => closeSource(key));
+    if (!boxes.value.some((box) => box.client === client)) {
+        if (item.kind === 'window') applyDefaultSetup(client);
+        else addBox(true);
+    }
+    selected.value = boxes.value.find((box) => box.client === client)?.key ?? selected.value;
+    setUpEar();
+    // Patch 62k: a client that was on when its window closed comes back on.
+    if (rememberedOn()[client]) void setClientOn(client, true);
+    return key;
+}
+
+// ---- Patch 62s: the app shares clients itself (no window picker) ----------------------------
+const appCapture = appCaptures();
+const appFeeds = new Map<string, TAppFeed>();
+const appOpen = ref<TAppWindow[]>([]);
+const feedStatus = ref<Record<string, TFeedStatus>>({});
+async function refreshAppWindows(): Promise<void> {
+    appOpen.value = (await appEveWindows()) ?? [];
+}
+function shareAppClient(name: string): void {
+    error.value = null;
+    const already = sources.value.find((item) => item.client === name);
+    if (already) {
+        currentKey.value = already.key;
+        return;
+    }
+    const feed = appClientFeed(name);
+    const key = addSource({ client: name, kind: 'window', stream: feed.stream, label: `app:${name}`, guessed: false });
+    appFeeds.set(key, feed);
+    watch(feed.status, (status) => (feedStatus.value = { ...feedStatus.value, [name]: status }), { immediate: true });
+}
+function pickAppClient(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const name = select.value;
+    select.value = '';
+    if (name) shareAppClient(name);
+}
+/** Open the share window: the clients shared last time come back by themselves. */
+if (appCapture) {
+    onMounted(async () => {
+        await refreshAppWindows();
+        const open = new Set(appOpen.value.map((item) => item.name));
+        for (const client of loadSharedOnce) {
+            if (open.has(client)) shareAppClient(client);
+        }
+    });
+}
+const FEED_TEXT: Record<TFeedStatus, string> = {
+    starting: 'starting…',
+    ok: '',
+    minimized: 'client minimized: restore it (behind other windows is fine)',
+    gone: 'that EVE client is closed',
+    blocked: 'the app refused the picture (update the app?)',
+};
 
 // ---- Boxes ---------------------------------------------------------------------------------
 function addBox(whole = false, role: TRole = 'camera'): void {
@@ -613,6 +664,8 @@ function closeSource(key: string): void {
         if (box.client === item.client) void stopBox(box);
     }
     item.stream.getTracks().forEach((track) => track.stop());
+    appFeeds.get(key)?.stop();
+    appFeeds.delete(key);
     videos.delete(key);
     sources.value = sources.value.filter((candidate) => candidate.key !== key);
     if (currentKey.value === key) currentKey.value = sources.value[0]?.key ?? null;
@@ -972,6 +1025,7 @@ onBeforeUnmount(() => {
     for (const link of directs.values()) link.pc.close();
     ear.value?.close();
     for (const item of sources.value) item.stream.getTracks().forEach((track) => track.stop());
+    for (const feed of appFeeds.values()) feed.stop();
 });
 
 const selectedBox = computed(() => boxes.value.find((box) => box.key === selected.value) ?? null);
@@ -1017,7 +1071,22 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
             <section class="flex min-w-0 flex-1 flex-col gap-2">
                 <div class="flex flex-wrap items-center gap-2">
                     <h1 class="mr-2 text-lg font-semibold">Share a camera <span class="text-sm font-normal text-muted-foreground">· {{ map.name }}</span></h1>
-                    <Button size="sm" variant="outline" @click="pick('window')"><Video class="mr-1 size-4" /> An EVE window</Button>
+                    <!-- Patch 62s: in the app, pick a client by name (the app takes its picture; no window picker) -->
+                    <select
+                        v-if="appCapture"
+                        class="h-8 rounded-md border border-border bg-background px-2 text-sm"
+                        title="The app shares the client's window itself"
+                        :value="''"
+                        @mousedown="refreshAppWindows"
+                        @focus="refreshAppWindows"
+                        @change="pickAppClient"
+                    >
+                        <option value="" disabled>📹 Share an EVE client…</option>
+                        <option v-for="item in appOpen" :key="item.name" :value="item.name" :disabled="sources.some((source) => source.client === item.name)">
+                            {{ item.name }}{{ item.minimized ? ' (minimized)' : '' }}{{ sources.some((source) => source.client === item.name) ? ' · shared' : '' }}
+                        </option>
+                    </select>
+                    <Button size="sm" variant="outline" :title="appCapture ? 'The browser\'s window picker (if a client isn\'t listed)' : undefined" @click="pick('window')"><Video class="mr-1 size-4" /> {{ appCapture ? 'Pick a window…' : 'An EVE window' }}</Button>
                     <Button size="sm" variant="outline" @click="pick('screen')"><Monitor class="mr-1 size-4" /> Whole screen</Button>
                     <select v-if="characters.length && !sources.length" v-model.number="characterId" class="h-8 rounded-md border border-border bg-background px-2 text-xs" title="Whose client, when the window title doesn't say">
                         <option v-for="character in characters" :key="character.id" :value="character.id">{{ character.online ? '● ' : '' }}{{ character.name }}{{ character.online ? ' (online)' : '' }}</option>
@@ -1058,7 +1127,8 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                         </select>
                         <button type="button" class="rounded px-0.5 text-muted-foreground hover:text-red-400" title="Stop sharing this window" @click="closeSource(item.key)">✕</button>
                     </div>
-                    <button type="button" class="rounded-md border border-dashed border-border px-2 py-1 text-muted-foreground hover:text-foreground" title="Share another client's window too" @click="pick('window')">+ Another EVE window</button>
+                    <button v-if="!appCapture" type="button" class="rounded-md border border-dashed border-border px-2 py-1 text-muted-foreground hover:text-foreground" title="Share another client's window too" @click="pick('window')">+ Another EVE window</button>
+                    <span v-for="(status, name) in feedStatus" v-show="FEED_TEXT[status]" :key="name" class="text-amber-300">{{ name }}: {{ FEED_TEXT[status] }}</span>
                 </div>
 
                 <!-- Patch 62k: the whole client at once (the map's pilot tab and hole watcher do the same) -->
@@ -1136,10 +1206,10 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                 <!-- Patch 62n: what was shared last time, a click each (each client's boxes and on / off come back with it) -->
                 <div v-if="toShareAgain.length" class="flex flex-wrap items-center gap-2 rounded-md border border-purple-800 bg-purple-950/30 px-3 py-2 text-xs">
                     <span class="font-semibold text-purple-100">Last time:</span>
-                    <Button v-for="client in toShareAgain" :key="client" size="sm" variant="outline" class="h-7" :title="`Opens the window picker: pick EVE - ${client}`" @click="pick('window', client)">
+                    <Button v-for="client in toShareAgain" :key="client" size="sm" variant="outline" class="h-7" :title="appCapture ? `Shares ${client}'s client` : `Opens the window picker: pick EVE - ${client}`" @click="appCapture ? shareAppClient(client) : pick('window', client)">
                         <Video class="mr-1 size-3.5" /> {{ client }}
                     </Button>
-                    <span class="text-muted-foreground">Pick that client's EVE window in the picker; its boxes, and its camera if it was on, come back.</span>
+                    <span class="text-muted-foreground">{{ appCapture ? 'A click each (they come back by themselves when their client is open)' : 'Pick that client\'s EVE window in the picker' }}; its boxes, and its camera if it was on, come back.</span>
                 </div>
                 <div v-if="!source" class="flex flex-col gap-2 rounded-md border border-dashed border-border p-6 text-sm text-muted-foreground">
                     <p class="font-medium text-foreground">Pick what to share, then draw boxes on it.</p>
