@@ -234,6 +234,9 @@
       <button type="button" data-tab="run">PI run</button>
       <button type="button" data-tab="colonies">My colonies</button>
       <button type="button" data-tab="templates">Templates</button>
+      <button type="button" data-tab="options" title="Your P0 → P2 planets restarted weekly, every 4 or 2 days, or daily: ISK against logins">Setup options</button>
+      <button type="button" data-tab="map" title="Every spot the corp has extracted from, and pairs of good spots for one P0 → P2 setup">Corp map</button>
+      <button type="button" data-tab="scan" title="Two scan screenshots in, one map of where both resources are hot">Scan combiner</button>
       @if($leader)<button type="button" data-tab="corp">Corp overview</button>@endif
       <button type="button" data-tab="alerts">Alerts</button>
     </nav>
@@ -677,6 +680,8 @@
   @endif
 
   {{-- ============================== Alerts ============================== --}}
+@include('devilsrage::pi.advanced')
+
   <section class="pane" id="pane-alerts" aria-label="Alerts">
     <section class="card form" style="max-width: 720px">
       <div><h2 style="margin: 0; font-size: 16px; font-weight: 600">How often may we bother you?</h2>

@@ -8,6 +8,8 @@ use DevilsRage\Seat\Models\AccountSetting;
 use DevilsRage\Seat\Models\PiTemplate as StoredTemplate;
 use DevilsRage\Seat\Models\Setting;
 use DevilsRage\Seat\Pi\PiData;
+use DevilsRage\Seat\Pi\PiMap;
+use DevilsRage\Seat\Pi\PiOptions;
 use DevilsRage\Seat\Pi\PiMoney;
 use DevilsRage\Seat\Pi\PiDigest;
 use DevilsRage\Seat\Pi\PiPlanner;
@@ -26,6 +28,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Seat\Eveapi\Jobs\PlanetaryInteraction\Character\Planets;
+use Seat\Eveapi\Models\Character\CharacterInfo;
 use Seat\Eveapi\Models\RefreshToken;
 use Seat\Web\Http\Controllers\Controller;
 use Seat\Web\Models\User;
@@ -196,7 +199,119 @@ class PiController extends Controller
             'leader' => $leader,
             'corp' => $leader ? $this->corp($now, $jita, $hub, $taxRate, $piSkills) : null,
             'templates' => $this->templates((int) $user->id, $leader),
+            'options' => $this->setupOptions($colonies, $prices, $taxRate),
+            'corpMap' => $this->corpMap($data, $leader),
         ]);
+    }
+
+    /**
+     * Patch 64: each pilot's setup options (effort against ISK) for their P0 → P2 planets.
+     *
+     * @param  list<array<string, mixed>>  $colonies
+     * @param  array<int, array{buy: float, sell: float}>  $prices
+     * @return array{pilots: list<array{name: string, planets: list<array{name: string, p2: string, options: list<array<string, mixed>>}>, total: list<array<string, mixed>>}>, total: list<array<string, mixed>>}
+     */
+    private function setupOptions(array $colonies, array $prices, float $taxRate): array
+    {
+        $pilots = [];
+        $everything = [];
+        foreach ($colonies as $colony) {
+            $planets = [];
+            foreach ($colony['planets'] as $info) {
+                $making = $info['making'];
+                if ($making === null || (int) $making['tier'] !== 2) {
+                    continue;
+                }
+                $lines = [];
+                foreach ($info['planet']['extractors'] as $extractor) {
+                    if ((int) ($extractor['heads'] ?? 0) > 0 && ! empty($extractor['qty']) && ! empty($extractor['cycle_time'])) {
+                        $lines[] = ['qty' => (int) $extractor['qty'], 'cycle' => (int) $extractor['cycle_time'], 'heads' => (int) $extractor['heads']];
+                    }
+                }
+                $splits = [];
+                foreach ($making['type_ids'] as $typeId) {
+                    $price = $prices[(int) $typeId] ?? null;
+                    if ($price !== null) {
+                        $splits[] = ((float) $price['buy'] + (float) $price['sell']) / 2;
+                    }
+                }
+                $value = ($splits === [] ? 0.0 : array_sum($splits) / count($splits)) - PiPlanner::exportTax(2, 1, $taxRate);
+                $options = PiOptions::forPlanet($lines, ['basic' => (int) $info['factory_counts']['basic'], 'advanced' => (int) $info['factory_counts']['advanced']], max(0.0, $value));
+                if ($options === []) {
+                    continue;
+                }
+                $planets[] = ['name' => (string) $info['planet']['name'], 'p2' => implode(', ', $making['names']), 'options' => $options];
+                $everything[] = $options;
+            }
+            if ($planets !== []) {
+                $pilots[] = ['name' => (string) $colony['name'], 'planets' => $planets, 'total' => PiOptions::total(array_column($planets, 'options'))];
+            }
+        }
+
+        return ['pilots' => $pilots, 'total' => PiOptions::total($everything)];
+    }
+
+    /**
+     * Patch 64: the corp planet map. Every spot the corp has extracted from in the last 180 days,
+     * per planet, with its yield and how worked out it is (PiMap). Names of who used a spot are
+     * for directors only.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function corpMap(PiData $data, bool $leader): array
+    {
+        $rows = DB::table('devilsrage_pi_runs')
+            ->where('install_time', '>=', now()->subDays(180))
+            ->whereNotNull('qty_per_cycle')
+            ->where('heads', '>', 0)
+            ->get(['character_id', 'planet_id', 'product_type_id', 'heads', 'latitude', 'longitude', 'qty_per_cycle', 'cycle_time', 'install_time']);
+        if ($rows->isEmpty()) {
+            return [];
+        }
+        $planetIds = $rows->pluck('planet_id')->unique()->map(fn ($id): int => (int) $id)->values()->all();
+        $names = DB::table('planets')->whereIn('planet_id', $planetIds)->pluck('name', 'planet_id');
+        $kinds = DB::table('character_planets')->whereIn('planet_id', $planetIds)->pluck('planet_type', 'planet_id');
+        $radius = [];
+        try {
+            $radius = DB::table('mapDenormalize')->whereIn('itemID', $planetIds)->pluck('radius', 'itemID')->all();
+        } catch (\Throwable) {
+            // No SDE map table: distances use a typical planet size (shown as "about").
+        }
+        $types = $data->typesFor($rows->pluck('product_type_id')->unique()->map(fn ($id): int => (int) $id)->values()->all());
+        $who = $leader ? CharacterInfo::query()->whereIn('character_id', $rows->pluck('character_id')->unique()->all())->pluck('name', 'character_id')->all() : [];
+
+        $out = [];
+        foreach ($rows->groupBy('planet_id') as $planetId => $planetRows) {
+            $runs = $planetRows->map(fn ($row): array => [
+                'character_id' => (int) $row->character_id,
+                'product' => (int) $row->product_type_id,
+                'product_name' => (string) ($types[(int) $row->product_type_id]['name'] ?? 'Type '.$row->product_type_id),
+                'heads' => (int) $row->heads,
+                'lat' => (float) $row->latitude,
+                'lon' => (float) $row->longitude,
+                'qty' => (int) $row->qty_per_cycle,
+                'cycle' => (int) $row->cycle_time,
+                'install' => Carbon::parse($row->install_time, 'UTC')->getTimestamp(),
+            ])->values()->all();
+            $spots = PiMap::spots($runs);
+            foreach ($spots as &$spot) {
+                $spot['who'] = $leader ? array_values(array_filter(array_map(fn (int $id): ?string => $who[$id] ?? null, $spot['characters']))) : [];
+                $spot['pilots'] = count($spot['characters']);
+                unset($spot['characters']);
+            }
+            unset($spot);
+            $radiusKm = isset($radius[$planetId]) && (float) $radius[$planetId] > 0 ? (float) $radius[$planetId] / 1000 : null;
+            $out[] = [
+                'planet_id' => (int) $planetId,
+                'name' => (string) ($names[$planetId] ?? 'Planet '.$planetId),
+                'type' => (string) ($kinds[$planetId] ?? ''),
+                'radius_km' => $radiusKm,
+                'spots' => $spots,
+            ];
+        }
+        usort($out, fn (array $a, array $b): int => strnatcmp($a['name'], $b['name']));
+
+        return $out;
     }
 
     /**
