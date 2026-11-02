@@ -3,7 +3,7 @@
 <style>
   .opt-table td, .opt-table th { padding: 7px 10px; border-top: 1px solid #23232a; vertical-align: top; }
   .opt-table tr.today td { background: #18181d; }
-  .opt-table .num { text-align: right; white-space: nowrap; }
+  .opt-table .ocol { text-align: right; white-space: nowrap; }
   .opt-table .best { color: var(--ok); font-weight: 600; }
   .opt-note { color: var(--muted); font-size: 12px; }
   .opt-planets { margin: 0 14px 12px; }
@@ -45,18 +45,18 @@
             $html = '';
             foreach ($rows as $r) {
                 $rate = $r['extra_isk_per_hour'] === null ? '—' : $isk($r['extra_isk_per_hour']).' / h';
-                $needs = $r['needs_more'] > 0 ? $r['needs_more'].' planet'.($r['needs_more'] === 1 ? '' : 's').' need more factories' : 'fits what you have';
+                $needs = $r['needs_more'] > 0 ? $r['needs_more'].' planet'.($r['needs_more'] === 1 ? '' : 's').' would make more raw than '.($r['needs_more'] === 1 ? 'its' : 'their').' factories take' : 'fits the factories you have';
                 $html .= '<tr class="'.($r['key'] === 'weekly' ? 'today' : '').'">'
                     .'<td><b>'.e($r['title']).'</b><div class="opt-note">'.e($r['note']).'</div></td>'
-                    .'<td class="num">'.e(number_format($r['logins'], 1)).'</td>'
-                    .'<td class="num">'.e(number_format($r['effort_hours'], 1)).' h</td>'
-                    .'<td class="num"><b>'.e($isk($r['isk_week'])).'</b></td>'
-                    .'<td class="num'.($r['key'] === $bestKey ? ' best' : '').'">'.e($rate).'</td>'
+                    .'<td class="ocol">'.e(number_format($r['logins'], 1)).'</td>'
+                    .'<td class="ocol">'.e(number_format($r['effort_hours'], 1)).' h</td>'
+                    .'<td class="ocol"><b>'.e($isk($r['isk_week'])).'</b></td>'
+                    .'<td class="ocol'.($r['key'] === $bestKey ? ' best' : '').'">'.e($rate).'</td>'
                     .'<td class="small">'.e($needs).'</td></tr>';
             }
             return $html;
         };
-        $head = '<tr><th>Option</th><th class="num">Logins / week</th><th class="num">Your time / week</th><th class="num">ISK / week</th><th class="num" title="What each extra hour of your time earns compared with logging in weekly">Extra ISK per extra hour</th><th>Factories</th></tr>';
+        $head = '<tr><th>Option</th><th class="ocol">Logins / week</th><th class="ocol">Your time / week</th><th class="ocol">ISK / week</th><th class="ocol" title="What each extra hour of your time earns compared with logging in weekly">Extra ISK per extra hour</th><th>Factories</th></tr>';
       @endphp
       @if(count($options['pilots']) > 1)
         <div class="sect"><b>All your pilots</b><span class="muted small">{{ array_sum(array_map(fn ($p) => count($p['planets']), $options['pilots'])) }} P0 → P2 planets</span></div>
@@ -74,15 +74,15 @@
         @foreach($pilot['planets'] as $planet)
           <div style="margin: 8px 0 4px"><b>{{ $planet['name'] }}</b> <span class="muted small">→ {{ $planet['p2'] }}</span></div>
           <table class="opt-table small">
-            <tr><th>Option</th><th class="num">Raw / h (each line)</th><th class="num">P2 / week</th><th class="num">Basic / advanced needed</th><th class="num">Extra power</th><th class="num">Hauled / week</th></tr>
+            <tr><th>Option</th><th class="ocol">Raw / h (each line)</th><th class="ocol">P2 / week</th><th class="ocol">Basic / advanced needed</th><th class="ocol">Extra power</th><th class="ocol">Hauled / week</th></tr>
             @foreach($planet['options'] as $o)
               <tr class="{{ $o['key'] === 'weekly' ? 'today' : '' }}">
                 <td>{{ $o['title'] }}</td>
-                <td class="num">{{ implode(' / ', array_map('number_format', $o['raw'])) }}</td>
-                <td class="num">{{ number_format($o['p2_week']) }} <span class="muted">({{ $isk($o['isk_week']) }})</span></td>
-                <td class="num">{{ $o['basics'] }} / {{ $o['advanced'] }}</td>
-                <td class="num {{ $o['extra_mw'] > 0 ? '' : 'muted' }}">{{ $o['extra_mw'] > 0 ? '+'.number_format($o['extra_mw']).' MW' : 'none' }}</td>
-                <td class="num">{{ number_format($o['m3_week']) }} m³</td>
+                <td class="ocol">{{ implode(' / ', array_map('number_format', $o['raw'])) }}</td>
+                <td class="ocol">{{ number_format($o['p2_week']) }} <span class="muted">({{ $isk($o['isk_week']) }})</span></td>
+                <td class="ocol">{{ $o['basics'] }} / {{ $o['advanced'] }}</td>
+                <td class="ocol {{ $o['extra_mw'] > 0 ? '' : 'muted' }}">{{ $o['extra_mw'] > 0 ? '+'.number_format($o['extra_mw']).' MW' : 'none' }}</td>
+                <td class="ocol">{{ number_format($o['m3_week']) }} m³</td>
               </tr>
             @endforeach
           </table>
