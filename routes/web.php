@@ -279,6 +279,9 @@ Route::middleware('auth')->group(function () {
     Route::put('fleet-layouts/{fleetLayout}', [FleetLayoutController::class, 'update'])->name('fleet-layouts.update');
     Route::delete('fleet-layouts/{fleetLayout}', [FleetLayoutController::class, 'destroy'])->name('fleet-layouts.destroy');
     Route::post('fleet-layouts/{fleetLayout}/build', [FleetLayoutController::class, 'build'])->middleware('throttle:10,1')->name('fleet-layouts.build');
+    // Patch 72: a quick fleet of your own characters, sorted into squads by the ship they're in.
+    Route::get('fleets/quick', [FleetLayoutController::class, 'quick'])->middleware('throttle:30,1')->name('fleets.quick');
+    Route::post('fleets/quick', [FleetLayoutController::class, 'quickBuild'])->middleware('throttle:10,1')->name('fleets.quick.build');
     Route::post('fleet-layouts/resolve', [FleetLayoutController::class, 'resolve'])->middleware('throttle:30,1')->name('fleet-layouts.resolve');
     Route::get('maps/{map}/jump-in', [JumpInController::class, 'show'])->middleware('throttle:60,1')->name('maps.jump-in.show');
     Route::get('maps/{map}/ship-profiles', [ShipProfileController::class, 'index'])->name('maps.ship-profiles.index');

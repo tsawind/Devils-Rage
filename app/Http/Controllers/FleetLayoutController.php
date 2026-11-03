@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Actions\Fleets\BuildFleetAction;
+use App\Actions\Fleets\QuickFleet;
+use App\Http\Requests\QuickFleetRequest;
 use App\Http\Requests\ResolveFleetNamesRequest;
 use App\Http\Requests\SaveFleetLayoutRequest;
 use App\Models\Character;
+use App\Models\CharacterStatus;
 use App\Models\EsiToken;
 use App\Models\FleetLayout;
 use App\Models\User;
@@ -86,6 +89,43 @@ final class FleetLayoutController extends Controller
         abort_unless($fleetLayout->user_id === $user->id || $fleetLayout->shared, 403);
 
         return response()->json($build->handle($user, $fleetLayout));
+    }
+
+    /**
+     * Patch 72: your characters for a quick fleet: who's online, what they're flying, where,
+     * and the squad that ship goes in.
+     */
+    public function quick(#[CurrentUser] User $user): JsonResponse
+    {
+        $characters = $user->characters()->with(['characterStatus.shipType.group', 'characterStatus.solarsystem'])->orderBy('name')->get();
+
+        return response()->json([
+            'squads' => QuickFleet::SQUADS,
+            'characters' => $characters->map(function (Character $character): array {
+                $status = $character->characterStatus;
+                $ship = $status instanceof CharacterStatus ? $status->shipType : null;
+
+                return [
+                    'id' => (int) $character->id,
+                    'name' => $character->name,
+                    'online' => $status instanceof CharacterStatus && $status->is_online,
+                    'ship' => $ship?->name,
+                    'ship_type_id' => $ship?->id,
+                    'system' => $status?->solarsystem?->name,
+                    'role' => QuickFleet::roleFor($ship?->group?->name, $ship?->name),
+                ];
+            })->values(),
+        ]);
+    }
+
+    /** Patch 72: put these characters in the fleet you're boss of, a squad per role (again after a roll: only who's missing). */
+    public function quickBuild(QuickFleetRequest $request, #[CurrentUser] User $user, BuildFleetAction $build): JsonResponse
+    {
+        /** @var list<array{id: int, name: string, role: string}> $members */
+        $members = array_values((array) $request->validated('members'));
+        $layout = new FleetLayout(['name' => 'Quick fleet', 'shared' => false, 'layout' => QuickFleet::layout($members)]);
+
+        return response()->json($build->handle($user, $layout));
     }
 
     /** Pasted names → characters (the mapper's own first, then EVE's exact-name lookup). */

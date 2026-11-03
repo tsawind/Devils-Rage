@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Actions\Fleets\QuickFleet;
 use App\Models\Character;
 use App\Models\EsiScope;
 use App\Models\EsiToken;
@@ -168,4 +169,72 @@ it('finds pasted names in the mapper first, then in EVE', function () {
 
     expect(collect($result['characters'])->pluck('name')->all())->toBe(['Girl Shady', 'Somebody New'])
         ->and($result['not_found'])->toBe(['Nobody']);
+});
+
+// ---- Patch 72: quick fleet ----
+
+it('sorts ships into squads by role', function (?string $group, ?string $type, string $role) {
+    expect(QuickFleet::roleFor($group, $type))->toBe($role);
+})->with([
+    'T2 logi' => ['Logistics', 'Guardian', 'logi'],
+    'T1 logi cruiser' => ['Cruiser', 'Scythe', 'logi'],
+    'dictor' => ['Interdictor', 'Sabre', 'tackle'],
+    'covops' => ['Covert Ops', 'Buzzard', 'scout'],
+    'command ship' => ['Command Ship', 'Damnation', 'boost'],
+    'battleship' => ['Battleship', 'Megathron', 'dps'],
+    'unknown ship' => [null, null, 'dps'],
+]);
+
+it('makes one wing with a squad per role that is there, DPS first', function () {
+    $layout = QuickFleet::layout([
+        ['id' => 1, 'name' => 'Logi Guy', 'role' => 'logi'],
+        ['id' => 2, 'name' => 'Shooter', 'role' => 'dps'],
+        ['id' => 3, 'name' => 'Odd', 'role' => 'nonsense'],
+    ]);
+
+    expect($layout['wings'])->toHaveCount(1)
+        ->and(array_column($layout['wings'][0]['squads'], 'name'))->toBe(['DPS', 'Logi'])
+        ->and(array_column($layout['wings'][0]['squads'][0]['members'], 'name'))->toBe(['Shooter', 'Odd']);
+});
+
+it('lists your characters for a quick fleet', function () {
+    [$user] = fleetBoss();
+    Character::factory()->create(['user_id' => $user->id, 'name' => 'Alt One']);
+    Character::factory()->create(['name' => 'Not Mine']);
+
+    $result = actingAs($user)->getJson(route('fleets.quick'))->assertSuccessful()->json();
+
+    expect(collect($result['characters'])->pluck('name')->all())->toBe(['Alt One', 'Tsawind'])
+        ->and($result['characters'][0]['online'])->toBeFalse()
+        ->and($result['characters'][0]['role'])->toBe('dps')
+        ->and($result['squads'])->toHaveKey('logi');
+});
+
+it('invites a quick fleet into a squad per role', function () {
+    [$user, $boss] = fleetBoss();
+    $esi = $this->mock(Esi::class);
+    $esi->shouldReceive('getCharacterFleet')->andReturn(new EsiResult(data: new FleetInfo(fleet_id: 77, fleet_boss_id: (int) $boss->id, role: 'fleet_commander', squad_id: -1, wing_id: -1)));
+    $esi->shouldReceive('getFleetWings')->andReturn(new EsiResult(data: [new FleetWing(id: 501, name: 'Fleet', squads: [new FleetSquad(id: 601, name: 'DPS'), new FleetSquad(id: 602, name: 'Logi')])]));
+    $esi->shouldNotReceive('createFleetWing');
+    $esi->shouldNotReceive('createFleetSquad');
+    $esi->shouldReceive('getFleetMembers')->andReturn(new EsiResult(data: []));
+    $esi->shouldReceive('inviteFleetMember')->once()->withArgs(fn ($c, $fleet, $member, $role, $squad, $wing) => $member === 9001 && $squad === 601)->andReturn(new EsiResult(data: null));
+    $esi->shouldReceive('inviteFleetMember')->once()->withArgs(fn ($c, $fleet, $member, $role, $squad, $wing) => $member === 9002 && $squad === 602)->andReturn(new EsiResult(data: null));
+
+    $result = actingAs($user)->postJson(route('fleets.quick.build'), ['members' => [
+        ['id' => 9001, 'name' => 'Shooter', 'role' => 'dps'],
+        ['id' => 9002, 'name' => 'Logi Guy', 'role' => 'logi'],
+        ['id' => (int) $boss->id, 'name' => 'Tsawind', 'role' => 'dps'],
+    ]])->assertSuccessful()->json();
+
+    expect($result['ok'])->toBeTrue()
+        ->and(collect($result['results'])->pluck('outcome', 'name')->all())->toBe(['Shooter' => 'invited', 'Tsawind' => 'boss', 'Logi Guy' => 'invited'])
+        ->and(FleetLayout::query()->count())->toBe(0);
+});
+
+it('rejects a quick fleet without a real squad', function () {
+    [$user] = fleetBoss();
+    actingAs($user)->postJson(route('fleets.quick.build'), ['members' => [['id' => 1, 'name' => 'X', 'role' => 'pilots']]])
+        ->assertUnprocessable()->assertJsonValidationErrors(['members.0.role']);
+    actingAs($user)->postJson(route('fleets.quick.build'), ['members' => []])->assertUnprocessable();
 });

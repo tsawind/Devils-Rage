@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import AppLayout from '@/layouts/AppLayout.vue';
 import SeoHead from '@/layouts/SeoHead.vue';
-import { Copy, Plus, Rocket, Save, Trash2, Users, X } from 'lucide-vue-next';
+import { Copy, Plus, RefreshCw, Rocket, Save, Trash2, Users, X, Zap } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 
 /**
@@ -131,6 +131,69 @@ async function buildFleet() {
     }
 }
 
+// ---- Patch 72: quick fleet of your own characters, a squad per role by the ship they're in ----
+type TQuickChar = { id: number; name: string; online: boolean; ship: string | null; system: string | null; role: string; picked: boolean };
+const quickOpen = ref(false);
+const quickChars = ref<TQuickChar[]>([]);
+const quickSquads = ref<Record<string, string>>({});
+const quickBusy = ref(false);
+const quickBuild = ref<TBuild | null>(null);
+const quickError = ref('');
+const quickPicked = computed(() => quickChars.value.filter((character) => character.picked));
+
+async function loadQuick() {
+    quickError.value = '';
+    quickBusy.value = true;
+    try {
+        const data = await send<{ squads: Record<string, string>; characters: Omit<TQuickChar, 'picked'>[] }>(FleetLayoutController.quick().url, 'GET');
+        const was = new Map(quickChars.value.map((character) => [character.id, character]));
+        quickSquads.value = data.squads;
+        quickChars.value = data.characters.map((character) => {
+            const before = was.get(character.id);
+            // Keep your own squad picks and ticks; new characters: ticked when online.
+            return { ...character, role: before?.role ?? character.role, picked: before ? before.picked : character.online };
+        });
+    } catch (error) {
+        quickError.value = (error as Error).message;
+    } finally {
+        quickBusy.value = false;
+    }
+}
+
+function toggleQuick() {
+    quickOpen.value = !quickOpen.value;
+    if (quickOpen.value && !quickChars.value.length) loadQuick();
+}
+
+async function inviteQuick() {
+    quickError.value = '';
+    quickBuild.value = null;
+    if (!quickPicked.value.length) {
+        quickError.value = 'Tick at least one character.';
+        return;
+    }
+    quickBusy.value = true;
+    try {
+        quickBuild.value = await send<TBuild>(FleetLayoutController.quickBuild().url, 'POST', {
+            members: quickPicked.value.map((character) => ({ id: character.id, name: character.name, role: character.role })),
+        });
+    } catch (error) {
+        quickError.value = (error as Error).message;
+    } finally {
+        quickBusy.value = false;
+    }
+}
+
+function quickToLayout() {
+    const squads: TSquad[] = Object.entries(quickSquads.value)
+        .map(([role, name]) => ({ name, commander: null, members: quickPicked.value.filter((character) => character.role === role).map((character) => ({ id: character.id, name: character.name })) }))
+        .filter((squad) => squad.members.length);
+    selectedId.value = null;
+    draft.value = { id: null, name: 'My fleet', shared: false, mine: true, layout: { wings: [{ name: 'Fleet', commander: null, squads: squads.length ? squads : blank().wings[0].squads }] } };
+    build.value = null;
+    said.value = 'Made a layout from the quick fleet: rename it and Save to keep it.';
+}
+
 // ---- Editing ----
 const addWing = () => draft.value.layout.wings.push({ name: `Wing ${draft.value.layout.wings.length + 1}`, commander: null, squads: [{ name: 'Squad 1', commander: null, members: [] }] });
 const addSquad = (wing: TWing) => wing.squads.push({ name: `Squad ${wing.squads.length + 1}`, commander: null, members: [] });
@@ -206,6 +269,7 @@ const outcomeLabel: Record<TResult['outcome'], string> = { invited: 'Invited', m
             <aside class="flex flex-col gap-2">
                 <h1 class="flex items-center gap-2 font-display text-2xl font-bold tracking-tight"><Users class="h-5 w-5" /> Fleets</h1>
                 <p class="text-xs text-muted-foreground">Save who goes where, then build the whole fleet in one go as fleet boss.</p>
+                <Button size="sm" class="justify-start gap-2" @click="toggleQuick"><Zap class="h-4 w-4" /> Quick fleet: my characters</Button>
                 <Button size="sm" variant="outline" class="justify-start gap-2" @click="startNew"><Plus class="h-4 w-4" /> New layout</Button>
                 <button
                     v-for="layout in list"
@@ -221,6 +285,49 @@ const outcomeLabel: Record<TResult['outcome'], string> = { invited: 'Invited', m
             </aside>
 
             <section class="flex min-w-0 flex-col gap-4">
+                <div v-if="quickOpen" class="rounded bg-card p-4 ring-1 ring-primary/50">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <h2 class="flex items-center gap-2 font-semibold"><Zap class="h-4 w-4" /> Quick fleet</h2>
+                        <span class="text-sm text-muted-foreground">Your characters, each in the squad its ship belongs in. Start a fleet in game (you as boss), then invite. After a roll, press it again: only whoever is missing gets an invite.</span>
+                    </div>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <Button class="gap-2" :disabled="quickBusy || !quickPicked.length" @click="inviteQuick"><Rocket class="h-4 w-4" /> Invite {{ quickPicked.length }} to the fleet</Button>
+                        <Button variant="outline" size="sm" class="gap-2" :disabled="quickBusy" @click="loadQuick"><RefreshCw class="h-4 w-4" /> Ships again</Button>
+                        <Button variant="outline" size="sm" class="gap-2" :disabled="!quickPicked.length" @click="quickToLayout"><Save class="h-4 w-4" /> Make it a layout</Button>
+                        <button type="button" class="text-xs text-muted-foreground underline" @click="quickChars.forEach((c) => (c.picked = c.online))">tick who's online</button>
+                        <button type="button" class="text-xs text-muted-foreground underline" @click="quickChars.forEach((c) => (c.picked = false))">untick all</button>
+                    </div>
+                    <p v-if="quickError" class="mt-2 text-sm text-red-400">{{ quickError }}</p>
+                    <div v-if="quickBuild" class="mt-2">
+                        <p :class="quickBuild.ok ? 'text-green-400' : 'text-red-400'" class="text-sm">{{ quickBuild.message }}<template v-if="quickBuild.boss"> (boss {{ quickBuild.boss }})</template></p>
+                        <table v-if="quickBuild.results?.length" class="mt-1 w-full text-sm">
+                            <tbody>
+                                <tr v-for="row in quickBuild.results" :key="row.id + row.place" class="border-t border-border/50">
+                                    <td class="py-1 pr-3 font-semibold">{{ row.name }}</td>
+                                    <td class="py-1 pr-3 text-muted-foreground">{{ row.place }}</td>
+                                    <td class="py-1 pr-3" :class="outcomeClass[row.outcome]">{{ outcomeLabel[row.outcome] }}</td>
+                                    <td class="py-1 text-muted-foreground">{{ row.detail }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <table class="mt-3 w-full text-sm">
+                        <tbody>
+                            <tr v-for="character in quickChars" :key="character.id" class="border-t border-border/50" :class="{ 'opacity-60': !character.online }">
+                                <td class="w-6 py-1"><input v-model="character.picked" type="checkbox" /></td>
+                                <td class="py-1 pr-3 font-semibold">{{ character.name }}</td>
+                                <td class="py-1 pr-3 text-xs" :class="character.online ? 'text-green-400' : 'text-muted-foreground'">{{ character.online ? 'online' : 'offline' }}</td>
+                                <td class="py-1 pr-3 text-muted-foreground">{{ character.ship ?? '—' }}<template v-if="character.system"> · {{ character.system }}</template></td>
+                                <td class="py-1">
+                                    <select v-model="character.role" class="rounded border border-border bg-background px-2 py-0.5 text-xs">
+                                        <option v-for="(name, role) in quickSquads" :key="role" :value="role">{{ name }}</option>
+                                    </select>
+                                </td>
+                            </tr>
+                            <tr v-if="!quickChars.length && !quickBusy"><td colspan="5" class="py-2 text-muted-foreground">No characters on your account yet.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div class="flex flex-wrap items-center gap-3">
                     <Input v-model="draft.name" maxlength="60" class="max-w-xs font-semibold" :disabled="!draft.mine" />
                     <label class="flex items-center gap-2 text-sm" :class="{ 'opacity-50': !draft.mine }">
@@ -239,6 +346,7 @@ const outcomeLabel: Record<TResult['outcome'], string> = { invited: 'Invited', m
                 <div class="rounded bg-card p-4 ring-1 ring-border">
                     <div class="flex flex-wrap items-center gap-3">
                         <Button class="gap-2" :disabled="busy || draft.id === null" @click="buildFleet"><Rocket class="h-4 w-4" /> Build fleet and invite</Button>
+                        <span class="text-xs text-muted-foreground">Again after a roll: only who's missing gets an invite.</span>
                         <span class="text-sm text-muted-foreground">
                             Start a fleet in game first (you as boss), then press this. Boss can be:
                             <b>{{ bosses.map((c) => c.name).join(', ') || 'none yet: give a character all permissions in Settings → EVE characters' }}</b>
