@@ -15,7 +15,6 @@ use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
-use NicolasKion\Esi\DTO\UniverseIds;
 use NicolasKion\Esi\Enums\EsiScope;
 use NicolasKion\Esi\Esi;
 use Throwable;
@@ -103,7 +102,7 @@ final class FleetLayoutController extends Controller
         if ($missing !== []) {
             try {
                 $result = $esi->getIds($missing);
-                if ($result->wasSuccessful() && $result->data instanceof UniverseIds) {
+                if ($result->wasSuccessful()) {
                     foreach ($result->data->characters as $character) {
                         $found[mb_strtolower($character->name)] = ['id' => $character->id, 'name' => $character->name];
                     }

@@ -49,7 +49,7 @@ final readonly class BuildFleetAction
         $squadIds = [];
         foreach ($plan as $w => $wing) {
             $existing = $wings[$w] ?? null;
-            $wingId = $existing?->id ?? $this->created($this->esi->createFleetWing($boss, $info->fleet_id));
+            $wingId = $existing->id ?? $this->created($this->esi->createFleetWing($boss, $info->fleet_id));
             if ($wingId === null) {
                 return ['ok' => false, 'message' => sprintf('EVE wouldn\'t make wing %d. Fleets hold up to 25 wings.', $w + 1)];
             }
@@ -66,9 +66,9 @@ final readonly class BuildFleetAction
         }
         foreach ($plan as $w => $wing) {
             $squads = array_values($byId[$wingIds[$w]]->squads ?? []);
-            foreach ($wing['squads'] ?? [] as $s => $squad) {
+            foreach ($wing['squads'] as $s => $squad) {
                 $existing = $squads[$s] ?? null;
-                $squadId = $existing?->id ?? $this->created($this->esi->createFleetSquad($boss, $info->fleet_id, $wingIds[$w]));
+                $squadId = $existing->id ?? $this->created($this->esi->createFleetSquad($boss, $info->fleet_id, $wingIds[$w]));
                 if ($squadId === null) {
                     return ['ok' => false, 'message' => sprintf('EVE wouldn\'t make squad %d in wing %d. Wings hold up to 25 squads.', $s + 1, $w + 1)];
                 }
@@ -83,8 +83,8 @@ final readonly class BuildFleetAction
         $members = [];
         try {
             $result = $this->esi->getFleetMembers($boss, $info->fleet_id);
-            foreach (is_array($result->data) ? $result->data : [] as $member) {
-                if ($member instanceof FleetMember) {
+            if ($result->wasSuccessful()) {
+                foreach ($result->data as $member) {
                     $members[$member->character_id] = $member;
                 }
             }
@@ -129,11 +129,11 @@ final readonly class BuildFleetAction
             if (isset($wing['commander']['id'])) {
                 $place($wing['commander'], 'wing_commander', $wingIds[$w], null, $wing['name'].' commander');
             }
-            foreach ($wing['squads'] ?? [] as $s => $squad) {
+            foreach ($wing['squads'] as $s => $squad) {
                 if (isset($squad['commander']['id'])) {
                     $place($squad['commander'], 'squad_commander', $wingIds[$w], $squadIds[$w][$s], $wing['name'].' · '.$squad['name'].' commander');
                 }
-                foreach ($squad['members'] ?? [] as $member) {
+                foreach ($squad['members'] as $member) {
                     $place($member, 'squad_member', $wingIds[$w], $squadIds[$w][$s], $wing['name'].' · '.$squad['name']);
                 }
             }
@@ -167,9 +167,8 @@ final readonly class BuildFleetAction
             } catch (Throwable) {
                 continue;
             }
-            $info = $result->data;
-            if ($result->wasSuccessful() && $info instanceof FleetInfo && $info->fleet_boss_id === $character->id) {
-                return [$character, $info];
+            if ($result->wasSuccessful() && $result->data->fleet_boss_id === $character->id) {
+                return [$character, $result->data];
             }
         }
 
@@ -184,11 +183,11 @@ final readonly class BuildFleetAction
         } catch (Throwable) {
             return null;
         }
-        if ($result->failed() || ! is_array($result->data)) {
+        if ($result->failed()) {
             return null;
         }
 
-        return array_values(array_filter($result->data, fn (mixed $wing): bool => $wing instanceof FleetWing));
+        return array_values($result->data);
     }
 
     private function created(EsiResult $result): ?int
@@ -199,7 +198,7 @@ final readonly class BuildFleetAction
     /** EVE's reason in plain words (e.g. the character is offline or already in a fleet). */
     public static function why(EsiResult $result): string
     {
-        $body = (string) ($result->error?->body ?? '');
+        $body = (string) ($result->error->body ?? '');
         $decoded = json_decode($body, true);
         $text = is_array($decoded) ? (string) ($decoded['error'] ?? $body) : $body;
 
@@ -207,7 +206,7 @@ final readonly class BuildFleetAction
             str_contains(mb_strtolower($text), 'online') => 'Not logged in right now.',
             str_contains(mb_strtolower($text), 'already') => 'Already in a fleet (leave it first).',
             $text !== '' => $text,
-            default => sprintf('EVE said no (%d).', $result->error?->code ?? 0),
+            default => sprintf('EVE said no (%d).', $result->error->code ?? 0),
         };
     }
 }

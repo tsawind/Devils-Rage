@@ -60,11 +60,11 @@ final class FleetLayout extends Model
             if (isset($wing['commander']['id'])) {
                 $ids[] = (int) $wing['commander']['id'];
             }
-            foreach ($wing['squads'] ?? [] as $squad) {
+            foreach ($wing['squads'] as $squad) {
                 if (isset($squad['commander']['id'])) {
                     $ids[] = (int) $squad['commander']['id'];
                 }
-                foreach ($squad['members'] ?? [] as $member) {
+                foreach ($squad['members'] as $member) {
                     $ids[] = (int) $member['id'];
                 }
             }
