@@ -5,6 +5,7 @@ declare(strict_types=1);
 use DevilsRage\Seat\Http\Controllers\AccountsController;
 use DevilsRage\Seat\Http\Controllers\BotApiController;
 use DevilsRage\Seat\Http\Controllers\HomeController;
+use DevilsRage\Seat\Http\Controllers\LaunchGroupsController;
 use DevilsRage\Seat\Http\Controllers\PiController;
 use DevilsRage\Seat\Http\Controllers\PlannerController;
 use DevilsRage\Seat\Http\Controllers\RemindersController;
@@ -62,6 +63,11 @@ Route::group([
 
     Route::post('launch-groups', [AccountsController::class, 'storeGroup'])->name('devilsrage.groups.store');
     Route::post('launch-groups/{launchGroup}/delete', [AccountsController::class, 'deleteGroup'])->name('devilsrage.groups.delete');
+    // Patch 66: launch groups for the desktop app, importing a PC's groups, corp groups from directors.
+    Route::get('launch-groups.json', [LaunchGroupsController::class, 'json'])->name('devilsrage.groups.json');
+    Route::post('launch-groups/import', [LaunchGroupsController::class, 'import'])->name('devilsrage.groups.import');
+    Route::post('launch-groups/corp', [LaunchGroupsController::class, 'storeCorp'])->name('devilsrage.groups.corp.store');
+    Route::post('launch-groups/{launchGroup}/corp-delete', [LaunchGroupsController::class, 'deleteCorp'])->name('devilsrage.groups.corp.delete');
 
     Route::get('layout', [AccountsController::class, 'layout'])->name('devilsrage.layout');
     Route::get('planner', [PlannerController::class, 'index'])->name('devilsrage.planner');

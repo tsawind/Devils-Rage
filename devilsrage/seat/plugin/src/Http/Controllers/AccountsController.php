@@ -489,7 +489,10 @@ class AccountsController extends Controller
         $user = auth()->user();
         $this->authorizeOwner($accountCharacter->account);
 
-        $own = LaunchGroup::query()->where('user_id', $user->id)->pluck('id')->map(fn ($id): int => (int) $id);
+        // Your own groups and the directors' corp groups (not Main / Second / Third: setCorpGroup).
+        $own = LaunchGroup::query()
+            ->where(fn ($query) => $query->where('user_id', $user->id)->orWhere(fn ($corp) => $corp->whereNull('user_id')->where('locked', false)))
+            ->pluck('id')->map(fn ($id): int => (int) $id);
         $data = $request->validate([
             'groups' => ['array'],
             'groups.*' => ['integer', Rule::in($own->all())],

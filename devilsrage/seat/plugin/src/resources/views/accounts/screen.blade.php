@@ -331,7 +331,7 @@
                   <form class="pills" method="post" action="{{ route('devilsrage.accounts.characters.groups', $link) }}" title="Your own launch groups (only you see them)">
                     @csrf
                     @foreach($ownGroups as $group)
-                      <label><input type="checkbox" name="groups[]" value="{{ $group->id }}" @checked(in_array($group->id, $ticked, true)) onchange="this.form.submit()"><span>{{ $group->name }}</span></label>
+                      <label><input type="checkbox" name="groups[]" value="{{ $group->id }}" @checked(in_array($group->id, $ticked, true)) onchange="this.form.submit()"><span>{{ $group->user_id === null ? '★ ' : '' }}{{ $group->name }}</span></label>
                     @endforeach
                   </form>
                 @endif
@@ -386,16 +386,36 @@
           <div class="groups">
             <span class="muted" title="Only you see these, e.g. a 7-pilot DST launch. Tick them on characters above; the same groups as in SeAT.">Your launch groups:</span>
             @foreach($ownGroups as $group)
+              @if($group->user_id === null)
+                {{-- Patch 66: a corp launch group from the directors: everyone can tick it. --}}
+                @can('devilsrage-leader')
+                  <form method="post" action="{{ route('devilsrage.groups.corp.delete', $group) }}" class="ask g" data-ask="Delete the corp launch group {{ $group->name }} for everyone? Characters stay where they are.">
+                    @csrf
+                    <span title="Corp launch group (everyone can use it)">★ {{ $group->name }}</span><button class="x" type="submit" title="Delete this corp group">✕</button>
+                  </form>
+                @else
+                  <span class="g" title="Corp launch group from the directors: tick it on the characters you bring"><span>★ {{ $group->name }}</span></span>
+                @endcan
+              @else
               <form method="post" action="{{ route('devilsrage.groups.delete', $group) }}" class="ask g" data-ask="Delete your launch group {{ $group->name }}? Characters stay where they are.">
                 @csrf
                 <span>{{ $group->name }}</span><button class="x" type="submit" title="Delete this group">✕</button>
               </form>
+              @endif
             @endforeach
             <form method="post" action="{{ route('devilsrage.groups.store') }}" style="display: flex; gap: 4px">
               @csrf
               <input name="name" maxlength="40" placeholder="New group, e.g. DST launch" required aria-label="New launch group">
               <button class="btn sm" type="submit">Add</button>
             </form>
+            @can('devilsrage-leader')
+              <form method="post" action="{{ route('devilsrage.groups.corp.store') }}" style="display: flex; gap: 4px" title="Directors: a launch group every pilot can tick (e.g. Roll fleet, PI run)">
+                @csrf
+                <input name="name" maxlength="40" placeholder="★ Corp group for everyone" required aria-label="New corp launch group">
+                <button class="btn sm" type="submit">Add for corp</button>
+              </form>
+            @endcan
+            <span class="app-sync muted" style="font-size: 12px" hidden></span>
           </div>
         </div>
       @endforeach
@@ -407,6 +427,47 @@
   <div class="box"><p id="confirm-text"></p><div><button class="btn" type="button" id="confirm-no">Cancel</button><button class="btn p" type="button" id="confirm-yes">Yes, remove</button></div></div>
 </div>
 
+<script>
+// Patch 66: inside the desktop app, hand your accounts and launch groups to the app (its
+// Launch groups page, pedal cycling and Client settings use them), and offer to bring in
+// groups made on this PC (e.g. imported from EVE-O Preview).
+(() => {
+  const app = window.__DEVILS_RAGE_APP__;
+  if (!app || !app.capture) return;
+  const bridge = 'http://drcap.localhost';
+  const said = (text) => document.querySelectorAll('.app-sync').forEach((el) => { el.hidden = !text; el.textContent = text || ''; });
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
+  async function sync() {
+    const data = await fetch(@json(route('devilsrage.groups.json')), { headers: { Accept: 'application/json' }, credentials: 'same-origin' }).then((r) => r.json());
+    const r = await fetch(bridge + '/launch-sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+    if (!r.ok) throw new Error('the app said ' + r.status);
+    return data;
+  }
+  async function offerImport() {
+    const local = await fetch(bridge + '/launch-local').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+    if (!local.length) { said('✓ The app has your launch groups.'); return; }
+    said('');
+    document.querySelectorAll('.app-sync').forEach((holder) => {
+      holder.hidden = false;
+      holder.innerHTML = '';
+      const btn = document.createElement('button');
+      btn.className = 'btn sm';
+      btn.type = 'button';
+      btn.textContent = `Bring in ${local.length} group${local.length === 1 ? '' : 's'} made in the app`;
+      btn.title = local.map((g) => g.name + ': ' + g.members.length + ' characters').join('\n');
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const r = await fetch(@json(route('devilsrage.groups.import')), { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf }, body: JSON.stringify({ groups: local }) }).then((x) => x.json()).catch(() => null);
+        if (!r) { said('Couldn\'t bring them in. Reload and try again.'); return; }
+        await fetch(bridge + '/launch-local', { method: 'DELETE' }).catch(() => {});
+        location.reload();
+      });
+      holder.append(btn);
+    });
+  }
+  sync().then(offerImport).catch(() => said('Couldn\'t reach the app\'s launch groups (update the app?).'));
+})();
+</script>
 <script>
 (() => {
   // Removing asks first, on the page itself (the app has no browser pop-up dialogs).

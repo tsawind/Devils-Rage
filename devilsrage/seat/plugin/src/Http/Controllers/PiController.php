@@ -210,6 +210,7 @@ class PiController extends Controller
             'corp' => $leader ? $this->corp($now, $jita, $hub, $taxRate, $piSkills) : null,
             'templates' => $this->templates((int) $user->id, $leader),
             'options' => $this->setupOptions($colonies, $prices, $taxRate),
+            'alphaIds' => $alphaIds,
             'corpMap' => $this->corpMap($data, $leader),
         ]);
     }
@@ -359,13 +360,17 @@ class PiController extends Controller
     }
 
     /** Patch 65: what one month of Omega costs per day (12-month PLEX bundle at the PLEX price). */
-    private function omegaPerDay(): float
+    private function omegaPerDay(): ?float
     {
-        $plex = (float) (DB::table('market_prices')->where('type_id', 44992)->get(['average', 'average_price'])
-            ->map(fn ($row): float => (float) ($row->average > 0 ? $row->average : $row->average_price))
-            ->first() ?? 0);
+        // The SP farm's PLEX price: what leaders set there, else SeAT's market average.
+        $plex = (float) (Setting::read('farm_price_plex') ?: 0);
+        if ($plex <= 0) {
+            $plex = (float) (DB::table('market_prices')->where('type_id', 44992)->get(['average', 'average_price'])
+                ->map(fn ($row): float => (float) ($row->average > 0 ? $row->average : $row->average_price))
+                ->first() ?? 0);
+        }
 
-        return app(FarmPrices::class)->omegaPlexPerMonth(12) * $plex / 30;
+        return $plex > 0 ? app(FarmPrices::class)->omegaPlexPerMonth(12) * $plex / 30 : null;
     }
 
     /**
@@ -551,7 +556,7 @@ class PiController extends Controller
             'stock' => $stock,
             'upgrade' => $upgrade,
             'grow' => $grow,
-            'omega' => $omega + ['cost_per_day' => $omega['accounts'] * $this->omegaPerDay()],
+            'omega' => ['cost_per_day' => ($perDay = $this->omegaPerDay()) === null ? null : $omega['accounts'] * $perDay] + $omega,
         ], $isk);
     }
 

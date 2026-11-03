@@ -472,7 +472,10 @@
         </div>
       </section>
     @endforeach
-    @php $idle = array_filter($skillRows, fn (array $r): bool => $r['colonies'] === 0); @endphp
+    @php
+      $idle = array_filter($skillRows, fn (array $r, $id): bool => $r['colonies'] === 0 && ! isset($alphaIds[$id]), ARRAY_FILTER_USE_BOTH);
+      $alphas = array_filter($skillRows, fn (array $r, $id): bool => isset($alphaIds[$id]), ARRAY_FILTER_USE_BOTH);
+    @endphp
     @if($idle !== [])
       <section class="card">
         <div class="sect"><h2>Characters not doing PI</h2><span class="muted small">what it takes to start (Command Center Upgrades 5, five planets), and what they'd add at your colonies' average of {{ $isk($perColony) }} a planet a day</span></div>
@@ -485,6 +488,23 @@
                 <td class="small" style="color: {{ $r['ready'] ? 'var(--ok)' : 'var(--warn)' }}">{{ $skillText($r) }}</td>
                 <td style="text-align: right; white-space: nowrap">{{ $r['per_day'] > 0 ? $isk($r['per_day'] * 30) : '—' }}</td>
                 <td style="text-align: right; padding-right: 16px; white-space: nowrap" class="muted">{{ $r['payback_days'] !== null ? (int) ceil($r['payback_days']).' days' : ($r['ready'] ? 'nothing to buy' : '—') }}</td>
+              </tr>
+            @endforeach
+          </tbody>
+        </table></div>
+      </section>
+    @endif
+    @if($alphas !== [])
+      <section class="card">
+        <div class="sect"><h2>On Alpha accounts</h2><span class="muted small">Alpha characters can't do PI. As Omega, each could run its planets at your average of {{ $isk($perColony) }} a planet a day. An account counts as Omega when Your accounts has an Omega date ahead (or a subscription), or one of its characters runs a colony.</span></div>
+        <div class="scroll"><table>
+          <thead><tr><th scope="col">Character</th><th scope="col">Skills</th><th scope="col" style="text-align: right; padding-right: 16px">As Omega could add / month</th></tr></thead>
+          <tbody>
+            @foreach($alphas as $r)
+              <tr>
+                <td><b>{{ $r['name'] }}</b></td>
+                <td class="small muted">{{ $r['planets_after'] ?? 0 }} planets with its skills{{ $r['ready'] ? '' : ' · '.$skillText($r) }}</td>
+                <td style="text-align: right; padding-right: 16px; white-space: nowrap">{{ ($r['planets_after'] ?? 0) > 0 ? $isk(($r['planets_after'] ?? 0) * $perColony * 30) : '—' }}</td>
               </tr>
             @endforeach
           </tbody>

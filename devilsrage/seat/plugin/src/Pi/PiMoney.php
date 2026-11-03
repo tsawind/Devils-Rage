@@ -114,7 +114,7 @@ final class PiMoney
      *   stock: array{value: float, m3: float},
      *   upgrade: array{p3: string, inputs: list<string>, per_day: int, factories: int, gain_per_day: float}|null,
      *   grow: array{planets: int, per_day: float, characters: int},
-     *   omega?: array{planets: int, per_day: float, characters: int, accounts: int, cost_per_day: float}
+     *   omega?: array{planets: int, per_day: float, characters: int, accounts: int, cost_per_day: float|null}
      * }  $facts
      * @return list<array{kind: string, title: string, why: string, per_month: float, now: float}>
      */
@@ -146,9 +146,13 @@ final class PiMoney
         }
         $omega = $facts['omega'] ?? null;
         if ($omega !== null && $omega['planets'] > 0 && $omega['per_day'] > 0) {
-            $net = $omega['per_day'] - $omega['cost_per_day'];
+            $cost = $omega['cost_per_day'];
+            $net = $cost === null ? $omega['per_day'] : $omega['per_day'] - $cost;
+            $costText = $cost === null
+                ? 'Omega costs PLEX each month too (set the PLEX price on the SP farm page to see it here)'
+                : 'Omega costs about '.$isk($cost * $month).' a month for those accounts (12-month PLEX bundle), so '.($net > 0 ? 'about '.$isk($net * $month).' a month ahead' : 'it doesn\'t pay for itself from PI alone');
             $list[] = self::item('omega', 'Make '.$omega['accounts'].' Alpha '.($omega['accounts'] === 1 ? 'account' : 'accounts').' Omega: '.$omega['planets'].' colonies on '.$omega['characters'].' characters',
-                'Alpha characters can\'t do PI, so they\'re left out of everything above. As Omega they could run '.$omega['planets'].' colonies at what an average colony of yours makes ('.$isk($omega['per_day'] * $month).' a month); Omega costs about '.$isk($omega['cost_per_day'] * $month).' a month for those accounts (12-month PLEX bundle), so '.($net > 0 ? 'about '.$isk($net * $month).' a month ahead' : 'it doesn\'t pay for itself from PI alone').'. Wrong account? Set its Omega date in Your accounts.',
+                'Alpha characters can\'t do PI, so they\'re left out of everything above. As Omega they could run '.$omega['planets'].' colonies at what an average colony of yours makes ('.$isk($omega['per_day'] * $month).' a month before Omega). '.$costText.'. Wrong account? Set its Omega date in Your accounts.',
                 max(0.0, $net) * $month, $net > 0 ? 0.0 : $omega['per_day'] * $month);
         }
         if ($facts['hub']['per_day'] > 0 && $facts['hub']['share'] >= 0.01) {
