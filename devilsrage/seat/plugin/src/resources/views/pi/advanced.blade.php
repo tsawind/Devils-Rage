@@ -106,7 +106,7 @@
     @else
       <div class="map-tools">
         <label>Planet <select id="map-planet">
-          @foreach($corpMap as $i => $p)<option value="{{ $i }}">{{ $p['name'] }}{{ $p['type'] ? ' · '.ucfirst($p['type']) : '' }} ({{ count($p['spots']) }} spots)</option>@endforeach
+          @foreach($corpMap as $i => $p)<option value="{{ $i }}">{{ $p['name'] }}{{ $p['type'] ? ' · '.ucfirst($p['type']) : '' }} ({{ count($p['spots']) }} spots{{ !empty($p['scans']) ? ', '.count($p['scans']).' scanned' : '' }})</option>@endforeach
         </select></label>
         <label><span class="legend-dot" style="background:#ff6a5a"></span><select id="map-a"></select></label>
         <label><span class="legend-dot" style="background:#5ab4ff"></span><select id="map-b"></select></label>
@@ -115,9 +115,10 @@
       </div>
       <div class="map-wrap"><svg id="pi-map" viewBox="0 0 720 360" preserveAspectRatio="xMidYMid meet" aria-label="Planet map"></svg>
         <div class="muted small" id="map-scale" style="margin-top: 4px"></div></div>
+      <div class="muted small" id="map-scans" style="padding: 0 16px 6px"></div>
       <div class="sect"><b>Best pairs</b><span class="muted small">one spot of each resource within reach, both still yielding well and used lately</span></div>
       <div class="pairs" id="map-pairs"></div>
-      <script type="application/json" id="map-data">{!! json_encode(['planets' => $corpMap, 'now' => $now, 'halfLife' => \DevilsRage\Seat\Pi\PiMap::HALF_LIFE_DAYS], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
+      <script type="application/json" id="map-data">{!! json_encode(['scanUrl' => url('devilsrage/pi/scans'), 'planets' => $corpMap, 'now' => $now, 'halfLife' => \DevilsRage\Seat\Pi\PiMap::HALF_LIFE_DAYS], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) !!}</script>
     @endif
   </div>
 </section>
@@ -149,7 +150,67 @@
   // ---------------- Corp map ----------------
   const dataEl = document.getElementById('map-data');
   if (dataEl) {
-    const { planets, now, halfLife } = JSON.parse(dataEl.textContent);
+    const { planets, now, halfLife, scanUrl } = JSON.parse(dataEl.textContent);
+    // Patch 71: video scans (whole-planet heat, 360 × 180 one-degree cells; 0 = not seen).
+    const scanCache = new Map();
+    const scanOf = (p, name) => (p.scans || []).find((x) => x.resource === name);
+    async function cellsFor(p, name) {
+      const key = p.planet_id + ':' + name;
+      if (!scanCache.has(key)) {
+        scanCache.set(key, fetch(`${scanUrl}/${p.planet_id}/${encodeURIComponent(name)}`, { headers: { Accept: 'application/json' } })
+          .then((r) => r.ok ? r.json() : null)
+          .then((j) => j ? Uint8Array.from(atob(j.cells), (c) => c.charCodeAt(0)) : null).catch(() => null));
+      }
+      return scanCache.get(key);
+    }
+    const SW = 360, SH = 180;
+    const heatOf = (cells, row, col) => { const v = cells[row * SW + ((col % SW) + SW) % SW]; return v ? (v - 1) / 250 : -1; };
+    function scanImage(ca, cb) {
+      const c = document.createElement('canvas'); c.width = SW; c.height = SH;
+      const x = c.getContext('2d'), img = x.createImageData(SW, SH);
+      for (let i = 0; i < SW * SH; i++) {
+        const ha = ca && ca[i] ? (ca[i] - 1) / 250 : 0, hb = cb && cb[i] ? (cb[i] - 1) / 250 : 0;
+        const seen = (ca && ca[i]) || (cb && cb[i]);
+        img.data[i * 4] = 255 * ha; img.data[i * 4 + 1] = 70 * Math.min(ha, hb); img.data[i * 4 + 2] = 255 * hb;
+        img.data[i * 4 + 3] = seen ? 40 + 170 * Math.max(ha, hb) : 0;
+      }
+      x.putImageData(img, 0, 0);
+      return c.toDataURL();
+    }
+    // Best places from the scans: a cell hot in A with a cell hot in B within reach (2° steps).
+    function scanPairs(ca, cb, r, reachKm) {
+      const step = 2, reachRad = reachKm / r, out = [];
+      const dRow = Math.ceil(reachRad / Math.PI * SH);
+      for (let row = 1; row < SH; row += step) {
+        const lat = (row + 0.5) / SH * Math.PI;
+        for (let col = 0; col < SW; col += step) {
+          const ha = heatOf(ca, row, col);
+          if (ha < 0.4) continue;
+          let best = null;
+          for (let r2 = Math.max(0, row - dRow); r2 <= Math.min(SH - 1, row + dRow); r2 += step) {
+            const lat2 = (r2 + 0.5) / SH * Math.PI, sinMin = Math.max(0.05, Math.min(Math.sin(lat), Math.sin(lat2)));
+            const dCol = Math.min(SW / 2, Math.ceil(reachRad / sinMin / (2 * Math.PI) * SW));
+            for (let c2 = col - dCol; c2 <= col + dCol; c2 += step) {
+              const hb = heatOf(cb, r2, c2);
+              if (hb < 0.4) continue;
+              const a = { lat, lon: (col + 0.5) / SW * 2 * Math.PI }, b = { lat: lat2, lon: (((c2 % SW) + SW) % SW + 0.5) / SW * 2 * Math.PI };
+              const km = dist(a, b, r);
+              if (km > reachKm) continue;
+              const score = Math.min(ha, hb);
+              if (!best || score > best.score || (score === best.score && km < best.km)) best = { a, b, km, score, ha, hb };
+            }
+          }
+          if (best) out.push(best);
+        }
+      }
+      out.sort((m, n) => n.score - m.score || m.km - n.km);
+      const picked = [];
+      for (const q of out) {
+        if (picked.every((p) => dist(p.a, q.a, r) > reachKm)) picked.push(q);
+        if (picked.length === 3) break;
+      }
+      return picked;
+    }
     const svg = document.getElementById('pi-map');
     const pick = document.getElementById('map-planet'), selA = document.getElementById('map-a'), selB = document.getElementById('map-b');
     const reach = document.getElementById('map-reach'), reachV = document.getElementById('map-reach-v');
@@ -163,6 +224,8 @@
     function products(p) {
       const seen = new Map();
       p.spots.forEach((s) => seen.set(s.product, (seen.get(s.product) || { name: s.product_name, n: 0 })) && seen.get(s.product).n++);
+      // Scanned resources nobody has extracted here yet still show up (keyed by name).
+      (p.scans || []).forEach((x) => { if (![...seen.values()].some((v) => v.name === x.resource)) seen.set('scan:' + x.resource, { name: x.resource, n: 0 }); });
       return [...seen.entries()].sort((a, b) => b[1].n - a[1].n);
     }
     function fillProducts() {
@@ -174,11 +237,42 @@
       });
       draw();
     }
+    let drawCount = 0;
+    async function drawScans(p, nameA, nameB, r, drawn, layer) {
+      const note = document.getElementById('map-scans');
+      const sa = scanOf(p, nameA), sb = scanOf(p, nameB);
+      if (!sa && !sb) {
+        note.textContent = (p.scans || []).length ? 'Scanned here: ' + p.scans.map((x) => `${x.resource} ${Math.round(x.coverage * 100)}%`).join(', ') + '. Pick those resources to see the heat.' : 'No video scan of this planet yet: the app\'s PI scan paints the whole planet\'s heat here.';
+        return;
+      }
+      const [ca, cb] = await Promise.all([sa ? cellsFor(p, nameA) : null, sb ? cellsFor(p, nameB) : null]);
+      if (drawn !== drawCount) return;
+      const img = document.createElementNS(NS, 'image');
+      img.setAttribute('href', scanImage(ca, cb)); img.setAttribute('width', 720); img.setAttribute('height', 360); img.setAttribute('preserveAspectRatio', 'none');
+      img.style.imageRendering = 'pixelated';
+      layer.append(img);
+      let text = [sa && `${nameA} scanned ${Math.round(sa.coverage * 100)}%`, sb && `${nameB} scanned ${Math.round(sb.coverage * 100)}%`].filter(Boolean).join(' · ') + ' (red / blue heat, purple where both).';
+      if (ca && cb && nameA !== nameB) {
+        const best = scanPairs(ca, cb, r, Number(reach.value));
+        best.forEach((q, i) => {
+          const [x1, y1] = xy(q.a), [x2, y2] = xy(q.b);
+          add('line', { x1, y1, x2, y2, stroke: '#ffd84a', 'stroke-width': i === 0 ? 2.5 : 1.2 }, layer);
+          add('circle', { cx: x1, cy: y1, r: 5, fill: 'none', stroke: '#ffd84a', 'stroke-width': 1.5 }, layer);
+          add('circle', { cx: x2, cy: y2, r: 5, fill: 'none', stroke: '#ffd84a', 'stroke-width': 1.5 }, layer);
+        });
+        text += best.length ? ` Yellow: best places from the scan (${best.map((q) => Math.round(q.score * 100) + '% hot, ' + fmtKm(q.km) + ' apart').join('; ')}).` : ' No place where both are hot within reach.';
+      }
+      note.textContent = text;
+    }
     function draw() {
       const p = planets[pick.value];
       const r = p.radius_km || 5000;
       const a = Number(selA.value), b = Number(selB.value);
+      const nameA = selA.selectedOptions[0]?.textContent || '', nameB = selB.selectedOptions[0]?.textContent || '';
+      const drawn = ++drawCount;
       svg.innerHTML = '';
+      const layer = add('g', {});
+      drawScans(p, nameA, nameB, r, drawn, layer);
       for (let i = 1; i < 6; i++) add('line', { x1: 0, x2: 720, y1: i * 60, y2: i * 60, stroke: '#2a2a33', 'stroke-width': 1 });
       for (let i = 1; i < 12; i++) add('line', { y1: 0, y2: 360, x1: i * 60, x2: i * 60, stroke: '#2a2a33', 'stroke-width': 1 });
       const best = {};

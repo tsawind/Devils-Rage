@@ -42,6 +42,11 @@ Route::group([
     Route::post('pi/alerts', [PiController::class, 'saveAlerts'])->name('devilsrage.pi.alerts');
     Route::post('pi/alerts/test', [PiController::class, 'testAlert'])->name('devilsrage.pi.alerts.test');
     Route::post('pi/update', [PiController::class, 'forceUpdate'])->name('devilsrage.pi.update');
+    // Patch 71: the app's PI video scan (planets + anchors, save / read / delete a scan).
+    Route::get('pi/scan-planets', [PiController::class, 'scanPlanets'])->name('devilsrage.pi.scan.planets');
+    Route::post('pi/scans', [PiController::class, 'saveScan'])->name('devilsrage.pi.scans.store');
+    Route::get('pi/scans/{planet}/{resource}', [PiController::class, 'scanCells'])->whereNumber('planet')->name('devilsrage.pi.scans.show');
+    Route::post('pi/scans/{planet}/{resource}/delete', [PiController::class, 'deleteScan'])->whereNumber('planet')->name('devilsrage.pi.scans.delete');
     Route::post('pi/tax', [PiController::class, 'saveTax'])->name('devilsrage.pi.tax');
     // Patch 59: PI colony templates (kept and traded on the PI screen).
     Route::post('pi/templates', [PiController::class, 'saveTemplate'])->name('devilsrage.pi.templates.store');

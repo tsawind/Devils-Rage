@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace DevilsRage\Seat\Http\Controllers;
 
 use DevilsRage\Seat\Models\AccountSetting;
+use DevilsRage\Seat\Models\PiScan as StoredScan;
 use DevilsRage\Seat\Models\PiTemplate as StoredTemplate;
 use DevilsRage\Seat\Models\Setting;
 use DevilsRage\Seat\Pi\PiData;
@@ -14,6 +15,7 @@ use DevilsRage\Seat\Pi\PiOptions;
 use DevilsRage\Seat\Pi\PiMoney;
 use DevilsRage\Seat\Pi\PiDigest;
 use DevilsRage\Seat\Pi\PiPlanner;
+use DevilsRage\Seat\Pi\PiScan;
 use DevilsRage\Seat\Pi\PiSkills;
 use DevilsRage\Seat\Pi\PiTemplate;
 use DevilsRage\Seat\Services\Corporation;
@@ -434,10 +436,11 @@ class PiController extends Controller
             ->whereNotNull('qty_per_cycle')
             ->where('heads', '>', 0)
             ->get(['character_id', 'planet_id', 'product_type_id', 'heads', 'latitude', 'longitude', 'qty_per_cycle', 'cycle_time', 'install_time']);
-        if ($rows->isEmpty()) {
+        $scans = StoredScan::query()->orderBy('resource')->get(['planet_id', 'resource', 'coverage', 'updated_at'])->groupBy('planet_id');
+        if ($rows->isEmpty() && $scans->isEmpty()) {
             return [];
         }
-        $planetIds = $rows->pluck('planet_id')->unique()->map(fn ($id): int => (int) $id)->values()->all();
+        $planetIds = $rows->pluck('planet_id')->merge($scans->keys())->unique()->map(fn ($id): int => (int) $id)->values()->all();
         $names = DB::table('planets')->whereIn('planet_id', $planetIds)->pluck('name', 'planet_id');
         $kinds = DB::table('character_planets')->whereIn('planet_id', $planetIds)->pluck('planet_type', 'planet_id');
         $radius = [];
@@ -450,7 +453,9 @@ class PiController extends Controller
         $who = $leader ? CharacterInfo::query()->whereIn('character_id', $rows->pluck('character_id')->unique()->all())->pluck('name', 'character_id')->all() : [];
 
         $out = [];
-        foreach ($rows->groupBy('planet_id') as $planetId => $planetRows) {
+        $byPlanet = $rows->groupBy('planet_id');
+        foreach ($planetIds as $planetId) {
+            $planetRows = $byPlanet->get($planetId, collect());
             $runs = $planetRows->map(fn ($row): array => [
                 'character_id' => (int) $row->character_id,
                 'product' => (int) $row->product_type_id,
@@ -476,6 +481,12 @@ class PiController extends Controller
                 'type' => (string) ($kinds[$planetId] ?? ''),
                 'radius_km' => $radiusKm,
                 'spots' => $spots,
+                // Patch 71: the app's video scans of this planet (cells fetched when picked).
+                'scans' => $scans->get($planetId, collect())->map(fn (StoredScan $scan): array => [
+                    'resource' => $scan->resource,
+                    'coverage' => round($scan->coverage, 3),
+                    'at' => $scan->updated_at?->getTimestamp(),
+                ])->values()->all(),
             ];
         }
         usort($out, fn (array $a, array $b): int => strnatcmp($a['name'], $b['name']));
@@ -669,6 +680,122 @@ class PiController extends Controller
             abort(403);
         }
         $stored->delete();
+
+        return response()->json(['deleted' => true]);
+    }
+
+    /**
+     * Patch 71: what the app's video scan needs: your colonies (planet, type, radius) with every
+     * building's position (the anchors that tell the scan which way the planet faces), and the
+     * corp's scans of those planets so far.
+     */
+    public function scanPlanets(): JsonResponse
+    {
+        $characterIds = Account::query()->where('user_id', auth()->id())
+            ->with('characters')->get()
+            ->flatMap(fn (Account $account) => $account->characters->pluck('character_id'))
+            ->map(fn ($id): int => (int) $id)->unique()->values()->all();
+        $owned = RefreshToken::query()->where('user_id', auth()->id())->pluck('character_id')->map(fn ($id): int => (int) $id)->all();
+        $characterIds = array_values(array_unique(array_merge($characterIds, $owned)));
+        $planets = DB::table('character_planets')->whereIn('character_id', $characterIds)->get(['character_id', 'planet_id', 'planet_type']);
+        if ($planets->isEmpty()) {
+            return response()->json(['planets' => []]);
+        }
+        $planetIds = $planets->pluck('planet_id')->unique()->map(fn ($id): int => (int) $id)->values()->all();
+        $names = DB::table('planets')->whereIn('planet_id', $planetIds)->pluck('name', 'planet_id');
+        $who = CharacterInfo::query()->whereIn('character_id', $planets->pluck('character_id')->unique()->all())->pluck('name', 'character_id');
+        $radius = [];
+        try {
+            $radius = DB::table('mapDenormalize')->whereIn('itemID', $planetIds)->pluck('radius', 'itemID')->all();
+        } catch (\Throwable) {
+            // No SDE map table: the scan doesn't need the size, only the corp map's distances do.
+        }
+        $pins = DB::table('character_planet_pins')->whereIn('character_id', $characterIds)
+            ->get(['character_id', 'planet_id', 'pin_id', 'type_id', 'latitude', 'longitude'])
+            ->groupBy(fn ($row): string => $row->character_id.':'.$row->planet_id);
+        // Extractor heads spread wider than the buildings: better anchors for the scan.
+        $heads = DB::table('character_planet_heads')->whereIn('character_id', $characterIds)
+            ->get(['character_id', 'extractor_id', 'head_id', 'latitude', 'longitude'])
+            ->groupBy(fn ($row): string => $row->character_id.':'.$row->extractor_id);
+        $types = (new PiData())->typesFor($pins->flatten(1)->pluck('type_id')->unique()->map(fn ($id): int => (int) $id)->values()->all());
+        $scans = StoredScan::query()->whereIn('planet_id', $planetIds)->get(['planet_id', 'resource', 'coverage', 'updated_at'])->groupBy('planet_id');
+
+        $out = [];
+        foreach ($planets as $planet) {
+            $out[] = [
+                'planet_id' => (int) $planet->planet_id,
+                'character_id' => (int) $planet->character_id,
+                'character' => (string) ($who[$planet->character_id] ?? ''),
+                'name' => (string) ($names[$planet->planet_id] ?? 'Planet '.$planet->planet_id),
+                'type' => (string) $planet->planet_type,
+                'radius_km' => isset($radius[$planet->planet_id]) ? (float) $radius[$planet->planet_id] / 1000 : null,
+                'pins' => $pins->get($planet->character_id.':'.$planet->planet_id, collect())->map(fn ($pin): array => [
+                    'id' => (int) $pin->pin_id,
+                    'name' => (string) ($types[(int) $pin->type_id]['name'] ?? 'Building'),
+                    'lat' => (float) $pin->latitude,
+                    'lon' => (float) $pin->longitude,
+                    'heads' => $heads->get($pin->character_id.':'.$pin->pin_id, collect())->map(fn ($head): array => [
+                        'id' => (int) $head->head_id,
+                        'lat' => (float) $head->latitude,
+                        'lon' => (float) $head->longitude,
+                    ])->values()->all(),
+                ])->values()->all(),
+                'scans' => $scans->get($planet->planet_id, collect())->map(fn (StoredScan $scan): array => [
+                    'resource' => $scan->resource,
+                    'coverage' => round($scan->coverage, 3),
+                    'at' => $scan->updated_at?->getTimestamp(),
+                ])->values()->all(),
+            ];
+        }
+        usort($out, fn (array $a, array $b): int => strnatcmp($a['name'], $b['name']));
+
+        return response()->json(['planets' => $out]);
+    }
+
+    /** Patch 71: one scan's cells (base64), for the app to carry on a scan or show it. */
+    public function scanCells(int $planet, string $resource): JsonResponse
+    {
+        $scan = StoredScan::query()->where('planet_id', $planet)->where('resource', $resource)->firstOrFail();
+
+        return response()->json(['resource' => $scan->resource, 'coverage' => $scan->coverage, 'cells' => base64_encode($scan->cells)]);
+    }
+
+    /** Patch 71: the app hands in a scan; it merges into what the corp has for that planet and resource. */
+    public function saveScan(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'planet_id' => ['required', 'integer', 'min:1'],
+            'resource' => ['required', 'string', 'max:60'],
+            'character_id' => ['nullable', 'integer'],
+            'cells' => ['required', 'string', 'max:100000'],
+        ]);
+        $cells = PiScan::decode($data['cells']);
+        if ($cells === null) {
+            return response()->json(['message' => 'That scan is not a whole planet map.'], 422);
+        }
+        $planetId = (int) $data['planet_id'];
+        if (! DB::table('character_planets')->where('planet_id', $planetId)->exists()) {
+            return response()->json(['message' => 'Nobody in the corp has a colony on that planet.'], 422);
+        }
+        $existing = StoredScan::query()->where('planet_id', $planetId)->where('resource', $data['resource'])->first();
+        $merged = PiScan::merge($existing?->cells, $cells);
+        $coverage = PiScan::coverage($merged);
+        StoredScan::query()->updateOrCreate(
+            ['planet_id' => $planetId, 'resource' => $data['resource']],
+            ['user_id' => (int) auth()->id(), 'character_id' => $data['character_id'] ?? null, 'cells' => $merged, 'coverage' => $coverage],
+        );
+
+        return response()->json(['coverage' => round($coverage, 3), 'message' => sprintf('Saved: %d%% of the planet scanned for %s.', (int) round($coverage * 100), $data['resource'])]);
+    }
+
+    /** Patch 71: remove a scan (whoever made it last, or a director). */
+    public function deleteScan(int $planet, string $resource): JsonResponse
+    {
+        $scan = StoredScan::query()->where('planet_id', $planet)->where('resource', $resource)->firstOrFail();
+        if ($scan->user_id !== (int) auth()->id() && ! Gate::allows('devilsrage-leader')) {
+            abort(403);
+        }
+        $scan->delete();
 
         return response()->json(['deleted' => true]);
     }
