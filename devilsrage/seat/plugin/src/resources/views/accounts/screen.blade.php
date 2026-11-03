@@ -440,7 +440,8 @@
   async function sync() {
     const data = await fetch(@json(route('devilsrage.groups.json')), { headers: { Accept: 'application/json' }, credentials: 'same-origin' }).then((r) => r.json());
     let r;
-    try { r = await fetch(bridge + '/launch-sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); }
+    // text/plain keeps it a "simple" request (no CORS preflight the app's local address can't answer).
+    try { r = await fetch(bridge + '/launch-sync', { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify(data) }); }
     catch (e) { throw new Error('no answer from the app (' + (app.version || 'old version') + ')'); }
     if (r.status === 403 || r.status === 404) throw new Error('this app (' + (app.version || '?') + ') is too old: update it to dev.68 or newer');
     if (!r.ok) throw new Error('the app said ' + r.status + ' ' + (await r.text().catch(() => '')).slice(0, 120));
@@ -462,7 +463,7 @@
         btn.disabled = true;
         const r = await fetch(@json(route('devilsrage.groups.import')), { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf }, body: JSON.stringify({ groups: local }) }).then((x) => x.json()).catch(() => null);
         if (!r) { said('Couldn\'t bring them in. Reload and try again.'); return; }
-        await fetch(bridge + '/launch-local', { method: 'DELETE' }).catch(() => {});
+        await fetch(bridge + '/launch-local-done', { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: '{}' }).catch(() => {});
         location.reload();
       });
       holder.append(btn);
