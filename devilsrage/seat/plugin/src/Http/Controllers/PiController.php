@@ -697,41 +697,53 @@ class PiController extends Controller
             ->map(fn ($id): int => (int) $id)->unique()->values()->all();
         $owned = RefreshToken::query()->where('user_id', auth()->id())->pluck('character_id')->map(fn ($id): int => (int) $id)->all();
         $characterIds = array_values(array_unique(array_merge($characterIds, $owned)));
-        $planets = DB::table('character_planets')->whereIn('character_id', $characterIds)->get(['character_id', 'planet_id', 'planet_type']);
-        if ($planets->isEmpty()) {
+        $mine = DB::table('character_planets')->whereIn('character_id', $characterIds)->get(['character_id', 'planet_id', 'solar_system_id']);
+        if ($mine->isEmpty()) {
             return response()->json(['planets' => []]);
         }
+        // Patch 73: every corp colony in the systems you have colonies in (anyone's buildings
+        // can anchor a scan: EVE shows them with "Show other characters' networks").
+        $systems = $mine->pluck('solar_system_id')->unique()->all();
+        $planets = DB::table('character_planets')->whereIn('solar_system_id', $systems)->get(['character_id', 'planet_id', 'planet_type']);
         $planetIds = $planets->pluck('planet_id')->unique()->map(fn ($id): int => (int) $id)->values()->all();
+        $allChars = $planets->pluck('character_id')->unique()->map(fn ($id): int => (int) $id)->values()->all();
         $names = DB::table('planets')->whereIn('planet_id', $planetIds)->pluck('name', 'planet_id');
-        $who = CharacterInfo::query()->whereIn('character_id', $planets->pluck('character_id')->unique()->all())->pluck('name', 'character_id');
+        $who = CharacterInfo::query()->whereIn('character_id', $allChars)->pluck('name', 'character_id');
         $radius = [];
         try {
             $radius = DB::table('mapDenormalize')->whereIn('itemID', $planetIds)->pluck('radius', 'itemID')->all();
         } catch (\Throwable) {
             // No SDE map table: the scan doesn't need the size, only the corp map's distances do.
         }
-        $pins = DB::table('character_planet_pins')->whereIn('character_id', $characterIds)
+        $pins = DB::table('character_planet_pins')->whereIn('planet_id', $planetIds)->whereIn('character_id', $allChars)
             ->get(['character_id', 'planet_id', 'pin_id', 'type_id', 'latitude', 'longitude'])
-            ->groupBy(fn ($row): string => $row->character_id.':'.$row->planet_id);
+            ->groupBy('planet_id');
         // Extractor heads spread wider than the buildings: better anchors for the scan.
-        $heads = DB::table('character_planet_heads')->whereIn('character_id', $characterIds)
+        $heads = DB::table('character_planet_heads')->whereIn('character_id', $allChars)
             ->get(['character_id', 'extractor_id', 'head_id', 'latitude', 'longitude'])
             ->groupBy(fn ($row): string => $row->character_id.':'.$row->extractor_id);
         $types = (new PiData())->typesFor($pins->flatten(1)->pluck('type_id')->unique()->map(fn ($id): int => (int) $id)->values()->all());
         $scans = StoredScan::query()->whereIn('planet_id', $planetIds)->get(['planet_id', 'resource', 'coverage', 'updated_at'])->groupBy('planet_id');
 
         $out = [];
-        foreach ($planets as $planet) {
+        foreach ($planets->groupBy('planet_id') as $planetId => $colonies) {
+            $own = $colonies->first(fn ($row): bool => in_array((int) $row->character_id, $characterIds, true));
             $out[] = [
-                'planet_id' => (int) $planet->planet_id,
-                'character_id' => (int) $planet->character_id,
-                'character' => (string) ($who[$planet->character_id] ?? ''),
-                'name' => (string) ($names[$planet->planet_id] ?? 'Planet '.$planet->planet_id),
-                'type' => (string) $planet->planet_type,
-                'radius_km' => isset($radius[$planet->planet_id]) ? (float) $radius[$planet->planet_id] / 1000 : null,
-                'pins' => $pins->get($planet->character_id.':'.$planet->planet_id, collect())->map(fn ($pin): array => [
+                'planet_id' => (int) $planetId,
+                'character_id' => $own !== null ? (int) $own->character_id : null,
+                'character' => $own !== null ? (string) ($who[$own->character_id] ?? '') : '',
+                'characters' => $colonies->map(fn ($row): array => [
+                    'id' => (int) $row->character_id,
+                    'name' => (string) ($who[$row->character_id] ?? ''),
+                    'mine' => in_array((int) $row->character_id, $characterIds, true),
+                ])->values()->all(),
+                'name' => (string) ($names[$planetId] ?? 'Planet '.$planetId),
+                'type' => (string) $colonies->first()->planet_type,
+                'radius_km' => isset($radius[$planetId]) ? (float) $radius[$planetId] / 1000 : null,
+                'pins' => $pins->get($planetId, collect())->map(fn ($pin): array => [
                     'id' => (int) $pin->pin_id,
                     'name' => (string) ($types[(int) $pin->type_id]['name'] ?? 'Building'),
+                    'owner' => (string) ($who[$pin->character_id] ?? ''),
                     'lat' => (float) $pin->latitude,
                     'lon' => (float) $pin->longitude,
                     'heads' => $heads->get($pin->character_id.':'.$pin->pin_id, collect())->map(fn ($head): array => [
@@ -740,7 +752,7 @@ class PiController extends Controller
                         'lon' => (float) $head->longitude,
                     ])->values()->all(),
                 ])->values()->all(),
-                'scans' => $scans->get($planet->planet_id, collect())->map(fn (StoredScan $scan): array => [
+                'scans' => $scans->get($planetId, collect())->map(fn (StoredScan $scan): array => [
                     'resource' => $scan->resource,
                     'coverage' => round($scan->coverage, 3),
                     'at' => $scan->updated_at?->getTimestamp(),
