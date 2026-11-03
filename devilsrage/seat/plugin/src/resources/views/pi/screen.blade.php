@@ -455,7 +455,12 @@
                     @else <span class="muted">—</span> @endif
                   </td>
                   <td style="white-space: nowrap" title="{{ $valueTitle($info['value'])."\n".collect($info['value']['items'])->map(fn (array $item): string => number_format($item['per_day']).' '.$item['name'].' / day')->implode("\n") }}">
-                    @if($info['value']['split'] > 0){{ $isk($info['value']['split']) }}@if($info['supply'] !== null && $info['supply'] < 0.995)<div class="small" style="color: var(--warn)">{{ (int) round($info['supply'] * 100) }}% (short raw)</div><div class="small muted" title="With its factories fully fed">full {{ $isk($info['value']['potential']) }}</div>@endif
+                    @if(! empty($info['value']['feed']))
+                      @php $feed = $info['value']['feed']; @endphp
+                      <span title="Makes {{ $isk($feed['gross']) }} a day; the goods it uses would sell for {{ $isk($feed['cost']) }}.{{ "\n" }}{{ collect($feed['items'])->map(fn (array $i): string => $i['name'].': needs '.number_format($i['need_week']).' / week, your characters make '.number_format($i['made_week']))->implode("\n") }}">{{ $isk($info['value']['split']) }}</span>
+                      <div class="small {{ $feed['fed'] < 0.95 ? '' : 'muted' }}" style="{{ $feed['fed'] < 0.95 ? 'color: var(--warn)' : '' }}">factory · fed {{ (int) round($feed['fed'] * 100) }}% by your P2</div>
+                      <div class="small muted">adds on top of the P2 it uses</div>
+                    @elseif($info['value']['split'] > 0){{ $isk($info['value']['split']) }}@if($info['supply'] !== null && $info['supply'] < 0.995)<div class="small" style="color: var(--warn)">{{ (int) round($info['supply'] * 100) }}% (short raw)</div><div class="small muted" title="With its factories fully fed">full {{ $isk($info['value']['potential']) }}</div>@endif
                     @else <span class="muted">—</span> @endif
                   </td>
                   <td class="muted">@if($info['planet']['last_update'])<span data-ts="{{ $info['planet']['last_update'] }}" data-fmt="ago"></span>@else — @endif</td>

@@ -113,7 +113,8 @@ final class PiMoney
      *   hub: array{name: string, per_day: float, share: float},
      *   stock: array{value: float, m3: float},
      *   upgrade: array{p3: string, inputs: list<string>, per_day: int, factories: int, gain_per_day: float}|null,
-     *   grow: array{planets: int, per_day: float, characters: int}
+     *   grow: array{planets: int, per_day: float, characters: int},
+     *   omega?: array{planets: int, per_day: float, characters: int, accounts: int, cost_per_day: float}
      * }  $facts
      * @return list<array{kind: string, title: string, why: string, per_month: float, now: float}>
      */
@@ -142,6 +143,13 @@ final class PiMoney
             $list[] = self::item('grow', $facts['grow']['planets'].' more '.($facts['grow']['planets'] === 1 ? 'colony' : 'colonies').' on '.$facts['grow']['characters'].' '.($facts['grow']['characters'] === 1 ? 'character' : 'characters'),
                 'Free slots and skills (CC 5, IC 4) at what an average colony of yours makes. The Skills tab has the cost.',
                 $facts['grow']['per_day'] * $month);
+        }
+        $omega = $facts['omega'] ?? null;
+        if ($omega !== null && $omega['planets'] > 0 && $omega['per_day'] > 0) {
+            $net = $omega['per_day'] - $omega['cost_per_day'];
+            $list[] = self::item('omega', 'Make '.$omega['accounts'].' Alpha '.($omega['accounts'] === 1 ? 'account' : 'accounts').' Omega: '.$omega['planets'].' colonies on '.$omega['characters'].' characters',
+                'Alpha characters can\'t do PI, so they\'re left out of everything above. As Omega they could run '.$omega['planets'].' colonies at what an average colony of yours makes ('.$isk($omega['per_day'] * $month).' a month); Omega costs about '.$isk($omega['cost_per_day'] * $month).' a month for those accounts (12-month PLEX bundle), so '.($net > 0 ? 'about '.$isk($net * $month).' a month ahead' : 'it doesn\'t pay for itself from PI alone').'. Wrong account? Set its Omega date in Your accounts.',
+                max(0.0, $net) * $month, $net > 0 ? 0.0 : $omega['per_day'] * $month);
         }
         if ($facts['hub']['per_day'] > 0 && $facts['hub']['share'] >= 0.01) {
             $list[] = self::item('hub', 'Sell at '.$facts['hub']['name'],

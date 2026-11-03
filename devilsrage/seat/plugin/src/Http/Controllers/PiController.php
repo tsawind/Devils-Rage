@@ -8,6 +8,7 @@ use DevilsRage\Seat\Models\AccountSetting;
 use DevilsRage\Seat\Models\PiTemplate as StoredTemplate;
 use DevilsRage\Seat\Models\Setting;
 use DevilsRage\Seat\Pi\PiData;
+use DevilsRage\Seat\Pi\PiFeed;
 use DevilsRage\Seat\Pi\PiMap;
 use DevilsRage\Seat\Pi\PiOptions;
 use DevilsRage\Seat\Pi\PiMoney;
@@ -16,7 +17,9 @@ use DevilsRage\Seat\Pi\PiPlanner;
 use DevilsRage\Seat\Pi\PiSkills;
 use DevilsRage\Seat\Pi\PiTemplate;
 use DevilsRage\Seat\Services\Corporation;
+use DevilsRage\Seat\Models\Account;
 use DevilsRage\Seat\Services\DiscordDm;
+use DevilsRage\Seat\Services\FarmPrices;
 use DevilsRage\Seat\Services\JitaPrices;
 use DevilsRage\Seat\Services\PersonName;
 use Illuminate\Http\JsonResponse;
@@ -150,6 +153,10 @@ class PiController extends Controller
         }
         unset($colony);
 
+        // Patch 65: factory planets fed with P2 / P3 from your other characters (Tsa hauls the
+        // P2 to J145735 IX and V for Organic Mortar Applicators). Worth what they add on top.
+        $this->feedFactoryPlanets($colonies, $totals, $money, $data, $planner, $jita, $hub, $otherHub, $prices, $otherPrices, $taxRate);
+
         // Patch 60: skills for the corp's PI bar, what they'd cost and add (for every character, PI or not).
         $running = 0;
         foreach ($colonies as $colony) {
@@ -169,7 +176,10 @@ class PiController extends Controller
                 + PiSkills::potential($skillChecks[$characterId], $counts[$characterId] ?? 0, $perColony);
         }
 
-        $suggestions = $this->moneySuggestions($money, $totals, $skillRows, $perColony, $data, $jita, $hub, JitaPrices::HUBS[$otherHub]['name'], $taxRate);
+        // Patch 65: Alpha characters can't do PI. Keep them out of "more colonies" and show
+        // what making their accounts Omega would add instead.
+        $alphaIds = $this->alphaCharacterIds((int) $user->id, $colonies, $now);
+        $suggestions = $this->moneySuggestions($money, $totals, $skillRows, $perColony, $data, $jita, $hub, JitaPrices::HUBS[$otherHub]['name'], $taxRate, $alphaIds);
 
         $setting = AccountSetting::query()->find($user->id);
         $leader = Gate::allows('devilsrage-leader');
@@ -202,6 +212,160 @@ class PiController extends Controller
             'options' => $this->setupOptions($colonies, $prices, $taxRate),
             'corpMap' => $this->corpMap($data, $leader),
         ]);
+    }
+
+    /**
+     * Patch 65: share your own P2 / P3 among your factory planets, and value each one by what it
+     * adds (what it makes minus what the goods it uses would sell for). Adjusts the planet, its
+     * character's totals, the grand totals and the P2 left for the "turn into P3" suggestion.
+     *
+     * @param  list<array<string, mixed>>  $colonies
+     * @param  array<string, float|int>  $totals
+     * @param  array<string, mixed>  $money
+     * @param  array<int, array{buy: float, sell: float}>  $prices
+     * @param  array<int, array{buy: float, sell: float}>  $otherPrices
+     */
+    private function feedFactoryPlanets(array &$colonies, array &$totals, array &$money, PiData $data, PiPlanner $planner, JitaPrices $jita, string $hub, string $otherHub, array &$prices, array &$otherPrices, float $taxRate): void
+    {
+        $types = $data->types();
+        $needs = [];
+        foreach ($colonies as $ci => $colony) {
+            foreach ($colony['planets'] as $pi => $info) {
+                if (($info['value']['split'] ?? 0) <= 0 && ($info['making']['tier'] ?? 0) < 3) {
+                    continue;
+                }
+                $need = PiFeed::imports($info['planet'], $types);
+                if ($need !== []) {
+                    $needs[$ci.':'.$pi] = $need;
+                }
+            }
+        }
+        if ($needs === []) {
+            return;
+        }
+        $supply = [];
+        foreach ($colonies as $ci => $colony) {
+            foreach ($colony['planets'] as $pi => $info) {
+                if (isset($needs[$ci.':'.$pi])) {
+                    continue;
+                }
+                foreach ($info['value']['items'] ?? [] as $item) {
+                    if ($item['tier'] >= 1) {
+                        $supply[$item['type']] = ($supply[$item['type']] ?? 0) + $item['per_day'] / 24;
+                    }
+                }
+            }
+        }
+        $inputIds = [];
+        foreach ($needs as $need) {
+            array_push($inputIds, ...array_keys($need));
+        }
+        $inputIds = array_values(array_unique($inputIds));
+        $prices += $jita->get(array_values(array_diff($inputIds, array_keys($prices))), $hub);
+        $otherPrices += $jita->get(array_values(array_diff($inputIds, array_keys($otherPrices))), $otherHub);
+        $names = $data->typesFor($inputIds);
+        $split = fn (array $list, int $id): float => isset($list[$id]) ? ((float) $list[$id]['buy'] + (float) $list[$id]['sell']) / 2 : 0.0;
+
+        foreach (PiFeed::share($needs, $supply) as $key => $share) {
+            [$ci, $pi] = array_map('intval', explode(':', (string) $key));
+            $info = &$colonies[$ci]['planets'][$pi];
+            $old = $info['value'];
+            $supplyNow = $info['supply'] === null ? 1.0 : min(1.0, (float) $info['supply']);
+            $fed = min($supplyNow, $share['fed']);
+            $value = $planner->value(['supply' => $fed] + $info, $prices, $taxRate);
+            $other = $planner->value(['supply' => $fed] + $info, $otherPrices, $taxRate);
+            $full = $planner->value(['supply' => null] + $info, $prices, $taxRate);
+            $cost = 0.0;
+            $otherCost = 0.0;
+            $fullCost = 0.0;
+            $items = [];
+            foreach ($share['items'] as $type => $item) {
+                $usedPerDay = $item['need'] * $fed * 24;
+                $cost += $usedPerDay * $split($prices, $type);
+                $otherCost += $usedPerDay * $split($otherPrices, $type);
+                $fullCost += $item['need'] * 24 * $split($prices, $type);
+                $items[] = [
+                    'name' => (string) ($names[$type]['name'] ?? 'Type '.$type),
+                    'need_week' => (int) round($item['need'] * 168),
+                    'have_week' => (int) round(min($item['need'], ($supply[$type] ?? 0)) * 168),
+                    'made_week' => (int) round(($supply[$type] ?? 0) * 168),
+                ];
+                $p2Name = $names[$type]['name'] ?? null;
+                if ($p2Name !== null && isset($money['p2'][$p2Name])) {
+                    $money['p2'][$p2Name] = max(0, $money['p2'][$p2Name] - (int) round($usedPerDay));
+                }
+            }
+            $new = [
+                'items' => $value['items'],
+                'buy' => $value['buy'] - $cost,
+                'split' => $value['split'] - $cost,
+                'sell' => $value['sell'] - $cost,
+                'tax' => $value['tax'],
+                'm3' => $value['m3'],
+                'other_split' => $other['split'] - $otherCost,
+                'potential' => $full['split'] - $fullCost,
+                'feed' => ['fed' => $share['fed'], 'gross' => $value['split'], 'cost' => $cost, 'items' => $items],
+            ];
+            foreach (['buy', 'split', 'sell', 'tax', 'other_split', 'potential'] as $side) {
+                $delta = (float) $new[$side] - (float) ($old[$side] ?? 0);
+                $colonies[$ci]['totals'][$side] += $delta;
+                $totals[$side] += $delta;
+            }
+            $info['value'] = $new;
+            unset($info);
+        }
+    }
+
+    /**
+     * Patch 65: this pilot's characters on Alpha accounts (they can't do PI). An account counts
+     * as Omega when Your accounts says so (Omega until a date still ahead, or on a subscription),
+     * or when one of its characters has a running colony. Characters outside any account are left
+     * alone (we can't tell).
+     *
+     * @param  list<array<string, mixed>>  $colonies
+     * @return array<int, int>  character id => account id
+     */
+    private function alphaCharacterIds(int $userId, array $colonies, int $now): array
+    {
+        $running = [];
+        foreach ($colonies as $colony) {
+            foreach ($colony['planets'] as $info) {
+                foreach ($info['planet']['extractors'] ?? [] as $extractor) {
+                    if (($extractor['expiry'] ?? 0) > $now - 8 * 86400) {
+                        $running[(int) $colony['character_id']] = true;
+                    }
+                }
+                if (($info['planet']['last_update'] ?? 0) > $now - 8 * 86400) {
+                    $running[(int) $colony['character_id']] = true;
+                }
+            }
+        }
+        $alpha = [];
+        $today = Carbon::createFromTimestamp($now, 'UTC')->startOfDay();
+        foreach (Account::query()->where('user_id', $userId)->with('characters')->get() as $account) {
+            $ids = $account->characters->pluck('character_id')->map(fn ($id): int => (int) $id)->all();
+            $omega = $account->omega_auto || ($account->omega_until !== null && $account->omega_until->greaterThanOrEqualTo($today));
+            foreach ($ids as $id) {
+                $omega = $omega || isset($running[$id]);
+            }
+            if (! $omega) {
+                foreach ($ids as $id) {
+                    $alpha[$id] = (int) $account->id;
+                }
+            }
+        }
+
+        return $alpha;
+    }
+
+    /** Patch 65: what one month of Omega costs per day (12-month PLEX bundle at the PLEX price). */
+    private function omegaPerDay(): float
+    {
+        $plex = (float) (DB::table('market_prices')->where('type_id', 44992)->get(['average', 'average_price'])
+            ->map(fn ($row): float => (float) ($row->average > 0 ? $row->average : $row->average_price))
+            ->first() ?? 0);
+
+        return app(FarmPrices::class)->omegaPlexPerMonth(12) * $plex / 30;
     }
 
     /**
@@ -322,7 +486,7 @@ class PiController extends Controller
      * @param  array<int, array<string, mixed>>  $skillRows
      * @return list<array{kind: string, title: string, why: string, per_month: float, now: float}>
      */
-    private function moneySuggestions(array $money, array $totals, array $skillRows, float $perColony, PiData $data, JitaPrices $jita, string $hub, string $otherHubName, float $taxRate): array
+    private function moneySuggestions(array $money, array $totals, array $skillRows, float $perColony, PiData $data, JitaPrices $jita, string $hub, string $otherHubName, float $taxRate, array $alphaIds = []): array
     {
         $isk = fn (float $v): string => match (true) {
             abs($v) >= 1e9 => number_format($v / 1e9, 2).' b',
@@ -356,7 +520,19 @@ class PiController extends Controller
         $upgrade = PiMoney::upgrades($money['p2'], $byName, $taxRate)[0] ?? null;
 
         $grow = ['planets' => 0, 'per_day' => 0.0, 'characters' => 0];
-        foreach ($skillRows as $row) {
+        $omega = ['planets' => 0, 'per_day' => 0.0, 'characters' => 0, 'accounts' => count(array_unique($alphaIds)), 'cost_per_day' => 0.0];
+        foreach ($skillRows as $characterId => $row) {
+            if (isset($alphaIds[$characterId])) {
+                // Omega lets them use their skills again: count what their planets could make.
+                $planets = (int) ($row['planets_after'] ?? 0);
+                if ($planets > 0) {
+                    $omega['planets'] += $planets;
+                    $omega['per_day'] += $planets * $perColony;
+                    $omega['characters']++;
+                }
+
+                continue;
+            }
             if (($row['extra_planets'] ?? 0) > 0) {
                 $grow['planets'] += (int) $row['extra_planets'];
                 $grow['per_day'] += (float) $row['per_day'];
@@ -375,6 +551,7 @@ class PiController extends Controller
             'stock' => $stock,
             'upgrade' => $upgrade,
             'grow' => $grow,
+            'omega' => $omega + ['cost_per_day' => $omega['accounts'] * $this->omegaPerDay()],
         ], $isk);
     }
 
