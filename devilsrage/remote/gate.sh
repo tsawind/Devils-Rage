@@ -122,6 +122,19 @@ case "$ACTION" in
         echo "== The report call backup.sh makes (output shown this time)"
         ( cd "$STACK" && docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T app php artisan devilsrage:backup-done ) 2>&1 | tail -n 8 | cut -c1-200 || true
         ;;
+    seat-pi-pins)
+        # PI scan tuning: Darkness Holder's buildings and extractor heads on J145735 II (positions only).
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            $c = Seat\Eveapi\Models\Character\CharacterInfo::query()->where("name", "Darkness Holder")->value("character_id");
+            $p = DB::table("planets")->where("name", "J145735 II")->value("planet_id");
+            echo "character ", $c, " planet ", $p, PHP_EOL;
+            foreach (DB::table("character_planet_pins")->where("character_id", $c)->where("planet_id", $p)->get(["pin_id", "type_id", "latitude", "longitude"]) as $r) {
+                echo "pin ", $r->pin_id, " ", $r->type_id, " ", DB::table("invTypes")->where("typeID", $r->type_id)->value("typeName"), " ", $r->latitude, " ", $r->longitude, PHP_EOL;
+                foreach (DB::table("character_planet_heads")->where("character_id", $c)->where("extractor_id", $r->pin_id)->get(["head_id", "latitude", "longitude"]) as $h) { echo "  head ", $h->head_id, " ", $h->latitude, " ", $h->longitude, PHP_EOL; }
+            }
+        ' 2>&1 | cut -c1-200
+        ;;
     seat-failed-jobs)
         # SeAT's failed jobs of the last day, grouped by job and the first line of the error.
         cd "$HOME/seat-docker"
@@ -232,7 +245,7 @@ case "$ACTION" in
         ;;
     *)
         echo "!! Unknown action: $ACTION"
-        echo "   Allowed: status, capacity, deploy-cameras, cameras-check, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check, backup-check, seat-failed-jobs, mapper-migrations"
+        echo "   Allowed: status, capacity, deploy-cameras, cameras-check, deploy-mapper, deploy-mapper-offline, deploy-seat, app-admins, restart-mapper, seat-errors, mapper-errors, mapper-timing, seat-trace, mapper-trace, update-gate, seat-sde, seat-srp-check, backup-check, seat-failed-jobs, mapper-migrations, seat-pi-pins"
         exit 2
         ;;
 esac
