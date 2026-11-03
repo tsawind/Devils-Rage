@@ -15,7 +15,7 @@ import { appCaptures, appClientFeed, appEveWindows, type TAppFeed, type TAppWind
 import { clientOfWindowLabel, DEFAULT_STRICTNESS, defaultSetup } from '@/lib/cameras/setups';
 import { appActive, appClients, appClosesCameraWindow, appAudioErrors, appHasClientAudio, appWindows, closeAppCameraWindow, appLevels, learnFromClient, listenToClients, onAppHeard, onAppLearned, playingClient, refreshAppClients } from '@/lib/cameras/appAudio';
 import { appSignal, inDesktopApp } from '@/lib/desktopApp';
-import { formFetch, jsonFetch } from '@/lib/jsonFetch';
+import { formFetch, jsonFetch, jsonFetchWhy } from '@/lib/jsonFetch';
 import { Monitor, Play, Pause, Plus, Square, Trash2, Video } from 'lucide-vue-next';
 import { useEcho } from '@laravel/echo-vue';
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue';
@@ -571,14 +571,30 @@ async function startBox(box: TBox): Promise<void> {
     const from = sourceOf(box);
     const element = from ? videos.get(from.key) : undefined;
     if (!from || !element || runs.has(box.key) || roleOf(box) === 'hide') return;
-    const started = await jsonFetch<{ camera: { id: number }; publish: TRelayPass }>(MapCameraController.store(props.map.slug).url, 'POST', {
-        ...details(box),
-        character_id: props.characters.find((character) => character.name === box.client)?.id ?? characterId.value,
-        // Patch 62n: the same box again is the same camera on the map.
-        box_key: box.key.replace(/[^a-z0-9]/gi, '').slice(0, 40),
-    });
+    const ask = () =>
+        jsonFetchWhy<{ camera: { id: number }; publish: TRelayPass }>(MapCameraController.store(props.map.slug).url, 'POST', {
+            ...details(box),
+            character_id: props.characters.find((character) => character.name === box.client)?.id ?? characterId.value,
+            // Patch 62n: the same box again is the same camera on the map.
+            box_key: box.key.replace(/[^a-z0-9]/gi, '').slice(0, 40),
+        });
+    let answer = await ask();
+    // Patch 73: a box saved before a roll can point at a hole or guest link that's gone: drop those and try again.
+    if (answer.status === 422) {
+        const fields = Object.keys(answer.errors);
+        if (fields.some((field) => ['map_connection_id', 'map_solarsystem_id', 'signature_id'].includes(field))) box.pin = '';
+        if (fields.some((field) => field.startsWith('guest_share_link_ids'))) box.guests = [];
+        answer = await ask();
+        if (answer.data) error.value = `${box.name}: what it was pinned to is gone (rolled?), so it's on the map unpinned now: pick a pipe or system again.`;
+    }
+    const started = answer.data;
     if (!started) {
-        error.value = 'The mapper wouldn’t start the camera (is the camera relay set up?).';
+        error.value =
+            answer.status === 404
+                ? 'Cameras are switched off on the mapper.'
+                : answer.status === 0
+                  ? 'Couldn’t reach the mapper to start the camera.'
+                  : `The mapper wouldn’t start ${box.name || 'the camera'}: ${Object.values(answer.errors).flat()[0] ?? answer.message ?? 'answered ' + answer.status}.`;
         return;
     }
     const camera = new BoxCamera(element, { x: box.x, y: box.y, w: box.w, h: box.h }, {
