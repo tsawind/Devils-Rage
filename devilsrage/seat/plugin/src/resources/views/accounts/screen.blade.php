@@ -469,7 +469,8 @@
       holder.append(btn);
     });
   }
-  sync().then(offerImport).catch((e) => said('Couldn\'t hand your launch groups to the app: ' + e.message + '.'));
+  // From app dev.71 the app reads them itself when this page opens; this is only the old way.
+  sync().then(offerImport).catch(() => said(''));
 })();
 </script>
 <script>
