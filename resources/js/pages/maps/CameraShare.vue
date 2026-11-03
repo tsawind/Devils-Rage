@@ -61,6 +61,8 @@ type TBox = TBoxRect & {
     listen: boolean;
     /** Patch 62d: in the desktop app, whose client's own sound this box listens to. */
     client?: string;
+    /** Patch 73: no alerts while you're on this client (in front, or left it under 3 s ago). */
+    quietWhenFront?: boolean;
 };
 type TRun = {
     camera: BoxCamera;
@@ -734,10 +736,28 @@ const INCIDENT_MS = 60_000;
 const CLIP_AFTER_MS = 8_000;
 const incidents = new Map<string, { startedAt: number; waiting: Promise<number | null> }>();
 
+// Patch 73: when each client was last in front (from the app), for "Not while I'm on it".
+const FRONT_GRACE_MS = 3000;
+const frontAt = new Map<string, number>();
+watch(appActive, (active) => {
+    if (active.character) frontAt.set(active.character, Date.now());
+});
+function onClientNow(client: string | undefined): boolean {
+    if (!client) return false;
+    const active = appActive.value;
+    if (active.character === client && Date.now() - active.at < 2500) return true;
+    return Date.now() - (frontAt.get(client) ?? 0) < FRONT_GRACE_MS;
+}
+const quietSkipped = ref<Record<string, number>>({});
+
 async function report(key: string, hit: THit): Promise<void> {
     const run = runs.get(key);
     const box = boxes.value.find((item) => item.key === key);
     if (!run || !box) return;
+    if (box.quietWhenFront && onClientNow(box.client)) {
+        quietSkipped.value = { ...quietSkipped.value, [key]: (quietSkipped.value[key] ?? 0) + 1 };
+        return;
+    }
     runs.set(key, { ...run, hits: run.hits + 1, kinds: { ...run.kinds, [hit.kind]: (run.kinds[hit.kind] ?? 0) + 1 }, lastHit: `${hit.kind} · ${hit.heardBy}${hit.playing ? ' · while playing' : ''} · ${hit.at.toLocaleTimeString()}` });
     const client = box.client ?? '';
     const open = incidents.get(client);
@@ -1347,6 +1367,16 @@ const ROLE_STYLE: Record<TRole, { idle: string; selected: string; tag: string }>
                                 <option value="off">Off (use triggers)</option>
                                 <option v-for="item in WATCHES" :key="item.value" :value="item.value">{{ item.label }}</option>
                             </select>
+                        </template>
+                        <template v-if="box.client">
+                            <label>While on it</label>
+                            <label class="flex items-center gap-2" title="No alerts from this box while this client is the window in front (and for 3 s after you leave it): your own clicking, D-scan and camera moves won't set it off">
+                                <input :checked="Boolean(box.quietWhenFront)" type="checkbox" @change="(event) => (box.quietWhenFront = (event.target as HTMLInputElement).checked)" />
+                                <span>
+                                    No alerts while I'm on {{ box.client }}
+                                    <span v-if="quietSkipped[box.key]" class="text-muted-foreground">({{ quietSkipped[box.key] }} skipped)</span>
+                                </span>
+                            </label>
                         </template>
                         <label>Listen</label>
                         <label v-if="clientAudio" class="flex items-center gap-2" title="This window's client only: the app records that client's sound by itself">
