@@ -141,6 +141,50 @@ class LaunchGroupsController extends Controller
         ]);
     }
 
+    /**
+     * Patch 70: the app's "New launch group" page: make (or remake) one of your own groups with
+     * exactly these characters, ticked in Your accounts.
+     */
+    public function appSave(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:40'],
+            'character_ids' => ['required', 'array', 'min:1', 'max:150'],
+            'character_ids.*' => ['integer'],
+        ]);
+        $name = trim($data['name']);
+        if (LaunchGroup::query()->whereNull('user_id')->where('name', $name)->exists()) {
+            return response()->json(['message' => 'That name is a corp group already: pick another.'], 422);
+        }
+        $links = AccountCharacter::query()
+            ->whereIn('account_id', Account::query()->where('user_id', $user->id)->pluck('id'))
+            ->whereIn('character_id', array_map('intval', $data['character_ids']))
+            ->get();
+        if ($links->isEmpty()) {
+            return response()->json(['message' => 'None of those characters is in your accounts.'], 422);
+        }
+        $group = LaunchGroup::query()->where('user_id', $user->id)->where('name', $name)->first();
+        if ($group === null) {
+            if (LaunchGroup::query()->where('user_id', $user->id)->count() >= self::MAX_OWN_GROUPS) {
+                return response()->json(['message' => 'You have '.self::MAX_OWN_GROUPS.' launch groups already: delete one first.'], 422);
+            }
+            $group = LaunchGroup::query()->create(['user_id' => $user->id, 'name' => $name, 'locked' => false]);
+        }
+        $group->characters()->sync($links->pluck('id')->all());
+
+        return response()->json(['id' => (int) $group->id, 'ticked' => $links->count()]);
+    }
+
+    /** Patch 70: delete one of your own groups from the app. */
+    public function appDelete(LaunchGroup $launchGroup): JsonResponse
+    {
+        abort_unless($launchGroup->user_id !== null && $launchGroup->user_id === (int) auth()->id(), 403);
+        $launchGroup->delete();
+
+        return response()->json(['deleted' => true]);
+    }
+
     /** Directors: a corp launch group every pilot can tick on their characters. */
     public function storeCorp(Request $request): RedirectResponse
     {

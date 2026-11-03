@@ -66,6 +66,8 @@ Route::group([
     // Patch 66: launch groups for the desktop app, importing a PC's groups, corp groups from directors.
     Route::get('launch-groups.json', [LaunchGroupsController::class, 'json'])->name('devilsrage.groups.json');
     Route::post('launch-groups/import', [LaunchGroupsController::class, 'import'])->name('devilsrage.groups.import');
+    Route::post('launch-groups/app', [LaunchGroupsController::class, 'appSave'])->name('devilsrage.groups.app.save');
+    Route::post('launch-groups/{launchGroup}/app-delete', [LaunchGroupsController::class, 'appDelete'])->name('devilsrage.groups.app.delete');
     Route::post('launch-groups/corp', [LaunchGroupsController::class, 'storeCorp'])->name('devilsrage.groups.corp.store');
     Route::post('launch-groups/{launchGroup}/corp-delete', [LaunchGroupsController::class, 'deleteCorp'])->name('devilsrage.groups.corp.delete');
 
