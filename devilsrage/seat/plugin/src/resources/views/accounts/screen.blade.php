@@ -439,8 +439,11 @@
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
   async function sync() {
     const data = await fetch(@json(route('devilsrage.groups.json')), { headers: { Accept: 'application/json' }, credentials: 'same-origin' }).then((r) => r.json());
-    const r = await fetch(bridge + '/launch-sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-    if (!r.ok) throw new Error('the app said ' + r.status);
+    let r;
+    try { r = await fetch(bridge + '/launch-sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); }
+    catch (e) { throw new Error('no answer from the app (' + (app.version || 'old version') + ')'); }
+    if (r.status === 403 || r.status === 404) throw new Error('this app (' + (app.version || '?') + ') is too old: update it to dev.68 or newer');
+    if (!r.ok) throw new Error('the app said ' + r.status + ' ' + (await r.text().catch(() => '')).slice(0, 120));
     return data;
   }
   async function offerImport() {
@@ -465,7 +468,7 @@
       holder.append(btn);
     });
   }
-  sync().then(offerImport).catch(() => said('Couldn\'t reach the app\'s launch groups (update the app?).'));
+  sync().then(offerImport).catch((e) => said('Couldn\'t hand your launch groups to the app: ' + e.message + '.'));
 })();
 </script>
 <script>

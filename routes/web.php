@@ -44,6 +44,7 @@ use App\Http\Controllers\MapIgnoredSolarsystemController;
 use App\Http\Controllers\MapImportController;
 use App\Http\Controllers\MapNamesController;
 use App\Http\Controllers\FleetController;
+use App\Http\Controllers\FleetLayoutController;
 use App\Http\Controllers\JumpInController;
 use App\Http\Controllers\MassSessionController;
 use App\Http\Controllers\RollingCrewController;
@@ -272,6 +273,13 @@ Route::middleware('auth')->group(function () {
 
     // Patch 37: the fleet you're in (read with the boss's token) and jump-in plans for the search.
     Route::get('maps/{map}/fleet', [FleetController::class, 'show'])->middleware('throttle:30,1')->name('maps.fleet.show');
+    // Patch 67: fleet layouts, built and invited in one go by the fleet boss.
+    Route::get('fleets', [FleetLayoutController::class, 'index'])->name('fleets.index');
+    Route::post('fleet-layouts', [FleetLayoutController::class, 'store'])->name('fleet-layouts.store');
+    Route::put('fleet-layouts/{fleetLayout}', [FleetLayoutController::class, 'update'])->name('fleet-layouts.update');
+    Route::delete('fleet-layouts/{fleetLayout}', [FleetLayoutController::class, 'destroy'])->name('fleet-layouts.destroy');
+    Route::post('fleet-layouts/{fleetLayout}/build', [FleetLayoutController::class, 'build'])->middleware('throttle:10,1')->name('fleet-layouts.build');
+    Route::post('fleet-layouts/resolve', [FleetLayoutController::class, 'resolve'])->middleware('throttle:30,1')->name('fleet-layouts.resolve');
     Route::get('maps/{map}/jump-in', [JumpInController::class, 'show'])->middleware('throttle:60,1')->name('maps.jump-in.show');
     Route::get('maps/{map}/ship-profiles', [ShipProfileController::class, 'index'])->name('maps.ship-profiles.index');
     Route::put('maps/{map}/ship-profiles', [ShipProfileController::class, 'update'])->name('maps.ship-profiles.update');

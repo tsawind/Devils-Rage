@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DocumentationController from '@/actions/App/Http/Controllers/DocumentationController';
+import FleetLayoutController from '@/actions/App/Http/Controllers/FleetLayoutController';
 import LoginController from '@/actions/App/Http/Controllers/LoginController';
 import MapController from '@/actions/App/Http/Controllers/MapController';
 import SettingsController from '@/actions/App/Http/Controllers/SettingsController';
@@ -15,7 +16,7 @@ import { home } from '@/routes';
 import type { AppPageProps, NavItem } from '@/types';
 import { TCharacter } from '@/types/models';
 import { Link, usePage } from '@inertiajs/vue3';
-import { AlertTriangle, CircleHelp, LayoutGrid, LogIn, Map as MapIcon, Menu, Shield } from 'lucide-vue-next';
+import { AlertTriangle, CircleHelp, LayoutGrid, LogIn, Map as MapIcon, Menu, Shield, Users } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 const page = usePage<
@@ -42,6 +43,12 @@ const mainNavItems: NavItem[] = [
         title: 'Maps',
         href: MapController.index().url,
         icon: LayoutGrid,
+    },
+    // Patch 67: fleet layouts (build and invite a whole fleet in one go).
+    {
+        title: 'Fleets',
+        href: FleetLayoutController.index().url,
+        icon: Users,
     },
 ];
 
