@@ -96,7 +96,7 @@ final readonly class BuildFleetAction
         $place = function (array $person, string $role, int $wingId, ?int $squadId, string $label) use ($boss, $info, $members, &$results): void {
             $id = (int) $person['id'];
             $name = (string) $person['name'];
-            if ($id === $boss->id) {
+            if ($id === (int) $boss->id) {
                 $results[] = ['id' => $id, 'name' => $name, 'place' => $label, 'outcome' => 'boss', 'detail' => 'You: the fleet boss stays where you are.'];
 
                 return;
@@ -167,7 +167,7 @@ final readonly class BuildFleetAction
             } catch (Throwable) {
                 continue;
             }
-            if ($result->wasSuccessful() && $result->data->fleet_boss_id === $character->id) {
+            if ($result->wasSuccessful() && $result->data->fleet_boss_id === (int) $character->id) {
                 return [$character, $result->data];
             }
         }

@@ -99,10 +99,10 @@ it('rejects layouts EVE would not take', function (array $change, string $field)
 
 it('builds the wings and squads and invites everyone to their place', function () {
     [$user, $boss] = fleetBoss();
-    $layout = FleetLayout::factory()->create(['user_id' => $user->id] + fleetBody([['id' => 9001, 'name' => 'Girl Shady'], ['id' => $boss->id, 'name' => 'Tsawind']]));
+    $layout = FleetLayout::factory()->create(['user_id' => $user->id] + fleetBody([['id' => 9001, 'name' => 'Girl Shady'], ['id' => (int) $boss->id, 'name' => 'Tsawind']]));
 
     $esi = $this->mock(Esi::class);
-    $esi->shouldReceive('getCharacterFleet')->andReturn(new EsiResult(data: new FleetInfo(fleet_id: 77, fleet_boss_id: $boss->id, role: 'fleet_commander', squad_id: -1, wing_id: -1)));
+    $esi->shouldReceive('getCharacterFleet')->andReturn(new EsiResult(data: new FleetInfo(fleet_id: 77, fleet_boss_id: (int) $boss->id, role: 'fleet_commander', squad_id: -1, wing_id: -1)));
     $esi->shouldReceive('getFleetWings')->andReturn(
         new EsiResult(data: []),
         new EsiResult(data: [new FleetWing(id: 501, name: 'Wing 1', squads: [new FleetSquad(id: 601, name: 'Squad 1')])]),
@@ -128,7 +128,7 @@ it('says why an invite failed', function () {
     $layout = FleetLayout::factory()->create(['user_id' => $user->id] + fleetBody(commander: null));
 
     $esi = $this->mock(Esi::class);
-    $esi->shouldReceive('getCharacterFleet')->andReturn(new EsiResult(data: new FleetInfo(fleet_id: 77, fleet_boss_id: $boss->id, role: 'fleet_commander', squad_id: -1, wing_id: -1)));
+    $esi->shouldReceive('getCharacterFleet')->andReturn(new EsiResult(data: new FleetInfo(fleet_id: 77, fleet_boss_id: (int) $boss->id, role: 'fleet_commander', squad_id: -1, wing_id: -1)));
     $esi->shouldReceive('getFleetWings')->andReturn(new EsiResult(data: [new FleetWing(id: 501, name: 'Rollers', squads: [new FleetSquad(id: 601, name: 'Squad A')])]));
     $esi->shouldNotReceive('renameFleetWing');
     $esi->shouldNotReceive('renameFleetSquad');
