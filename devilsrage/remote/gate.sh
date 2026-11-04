@@ -244,6 +244,33 @@ case "$ACTION" in
             }
         ' 2>&1 | cut -c1-300
         ;;
+    seat-pi-repeat)
+        # Two latest scans of each planet's raw compared: how much they differ everywhere (scanner
+        # noise), and in the 150 km round Tsawind's J145735 II extractor vs the ring round that.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            $S = DevilsRage\Seat\Pi\PiScan::class;
+            foreach (DevilsRage\Seat\Models\PiScanSnapshot::query()->orderByDesc("created_at")->get()->groupBy(fn ($r) => $r->planet_id."|".$r->resource) as $key => $list) {
+                if ($list->count() < 2) { continue; }
+                [$new, $old] = [$S::despeckle($list[0]->cells), $S::despeckle($list[1]->cells)];
+                $n = 0; $d = 0.0; $sa = $sb = $saa = $sbb = $sab = 0.0;
+                for ($i = 0; $i < strlen($new); $i++) { $a = ord($old[$i]); $b = ord($new[$i]); if (!$a || !$b) { continue; } $a = ($a - 1) / 250; $b = ($b - 1) / 250; $n++; $d += abs($a - $b); $sa += $a; $sb += $b; $saa += $a*$a; $sbb += $b*$b; $sab += $a*$b; }
+                $corr = $n ? ($n*$sab - $sa*$sb) / sqrt(max(1e-12, ($n*$saa - $sa*$sa) * ($n*$sbb - $sb*$sb))) : 0;
+                [$planet, $res] = explode("|", $key);
+                echo DB::table("planets")->where("planet_id", $planet)->value("name"), " ", $res, ": ", $list[1]->created_at, " vs ", $list[0]->created_at, ", cells in both ", $n, ", mean change ", round($d / max(1, $n), 3), ", correlation ", round($corr, 3), PHP_EOL;
+                if ((int) $planet === 40467107 && $res === "Felsic Magma") {
+                    $spots = [["template extractor", 0.9512, 1.4050]];
+                    foreach (DB::table("character_planet_heads")->where("character_id", 1793390976)->get() as $h) { $spots[] = ["head ".$h->head_id, (float) $h->latitude, (float) $h->longitude]; }
+                    foreach ($spots as [$name, $la, $lo]) {
+                        $r = $name === "template extractor" ? 150 / 1990 : 0.012;
+                        $ai = $S::meanAround($old, $la, $lo, $r, $new); $bi = $S::meanAround($new, $la, $lo, $r, $old);
+                        $aw = $S::meanAround($old, $la, $lo, 3 * $r, $new); $bw = $S::meanAround($new, $la, $lo, 3 * $r, $old);
+                        echo "  ", $name, ": inside ", round($ai["heat"] ?? -1, 3), " -> ", round($bi["heat"] ?? -1, 3), " (", $ai["cells"], " cells); wider ", round($aw["heat"] ?? -1, 3), " -> ", round($bw["heat"] ?? -1, 3), PHP_EOL;
+                    }
+                }
+            }
+        ' 2>&1 | cut -c1-300
+        ;;
     seat-failed-jobs)
         # SeAT's failed jobs of the last day, grouped by job and the first line of the error.
         cd "$HOME/seat-docker"
