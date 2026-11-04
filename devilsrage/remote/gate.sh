@@ -135,6 +135,16 @@ case "$ACTION" in
             }
         ' 2>&1 | cut -c1-200
         ;;
+    seat-pi-scans)
+        # PI scan review: every saved scan map (planet, resource, coverage, when) and its cells as base64 lines.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            foreach (DevilsRage\Seat\Models\PiScan::query()->orderBy("planet_id")->orderBy("resource")->get() as $s) {
+                echo "scan ", $s->planet_id, " ", DB::table("planets")->where("planet_id", $s->planet_id)->value("name"), " | ", $s->resource, " | ", round($s->coverage, 3), " | ", $s->updated_at, PHP_EOL;
+                foreach (str_split(base64_encode($s->cells), 150) as $line) { echo "c ", $line, PHP_EOL; }
+            }
+        ' 2>&1 | cut -c1-200
+        ;;
     seat-failed-jobs)
         # SeAT's failed jobs of the last day, grouped by job and the first line of the error.
         cd "$HOME/seat-docker"
