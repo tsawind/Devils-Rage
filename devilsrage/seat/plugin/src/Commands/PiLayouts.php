@@ -75,18 +75,19 @@ class PiLayouts extends Command
                         $avoid[] = [(float) $h->latitude, (float) $h->longitude];
                     }
                 }
-                if ($scan === null) {
+                if ($scan === null && ! in_array($raw, $this->option('raw'), true)) {
                     $this->line(sprintf('  %-18s no scan yet (%d corp extractors on it)', $raw, $pulling->count()));
 
                     continue;
                 }
-                $spot = PiLayout::hotspot(PiScan::despeckle($scan->cells), $radiusKm, $avoid);
+                // Asked for by name without a scan: drawn anywhere; drag it onto the hotspot in EVE when placing it.
+                $spot = $scan === null ? ['lat' => M_PI / 2, 'lon' => M_PI, 'heat' => 1.0, 'toward' => 0.0] : PiLayout::hotspot(PiScan::despeckle($scan->cells), $radiusKm, $avoid);
                 if ($spot === null) {
                     $this->line(sprintf('  %-18s no free ground (%d corp extractors on it)', $raw, $pulling->count()));
 
                     continue;
                 }
-                $choices[] = compact('raw', 'p0', 'p1', 'spot', 'avoid') + ['scanned' => (string) $scan->created_at, 'others' => $pulling->count()];
+                $choices[] = compact('raw', 'p0', 'p1', 'spot', 'avoid') + ['scanned' => $scan === null ? 'not scanned' : (string) $scan->created_at, 'others' => $pulling->count()];
             }
             if ($choices === []) {
                 continue;
@@ -115,7 +116,7 @@ class PiLayouts extends Command
                     ['user_id' => $owner, 'fingerprint' => PiTemplate::fingerprint($parsed)],
                     [
                         'name' => mb_substr("P1 {$planet->itemName} · {$p1Name} · {$layout['factories']} factories", 0, 80),
-                        'note' => mb_substr(sprintf('Drawn on the %s scan of %s. Extractor on the hotspot (heat %.2f), heads spread round it when the program starts: 1 d 45 m program (15-minute cycles), restart daily. Needs a command center %d.', $pick['raw'], $pick['scanned'], $pick['spot']['heat'], $level ?: 5), 0, 500),
+                        'note' => mb_substr(($pick['scanned'] === 'not scanned' ? sprintf('No %s scan yet: when placing it, drag it so the extractor sits on the hotspot EVE\'s scan shows.', $pick['raw']) : sprintf('Drawn on the %s scan of %s, extractor on the hotspot (heat %.2f).', $pick['raw'], $pick['scanned'], $pick['spot']['heat'])).sprintf(' Heads spread round the extractor when the program starts: 1 d 45 m program (15-minute cycles), restart daily. Needs a command center %d.', $level ?: 5), 0, 500),
                         'body' => $body, 'planet_type_id' => (int) $planet->typeID, 'shared' => false,
                     ],
                 );
