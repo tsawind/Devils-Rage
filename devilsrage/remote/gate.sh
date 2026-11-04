@@ -174,6 +174,40 @@ case "$ACTION" in
             }
         ' 2>&1 | cut -c1-400
         ;;
+    seat-pi-layout-data)
+        # PI layout design data: PI structure fitting (SDE dogma), the J145735 planets (type, radius),
+        # who extracts what on each, and Tsawind's colonies (pins, links, CC level).
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            $types = DB::table("invTypes as t")->join("invGroups as g", "g.groupID", "=", "t.groupID")->where("g.categoryID", 41)->where("t.published", 1)->get(["t.typeID", "t.typeName", "g.groupName"]);
+            $attrNames = DB::table("dgmAttributeTypes")->pluck("attributeName", "attributeID");
+            foreach ($types as $t) {
+                $a = DB::table("dgmTypeAttributes")->where("typeID", $t->typeID)->get(["attributeID", "valueFloat", "valueInt"]);
+                $parts = [];
+                foreach ($a as $r) { $n = $attrNames[$r->attributeID] ?? $r->attributeID; $parts[] = $n."=".($r->valueFloat ?? $r->valueInt); }
+                echo "type ", $t->typeID, " ", $t->typeName, " [", $t->groupName, "] ", implode(" ", $parts), PHP_EOL;
+            }
+            $sys = DB::table("mapDenormalize")->where("itemName", "J145735")->value("itemID");
+            foreach (DB::table("mapDenormalize")->where("solarSystemID", $sys)->where("groupID", 7)->get(["itemID", "itemName", "typeID", "radius"]) as $p) {
+                echo "planet ", $p->itemID, " ", $p->itemName, " type ", $p->typeID, " ", DB::table("invTypes")->where("typeID", $p->typeID)->value("typeName"), " radius_m ", $p->radius, PHP_EOL;
+                foreach (DB::table("character_planet_extractors")->where("planet_id", $p->itemID)->get() as $x) {
+                    echo "  extracts ", DB::table("invTypes")->where("typeID", $x->product_type_id)->value("typeName"), " by ", DB::table("character_infos")->where("character_id", $x->character_id)->value("name"), PHP_EOL;
+                }
+            }
+            foreach (DB::table("character_infos")->where("name", "like", "Tsawind%")->get(["character_id", "name"]) as $c) {
+                echo "char ", $c->character_id, " ", $c->name, PHP_EOL;
+                foreach (DB::table("character_planets")->where("character_id", $c->character_id)->get() as $cp) {
+                    echo " colony ", $cp->planet_id, " ", DB::table("planets")->where("planet_id", $cp->planet_id)->value("name"), " level ", $cp->upgrade_level, " pins ", $cp->num_pins, PHP_EOL;
+                    foreach (DB::table("character_planet_pins")->where("character_id", $c->character_id)->where("planet_id", $cp->planet_id)->get() as $pin) {
+                        echo "  pin ", $pin->pin_id, " ", $pin->type_id, " ", DB::table("invTypes")->where("typeID", $pin->type_id)->value("typeName"), " ", $pin->latitude, " ", $pin->longitude, " schematic ", $pin->schematic_id ?? "-", PHP_EOL;
+                    }
+                    foreach (DB::table("character_planet_links")->where("character_id", $c->character_id)->where("planet_id", $cp->planet_id)->get() as $l) {
+                        echo "  link ", $l->source_pin_id, " ", $l->destination_pin_id, " lv ", $l->link_level, PHP_EOL;
+                    }
+                }
+            }
+        ' 2>&1 | cut -c1-900
+        ;;
     seat-failed-jobs)
         # SeAT's failed jobs of the last day, grouped by job and the first line of the error.
         cd "$HOME/seat-docker"
