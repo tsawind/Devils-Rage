@@ -215,6 +215,35 @@ case "$ACTION" in
         docker compose exec -T front php artisan devilsrage:pi:layouts Tsawind --planet="J145735 I" --planet="J145735 II" --planet="J145735 III" --planet="J145735 IV" --save 2>&1 | cut -c1-6000
         docker compose exec -T front php artisan devilsrage:pi:layouts Tsawind --planet="J145735 VI" --raw="Aqueous Liquids" --save 2>&1 | cut -c1-6000
         ;;
+    seat-pi-align-check)
+        # Are the saved scans placed right? Players put heads on hot ground, so the mean scan heat
+        # under every corp head of a raw should peak with no shift. Tries shifts in longitude and
+        # latitude (and the mirrored longitude) and prints the best against no shift.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            $byPlanet = DevilsRage\Seat\Models\PiScanSnapshot::query()->orderByDesc("created_at")->get()->groupBy("planet_id");
+            foreach ($byPlanet as $planet => $snaps) {
+                foreach ($snaps->groupBy("resource") as $res => $list) {
+                    $cells = DevilsRage\Seat\Pi\PiScan::despeckle($list->first()->cells);
+                    $p0 = DB::table("invTypes")->where("typeName", $res)->value("typeID");
+                    $heads = [];
+                    foreach (DB::table("character_planet_extractors")->where("planet_id", $planet)->where("product_type_id", $p0)->get() as $x) {
+                        foreach (DB::table("character_planet_heads")->where("character_id", $x->character_id)->where("extractor_id", $x->pin_id)->get() as $h) { $heads[] = [(float) $h->latitude, (float) $h->longitude]; }
+                    }
+                    if (count($heads) < 6) { echo DB::table("planets")->where("planet_id", $planet)->value("name"), " ", $res, ": ", count($heads), " heads, too few", PHP_EOL; continue; }
+                    $score = function (float $dLat, float $dLon, bool $mirror) use ($cells, $heads) {
+                        $s = 0; $n = 0;
+                        foreach ($heads as [$la, $lo]) { $lo2 = $mirror ? 2 * M_PI - $lo : $lo; $v = DevilsRage\Seat\Pi\PiScan::heatAt($cells, max(0.0, min(M_PI - 1e-6, $la + $dLat)), $lo2 + $dLon); if ($v !== null) { $s += $v; $n++; } }
+                        return $n ? $s / $n : 0;
+                    };
+                    $zero = $score(0, 0, false); $best = [0, 0, false, $zero]; $low = [0, 0, false, $zero]; $all = [];
+                    foreach ([false, true] as $m) { for ($a = -10; $a <= 10; $a += 1) { for ($o = -30; $o <= 30; $o += 1) { $v = $score($a * M_PI / 180, $o * M_PI / 180, $m); $all[] = $v; if ($v > $best[3]) { $best = [$a, $o, $m, $v]; } if ($v < $low[3]) { $low = [$a, $o, $m, $v]; } } } }
+                    sort($all); $median = $all[intdiv(count($all), 2)];
+                    echo DB::table("planets")->where("planet_id", $planet)->value("name"), " ", $res, ": ", count($heads), " heads; heat under heads no shift ", round($zero, 3), ", best ", round($best[3], 3), " at lat ", $best[0], "° lon ", $best[1], "°", $best[2] ? " MIRRORED" : "", ", lowest ", round($low[3], 3), " at lat ", $low[0], "° lon ", $low[1], "°", $low[2] ? " MIRRORED" : "", ", typical ", round($median, 3), PHP_EOL;
+                }
+            }
+        ' 2>&1 | cut -c1-300
+        ;;
     seat-failed-jobs)
         # SeAT's failed jobs of the last day, grouped by job and the first line of the error.
         cd "$HOME/seat-docker"
