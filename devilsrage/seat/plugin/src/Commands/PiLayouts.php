@@ -53,16 +53,20 @@ class PiLayouts extends Command
             }
             $radiusKm = (float) $planet->radius / 1000;
             $level = (int) (DB::table('character_planets')->where('character_id', $character->character_id)->where('planet_id', $planet->itemID)->value('upgrade_level') ?? 5);
-            $raws = DB::table('invTypes')->where('typeName', 'like', "$kind % Extractor")->pluck('typeName')
-                ->map(fn ($n) => trim(substr((string) $n, strlen($kind) + 1, -strlen(' Extractor'))))->unique()->values();
+            $harvested = (int) DB::table('dgmAttributeTypes')->whereIn('attributeName', ['harvestedTypeID', 'Harvested Type'])->value('attributeID');
+            $extractorIds = DB::table('invTypes')->where('typeName', 'like', "$kind % Extractor")->pluck('typeID');
+            $rawIds = DB::table('dgmTypeAttributes')->whereIn('typeID', $extractorIds)->where('attributeID', $harvested)->get(['valueInt', 'valueFloat'])
+                ->map(fn ($r) => (int) ($r->valueInt ?? $r->valueFloat))->unique()->values();
             $choices = [];
-            foreach ($raws as $raw) {
+            foreach ($rawIds as $p0) {
+                $raw = (string) DB::table('invTypes')->where('typeID', $p0)->value('typeName');
                 if ($this->option('raw') !== [] && ! in_array($raw, $this->option('raw'), true)) {
                     continue;
                 }
-                $p0 = (int) DB::table('invTypes')->where('typeName', $raw)->value('typeID');
-                $schematic = DB::table('planetSchematicsTypeMap')->where('typeID', $p0)->where('isInput', 1)->value('schematicID');
-                $p1 = (int) DB::table('planetSchematicsTypeMap')->where('schematicID', $schematic)->where('isInput', 0)->value('typeID');
+                $p1 = PiLayout::P1_OF[$p0] ?? 0;
+                if ($p1 === 0) {
+                    continue;
+                }
                 $scan = PiScanSnapshot::query()->where('planet_id', $planet->itemID)->where('resource', $raw)->orderByDesc('created_at')->first();
                 $pulling = DB::table('character_planet_extractors')->where('planet_id', $planet->itemID)->where('product_type_id', $p0)->where('character_id', '!=', $character->character_id)->get(['character_id', 'pin_id']);
                 $avoid = [];

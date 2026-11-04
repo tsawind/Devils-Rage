@@ -43,6 +43,12 @@ final class PiLayout
 
     public const MAX_FACTORIES = 24;
 
+    /** Raw (P0) type → the P1 a basic industry facility makes from it. */
+    public const P1_OF = [
+        2268 => 3645, 2267 => 2398, 2288 => 2396, 2073 => 2393, 2270 => 2399, 2272 => 2400, 2307 => 9828, 2306 => 2401,
+        2308 => 2389, 2305 => 2397, 2287 => 2395, 2309 => 2390, 2310 => 3683, 2311 => 2392, 2286 => 3779,
+    ];
+
     /** Raw a basic factory takes per 30-minute cycle, and the P1 it makes. */
     public const BASIC_IN = 3000;
 
