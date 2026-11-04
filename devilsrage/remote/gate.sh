@@ -208,6 +208,12 @@ case "$ACTION" in
             }
         ' 2>&1 | cut -c1-900
         ;;
+    seat-pi-layouts)
+        # P1 colony templates for Tsawind's four slots (J145735 I, II, III, IV), drawn on the latest
+        # scans and saved to Tsawind's Templates on the PI screen. Planets without a scan are listed.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan devilsrage:pi:layouts Tsawind --planet="J145735 I" --planet="J145735 II" --planet="J145735 III" --planet="J145735 IV" --save 2>&1 | cut -c1-6000
+        ;;
     seat-failed-jobs)
         # SeAT's failed jobs of the last day, grouped by job and the first line of the error.
         cd "$HOME/seat-docker"
