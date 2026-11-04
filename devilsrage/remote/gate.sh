@@ -127,12 +127,12 @@ case "$ACTION" in
         cd "$HOME/seat-docker"
         docker compose exec -T front php artisan tinker --execute='
             $c = Seat\Eveapi\Models\Character\CharacterInfo::query()->where("name", "Darkness Holder")->value("character_id");
-            $p = DB::table("planets")->where("name", "J145735 II")->value("planet_id");
+            foreach (["J145735 II", "J145735 III", "J145735 I", "J145735 VI"] as $pname) { $p = DB::table("planets")->where("name", $pname)->value("planet_id"); echo "== ", $pname, PHP_EOL;
             echo "character ", $c, " planet ", $p, PHP_EOL;
             foreach (DB::table("character_planet_pins")->where("character_id", $c)->where("planet_id", $p)->get(["pin_id", "type_id", "latitude", "longitude"]) as $r) {
                 echo "pin ", $r->pin_id, " ", $r->type_id, " ", DB::table("invTypes")->where("typeID", $r->type_id)->value("typeName"), " ", $r->latitude, " ", $r->longitude, PHP_EOL;
                 foreach (DB::table("character_planet_heads")->where("character_id", $c)->where("extractor_id", $r->pin_id)->get(["head_id", "latitude", "longitude"]) as $h) { echo "  head ", $h->head_id, " ", $h->latitude, " ", $h->longitude, PHP_EOL; }
-            }
+            } }
         ' 2>&1 | cut -c1-200
         ;;
     seat-pi-scans)
