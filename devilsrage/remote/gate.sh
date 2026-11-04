@@ -145,6 +145,35 @@ case "$ACTION" in
             }
         ' 2>&1 | cut -c1-200
         ;;
+    seat-pi-experiment)
+        # PI depletion experiment: for every extractor on a scanned planet, the mean scan heat on
+        # each head (within its radius) and in a ring round it (2-4 radii: untouched ground), per dated scan.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            $snaps = DevilsRage\Seat\Models\PiScanSnapshot::query()->orderBy("created_at")->get();
+            foreach ($snaps->groupBy("planet_id") as $planet => $list) {
+                echo "planet ", $planet, " ", DB::table("planets")->where("planet_id", $planet)->value("name"), ": ", $list->count(), " scans", PHP_EOL;
+                foreach (DB::table("character_planet_extractors")->where("planet_id", $planet)->get() as $x) {
+                    $who = DB::table("character_infos")->where("character_id", $x->character_id)->value("name");
+                    $res = DB::table("invTypes")->where("typeID", $x->product_type_id)->value("typeName");
+                    $pin = DB::table("character_planet_pins")->where("character_id", $x->character_id)->where("pin_id", $x->pin_id)->first();
+                    echo " extractor ", $x->pin_id, " ", $who, " ", $res, " head_radius ", $x->head_radius, " cycle ", $x->cycle_time, "s qty ", $x->qty_per_cycle, " installed ", $pin->install_time ?? "?", " expires ", $pin->expiry_time ?? "?", PHP_EOL;
+                    $heads = DB::table("character_planet_heads")->where("character_id", $x->character_id)->where("extractor_id", $x->pin_id)->get();
+                    foreach ($list->where("resource", $res) as $s) {
+                        $cells = DevilsRage\Seat\Pi\PiScan::despeckle($s->cells);
+                        $line = "  scan ".$s->created_at." cov ".round($s->coverage, 2).":";
+                        foreach ($heads as $h) {
+                            $in = DevilsRage\Seat\Pi\PiScan::meanAround($cells, (float) $h->latitude, (float) $h->longitude, (float) $x->head_radius);
+                            $wide = DevilsRage\Seat\Pi\PiScan::meanAround($cells, (float) $h->latitude, (float) $h->longitude, 4 * (float) $x->head_radius);
+                            $ring = ($wide["heat"] !== null && $in["heat"] !== null && $wide["cells"] > $in["cells"]) ? ($wide["heat"] * $wide["cells"] - $in["heat"] * $in["cells"]) / ($wide["cells"] - $in["cells"]) : null;
+                            $line .= " h".$h->head_id."=".($in["heat"] === null ? "-" : round($in["heat"], 3))."/ring ".($ring === null ? "-" : round($ring, 3));
+                        }
+                        echo $line, PHP_EOL;
+                    }
+                }
+            }
+        ' 2>&1 | cut -c1-400
+        ;;
     seat-failed-jobs)
         # SeAT's failed jobs of the last day, grouped by job and the first line of the error.
         cd "$HOME/seat-docker"

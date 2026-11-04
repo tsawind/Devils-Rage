@@ -88,4 +88,78 @@ final class PiScan
     {
         return 1 + (int) round(max(0.0, min(1.0, $heat)) * 250);
     }
+    /**
+     * EVE's resource fields are smooth, so a lone cell far from the cells round it (5 × 5) is a
+     * speck (glowing lava shining through the scan colours): it takes their median.
+     */
+    public static function despeckle(string $bytes, float $limit = 0.2): string
+    {
+        $out = $bytes;
+        $lim = (int) round($limit * 250);
+        for ($row = 0; $row < self::GRID_H; $row++) {
+            for ($col = 0; $col < self::GRID_W; $col++) {
+                $here = ord($bytes[$row * self::GRID_W + $col]);
+                if ($here === self::UNSEEN) {
+                    continue;
+                }
+                $near = [];
+                for ($dr = -2; $dr <= 2; $dr++) {
+                    $r = $row + $dr;
+                    if ($r < 0 || $r >= self::GRID_H) {
+                        continue;
+                    }
+                    for ($dc = -2; $dc <= 2; $dc++) {
+                        $v = ord($bytes[$r * self::GRID_W + (($col + $dc + self::GRID_W) % self::GRID_W)]);
+                        if ($v !== self::UNSEEN) {
+                            $near[] = $v;
+                        }
+                    }
+                }
+                if (count($near) < 9) {
+                    continue;
+                }
+                sort($near);
+                $median = $near[intdiv(count($near), 2)];
+                if (abs($here - $median) > $lim) {
+                    $out[$row * self::GRID_W + $col] = chr($median);
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * The mean heat 0 … 1 within `radius` (radians on the planet) of an EVE position, over cells
+     * seen in both maps when `other` is given (so two dates compare like for like).
+     *
+     * @return array{heat: float|null, cells: int}
+     */
+    public static function meanAround(string $bytes, float $lat, float $lon, float $radius, ?string $other = null): array
+    {
+        $centre = [sin($lat) * cos($lon), sin($lat) * sin($lon), cos($lat)];
+        $sum = 0.0;
+        $n = 0;
+        $rows = (int) ceil($radius / M_PI * self::GRID_H) + 1;
+        $mid = (int) floor($lat / M_PI * self::GRID_H);
+        for ($row = max(0, $mid - $rows); $row <= min(self::GRID_H - 1, $mid + $rows); $row++) {
+            $la = ($row + 0.5) / self::GRID_H * M_PI;
+            for ($col = 0; $col < self::GRID_W; $col++) {
+                $lo = ($col + 0.5) / self::GRID_W * 2 * M_PI;
+                $dot = sin($la) * cos($lo) * $centre[0] + sin($la) * sin($lo) * $centre[1] + cos($la) * $centre[2];
+                if (acos(max(-1.0, min(1.0, $dot))) > $radius) {
+                    continue;
+                }
+                $i = $row * self::GRID_W + $col;
+                $v = ord($bytes[$i]);
+                if ($v === self::UNSEEN || ($other !== null && ord($other[$i]) === self::UNSEEN)) {
+                    continue;
+                }
+                $sum += ($v - 1) / 250;
+                $n++;
+            }
+        }
+
+        return ['heat' => $n > 0 ? $sum / $n : null, 'cells' => $n];
+    }
 }

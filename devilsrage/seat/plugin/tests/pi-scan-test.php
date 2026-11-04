@@ -40,5 +40,24 @@ check('a rescan keeps what it did not see', ord($merged[5]) === 126);
 check('and replaces what it saw', ord($merged[0]) === 200);
 check('no old map: the new one', PiScan::merge(null, $new) === $new);
 
+// Specks go, the smooth field stays.
+$smooth = '';
+for ($i = 0; $i < $cells; $i++) { $smooth .= chr(PiScan::encodeHeat(0.3 + 0.2 * sin(($i % PiScan::GRID_W) / 20))); }
+$specked = $smooth;
+foreach ([5000, 20111, 33333] as $i) { $specked[$i] = chr(PiScan::encodeHeat(0.95)); }
+$clean = PiScan::despeckle($specked);
+check('specks take the value round them', abs(ord($clean[20111]) - ord($smooth[20111])) <= 3 && abs(ord($clean[5000]) - ord($smooth[5000])) <= 3);
+$changed = 0; for ($i = 0; $i < $cells; $i++) { if (! in_array($i, [5000, 20111, 33333], true) && $clean[$i] !== $smooth[$i]) { $changed++; } }
+check('the smooth field is left alone', $changed === 0);
+
+// Mean heat round a spot, before and after (a depleted patch shows as a drop).
+$before = str_repeat(chr(PiScan::encodeHeat(0.6)), $cells);
+$after = $before;
+for ($row = 85; $row < 95; $row++) { for ($col = 175; $col < 185; $col++) { $after[$row * PiScan::GRID_W + $col] = chr(PiScan::encodeHeat(0.2)); } }
+$at = fn (string $b) => PiScan::meanAround($b, M_PI / 2, M_PI, 3 * M_PI / 180, $before);
+check('mean round a spot before', abs($at($before)['heat'] - 0.6) < 0.01 && $at($before)['cells'] > 20);
+check('and the drop after', abs($at($after)['heat'] - 0.2) < 0.02);
+check('cells not seen in the other map are left out', PiScan::meanAround($before, M_PI / 2, M_PI, 0.05, $empty)['cells'] === 0);
+
 echo $fails ? "\n$fails failed\n" : "\nall passed\n";
 exit($fails ? 1 : 0);

@@ -6,6 +6,7 @@ namespace DevilsRage\Seat\Http\Controllers;
 
 use DevilsRage\Seat\Models\AccountSetting;
 use DevilsRage\Seat\Models\PiScan as StoredScan;
+use DevilsRage\Seat\Models\PiScanSnapshot;
 use DevilsRage\Seat\Models\PiTemplate as StoredTemplate;
 use DevilsRage\Seat\Models\Setting;
 use DevilsRage\Seat\Pi\PiData;
@@ -796,6 +797,11 @@ class PiController extends Controller
             ['planet_id' => $planetId, 'resource' => $data['resource']],
             ['user_id' => (int) auth()->id(), 'character_id' => $data['character_id'] ?? null, 'cells' => $merged, 'coverage' => $coverage],
         );
+        // The history: this save on its own, dated, so depletion shows between scans.
+        PiScanSnapshot::query()->create([
+            'planet_id' => $planetId, 'resource' => $data['resource'], 'user_id' => (int) auth()->id(),
+            'character_id' => $data['character_id'] ?? null, 'cells' => $cells, 'coverage' => PiScan::coverage($cells),
+        ]);
 
         return response()->json(['coverage' => round($coverage, 3), 'message' => sprintf('Saved: %d%% of the planet scanned for %s.', (int) round($coverage * 100), $data['resource'])]);
     }
