@@ -108,10 +108,12 @@ class PiLayouts extends Command
                 'comment' => "DR P1 {$planet->itemName} {$p1Name}",
             ]);
             $this->info(sprintf('  Pick: %s → %s, %d basic factories (CC %d: %.0f MW, %.0f tf), extractor at %.4f, %.4f', $pick['raw'], $p1Name, $layout['factories'], $level ?: 5, $layout['power'], $layout['cpu'], $pick['spot']['lat'], $pick['spot']['lon']));
-            $body = json_encode($layout['template'], JSON_THROW_ON_ERROR);
+            // EVE refuses a template whose numbers lost their decimal point ("Diam": 3980 instead of 3980.0).
+            $body = json_encode($layout['template'], JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION);
             $this->line('  '.$body);
             if ($this->option('save') && $owner > 0) {
                 $parsed = PiTemplate::parse($body);
+                StoredTemplate::query()->where('user_id', $owner)->where('name', 'like', "P1 {$planet->itemName} · %")->delete();
                 StoredTemplate::query()->updateOrCreate(
                     ['user_id' => $owner, 'fingerprint' => PiTemplate::fingerprint($parsed)],
                     [
