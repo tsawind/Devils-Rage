@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace DevilsRage\Seat\Http\Controllers;
 
 use DevilsRage\Seat\Models\AccountCharacter;
+use DevilsRage\Seat\Models\SkillPlan;
 use DevilsRage\Seat\Services\Corporation;
+use DevilsRage\Seat\Skills\SkillCheck;
 use DevilsRage\Seat\Services\Leadership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -220,6 +222,7 @@ class AssetsController extends Controller
             }
             $ship = $ships->get($id);
             $pilots[] = [
+                'id' => (int) $id,
                 'name' => $name,
                 'home' => $home !== null && (int) ($locations[$id] ?? 0) === (int) $home,
                 'system' => (string) ($systemNames[(int) ($locations[$id] ?? 0)] ?? ''),
@@ -238,6 +241,23 @@ class AssetsController extends Controller
                 'can' => $can,
                 'could' => $could,
             ];
+        }
+
+        // Skill plans (SeAT's Skill plans page): how far each character is, e.g. the HD doctrines.
+        $plans = [];
+        foreach (SkillPlan::query()->with('skills')->orderBy('name')->get() as $plan) {
+            $plans[] = ['id' => (int) $plan->id, 'name' => (string) $plan->name];
+            $progress = app(SkillCheck::class)->compare(array_map('intval', $names->keys()->all()), $plan->requirements());
+            foreach ($pilots as &$pilot) {
+                $row = $progress[$pilot['id']] ?? null;
+                if ($row !== null) {
+                    $pilot['plans'][$plan->id] = [
+                        'pct' => $row['total_points'] > 0 ? (int) floor(100 * $row['done_points'] / $row['total_points']) : 100,
+                        'days' => round($row['seconds'] / 86400, 1),
+                    ];
+                }
+            }
+            unset($pilot);
         }
 
         // Jump clones and what their implants are worth; the ones in Daisy die with the structure.
@@ -288,6 +308,7 @@ class AssetsController extends Controller
             'hulls' => $hulls,
             'pilots' => $pilots,
             'clones' => $clones,
+            'plans' => $plans,
             'items' => array_slice($items, 0, 8000),
             'count' => count($items),
         ]);
