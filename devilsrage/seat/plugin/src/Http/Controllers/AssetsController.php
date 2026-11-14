@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace DevilsRage\Seat\Http\Controllers;
 
+use DevilsRage\Seat\Models\AccountCharacter;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
 use Illuminate\Http\JsonResponse;
@@ -132,6 +133,8 @@ class AssetsController extends Controller
             $division = $row->division ?? null;
             $owner = $division === null ? (string) ($names[$row->character_id] ?? $row->character_id) : "Division $division (".($divisionName[$division] ?? '?').')';
             $item = [
+                'item_id' => (int) $row->item_id,
+                'holder' => (int) $row->location_id,
                 'owner' => $owner,
                 'mine' => $division === null || $division === $myDivision,
                 'division' => $division,
@@ -150,7 +153,7 @@ class AssetsController extends Controller
             ];
             $items[] = $item;
             if ($isShip && in_array($type->groupName ?? '', self::BIG, true)) {
-                $hulls[] = $item + ['type_id' => (int) $row->type_id, 'item_id' => (int) $row->item_id, 'cargo' => (float) ($type->capacity ?? 0), 'smb' => (float) ($smb[$row->type_id] ?? 0)];
+                $hulls[] = $item + ['type_id' => (int) $row->type_id, 'cargo' => (float) ($type->capacity ?? 0), 'smb' => (float) ($smb[$row->type_id] ?? 0)];
             }
         }
         usort($items, fn ($a, $b) => $b['value'] <=> $a['value']);
@@ -176,11 +179,17 @@ class AssetsController extends Controller
         }
         $hullNames = collect($hulls)->pluck('type', 'type_id');
         $skills = DB::table('character_skills')->whereIn('character_id', $characterIds)->get(['character_id', 'skill_id', 'active_skill_level', 'trained_skill_level'])->groupBy('character_id');
+        // EVE accounts (one character per account online at a time) and active clone implants.
+        $accounts = AccountCharacter::query()->whereIn('character_id', $characterIds)->with('account')->get()->keyBy('character_id');
+        $activeImplants = DB::table('character_implants')->leftJoin('market_prices', 'market_prices.type_id', '=', 'character_implants.type_id')
+            ->whereIn('character_implants.character_id', $characterIds)->groupBy('character_implants.character_id')
+            ->selectRaw('character_implants.character_id, count(*) as n, coalesce(sum(market_prices.adjusted_price), 0) as v')->get()->keyBy('character_id');
         $pilots = [];
         foreach ($names as $id => $name) {
             $mySkills = ($skills->get($id) ?? collect())->keyBy('skill_id');
             $can = [];
             $could = [];
+            $near = [];
             foreach ($needs as $typeId => $reqs) {
                 $now = true;
                 $trained = true;
@@ -196,6 +205,17 @@ class AssetsController extends Controller
                     $can[] = $hullNames[$typeId];
                 } elseif ($trained) {
                     $could[] = $hullNames[$typeId];
+                } else {
+                    // How many skill levels short (only the hull's own required skills).
+                    $missing = 0;
+                    foreach ($reqs as $req) {
+                        if (isset($req['skill'])) {
+                            $missing += max(0, (int) ($req['level'] ?? 1) - (int) ($mySkills->get($req['skill'])->trained_skill_level ?? 0));
+                        }
+                    }
+                    if ($missing <= 4) {
+                        $near[] = ['type' => $hullNames[$typeId], 'missing' => $missing];
+                    }
                 }
             }
             $ship = $ships->get($id);
@@ -208,6 +228,10 @@ class AssetsController extends Controller
                 'in_big_hull' => in_array($ship->groupName ?? '', self::BIG, true),
                 'alpha' => $skilled->has($id) ? $alphas->has($id) : null,
                 'ship_item_id' => (int) ($ship->ship_item_id ?? 0),
+                'account' => ($a = $accounts->get($id)?->account) ? ['id' => (int) $a->id, 'number' => (int) $a->position, 'name' => (string) $a->nickname, 'omega_until' => $a->omega_until] : null,
+                'implants' => (int) ($activeImplants->get($id)->n ?? 0),
+                'implants_value' => round((float) ($activeImplants->get($id)->v ?? 0)),
+                'near' => $near,
                 'can' => $can,
                 'could' => $could,
             ];
