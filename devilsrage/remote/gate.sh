@@ -135,6 +135,16 @@ case "$ACTION" in
             } }
         ' 2>&1 | cut -c1-200
         ;;
+    seat-clone-names)
+        # Assets page: are jump clone names stored? Darkness Holder's clones, and a count over everyone.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            $c = Seat\Eveapi\Models\Character\CharacterInfo::query()->where("name", "Darkness Holder")->value("character_id");
+            foreach (DB::table("character_jump_clones")->where("character_id", $c)->get(["jump_clone_id", "name", "location_id", "updated_at"]) as $r) { echo "clone ", $r->jump_clone_id, " name=[", $r->name, "] at ", $r->location_id, " updated ", $r->updated_at, PHP_EOL; }
+            echo "named ", DB::table("character_jump_clones")->whereNotNull("name")->where("name", "<>", "")->count(), " of ", DB::table("character_jump_clones")->count(), PHP_EOL;
+            echo "clones job last run ", DB::table("character_jump_clones")->max("updated_at"), PHP_EOL;
+        ' 2>&1 | cut -c1-200
+        ;;
     seat-pi-scans)
         # PI scan review: every saved scan map (planet, resource, coverage, when) and its cells as base64 lines.
         cd "$HOME/seat-docker"
