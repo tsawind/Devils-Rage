@@ -150,7 +150,7 @@ class AssetsController extends Controller
             ];
             $items[] = $item;
             if ($isShip && in_array($type->groupName ?? '', self::BIG, true)) {
-                $hulls[] = $item + ['cargo' => (float) ($type->capacity ?? 0), 'smb' => (float) ($smb[$row->type_id] ?? 0)];
+                $hulls[] = $item + ['type_id' => (int) $row->type_id, 'item_id' => (int) $row->item_id, 'cargo' => (float) ($type->capacity ?? 0), 'smb' => (float) ($smb[$row->type_id] ?? 0)];
             }
         }
         usort($items, fn ($a, $b) => $b['value'] <=> $a['value']);
@@ -161,12 +161,43 @@ class AssetsController extends Controller
         $locations = DB::table('character_locations')->whereIn('character_id', $characterIds)->pluck('solar_system_id', 'character_id');
         $ships = DB::table('character_ships')->leftJoin('invTypes', 'invTypes.typeID', '=', 'character_ships.ship_type_id')
             ->leftJoin('invGroups', 'invGroups.groupID', '=', 'invTypes.groupID')
-            ->whereIn('character_ships.character_id', $characterIds)->get(['character_ships.character_id', 'invTypes.typeName', 'invGroups.groupName'])->keyBy('character_id');
+            ->whereIn('character_ships.character_id', $characterIds)->get(['character_ships.character_id', 'character_ships.ship_item_id', 'invTypes.typeName', 'invGroups.groupName'])->keyBy('character_id');
         $alphas = DB::table('character_skills')->whereIn('character_id', $characterIds)->whereColumn('active_skill_level', '<', 'trained_skill_level')
             ->distinct()->pluck('character_id')->flip();
         $skilled = DB::table('character_skills')->whereIn('character_id', $characterIds)->distinct()->pluck('character_id')->flip();
+        // Which big hulls each character can board: the hull's required skills (SDE attributes
+        // 182-184 + levels 277-279) against active levels now, and trained levels (if made Omega).
+        $hullTypes = collect($hulls)->pluck('type_id')->unique()->values()->all();
+        $needs = [];
+        foreach (DB::table('dgmTypeAttributes')->whereIn('typeID', $hullTypes)->whereIn('attributeID', [182, 183, 184, 277, 278, 279])->get() as $a) {
+            $v = (int) ($a->valueFloat ?? $a->valueInt);
+            $slot = [182 => 0, 183 => 1, 184 => 2, 277 => 0, 278 => 1, 279 => 2][$a->attributeID];
+            $needs[$a->typeID][$slot][$a->attributeID < 200 ? 'skill' : 'level'] = $v;
+        }
+        $hullNames = collect($hulls)->pluck('type', 'type_id');
+        $skills = DB::table('character_skills')->whereIn('character_id', $characterIds)->get(['character_id', 'skill_id', 'active_skill_level', 'trained_skill_level'])->groupBy('character_id');
         $pilots = [];
         foreach ($names as $id => $name) {
+            $mySkills = ($skills->get($id) ?? collect())->keyBy('skill_id');
+            $can = [];
+            $could = [];
+            foreach ($needs as $typeId => $reqs) {
+                $now = true;
+                $trained = true;
+                foreach ($reqs as $req) {
+                    if (! isset($req['skill'])) {
+                        continue;
+                    }
+                    $have = $mySkills->get($req['skill']);
+                    $now = $now && $have !== null && (int) $have->active_skill_level >= (int) ($req['level'] ?? 1);
+                    $trained = $trained && $have !== null && (int) $have->trained_skill_level >= (int) ($req['level'] ?? 1);
+                }
+                if ($now) {
+                    $can[] = $hullNames[$typeId];
+                } elseif ($trained) {
+                    $could[] = $hullNames[$typeId];
+                }
+            }
             $ship = $ships->get($id);
             $pilots[] = [
                 'name' => $name,
@@ -176,6 +207,9 @@ class AssetsController extends Controller
                 'ship_group' => (string) ($ship->groupName ?? ''),
                 'in_big_hull' => in_array($ship->groupName ?? '', self::BIG, true),
                 'alpha' => $skilled->has($id) ? $alphas->has($id) : null,
+                'ship_item_id' => (int) ($ship->ship_item_id ?? 0),
+                'can' => $can,
+                'could' => $could,
             ];
         }
 
