@@ -68,6 +68,7 @@ class AssetsController extends Controller
         $columns = ['item_id', 'type_id', 'quantity', 'location_id', 'location_flag', 'is_singleton'];
         $mine = DB::table('character_assets')->whereIn('character_id', $characterIds)->get([...$columns, 'character_id']);
         $corp = collect();
+        $all = collect();
         if ($corporationId !== null && $divisions !== []) {
             $all = DB::table('corporation_assets')->where('corporation_id', $corporationId)->get($columns);
             $children = $all->groupBy('location_id');
@@ -101,19 +102,24 @@ class AssetsController extends Controller
         $smb = DB::table('dgmTypeAttributes')->where('attributeID', 908)->whereIn('typeID', $typeIds)
             ->get(['typeID', 'valueFloat', 'valueInt'])->mapWithKeys(fn ($r) => [$r->typeID => (float) ($r->valueFloat ?? $r->valueInt)]);
 
+        // Walk up to the structure / station / space: corp hangars sit in an office item, which
+        // isn't part of the division, so walk through all the corp's assets.
+        $allById = $all->keyBy('item_id');
         $roots = [];
         foreach ($rows as $row) {
             $at = $row;
             $guard = 0;
-            while ($byItem->has($at->location_id) && $guard++ < 12) {
-                $at = $byItem->get($at->location_id);
+            while ($guard++ < 12) {
+                $up = $byItem->get($at->location_id) ?? $allById->get($at->location_id);
+                if ($up === null) {
+                    break;
+                }
+                $at = $up;
             }
             $roots[$row->item_id] = (int) $at->location_id;
         }
-        $places = collect(array_unique(array_values($roots)));
-        $placeNames = DB::table('universe_structures')->whereIn('structure_id', $places)->pluck('name', 'structure_id')
-            ->union(DB::table('universe_stations')->whereIn('station_id', $places)->pluck('name', 'station_id'))
-            ->union(DB::table('mapDenormalize')->whereIn('itemID', $places)->pluck('itemName', 'itemID'));
+        [$placeNames, $placeSystems, $systemNames] = $this->places(array_values(array_unique(array_values($roots))));
+        $home = DB::table('mapDenormalize')->where('itemName', self::HOME)->where('groupID', 5)->value('itemID');
         $rigged = $rows->filter(fn ($r) => str_starts_with((string) $r->location_flag, 'RigSlot'))->pluck('location_id')->flip();
 
         $items = [];
@@ -138,6 +144,7 @@ class AssetsController extends Controller
                 'value' => round((float) ($prices[$row->type_id] ?? 0) * $qty),
                 'm3' => round((float) ($type->volume ?? 0) * $qty, 1),
                 'place' => (string) ($placeNames[$roots[$row->item_id]] ?? $roots[$row->item_id]),
+                'home' => $home !== null && (int) ($placeSystems[$roots[$row->item_id]] ?? 0) === (int) $home,
                 'in' => $holder !== null ? ($types->get($holder->type_id)->typeName ?? '') : '',
                 'flag' => (string) $row->location_flag,
             ];
@@ -149,14 +156,46 @@ class AssetsController extends Controller
         usort($items, fn ($a, $b) => $b['value'] <=> $a['value']);
         usort($hulls, fn ($a, $b) => [$a['owner'], $a['group']] <=> [$b['owner'], $b['group']]);
 
-        // Where the member's characters are, and what they sit in.
-        $home = DB::table('mapDenormalize')->where('itemName', self::HOME)->where('groupID', 5)->value('itemID');
+        // Where the member's characters are, what they sit in, and Alpha / Omega (an Alpha's
+        // skills run below what they trained: active level < trained level).
         $locations = DB::table('character_locations')->whereIn('character_id', $characterIds)->pluck('solar_system_id', 'character_id');
         $ships = DB::table('character_ships')->leftJoin('invTypes', 'invTypes.typeID', '=', 'character_ships.ship_type_id')
-            ->whereIn('character_ships.character_id', $characterIds)->pluck('invTypes.typeName', 'character_ships.character_id');
+            ->leftJoin('invGroups', 'invGroups.groupID', '=', 'invTypes.groupID')
+            ->whereIn('character_ships.character_id', $characterIds)->get(['character_ships.character_id', 'invTypes.typeName', 'invGroups.groupName'])->keyBy('character_id');
+        $alphas = DB::table('character_skills')->whereIn('character_id', $characterIds)->whereColumn('active_skill_level', '<', 'trained_skill_level')
+            ->distinct()->pluck('character_id')->flip();
+        $skilled = DB::table('character_skills')->whereIn('character_id', $characterIds)->distinct()->pluck('character_id')->flip();
         $pilots = [];
         foreach ($names as $id => $name) {
-            $pilots[] = ['name' => $name, 'home' => $home !== null && (int) ($locations[$id] ?? 0) === (int) $home, 'ship' => (string) ($ships[$id] ?? '')];
+            $ship = $ships->get($id);
+            $pilots[] = [
+                'name' => $name,
+                'home' => $home !== null && (int) ($locations[$id] ?? 0) === (int) $home,
+                'system' => (string) ($systemNames[(int) ($locations[$id] ?? 0)] ?? ''),
+                'ship' => (string) ($ship->typeName ?? ''),
+                'ship_group' => (string) ($ship->groupName ?? ''),
+                'in_big_hull' => in_array($ship->groupName ?? '', self::BIG, true),
+                'alpha' => $skilled->has($id) ? $alphas->has($id) : null,
+            ];
+        }
+
+        // Jump clones and what their implants are worth; the ones in Daisy die with the structure.
+        $clones = [];
+        foreach (DB::table('character_jump_clones')->whereIn('character_id', $characterIds)->get(['character_id', 'location_id', 'implants']) as $clone) {
+            $implants = array_map('intval', (array) (json_decode((string) $clone->implants, true) ?: []));
+            [$cName, $cSystem] = [$placeNames[$clone->location_id] ?? null, $placeSystems[$clone->location_id] ?? null];
+            if ($cName === null) {
+                [$n, $sy] = $this->places([(int) $clone->location_id]);
+                $cName = $n[$clone->location_id] ?? (string) $clone->location_id;
+                $cSystem = $sy[$clone->location_id] ?? null;
+            }
+            $clones[] = [
+                'character' => (string) ($names[$clone->character_id] ?? $clone->character_id),
+                'place' => (string) $cName,
+                'home' => $home !== null && (int) $cSystem === (int) $home,
+                'implants' => count($implants),
+                'value' => round((float) DB::table('market_prices')->whereIn('type_id', $implants)->sum('adjusted_price')),
+            ];
         }
 
         // Plans: the corp's (war / eviction) and vacations.
@@ -166,7 +205,7 @@ class AssetsController extends Controller
         foreach ($people as $p) {
             $v = $modes->get($p['user_id']);
             if ($leader || $p['user_id'] === $user->id) {
-                $daisy = collect($items)->where('division', $p['division'])->filter(fn ($i) => str_contains($i['place'], self::HOME))->sum('value');
+                $daisy = collect($items)->where('division', $p['division'])->where('home', true)->sum('value');
                 $vacations[] = $p + [
                     'vacation' => $v !== null && $v->mode === 'vacation' ? ['threat' => (int) $v->threat, 'until' => $v->until] : null,
                     'division_in_home' => $daisy,
@@ -187,9 +226,46 @@ class AssetsController extends Controller
             'my_mode' => $me !== null ? ['mode' => $me->mode, 'threat' => (int) $me->threat, 'until' => $me->until] : null,
             'hulls' => $hulls,
             'pilots' => $pilots,
+            'clones' => $clones,
             'items' => array_slice($items, 0, 8000),
             'count' => count($items),
         ]);
+    }
+
+    /**
+     * Names and solar systems of top-level locations (structures, stations, space).
+     *
+     * @param  list<int>  $ids
+     * @return array{0: array<int, string>, 1: array<int, int>, 2: array<int, string>}
+     */
+    private function places(array $ids): array
+    {
+        $names = [];
+        $systems = [];
+        foreach (DB::table('universe_structures')->whereIn('structure_id', $ids)->get(['structure_id', 'name', 'solar_system_id']) as $r) {
+            $names[(int) $r->structure_id] = (string) $r->name;
+            $systems[(int) $r->structure_id] = (int) $r->solar_system_id;
+        }
+        foreach (DB::table('universe_stations')->whereIn('station_id', $ids)->get(['station_id', 'name', 'system_id']) as $r) {
+            $names[(int) $r->station_id] = (string) $r->name;
+            $systems[(int) $r->station_id] = (int) $r->system_id;
+        }
+        // Our own structures SeAT hasn't named.
+        foreach (DB::table('corporation_structures')->whereIn('structure_id', $ids)->get(['structure_id', 'system_id']) as $r) {
+            $systems[(int) $r->structure_id] ??= (int) $r->system_id;
+        }
+        foreach (DB::table('mapDenormalize')->whereIn('itemID', $ids)->get(['itemID', 'itemName', 'solarSystemID', 'groupID']) as $r) {
+            $names[(int) $r->itemID] ??= (string) $r->itemName;
+            $systems[(int) $r->itemID] ??= (int) ((int) $r->groupID === 5 ? $r->itemID : $r->solarSystemID);
+        }
+        $systemNames = DB::table('mapDenormalize')->where('groupID', 5)->whereIn('itemID', array_values(array_unique($systems)))->pluck('itemName', 'itemID')->all();
+        foreach ($ids as $id) {
+            if (! isset($names[$id]) && isset($systems[$id])) {
+                $names[$id] = ($systemNames[$systems[$id]] ?? 'Unknown').' structure';
+            }
+        }
+
+        return [$names, $systems, $systemNames + DB::table('mapDenormalize')->where('groupID', 5)->whereIn('itemID', DB::table('character_locations')->pluck('solar_system_id')->unique())->pluck('itemName', 'itemID')->all()];
     }
 
     /** Set or clear a plan: scope "corp" (War / Being evicted, directors) or "me" (Vacation). */
