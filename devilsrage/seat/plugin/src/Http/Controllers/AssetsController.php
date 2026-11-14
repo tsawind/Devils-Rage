@@ -181,6 +181,8 @@ class AssetsController extends Controller
         }
         $hullNames = collect($hulls)->pluck('type', 'type_id');
         $skills = DB::table('character_skills')->whereIn('character_id', $characterIds)->get(['character_id', 'skill_id', 'active_skill_level', 'trained_skill_level'])->groupBy('character_id');
+        // Freighter skills set Charon cargo / Bowhead bay size (+5% a level).
+        $freighterSkills = DB::table('invTypes')->whereIn('typeName', ['Caldari Freighter', 'ORE Freighter'])->pluck('typeName', 'typeID');
         // EVE accounts (one character per account online at a time) and active clone implants.
         $accounts = AccountCharacter::query()->whereIn('character_id', $characterIds)->with(['account', 'launchGroups'])->get()->keyBy('character_id');
         $activeImplants = DB::table('character_implants')->leftJoin('market_prices', 'market_prices.type_id', '=', 'character_implants.type_id')
@@ -238,6 +240,7 @@ class AssetsController extends Controller
                 'implants' => (int) ($activeImplants->get($id)->n ?? 0),
                 'implants_value' => round((float) ($activeImplants->get($id)->v ?? 0)),
                 'near' => $near,
+                'freighter' => collect($freighterSkills)->mapWithKeys(fn ($skillName, $skillId) => [$skillName => (int) ($mySkills->get($skillId)->active_skill_level ?? 0)])->all(),
                 'can' => $can,
                 'could' => $could,
             ];
@@ -262,7 +265,9 @@ class AssetsController extends Controller
 
         // Jump clones and what their implants are worth; the ones in Daisy die with the structure.
         $clones = [];
-        foreach (DB::table('character_jump_clones')->whereIn('character_id', $characterIds)->get(['character_id', 'location_id', 'implants']) as $clone) {
+        $cloneRows = DB::table('character_jump_clones')->whereIn('character_id', $characterIds)->get(['character_id', 'name', 'location_id', 'implants']);
+        $implantNames = DB::table('invTypes')->whereIn('typeID', $cloneRows->flatMap(fn ($c) => (array) (json_decode((string) $c->implants, true) ?: []))->unique()->values())->pluck('typeName', 'typeID');
+        foreach ($cloneRows as $clone) {
             $implants = array_map('intval', (array) (json_decode((string) $clone->implants, true) ?: []));
             [$cName, $cSystem] = [$placeNames[$clone->location_id] ?? null, $placeSystems[$clone->location_id] ?? null];
             if ($cName === null) {
@@ -274,7 +279,10 @@ class AssetsController extends Controller
                 'character' => (string) ($names[$clone->character_id] ?? $clone->character_id),
                 'place' => (string) $cName,
                 'home' => $home !== null && (int) $cSystem === (int) $home,
+                'name' => (string) ($clone->name ?? ''),
                 'implants' => count($implants),
+                // Short implant names ("High-grade Amulet Alpha" → "HG Amulet Alpha"), for telling clones apart.
+                'implant_names' => array_values(array_map(fn ($id) => str_replace(['High-grade ', 'Mid-grade ', 'Low-grade '], ['HG ', 'MG ', 'LG '], (string) ($implantNames[$id] ?? $id)), $implants)),
                 'value' => round((float) DB::table('market_prices')->whereIn('type_id', $implants)->sum('adjusted_price')),
             ];
         }
