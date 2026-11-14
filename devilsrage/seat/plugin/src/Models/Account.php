@@ -28,7 +28,7 @@ class Account extends Model
 
     protected $table = 'devilsrage_accounts';
 
-    protected $fillable = ['user_id', 'nickname', 'position', 'omega_until', 'omega_reminded', 'omega_auto', 'mct_slots', 'mct_until', 'mct_auto', 'mct_reminded', 'plex_vault', 'plex_vault_at'];
+    protected $fillable = ['user_id', 'nickname', 'launcher_user_id', 'position', 'omega_until', 'omega_reminded', 'omega_auto', 'mct_slots', 'mct_until', 'mct_auto', 'mct_reminded', 'plex_vault', 'plex_vault_at'];
 
     /** @var array<string, string> */
     protected $casts = [

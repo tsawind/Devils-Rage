@@ -53,6 +53,8 @@ Route::group([
     Route::post('pi/templates/{template}', [PiController::class, 'updateTemplate'])->whereNumber('template')->name('devilsrage.pi.templates.update');
     Route::post('pi/templates/{template}/delete', [PiController::class, 'deleteTemplate'])->whereNumber('template')->name('devilsrage.pi.templates.delete');
     Route::post('accounts', [AccountsController::class, 'storeAccount'])->name('devilsrage.accounts.store');
+    Route::get('accounts/mine.json', [\DevilsRage\Seat\Http\Controllers\LauncherAccountsController::class, 'mine'])->name('devilsrage.accounts.mine');
+    Route::post('accounts/launcher-import', [\DevilsRage\Seat\Http\Controllers\LauncherAccountsController::class, 'import'])->name('devilsrage.accounts.launcher');
     Route::post('accounts/share', [AccountsController::class, 'share'])->name('devilsrage.accounts.share');
     Route::post('accounts/name', [AccountsController::class, 'saveName'])->name('devilsrage.accounts.name');
     Route::post('accounts/{account}/rename', [AccountsController::class, 'renameAccount'])->name('devilsrage.accounts.rename');
