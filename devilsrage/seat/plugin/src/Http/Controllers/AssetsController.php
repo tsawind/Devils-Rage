@@ -180,7 +180,7 @@ class AssetsController extends Controller
         $hullNames = collect($hulls)->pluck('type', 'type_id');
         $skills = DB::table('character_skills')->whereIn('character_id', $characterIds)->get(['character_id', 'skill_id', 'active_skill_level', 'trained_skill_level'])->groupBy('character_id');
         // EVE accounts (one character per account online at a time) and active clone implants.
-        $accounts = AccountCharacter::query()->whereIn('character_id', $characterIds)->with('account')->get()->keyBy('character_id');
+        $accounts = AccountCharacter::query()->whereIn('character_id', $characterIds)->with(['account', 'launchGroups'])->get()->keyBy('character_id');
         $activeImplants = DB::table('character_implants')->leftJoin('market_prices', 'market_prices.type_id', '=', 'character_implants.type_id')
             ->whereIn('character_implants.character_id', $characterIds)->groupBy('character_implants.character_id')
             ->selectRaw('character_implants.character_id, count(*) as n, coalesce(sum(market_prices.adjusted_price), 0) as v')->get()->keyBy('character_id');
@@ -229,6 +229,9 @@ class AssetsController extends Controller
                 'alpha' => $skilled->has($id) ? $alphas->has($id) : null,
                 'ship_item_id' => (int) ($ship->ship_item_id ?? 0),
                 'account' => ($a = $accounts->get($id)?->account) ? ['id' => (int) $a->id, 'number' => (int) $a->position, 'name' => (string) $a->nickname, 'omega_until' => $a->omega_until] : null,
+                // Roles ticked on Your accounts: HD / Coffins / Can coffin, and the corp's Main / Second / Third.
+                'roles' => $accounts->get($id)?->launchGroups->pluck('key')->filter()->values()->all() ?? [],
+                'groups' => $accounts->get($id)?->launchGroups->pluck('name')->values()->all() ?? [],
                 'implants' => (int) ($activeImplants->get($id)->n ?? 0),
                 'implants_value' => round((float) ($activeImplants->get($id)->v ?? 0)),
                 'near' => $near,
