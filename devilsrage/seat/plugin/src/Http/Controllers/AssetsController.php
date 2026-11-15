@@ -76,7 +76,7 @@ class AssetsController extends Controller
             }
         }
         $myDivision = $people[$user->id]['division'] ?? null;
-        $divisions = $leader ? array_values(array_unique(array_merge([1], array_column($people, 'division')))) : array_values(array_filter([1, $myDivision]));
+        $divisions = $leader ? range(1, 7) : array_values(array_filter([1, $myDivision]));
         $divisionName = [1 => 'corp'];
         foreach ($people as $p) {
             $divisionName[$p['division']] = $p['main'];
@@ -380,7 +380,7 @@ class AssetsController extends Controller
                 ];
             }
         }
-        $me = $modes->get($user->id);
+        $myMode = $modes->get($user->id);
 
         return response()->json([
             'generated' => now()->toIso8601String(),
@@ -398,7 +398,7 @@ class AssetsController extends Controller
             'my_division' => $myDivision,
             'people' => array_values($vacations),
             'corp_mode' => $corpMode !== null ? ['mode' => $corpMode->mode, 'threat' => (int) $corpMode->threat, 'since' => $corpMode->updated_at] : null,
-            'my_mode' => $me !== null ? ['mode' => $me->mode, 'threat' => (int) $me->threat, 'until' => $me->until] : null,
+            'my_mode' => $myMode !== null ? ['mode' => $myMode->mode, 'threat' => (int) $myMode->threat, 'until' => $myMode->until] : null,
             'hulls' => $hulls,
             'pilots' => $pilots,
             'clones' => $clones,
