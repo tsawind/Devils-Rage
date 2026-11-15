@@ -159,7 +159,8 @@ class AssetsController extends Controller
                 'rigged' => $rigged->has($row->item_id),
                 'qty' => $qty,
                 'value' => round((float) ($prices[$row->type_id] ?? 0) * $qty),
-                'm3' => round((float) ($type->volume ?? 0) * $qty, 1),
+                // A packaged ship takes its packaged size (a packaged Vargur is 50,000 m³, not 900,000).
+                'm3' => round(($isShip && ! $row->is_singleton ? (float) ($packaged[$row->type_id] ?? $type->volume ?? 0) : (float) ($type->volume ?? 0)) * $qty, 1),
                 'packaged_m3' => $isShip ? round((float) ($packaged[$row->type_id] ?? $type->volume ?? 0), 1) : null,
                 'place' => (string) ($placeNames[$roots[$row->item_id]] ?? $roots[$row->item_id]),
                 'home' => $home !== null && (int) ($placeSystems[$roots[$row->item_id]] ?? 0) === (int) $home,
