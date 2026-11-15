@@ -11,7 +11,9 @@ use DevilsRage\Seat\Skills\SkillCheck;
 use DevilsRage\Seat\Services\Leadership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Seat\Eveapi\Models\Corporation\CorporationTitle;
 use Seat\Web\Http\Controllers\Controller;
 use Seat\Web\Models\User;
@@ -123,6 +125,16 @@ class AssetsController extends Controller
         }
         [$placeNames, $placeSystems, $systemNames] = $this->places(array_values(array_unique(array_values($roots))));
         $home = DB::table('mapDenormalize')->where('itemName', self::HOME)->where('groupID', 5)->value('itemID');
+        // Packaged ship sizes (a repackaged battleship is 50,000 m³, not 470,000): our SDE has no
+        // invVolumes, so ESI's public type info, cached for good per type.
+        $packaged = [];
+        foreach ($types->filter(fn ($t) => (int) $t->categoryID === 6) as $t) {
+            $packaged[$t->typeID] = Cache::rememberForever('devilsrage.packaged.'.$t->typeID, function () use ($t): ?float {
+                $response = Http::acceptJson()->timeout(8)->withHeaders(['User-Agent' => "Devil's Rage SeAT plugin"])->get('https://esi.evetech.net/latest/universe/types/'.$t->typeID.'/');
+
+                return $response->successful() ? (float) ($response->json('packaged_volume') ?? $t->volume) : null;
+            }) ?? (float) $t->volume;
+        }
         $rigged = $rows->filter(fn ($r) => str_starts_with((string) $r->location_flag, 'RigSlot'))->pluck('location_id')->flip();
 
         $items = [];
@@ -148,6 +160,7 @@ class AssetsController extends Controller
                 'qty' => $qty,
                 'value' => round((float) ($prices[$row->type_id] ?? 0) * $qty),
                 'm3' => round((float) ($type->volume ?? 0) * $qty, 1),
+                'packaged_m3' => $isShip ? round((float) ($packaged[$row->type_id] ?? $type->volume ?? 0), 1) : null,
                 'place' => (string) ($placeNames[$roots[$row->item_id]] ?? $roots[$row->item_id]),
                 'home' => $home !== null && (int) ($placeSystems[$roots[$row->item_id]] ?? 0) === (int) $home,
                 'in' => $holder !== null ? ($types->get($holder->type_id)->typeName ?? '') : '',
