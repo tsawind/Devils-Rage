@@ -10,9 +10,13 @@
     .dr-accounts { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: .75rem; margin-bottom: 1rem; }
     .dr-acct { border: 1px solid rgba(120,120,120,.25); border-radius: 6px; }
     .dr-acct-head { display: flex; align-items: center; gap: .35rem; padding: .35rem .6rem; border-bottom: 1px solid rgba(120,120,120,.2); font-size: .85rem; }
-    .dr-char { display: flex; align-items: center; gap: .35rem; padding: .25rem .6rem; font-size: .85rem; min-height: 32px; }
+    .dr-char { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; padding: .25rem .6rem; font-size: .85rem; min-height: 32px; }
     .dr-char + .dr-char { border-top: 1px dashed rgba(120,120,120,.15); }
-    .dr-char .dr-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 11rem; }
+    .dr-char .dr-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 5rem; max-width: 11rem; flex: 0 1 auto; }
+    .dr-char a.dr-name { color: inherit; }
+    .dr-char a.dr-name:hover { text-decoration: underline; }
+    /* The group pills get their own line under the character, so the name stays readable. */
+    .dr-char .dr-pills { flex: 1 0 100%; padding-left: 2.6rem; }
     .dr-char select.form-control { height: 24px; padding: 0 .3rem; font-size: .75rem; width: auto; }
     .dr-move button { line-height: .7; padding: 0 .2rem; font-size: .7rem; }
     .dr-empty { color: #8a8a8a; font-style: italic; }
@@ -160,7 +164,11 @@
               <form method="post" action="{{ route('devilsrage.accounts.characters.move', $link) }}">@csrf<input type="hidden" name="direction" value="down"><button type="submit" class="btn btn-link text-muted" title="Move down" @disabled($loop->last)><i class="fas fa-caret-down"></i></button></form>
             </span>
             <img src="https://images.evetech.net/characters/{{ $link->character_id }}/portrait?size=32" width="22" height="22" class="rounded" alt="">
-            <span class="dr-name" title="{{ $link->displayName() }}{{ $link->external ? ' · not on SeAT · '.($link->external_corporation ?? '?').($link->external_alliance ? ' / '.$link->external_alliance : '') : '' }}">{{ $link->displayName() }}</span>
+            @if($link->external)
+              <span class="dr-name" title="{{ $link->displayName() }} · not on SeAT · {{ ($link->external_corporation ?? '?').($link->external_alliance ? ' / '.$link->external_alliance : '') }}">{{ $link->displayName() }}</span>
+            @else
+              <a class="dr-name" href="{{ \Illuminate\Support\Facades\Route::has('seatcore::character.view.sheet') ? route('seatcore::character.view.sheet', $link->character_id) : url('characters/'.$link->character_id.'/sheet') }}" title="{{ $link->displayName() }}: open the character sheet">{{ $link->displayName() }}</a>
+            @endif
             @if($link->external)<span class="badge badge-light" title="Not on our SeAT: public data only, fits ticked by hand">🔗</span>@endif
             @if($om && in_array($link->character_id, $om['alpha_characters'], true))<span class="badge badge-warning" title="Training at Alpha speed right now">α?</span>@endif
             @unless($link->external)
@@ -190,7 +198,7 @@
               </select>
             </form>
             @if($ownGroups->isNotEmpty())
-              <form method="post" action="{{ route('devilsrage.accounts.characters.groups', $link) }}" class="d-inline-flex flex-wrap" style="gap: .15rem;">
+              <form method="post" action="{{ route('devilsrage.accounts.characters.groups', $link) }}" class="dr-pills d-inline-flex flex-wrap" style="gap: .15rem;">
                 @csrf
                 @foreach($ownGroups as $group)
                   <label class="dr-tog" title="{{ $group->name }}">
