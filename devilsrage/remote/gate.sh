@@ -135,6 +135,38 @@ case "$ACTION" in
             } }
         ' 2>&1 | cut -c1-200
         ;;
+    seat-asset-space)
+        # Assets page: what takes the space in Daisy (read only). Runs the Assets feed as Tsawind's
+        # SeAT user, then: m3 by group, containers, ships rigged / not, packaged sizes, freight
+        # container stock and sizes from the SDE.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            $main = Seat\Eveapi\Models\Character\CharacterInfo::query()->where("name", "Tsawind")->value("character_id");
+            $u = Seat\Web\Models\User::query()->where("main_character_id", $main)->first(); auth()->login($u);
+            $d = app()->call([app(DevilsRage\Seat\Http\Controllers\AssetsController::class), "json"])->getData(true);
+            $home = collect($d["items"])->where("home", true);
+            $mine = $home->where("mine", true);
+            echo "items ", $d["count"], " home ", $home->count(), " mine-home ", $mine->count(), PHP_EOL;
+            $inside = "/Slot|DroneBay|Cargo|FleetHangar|ShipHangar|Specialized|FighterBay|SubSystem/";
+            $top = $mine->filter(fn ($x) => ! preg_match($inside, $x["flag"]) || ($x["ship"] && $x["assembled"]));
+            echo "top-level m3 ", round($top->sum("m3")), " value ", round($top->sum("value") / 1e9, 1), "b", PHP_EOL;
+            echo "== m3 by group (top 20)", PHP_EOL;
+            foreach ($top->groupBy("group")->map(fn ($g) => [round($g->sum("m3")), $g->count(), round($g->sum("value") / 1e6)])->sortByDesc(fn ($v) => $v[0])->take(20) as $g => $v) { echo str_pad($g, 32), " m3 ", str_pad($v[0], 12), " n ", str_pad($v[1], 6), " ", $v[2], "m", PHP_EOL; }
+            $ships = $top->filter(fn ($x) => $x["ship"] && $x["assembled"]);
+            echo "== assembled ships ", $ships->count(), " m3 ", round($ships->sum("m3")), " rigged ", $ships->where("rigged", true)->count(), " (m3 ", round($ships->where("rigged", true)->sum("m3")), ")", PHP_EOL;
+            echo "invVolumes table: ", Schema::hasTable("invVolumes") ? "yes" : "no", PHP_EOL;
+            $pk = Schema::hasTable("invVolumes") ? DB::table("invVolumes")->pluck("volume", "typeID") : collect();
+            $tid = DB::table("invTypes")->whereIn("typeName", $ships->pluck("type")->unique())->pluck("typeID", "typeName");
+            echo "ships packaged m3 (invVolumes) ", round($ships->sum(fn ($x) => (float) ($pk[$tid[$x["type"]] ?? 0] ?? 0))), " missing ", $ships->filter(fn ($x) => ! isset($pk[$tid[$x["type"]] ?? 0]))->count(), PHP_EOL;
+            echo "== containers (top level)", PHP_EOL;
+            foreach ($top->filter(fn ($x) => str_contains($x["group"], "Container"))->groupBy("type")->map(fn ($g) => [$g->count(), round($g->sum("m3"))]) as $t => $v) { echo str_pad($t, 40), " n ", $v[0], " m3 ", $v[1], PHP_EOL; }
+            echo "== items inside containers: m3 ", round($mine->filter(fn ($x) => in_array($x["flag"], ["Unlocked", "Locked"], true))->sum("m3")), PHP_EOL;
+            echo "== freight container stock (all of yours + divisions, everywhere)", PHP_EOL;
+            foreach (collect($d["items"])->filter(fn ($x) => str_contains($x["type"], "Freight Container"))->groupBy(fn ($x) => $x["type"]." | ".($x["division"] ? "div ".$x["division"] : "personal")." | ".($x["home"] ? "Daisy" : "elsewhere"))->map->sum("qty") as $k => $n) { echo str_pad($k, 60), " ", $n, PHP_EOL; }
+            echo "== freight container sizes (SDE)", PHP_EOL;
+            foreach (DB::table("invTypes")->where("typeName", "like", "%Freight Container%")->where("published", 1)->get(["typeID", "typeName", "volume", "capacity"]) as $t) { echo str_pad($t->typeName, 32), " capacity ", $t->capacity, " volume ", $t->volume, " packaged ", $pk[$t->typeID] ?? "-", PHP_EOL; }
+        ' 2>&1 | grep -v "deprecated" | cut -c1-200
+        ;;
     seat-clone-names)
         # Assets page: are jump clone names stored? Darkness Holder's clones, and a count over everyone.
         cd "$HOME/seat-docker"
