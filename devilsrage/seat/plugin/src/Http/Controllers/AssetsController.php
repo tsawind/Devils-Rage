@@ -125,15 +125,32 @@ class AssetsController extends Controller
         }
         [$placeNames, $placeSystems, $systemNames] = $this->places(array_values(array_unique(array_values($roots))));
         $home = DB::table('mapDenormalize')->where('itemName', self::HOME)->where('groupID', 5)->value('itemID');
-        // Packaged ship sizes (a repackaged battleship is 50,000 m³, not 470,000): our SDE has no
-        // invVolumes, so ESI's public type info, cached for good per type.
+        // Packaged sizes: ships (a repackaged battleship is 50,000 m³, not 470,000), modules (capital
+        // modules shrink a lot), containers and deployables. Our SDE has no invVolumes, so ESI's
+        // public type info, fetched in parallel for types not seen yet and cached for good.
         $packaged = [];
-        foreach ($types->filter(fn ($t) => (int) $t->categoryID === 6) as $t) {
-            $packaged[$t->typeID] = Cache::rememberForever('devilsrage.packaged.'.$t->typeID, function () use ($t): ?float {
-                $response = Http::acceptJson()->timeout(8)->withHeaders(['User-Agent' => "Devil's Rage SeAT plugin"])->get('https://esi.evetech.net/latest/universe/types/'.$t->typeID.'/');
-
-                return $response->successful() ? (float) ($response->json('packaged_volume') ?? $t->volume) : null;
-            }) ?? (float) $t->volume;
+        $wanted = $types->filter(fn ($t) => in_array((int) $t->categoryID, [2, 6, 7, 22, 32], true));
+        $missing = [];
+        foreach ($wanted as $t) {
+            $hit = Cache::get('devilsrage.packaged.'.$t->typeID);
+            if ($hit === null) {
+                $missing[] = $t;
+            } else {
+                $packaged[$t->typeID] = (float) $hit;
+            }
+        }
+        foreach (array_chunk($missing, 40) as $chunk) {
+            $responses = Http::pool(fn ($pool) => array_map(fn ($t) => $pool->as((string) $t->typeID)->acceptJson()->timeout(8)
+                ->withHeaders(['User-Agent' => "Devil's Rage SeAT plugin"])
+                ->get('https://esi.evetech.net/latest/universe/types/'.$t->typeID.'/'), $chunk));
+            foreach ($chunk as $t) {
+                $response = $responses[(string) $t->typeID] ?? null;
+                if ($response instanceof \Illuminate\Http\Client\Response && $response->successful()) {
+                    $size = (float) ($response->json('packaged_volume') ?? $t->volume);
+                    Cache::forever('devilsrage.packaged.'.$t->typeID, $size);
+                    $packaged[$t->typeID] = $size;
+                }
+            }
         }
         $rigged = $rows->filter(fn ($r) => str_starts_with((string) $r->location_flag, 'RigSlot'))->pluck('location_id')->flip();
 
@@ -159,9 +176,10 @@ class AssetsController extends Controller
                 'rigged' => $rigged->has($row->item_id),
                 'qty' => $qty,
                 'value' => round((float) ($prices[$row->type_id] ?? 0) * $qty),
-                // A packaged ship takes its packaged size (a packaged Vargur is 50,000 m³, not 900,000).
-                'm3' => round(($isShip && ! $row->is_singleton ? (float) ($packaged[$row->type_id] ?? $type->volume ?? 0) : (float) ($type->volume ?? 0)) * $qty, 1),
-                'packaged_m3' => $isShip ? round((float) ($packaged[$row->type_id] ?? $type->volume ?? 0), 1) : null,
+                // Packaged items take their packaged size (a packaged Vargur is 50,000 m³, not 900,000);
+                // assembled ones (fitted, or unpacked in a hangar) their full size until repackaged.
+                'm3' => round((! $row->is_singleton ? (float) ($packaged[$row->type_id] ?? $type->volume ?? 0) : (float) ($type->volume ?? 0)) * $qty, 1),
+                'packaged_m3' => round((float) ($packaged[$row->type_id] ?? $type->volume ?? 0) * $qty, 1),
                 'place' => (string) ($placeNames[$roots[$row->item_id]] ?? $roots[$row->item_id]),
                 'home' => $home !== null && (int) ($placeSystems[$roots[$row->item_id]] ?? 0) === (int) $home,
                 'in' => $holder !== null ? ($types->get($holder->type_id)->typeName ?? '') : '',
