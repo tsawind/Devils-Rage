@@ -163,6 +163,15 @@ case "$ACTION" in
             echo "== items inside containers: m3 ", round($mine->filter(fn ($x) => in_array($x["flag"], ["Unlocked", "Locked"], true))->sum("m3")), PHP_EOL;
             echo "== freight container stock (all of yours + divisions, everywhere)", PHP_EOL;
             foreach (collect($d["items"])->filter(fn ($x) => str_contains($x["type"], "Freight Container"))->groupBy(fn ($x) => $x["type"]." | ".($x["division"] ? "div ".$x["division"] : "personal")." | ".($x["home"] ? "Daisy" : "elsewhere"))->map->sum("qty") as $k => $n) { echo str_pad($k, 60), " ", $n, PHP_EOL; }
+            echo "== CARGO (not assembled ships, not big hulls): m3 by group (top 25)", PHP_EOL;
+            $big = ["Freighter", "Jump Freighter", "Capital Industrial Ship", "Carrier", "Supercarrier", "Dreadnought", "Lancer Dreadnought", "Force Auxiliary", "Titan"];
+            $loose = $top->filter(fn ($x) => ! ($x["ship"] && $x["assembled"]) && ! in_array($x["group"], $big, true));
+            foreach ($loose->groupBy("group")->map(fn ($g) => [round($g->sum("m3")), $g->count(), round($g->sum("value") / 1e6)])->sortByDesc(fn ($v) => $v[0])->take(25) as $g => $v) { echo str_pad($g, 34), " m3 ", str_pad($v[0], 11), " n ", str_pad($v[1], 6), " ", $v[2], "m", PHP_EOL; }
+            echo "loose total m3 ", round($loose->sum("m3")), " of it inside freight containers ", round($loose->filter(fn ($x) => in_array($x["flag"], ["Unlocked", "Locked"], true))->sum("m3")), PHP_EOL;
+            $sub = $ships->filter(fn ($x) => ! in_array($x["group"], $big, true));
+            echo "subcap ships ", $sub->count(), " assembled m3 ", round($sub->sum("m3")), " packaged m3 ", round($sub->sum("packaged_m3")), PHP_EOL;
+            echo "== top 15 loose items by m3", PHP_EOL;
+            foreach ($loose->sortByDesc("m3")->take(15) as $x) { echo str_pad($x["type"], 40), " ", str_pad($x["owner"], 22), " m3 ", str_pad(round($x["m3"]), 10), " in ", $x["in"], " flag ", $x["flag"], PHP_EOL; }
             echo "== freight container sizes (SDE)", PHP_EOL;
             foreach (DB::table("invTypes")->where("typeName", "like", "%Freight Container%")->where("published", 1)->get(["typeID", "typeName", "volume", "capacity"]) as $t) { echo str_pad($t->typeName, 32), " capacity ", $t->capacity, " volume ", $t->volume, " packaged ", $pk[$t->typeID] ?? "-", PHP_EOL; }
         ' 2>&1 | grep -v "deprecated" | cut -c1-200
