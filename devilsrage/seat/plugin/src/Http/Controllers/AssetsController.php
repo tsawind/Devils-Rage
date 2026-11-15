@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Seat\Eveapi\Models\Corporation\CorporationTitle;
 use Seat\Web\Http\Controllers\Controller;
 use Seat\Web\Models\User;
@@ -33,13 +34,24 @@ class AssetsController extends Controller
     /** Ship groups that hold a lot (cargo / maintenance bays) or need a dedicated pilot. */
     public const BIG = ['Freighter', 'Jump Freighter', 'Carrier', 'Supercarrier', 'Dreadnought', 'Lancer Dreadnought', 'Force Auxiliary', 'Titan', 'Capital Industrial Ship'];
 
+    /** Skills shown on each character's Skills dropdown. */
+    public const KEY_SKILLS = ['Capital Ships', 'Jump Drive Operation', 'Jump Drive Calibration', 'Jump Fuel Conservation', 'Caldari Freighter', 'ORE Freighter', 'Amarr Freighter', 'Gallente Freighter', 'Minmatar Freighter',
+        'Minmatar Dreadnought', 'Caldari Dreadnought', 'Amarr Dreadnought', 'Gallente Dreadnought', 'Precursor Dreadnought', 'Minmatar Carrier', 'Caldari Carrier', 'Amarr Carrier', 'Gallente Carrier',
+        'Minmatar Force Auxiliary', 'Caldari Force Auxiliary', 'Amarr Force Auxiliary', 'Gallente Force Auxiliary', 'Capital Industrial Ships', 'Marauders', 'Capital Projectile Turret', 'Capital Hybrid Turret', 'Capital Energy Turret', 'Capital Remote Armor Repair Systems', 'Capital Shield Emission Systems'];
+
     /** The wormhole home: Daisy. */
     public const HOME = 'J145735';
 
-    public function json(Corporation $corporation, Leadership $leadership): JsonResponse
+    public function json(Request $request, Corporation $corporation, Leadership $leadership): JsonResponse
     {
-        /** @var User $user */
-        $user = auth()->user();
+        /** @var User $me */
+        $me = auth()->user();
+        // SeAT admins can look at the page as any member sees it (read only: mode() ignores this).
+        $isAdmin = method_exists($me, 'isAdmin') ? (bool) $me->isAdmin() : (bool) ($me->admin ?? false);
+        $user = $me;
+        if ($isAdmin && $request->filled('as')) {
+            $user = User::query()->find((int) $request->query('as')) ?? $me;
+        }
         $leader = $leadership->isLeader($user);
         $characterIds = array_map('intval', $user->associatedCharacterIds());
         $names = DB::table('character_infos')->whereIn('character_id', $characterIds)->pluck('name', 'character_id');
@@ -124,7 +136,13 @@ class AssetsController extends Controller
             $roots[$row->item_id] = (int) $at->location_id;
         }
         [$placeNames, $placeSystems, $systemNames] = $this->places(array_values(array_unique(array_values($roots))));
-        $home = DB::table('mapDenormalize')->where('itemName', self::HOME)->where('groupID', 5)->value('itemID');
+        // The system the page plans for: Daisy unless another one is picked.
+        $homeName = (string) ($request->query('system') ?: self::HOME);
+        $home = DB::table('mapDenormalize')->where('itemName', $homeName)->where('groupID', 5)->value('itemID');
+        if ($home === null) {
+            $homeName = self::HOME;
+            $home = DB::table('mapDenormalize')->where('itemName', $homeName)->where('groupID', 5)->value('itemID');
+        }
         // Packaged sizes: ships (a repackaged battleship is 50,000 m³, not 470,000), modules (capital
         // modules shrink a lot), containers and deployables. Our SDE has no invVolumes, so ESI's
         // public type info, fetched in parallel for types not seen yet and cached for good.
@@ -191,6 +209,20 @@ class AssetsController extends Controller
             }
         }
         usort($items, fn ($a, $b) => $b['value'] <=> $a['value']);
+        // Where things are: ISK per solar system, for picking which system to plan for.
+        $bySystem = [];
+        foreach ($rows as $row) {
+            $sys = (int) ($placeSystems[$roots[$row->item_id]] ?? 0);
+            if ($sys > 0) {
+                $bySystem[$sys] = ($bySystem[$sys] ?? 0) + (float) ($prices[$row->type_id] ?? 0) * max(1, (int) $row->quantity);
+            }
+        }
+        arsort($bySystem);
+        $sysNames = DB::table('mapDenormalize')->where('groupID', 5)->whereIn('itemID', array_keys($bySystem))->pluck('itemName', 'itemID');
+        $systems = [];
+        foreach (array_slice($bySystem, 0, 25, true) as $sys => $value) {
+            $systems[] = ['name' => (string) ($sysNames[$sys] ?? $sys), 'value' => round($value)];
+        }
         usort($hulls, fn ($a, $b) => [$a['owner'], $a['group']] <=> [$b['owner'], $b['group']]);
 
         // Where the member's characters are, what they sit in, and Alpha / Omega (an Alpha's
@@ -204,17 +236,26 @@ class AssetsController extends Controller
         $skilled = DB::table('character_skills')->whereIn('character_id', $characterIds)->distinct()->pluck('character_id')->flip();
         // Which big hulls each character can board: the hull's required skills (SDE attributes
         // 182-184 + levels 277-279) against active levels now, and trained levels (if made Omega).
-        $hullTypes = collect($hulls)->pluck('type_id')->unique()->values()->all();
+        // Every ship type the member owns, so the page can list what each character flies now
+        // and what needs Omega; only the big hulls count for the "nearly there" list.
+        $hullTypes = $rows->filter(fn ($r) => (int) ($types->get($r->type_id)->categoryID ?? 0) === 6)->pluck('type_id')->unique()->values()->all();
+        $bigTypes = collect($hulls)->pluck('type_id')->unique()->flip();
         $needs = [];
         foreach (DB::table('dgmTypeAttributes')->whereIn('typeID', $hullTypes)->whereIn('attributeID', [182, 183, 184, 277, 278, 279])->get() as $a) {
             $v = (int) ($a->valueFloat ?? $a->valueInt);
             $slot = [182 => 0, 183 => 1, 184 => 2, 277 => 0, 278 => 1, 279 => 2][$a->attributeID];
             $needs[$a->typeID][$slot][$a->attributeID < 200 ? 'skill' : 'level'] = $v;
         }
-        $hullNames = collect($hulls)->pluck('type', 'type_id');
+        $hullNames = $types->only($hullTypes)->map(fn ($t) => (string) $t->typeName);
         $skills = DB::table('character_skills')->whereIn('character_id', $characterIds)->get(['character_id', 'skill_id', 'active_skill_level', 'trained_skill_level'])->groupBy('character_id');
         // Freighter skills set Charon cargo / Bowhead bay size (+5% a level).
         $freighterSkills = DB::table('invTypes')->whereIn('typeName', ['Caldari Freighter', 'ORE Freighter'])->pluck('typeName', 'typeID');
+        // Capital and hauling skills worth seeing at a glance (active / trained levels).
+        $keySkills = DB::table('invTypes')->whereIn('typeName', self::KEY_SKILLS)->pluck('typeName', 'typeID');
+        $sp = Schema::hasTable('character_info_skills')
+            ? DB::table('character_info_skills')->whereIn('character_id', $characterIds)->get(['character_id', 'total_sp', 'unallocated_sp'])->keyBy('character_id') : collect();
+        $queueEnds = Schema::hasTable('character_skill_queues')
+            ? DB::table('character_skill_queues')->whereIn('character_id', $characterIds)->groupBy('character_id')->selectRaw('character_id, max(finish_date) as ends, count(*) as n')->get()->keyBy('character_id') : collect();
         // EVE accounts (one character per account online at a time) and active clone implants.
         $accounts = AccountCharacter::query()->whereIn('character_id', $characterIds)->with(['account', 'launchGroups'])->get()->keyBy('character_id');
         $activeImplants = DB::table('character_implants')->leftJoin('market_prices', 'market_prices.type_id', '=', 'character_implants.type_id')
@@ -249,7 +290,7 @@ class AssetsController extends Controller
                             $missing += max(0, (int) ($req['level'] ?? 1) - (int) ($mySkills->get($req['skill'])->trained_skill_level ?? 0));
                         }
                     }
-                    if ($missing <= 4) {
+                    if ($missing <= 4 && $bigTypes->has($typeId)) {
                         $near[] = ['type' => $hullNames[$typeId], 'missing' => $missing];
                     }
                 }
@@ -275,6 +316,12 @@ class AssetsController extends Controller
                 'freighter' => collect($freighterSkills)->mapWithKeys(fn ($skillName, $skillId) => [$skillName => (int) ($mySkills->get($skillId)->active_skill_level ?? 0)])->all(),
                 'can' => $can,
                 'could' => $could,
+                'skills' => collect($keySkills)->map(fn ($skillName, $skillId) => ['name' => $skillName, 'active' => (int) ($mySkills->get($skillId)->active_skill_level ?? 0), 'trained' => (int) ($mySkills->get($skillId)->trained_skill_level ?? 0)])
+                    ->filter(fn ($k) => $k['trained'] > 0)->values()->all(),
+                'sp' => isset($sp[$id]) ? (int) $sp[$id]->total_sp : null,
+                'sp_free' => isset($sp[$id]) ? (int) $sp[$id]->unallocated_sp : null,
+                'queue_ends' => $queueEnds->get($id)->ends ?? null,
+                'queue' => (int) ($queueEnds->get($id)->n ?? 0),
             ];
         }
 
@@ -337,6 +384,13 @@ class AssetsController extends Controller
 
         return response()->json([
             'generated' => now()->toIso8601String(),
+            'home_name' => $homeName,
+            'systems' => $systems,
+            'admin' => $isAdmin,
+            'viewing_as' => $user->id !== $me->id ? (string) ($names[$user->main_character_id] ?? $user->name) : null,
+            'members' => $isAdmin ? User::query()->whereNotNull('main_character_id')->get(['id', 'main_character_id', 'name'])
+                ->map(fn ($u) => ['id' => (int) $u->id, 'name' => (string) (DB::table('character_infos')->where('character_id', $u->main_character_id)->value('name') ?? $u->name)])
+                ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values()->all() : [],
             'leader' => $leader,
             'me' => $people[$user->id]['main'] ?? ($names[$user->main_character_id] ?? ''),
             'characters' => $names->values(),
