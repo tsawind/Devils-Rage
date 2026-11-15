@@ -83,6 +83,10 @@ class AssetsController extends Controller
         }
 
         $columns = ['item_id', 'type_id', 'quantity', 'location_id', 'location_flag', 'is_singleton'];
+        // The in-game name players gave a ship or container, to tell which one to load.
+        if (Schema::hasColumn('character_assets', 'name') && Schema::hasColumn('corporation_assets', 'name')) {
+            $columns[] = 'name';
+        }
         $mine = DB::table('character_assets')->whereIn('character_id', $characterIds)->get([...$columns, 'character_id']);
         $corp = collect();
         $all = collect();
@@ -183,6 +187,7 @@ class AssetsController extends Controller
             $owner = $division === null ? (string) ($names[$row->character_id] ?? $row->character_id) : "Division $division (".($divisionName[$division] ?? '?').')';
             $item = [
                 'item_id' => (int) $row->item_id,
+                'name' => isset($row->name) && $row->name !== '' && $row->name !== ($type->typeName ?? null) ? (string) $row->name : null,
                 'holder' => (int) $row->location_id,
                 'owner' => $owner,
                 'mine' => $division === null || $division === $myDivision,
@@ -254,6 +259,18 @@ class AssetsController extends Controller
         $keySkills = DB::table('invTypes')->whereIn('typeName', self::KEY_SKILLS)->pluck('typeName', 'typeID');
         $sp = Schema::hasTable('character_info_skills')
             ? DB::table('character_info_skills')->whereIn('character_id', $characterIds)->get(['character_id', 'total_sp', 'unallocated_sp'])->keyBy('character_id') : collect();
+        // Training speed of the skill in training now: Alphas train at half speed, so roughly
+        // 1,500+ SP an hour means the clone is probably Omega.
+        $spRate = collect();
+        if (Schema::hasTable('character_skill_queues') && Schema::hasColumn('character_skill_queues', 'training_start_sp')) {
+            $spRate = DB::table('character_skill_queues')->whereIn('character_id', $characterIds)->where('queue_position', 0)
+                ->whereNotNull('start_date')->whereNotNull('finish_date')->get(['character_id', 'start_date', 'finish_date', 'training_start_sp', 'level_end_sp'])
+                ->mapWithKeys(function ($q) {
+                    $hours = (strtotime((string) $q->finish_date) - strtotime((string) $q->start_date)) / 3600;
+
+                    return [$q->character_id => $hours > 0.05 ? (int) round(((int) $q->level_end_sp - (int) $q->training_start_sp) / $hours) : null];
+                });
+        }
         $queueEnds = Schema::hasTable('character_skill_queues')
             ? DB::table('character_skill_queues')->whereIn('character_id', $characterIds)->groupBy('character_id')->selectRaw('character_id, max(finish_date) as ends, count(*) as n')->get()->keyBy('character_id') : collect();
         // EVE accounts (one character per account online at a time) and active clone implants.
@@ -322,6 +339,7 @@ class AssetsController extends Controller
                 'sp_free' => isset($sp[$id]) ? (int) $sp[$id]->unallocated_sp : null,
                 'queue_ends' => $queueEnds->get($id)->ends ?? null,
                 'queue' => (int) ($queueEnds->get($id)->n ?? 0),
+                'sp_rate' => $spRate->get($id),
             ];
         }
 
