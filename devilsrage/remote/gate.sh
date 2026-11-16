@@ -252,6 +252,8 @@ case "$ACTION" in
                     }
                 }
                 echo "sent ", count($planets), " planets", PHP_EOL;
+                foreach (array_slice($planets, 0, 3) as $p) { echo "sent sample ", $p["planet_id"], " ", $p["name"], " maps=", json_encode($p["maps"] ?? "MISSING"), PHP_EOL; }
+                echo "sent ids in maps table: ", implode(",", DevilsRage\Seat\Models\PiPlanetMap::query()->pluck("planet_id")->unique()->all()), PHP_EOL;
             }
         ' 2>&1 | cut -c1-200
         ;;
