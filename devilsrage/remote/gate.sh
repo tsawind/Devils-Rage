@@ -135,6 +135,23 @@ case "$ACTION" in
             } }
         ' 2>&1 | cut -c1-200
         ;;
+    seat-item-where)
+        # Assets page (read only): where things in Daisy actually are, by structure / place and
+        # location flag, and where the Organic Mortar Applicators sit.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            $main = Seat\Eveapi\Models\Character\CharacterInfo::query()->where("name", "Tsawind")->value("character_id");
+            $u = Seat\Web\Models\User::query()->where("main_character_id", $main)->first(); auth()->login($u);
+            $d = app()->call([app(DevilsRage\Seat\Http\Controllers\AssetsController::class), "json"])->getData(true);
+            $home = collect($d["items"])->where("home", true);
+            echo "== places in Daisy (items, ISK)", PHP_EOL;
+            foreach ($home->groupBy("place")->map(fn ($g) => [$g->count(), round($g->sum("value") / 1e9, 2)])->sortByDesc(fn ($v) => $v[1]) as $pl => $v) { echo str_pad(substr((string) $pl, 0, 70), 72), " n ", str_pad((string) $v[0], 6), " ", $v[1], "b", PHP_EOL; }
+            echo "== flags of top-level items in Daisy", PHP_EOL;
+            foreach ($home->groupBy("flag")->map->count()->sortDesc()->take(25) as $f => $n) { echo str_pad($f, 30), " ", $n, PHP_EOL; }
+            echo "== Organic Mortar Applicators", PHP_EOL;
+            foreach (collect($d["items"])->filter(fn ($x) => str_contains($x["type"], "Organic Mortar")) as $x) { echo $x["owner"], " · qty ", $x["qty"], " · ", $x["place"], " · flag ", $x["flag"], " · in ", $x["in"], " · holder ", $x["holder"] ?? "", " · home ", $x["home"] ? "yes" : "no", PHP_EOL; }
+        '
+        ;;
     seat-price-check)
         # Assets page prices (read only): which items make the totals, market average vs CCP's
         # adjusted price, and which columns market_prices has.
