@@ -9,6 +9,7 @@ use DevilsRage\Seat\Models\SkillPlan;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Skills\SkillCheck;
 use DevilsRage\Seat\Services\Leadership;
+use DevilsRage\Seat\Services\Prices;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -118,7 +119,7 @@ class AssetsController extends Controller
         $types = DB::table('invTypes')->leftJoin('invGroups', 'invGroups.groupID', '=', 'invTypes.groupID')
             ->whereIn('invTypes.typeID', $typeIds)
             ->get(['invTypes.typeID', 'invTypes.typeName', 'invTypes.volume', 'invTypes.capacity', 'invGroups.groupName', 'invGroups.categoryID'])->keyBy('typeID');
-        $prices = DB::table('market_prices')->whereIn('type_id', $typeIds)->pluck('adjusted_price', 'type_id');
+        $prices = Prices::forTypes(array_map('intval', is_array($typeIds) ? $typeIds : collect($typeIds)->all()));
         // Ship maintenance bay (attribute 908) of the big hulls.
         $smb = DB::table('dgmTypeAttributes')->where('attributeID', 908)->whereIn('typeID', $typeIds)
             ->get(['typeID', 'valueFloat', 'valueInt'])->mapWithKeys(fn ($r) => [$r->typeID => (float) ($r->valueFloat ?? $r->valueInt)]);
@@ -277,7 +278,7 @@ class AssetsController extends Controller
         $accounts = AccountCharacter::query()->whereIn('character_id', $characterIds)->with(['account', 'launchGroups'])->get()->keyBy('character_id');
         $activeImplants = DB::table('character_implants')->leftJoin('market_prices', 'market_prices.type_id', '=', 'character_implants.type_id')
             ->whereIn('character_implants.character_id', $characterIds)->groupBy('character_implants.character_id')
-            ->selectRaw('character_implants.character_id, count(*) as n, coalesce(sum(market_prices.adjusted_price), 0) as v')->get()->keyBy('character_id');
+            ->selectRaw('character_implants.character_id, count(*) as n, coalesce(sum('.Prices::expression().'), 0) as v')->get()->keyBy('character_id');
         $pilots = [];
         foreach ($names as $id => $name) {
             $mySkills = ($skills->get($id) ?? collect())->keyBy('skill_id');
@@ -381,7 +382,7 @@ class AssetsController extends Controller
                 'implants' => count($implants),
                 // Short implant names ("High-grade Amulet Alpha" → "HG Amulet Alpha"), for telling clones apart.
                 'implant_names' => array_values(array_map(fn ($id) => str_replace(['High-grade ', 'Mid-grade ', 'Low-grade '], ['HG ', 'MG ', 'LG '], (string) ($implantNames[$id] ?? $id)), $implants)),
-                'value' => round((float) DB::table('market_prices')->whereIn('type_id', $implants)->sum('adjusted_price')),
+                'value' => round(array_sum(Prices::forTypes(array_map('intval', $implants)))),
             ];
         }
 
@@ -406,8 +407,8 @@ class AssetsController extends Controller
             'home_name' => $homeName,
             // Rough prices for "what it costs to get a coffin pilot": Omega (500 PLEX a month) and Large Skill Injectors.
             'market' => [
-                'plex' => (float) (DB::table('market_prices')->where('type_id', 44992)->value(Schema::hasColumn('market_prices', 'average_price') ? 'average_price' : 'adjusted_price') ?? 0),
-                'injector' => (float) (DB::table('market_prices')->where('type_id', 40520)->value(Schema::hasColumn('market_prices', 'average_price') ? 'average_price' : 'adjusted_price') ?? 0),
+                'plex' => Prices::forTypes([44992])[44992] ?? 0.0,
+                'injector' => Prices::forTypes([40520])[40520] ?? 0.0,
             ],
             'systems' => $systems,
             'admin' => $isAdmin,

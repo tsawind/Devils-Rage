@@ -124,7 +124,7 @@ final class AssetLocator
             ->get([
                 'character_assets.item_id', 'character_assets.character_id', 'character_assets.type_id',
                 'character_assets.quantity', 'character_assets.location_id', 'character_assets.location_type',
-                'invTypes.typeName', 'invTypes.groupID', 'invGroups.categoryID', 'market_prices.adjusted_price',
+                'invTypes.typeName', 'invTypes.groupID', 'invGroups.categoryID', DB::raw(Prices::expression().' as adjusted_price'),
             ]);
 
         $byItem = $rows->keyBy('item_id');

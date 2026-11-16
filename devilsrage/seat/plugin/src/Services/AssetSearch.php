@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace DevilsRage\Seat\Services;
 
+use Illuminate\Support\Facades\DB;
+
 use Illuminate\Database\Eloquent\Builder;
 use Seat\Eveapi\Models\Assets\CharacterAsset;
 use Seat\Eveapi\Models\Character\CharacterInfo;
@@ -34,7 +36,7 @@ final class AssetSearch
         $columns = [
             'character_assets.item_id', 'character_assets.character_id', 'character_assets.type_id', 'character_assets.quantity',
             'character_assets.location_id', 'character_assets.location_type', 'character_assets.location_flag', 'character_assets.name',
-            'invTypes.typeName', 'invGroups.categoryID', 'market_prices.adjusted_price',
+            'invTypes.typeName', 'invGroups.categoryID', DB::raw(Prices::expression().' as adjusted_price'),
         ];
         $rows = $this->base($characterIds)
             ->when($query !== '', fn ($q) => $q->where(fn ($inner) => $inner
