@@ -7,9 +7,13 @@ use DevilsRage\Seat\Pi\PlanetMaps;
 $fails = 0;
 function check(string $what, bool $ok): void { global $fails; echo ($ok ? "ok   " : "FAIL ") . $what . "\n"; if (!$ok) $fails++; }
 
-check('a bare map of the right size is fine', PlanetMaps::problem('bare', str_repeat("\1", 360 * 180 * 3)) === null);
-check('a short bare map is not', PlanetMaps::problem('bare', str_repeat("\1", 100)) !== null);
-check('a sky starts with SKY2', PlanetMaps::problem('sky', "SKY2\1\3" . str_repeat("\0", 50)) === null);
+$base = 'BAS1' . pack('vv', 2048, 1024) . str_repeat("\1", 2048 * 1024 * 3);
+check('a base map the app made is fine', PlanetMaps::problem('bare', $base) === null);
+check('a short base map is not', PlanetMaps::problem('bare', substr($base, 0, -3)) !== null);
+check('the old 360 x 180 bare map is not taken any more', PlanetMaps::problem('bare', str_repeat("\1", 360 * 180 * 3)) !== null);
+check('a base map of another size is not', PlanetMaps::problem('bare', 'BAS1' . pack('vv', 1024, 2048) . str_repeat("\1", 2048 * 1024 * 3)) !== null);
+check('a sky starts with SKY3', PlanetMaps::problem('sky', "SKY3\0\3" . str_repeat("\0", 50)) === null);
+check('an older SKY2 sky is not taken (another frame)', PlanetMaps::problem('sky', "SKY2\1\3" . str_repeat("\0", 50)) !== null);
 check('anything else is not a sky', PlanetMaps::problem('sky', 'hello world') !== null);
 check('unknown kinds are refused', PlanetMaps::problem('moon', 'x') !== null);
 check('planet types from the SDE', PlanetMaps::typeFromName('Planet (Gas)') === 'gas' && PlanetMaps::typeFromName('Planet (Lava)') === 'lava');
