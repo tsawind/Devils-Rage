@@ -47,6 +47,10 @@ Route::group([
     Route::post('pi/scans', [PiController::class, 'saveScan'])->name('devilsrage.pi.scans.store');
     Route::get('pi/scans/{planet}/{resource}', [PiController::class, 'scanCells'])->whereNumber('planet')->name('devilsrage.pi.scans.show');
     Route::post('pi/scans/{planet}/{resource}/delete', [PiController::class, 'deleteScan'])->whereNumber('planet')->name('devilsrage.pi.scans.delete');
+    // The planet scan (remake): each planet's shared sky and bare map.
+    Route::get('pi/maps/{planet}/{kind}', [PiController::class, 'planetMap'])->whereNumber('planet')->name('devilsrage.pi.maps.show');
+    Route::post('pi/maps', [PiController::class, 'savePlanetMap'])->name('devilsrage.pi.maps.store');
+    Route::post('pi/maps/{planet}/{kind}/delete', [PiController::class, 'deletePlanetMap'])->whereNumber('planet')->name('devilsrage.pi.maps.delete');
     Route::post('pi/tax', [PiController::class, 'saveTax'])->name('devilsrage.pi.tax');
     // Patch 59: PI colony templates (kept and traded on the PI screen).
     Route::post('pi/templates', [PiController::class, 'saveTemplate'])->name('devilsrage.pi.templates.store');

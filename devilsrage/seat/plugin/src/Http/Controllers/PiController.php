@@ -6,6 +6,7 @@ namespace DevilsRage\Seat\Http\Controllers;
 
 use DevilsRage\Seat\Models\AccountSetting;
 use DevilsRage\Seat\Models\PiScan as StoredScan;
+use DevilsRage\Seat\Models\PiPlanetMap;
 use DevilsRage\Seat\Models\PiScanSnapshot;
 use DevilsRage\Seat\Models\PiTemplate as StoredTemplate;
 use DevilsRage\Seat\Models\Setting;
@@ -19,6 +20,7 @@ use DevilsRage\Seat\Pi\PiPlanner;
 use DevilsRage\Seat\Pi\PiScan;
 use DevilsRage\Seat\Pi\PiSkills;
 use DevilsRage\Seat\Pi\PiTemplate;
+use DevilsRage\Seat\Pi\PlanetMaps;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Models\Account;
 use DevilsRage\Seat\Services\DiscordDm;
@@ -483,11 +485,25 @@ class PiController extends Controller
                 'radius_km' => $radiusKm,
                 'spots' => $spots,
                 // Patch 71: the app's video scans of this planet (cells fetched when picked).
-                'scans' => $scans->get($planetId, collect())->map(fn (StoredScan $scan): array => [
-                    'resource' => $scan->resource,
-                    'coverage' => round($scan->coverage, 3),
-                    'at' => $scan->updated_at?->getTimestamp(),
-                ])->values()->all(),
+                'scans' => $scansOf((int) $planetId),
+                'maps' => $mapsOf((int) $planetId),
+                'system_id' => (int) ($systemOf[$planetId] ?? 0),
+            ];
+        }
+        foreach ($others as $planet) {
+            $out[] = [
+                'planet_id' => (int) $planet->itemID,
+                'character_id' => null,
+                'character' => '',
+                'characters' => [],
+                'name' => (string) $planet->itemName,
+                'type' => PlanetMaps::typeFromName((string) ($otherTypes[$planet->typeID] ?? '')),
+                'radius_km' => $planet->radius !== null ? (float) $planet->radius / 1000 : null,
+                'pins' => [],
+                'scans' => $scansOf((int) $planet->itemID),
+                'maps' => $mapsOf((int) $planet->itemID),
+                'system_id' => 0,
+                'no_colony' => true,
             ];
         }
         usort($out, fn (array $a, array $b): int => strnatcmp($a['name'], $b['name']));
@@ -724,7 +740,42 @@ class PiController extends Controller
             ->get(['character_id', 'extractor_id', 'head_id', 'latitude', 'longitude'])
             ->groupBy(fn ($row): string => $row->character_id.':'.$row->extractor_id);
         $types = (new PiData())->typesFor($pins->flatten(1)->pluck('type_id')->unique()->map(fn ($id): int => (int) $id)->values()->all());
-        $scans = StoredScan::query()->whereIn('planet_id', $planetIds)->get(['planet_id', 'resource', 'coverage', 'updated_at'])->groupBy('planet_id');
+        // The planet scan (remake): every planet in those systems, colony or not (from the SDE).
+        $others = collect();
+        try {
+            $others = DB::table('mapDenormalize')->whereIn('solarSystemID', $systems)->where('groupID', 7)
+                ->whereNotIn('itemID', $planetIds)->get(['itemID', 'itemName', 'typeID', 'radius']);
+        } catch (\Throwable) {
+            // No SDE map table: only the planets with colonies.
+        }
+        $otherTypes = [];
+        if ($others->isNotEmpty()) {
+            try {
+                $otherTypes = DB::table('invTypes')->whereIn('typeID', $others->pluck('typeID')->unique()->all())->pluck('typeName', 'typeID')->all();
+            } catch (\Throwable) {
+                $otherTypes = [];
+            }
+        }
+        $everyId = array_values(array_unique(array_merge($planetIds, $others->pluck('itemID')->map(fn ($id): int => (int) $id)->all())));
+        $scans = StoredScan::query()->whereIn('planet_id', $everyId)->get(['planet_id', 'resource', 'coverage', 'updated_at', 'user_id', 'character_id'])->groupBy('planet_id');
+        $maps = PiPlanetMap::query()->whereIn('planet_id', $everyId)->get(['planet_id', 'kind', 'coverage', 'bytes', 'user_id', 'character_id', 'updated_at'])->groupBy('planet_id');
+        $scanners = CharacterInfo::query()->whereIn('character_id', $scans->flatten(1)->pluck('character_id')->merge($maps->flatten(1)->pluck('character_id'))->filter()->unique()->all())->pluck('name', 'character_id');
+        $users = User::query()->whereIn('id', $scans->flatten(1)->pluck('user_id')->merge($maps->flatten(1)->pluck('user_id'))->unique()->all())->pluck('name', 'id');
+        $byName = fn ($row): string => (string) ($row->character_id !== null && isset($scanners[$row->character_id]) ? $scanners[$row->character_id] : ($users[$row->user_id] ?? ''));
+        $mapsOf = fn (int $planetId): array => $maps->get($planetId, collect())->map(fn (PiPlanetMap $map): array => [
+            'kind' => $map->kind,
+            'coverage' => round($map->coverage, 3),
+            'bytes' => $map->bytes,
+            'at' => $map->updated_at?->getTimestamp(),
+            'by' => $byName($map),
+        ])->values()->all();
+        $scansOf = fn (int $planetId): array => $scans->get($planetId, collect())->map(fn (StoredScan $scan): array => [
+            'resource' => $scan->resource,
+            'coverage' => round($scan->coverage, 3),
+            'at' => $scan->updated_at?->getTimestamp(),
+            'by' => $byName($scan),
+        ])->values()->all();
+        $systemOf = $planets->isNotEmpty() ? DB::table('character_planets')->whereIn('planet_id', $planetIds)->pluck('solar_system_id', 'planet_id') : collect();
 
         $out = [];
         foreach ($planets->groupBy('planet_id') as $planetId => $colonies) {
@@ -787,8 +838,8 @@ class PiController extends Controller
             return response()->json(['message' => 'That scan is not a whole planet map.'], 422);
         }
         $planetId = (int) $data['planet_id'];
-        if (! DB::table('character_planets')->where('planet_id', $planetId)->exists()) {
-            return response()->json(['message' => 'Nobody in the corp has a colony on that planet.'], 422);
+        if (! $this->inCorpSystem($planetId)) {
+            return response()->json(['message' => 'That planet isn\'t in a system where the corp has colonies.'], 422);
         }
         $existing = StoredScan::query()->where('planet_id', $planetId)->where('resource', $data['resource'])->first();
         $merged = PiScan::merge($existing?->cells, $cells);
@@ -814,6 +865,101 @@ class PiController extends Controller
             abort(403);
         }
         $scan->delete();
+
+        return response()->json(['deleted' => true]);
+    }
+
+    /** A planet with a corp colony, or any planet in a system where the corp has colonies. */
+    private function inCorpSystem(int $planetId): bool
+    {
+        if (DB::table('character_planets')->where('planet_id', $planetId)->exists()) {
+            return true;
+        }
+        try {
+            $system = DB::table('mapDenormalize')->where('itemID', $planetId)->value('solarSystemID');
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $system !== null && DB::table('character_planets')->where('solar_system_id', (int) $system)->exists();
+    }
+
+    /** The planet scan (remake): one planet's shared sky or bare map (base64), or 404. */
+    public function planetMap(int $planet, string $kind): JsonResponse
+    {
+        abort_unless(in_array($kind, PlanetMaps::KINDS, true), 404);
+        $map = PiPlanetMap::query()->where('planet_id', $planet)->where('kind', $kind)->firstOrFail();
+
+        return response()->json([
+            'kind' => $map->kind, 'coverage' => $map->coverage, 'bytes' => $map->bytes, 'meta' => $map->meta,
+            'at' => $map->updated_at?->getTimestamp(), 'data' => $map->data,
+        ]);
+    }
+
+    /**
+     * The planet scan (remake): the app hands in a sky or bare map in pieces (a sky is a few MB,
+     * more than one request carries); the last piece puts it together and keeps it for the corp.
+     */
+    public function savePlanetMap(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'planet_id' => ['required', 'integer', 'min:1'],
+            'kind' => ['required', Rule::in(PlanetMaps::KINDS)],
+            'upload' => ['required', 'string', 'max:40', 'alpha_dash'],
+            'part' => ['required', 'integer', 'min:0', 'max:63'],
+            'parts' => ['required', 'integer', 'min:1', 'max:64'],
+            'data' => ['required', 'string', 'max:800000'],
+            'coverage' => ['nullable', 'numeric', 'between:0,1'],
+            'meta' => ['nullable', 'string', 'max:4000'],
+            'character_id' => ['nullable', 'integer'],
+        ]);
+        $planetId = (int) $data['planet_id'];
+        if (! $this->inCorpSystem($planetId)) {
+            return response()->json(['message' => 'That planet isn\'t in a system where the corp has colonies.'], 422);
+        }
+        $key = 'dr-pi-map:'.auth()->id().':'.$data['upload'];
+        $part = (int) $data['part'];
+        $parts = (int) $data['parts'];
+        Cache::put($key.':'.$part, $data['data'], now()->addMinutes(20));
+        if ($part < $parts - 1) {
+            return response()->json(['more' => true, 'part' => $part]);
+        }
+        $pieces = [];
+        for ($i = 0; $i < $parts; $i++) {
+            $pieces[$i] = Cache::get($key.':'.$i);
+        }
+        $b64 = PlanetMaps::assemble($pieces, $parts);
+        for ($i = 0; $i < $parts; $i++) {
+            Cache::forget($key.':'.$i);
+        }
+        if ($b64 === null) {
+            return response()->json(['message' => 'A piece of that map went missing on the way. Try again.'], 422);
+        }
+        $raw = base64_decode($b64, true);
+        if ($raw === false) {
+            return response()->json(['message' => 'That map arrived broken. Try again.'], 422);
+        }
+        $problem = PlanetMaps::problem($data['kind'], $raw);
+        if ($problem !== null) {
+            return response()->json(['message' => $problem], 422);
+        }
+        PiPlanetMap::query()->updateOrCreate(
+            ['planet_id' => $planetId, 'kind' => $data['kind']],
+            ['data' => $b64, 'bytes' => strlen($raw), 'coverage' => (float) ($data['coverage'] ?? 0), 'meta' => $data['meta'] ?? null,
+                'user_id' => (int) auth()->id(), 'character_id' => $data['character_id'] ?? null],
+        );
+
+        return response()->json(['saved' => true, 'message' => $data['kind'] === 'sky' ? 'Sky saved for the corp.' : 'Bare map saved for the corp.']);
+    }
+
+    /** The planet scan (remake): remove a shared sky or bare map (whoever saved it last, or a director). */
+    public function deletePlanetMap(int $planet, string $kind): JsonResponse
+    {
+        $map = PiPlanetMap::query()->where('planet_id', $planet)->where('kind', $kind)->firstOrFail();
+        if ($map->user_id !== (int) auth()->id() && ! Gate::allows('devilsrage-leader')) {
+            abort(403);
+        }
+        $map->delete();
 
         return response()->json(['deleted' => true]);
     }
