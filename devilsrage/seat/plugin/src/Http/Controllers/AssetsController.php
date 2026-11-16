@@ -208,6 +208,24 @@ class AssetsController extends Controller
         }
         $rigged = $rows->filter(fn ($r) => str_starts_with((string) $r->location_flag, 'RigSlot'))->pluck('location_id')->flip();
 
+        // Blueprint copies have no market price (the market price is the original's: a Ragnarok
+        // BPC isn't worth 67 b). ESI's is_blueprint_copy where SeAT keeps it, else the blueprints
+        // tables (quantity -2 = a copy).
+        $copies = [];
+        foreach (['character_assets', 'corporation_assets'] as $table) {
+            if (Schema::hasColumn($table, 'is_blueprint_copy')) {
+                foreach (DB::table($table)->whereIn('item_id', $rows->pluck('item_id'))->where('is_blueprint_copy', true)->pluck('item_id') as $id) {
+                    $copies[(int) $id] = true;
+                }
+            }
+        }
+        foreach (['character_blueprints', 'corporation_blueprints'] as $table) {
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'quantity')) {
+                foreach (DB::table($table)->whereIn('item_id', $rows->pluck('item_id'))->where('quantity', -2)->pluck('item_id') as $id) {
+                    $copies[(int) $id] = true;
+                }
+            }
+        }
         $items = [];
         $hulls = [];
         foreach ($rows as $row) {
@@ -230,7 +248,8 @@ class AssetsController extends Controller
                 'assembled' => $isShip && (bool) $row->is_singleton,
                 'rigged' => $rigged->has($row->item_id),
                 'qty' => $qty,
-                'value' => round((float) ($prices[$row->type_id] ?? 0) * $qty),
+                'value' => isset($copies[(int) $row->item_id]) ? 0 : round((float) ($prices[$row->type_id] ?? 0) * $qty),
+                'copy' => isset($copies[(int) $row->item_id]),
                 // Packaged items take their packaged size (a packaged Vargur is 50,000 m³, not 900,000);
                 // assembled ones (fitted, or unpacked in a hangar) their full size until repackaged.
                 'm3' => round((! $row->is_singleton ? (float) ($packaged[$row->type_id] ?? $type->volume ?? 0) : (float) ($type->volume ?? 0)) * $qty, 1),
@@ -257,7 +276,7 @@ class AssetsController extends Controller
         foreach ($rows as $row) {
             $sys = (int) ($placeSystems[$roots[$row->item_id]] ?? 0);
             if ($sys > 0) {
-                $bySystem[$sys] = ($bySystem[$sys] ?? 0) + (float) ($prices[$row->type_id] ?? 0) * max(1, (int) $row->quantity);
+                $bySystem[$sys] = ($bySystem[$sys] ?? 0) + (isset($copies[(int) $row->item_id]) ? 0 : (float) ($prices[$row->type_id] ?? 0) * max(1, (int) $row->quantity));
             }
         }
         arsort($bySystem);
