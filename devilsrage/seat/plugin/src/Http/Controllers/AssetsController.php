@@ -151,6 +151,7 @@ class AssetsController extends Controller
         // isn't part of the division, so walk through all the corp's assets.
         $allById = $all->keyBy('item_id');
         $roots = [];
+        $anchors = [];
         foreach ($rows as $row) {
             $at = $row;
             $guard = 0;
@@ -162,7 +163,14 @@ class AssetsController extends Controller
                 $at = $up;
             }
             $roots[$row->item_id] = (int) $at->location_id;
+            // The thing in space it sits in (a citadel, a customs office…), when that's an asset too.
+            $anchors[$row->item_id] = $at->item_id !== $row->item_id ? $at : null;
         }
+        // Customs offices: what's in them isn't in the structure (it doesn't drop with it, and
+        // the coffins can't load it without a trip).
+        $anchorTypes = collect($anchors)->filter()->pluck('type_id')->unique()->all();
+        $anchorGroups = DB::table('invTypes')->leftJoin('invGroups', 'invGroups.groupID', '=', 'invTypes.groupID')->whereIn('invTypes.typeID', $anchorTypes)
+            ->get(['invTypes.typeID', 'invTypes.typeName', 'invGroups.groupName'])->keyBy('typeID');
         [$placeNames, $placeSystems, $systemNames] = $this->places(array_values(array_unique(array_values($roots))));
         // The system the page plans for: Daisy unless another one is picked.
         $homeName = (string) ($request->query('system') ?: self::HOME);
@@ -232,6 +240,12 @@ class AssetsController extends Controller
                 'in' => $holder !== null ? ($types->get($holder->type_id)->typeName ?? '') : '',
                 'flag' => (string) $row->location_flag,
             ];
+            $anchor = $anchors[$row->item_id] ?? null;
+            $anchorType = $anchor !== null ? $anchorGroups->get($anchor->type_id) : null;
+            if ($anchorType !== null && ($anchorType->groupName === 'Orbital Infrastructure' || str_contains((string) $anchorType->typeName, 'Customs Office'))) {
+                $item['poco'] = true;
+                $item['site'] = (string) (($anchor->name ?? '') ?: $anchorType->typeName);
+            }
             $items[] = $item;
             if ($isShip && in_array($type->groupName ?? '', self::BIG, true)) {
                 $hulls[] = $item + ['type_id' => (int) $row->type_id, 'cargo' => (float) ($hullStats[$row->type_id]['cargo'] ?? $type->capacity ?? 0), 'smb' => (float) (($hullStats[$row->type_id]['smb'] ?? 0) ?: ($smb[$row->type_id] ?? 0))];
