@@ -241,6 +241,18 @@ case "$ACTION" in
             foreach (DevilsRage\Seat\Models\PiPlanetMap::query()->orderBy("planet_id")->orderBy("kind")->get(["planet_id", "kind", "bytes", "coverage", "character_id", "updated_at"]) as $m) {
                 echo "map ", $m->planet_id, " ", DB::table("planets")->where("planet_id", $m->planet_id)->value("name") ?? DB::table("mapDenormalize")->where("itemID", $m->planet_id)->value("itemName"), " | ", $m->kind, " | ", $m->bytes, " B | ", round($m->coverage, 3), " | ", DB::table("character_infos")->where("character_id", $m->character_id)->value("name"), " | ", $m->updated_at, PHP_EOL;
             }
+            // What the app is sent (pi/scan-planets) for the user who saved the first map: the maps of each planet.
+            $who = DevilsRage\Seat\Models\PiPlanetMap::query()->value("user_id");
+            if ($who) {
+                auth()->loginUsingId($who);
+                $planets = json_decode(app(DevilsRage\Seat\Http\Controllers\PiController::class)->scanPlanets()->getContent(), true)["planets"] ?? [];
+                foreach ($planets as $p) {
+                    if (! empty($p["maps"])) {
+                        echo "sent ", $p["name"], ": ", implode(", ", array_map(fn ($m) => $m["kind"]." at ".$m["at"], $p["maps"])), PHP_EOL;
+                    }
+                }
+                echo "sent ", count($planets), " planets", PHP_EOL;
+            }
         ' 2>&1 | cut -c1-200
         ;;
     seat-pi-experiment)
