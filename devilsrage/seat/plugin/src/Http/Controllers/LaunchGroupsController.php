@@ -204,6 +204,8 @@ class LaunchGroupsController extends Controller
     {
         abort_unless(Gate::allows('devilsrage-leader'), 403);
         abort_unless($launchGroup->user_id === null && ! $launchGroup->locked, 403);
+        // The role groups (HD, HD Caps, Coffins, Can coffin) drive the Assets page: they stay.
+        abort_unless($launchGroup->key === null, 403);
         $launchGroup->delete();
 
         return back()->with('success', 'Corp launch group "'.$launchGroup->name.'" removed.');

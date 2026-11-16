@@ -388,14 +388,16 @@
             @foreach($ownGroups as $group)
               @if($group->user_id === null)
                 {{-- Patch 66: a corp launch group from the directors: everyone can tick it. --}}
-                @can('devilsrage-leader')
-                  <form method="post" action="{{ route('devilsrage.groups.corp.delete', $group) }}" class="ask g" data-ask="Delete the corp launch group {{ $group->name }} for everyone? Characters stay where they are.">
+                @if($group->key !== null)
+                  <span class="g" title="Used by the Assets page (roles): can't be deleted"><span>★ {{ $group->name }}</span></span>
+                @elseif(\Illuminate\Support\Facades\Gate::allows('devilsrage-leader'))
+                  <form method="post" action="{{ route('devilsrage.groups.corp.delete', $group) }}" class="ask g" data-ask="Delete the corp launch group {{ $group->name }} for everyone? Characters stay where they are." data-ask2="⚠ Last check: {{ $group->name }} disappears from every pilot's characters and launch groups in the whole corp. Delete it?">
                     @csrf
                     <span title="Corp launch group (everyone can use it)">★ {{ $group->name }}</span><button class="x" type="submit" title="Delete this corp group">✕</button>
                   </form>
                 @else
                   <span class="g" title="Corp launch group from the directors: tick it on the characters you bring"><span>★ {{ $group->name }}</span></span>
-                @endcan
+                @endif
               @else
               <form method="post" action="{{ route('devilsrage.groups.delete', $group) }}" class="ask g" data-ask="Delete your launch group {{ $group->name }}? Characters stay where they are.">
                 @csrf
@@ -486,12 +488,18 @@
     box.classList.add('show');
     document.getElementById('confirm-no').focus();
   }));
-  const close = () => { box.classList.remove('show'); pending = null; };
+  const close = () => { box.classList.remove('show'); if (pending) { delete pending.dataset.asked2; } pending = null; };
   document.getElementById('confirm-no').addEventListener('click', close);
   box.addEventListener('click', (e) => { if (e.target === box) close(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
   document.getElementById('confirm-yes').addEventListener('click', () => {
     if (!pending) return;
+    // Corp-wide removals ask twice.
+    if (pending.dataset.ask2 && pending.dataset.asked2 !== '1') {
+      pending.dataset.asked2 = '1';
+      document.getElementById('confirm-text').textContent = pending.dataset.ask2;
+      return;
+    }
     pending.dataset.sure = '1';
     pending.submit();
   });

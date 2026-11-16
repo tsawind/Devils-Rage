@@ -354,6 +354,7 @@ class AssetsController extends Controller
                     $pilot['plans'][$plan->id] = [
                         'pct' => $row['total_points'] > 0 ? (int) floor(100 * $row['done_points'] / $row['total_points']) : 100,
                         'days' => round($row['seconds'] / 86400, 1),
+                        'sp_left' => (int) ($row['missing_points'] ?? max(0, $row['total_points'] - $row['done_points'])),
                     ];
                 }
             }
@@ -403,6 +404,11 @@ class AssetsController extends Controller
         return response()->json([
             'generated' => now()->toIso8601String(),
             'home_name' => $homeName,
+            // Rough prices for "what it costs to get a coffin pilot": Omega (500 PLEX a month) and Large Skill Injectors.
+            'market' => [
+                'plex' => (float) (DB::table('market_prices')->where('type_id', 44992)->value(Schema::hasColumn('market_prices', 'average_price') ? 'average_price' : 'adjusted_price') ?? 0),
+                'injector' => (float) (DB::table('market_prices')->where('type_id', 40520)->value(Schema::hasColumn('market_prices', 'average_price') ? 'average_price' : 'adjusted_price') ?? 0),
+            ],
             'systems' => $systems,
             'admin' => $isAdmin,
             'viewing_as' => $user->id !== $me->id ? (string) ($names[$user->main_character_id] ?? $user->name) : null,
