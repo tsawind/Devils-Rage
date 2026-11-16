@@ -485,25 +485,11 @@ class PiController extends Controller
                 'radius_km' => $radiusKm,
                 'spots' => $spots,
                 // Patch 71: the app's video scans of this planet (cells fetched when picked).
-                'scans' => $scansOf((int) $planetId),
-                'maps' => $mapsOf((int) $planetId),
-                'system_id' => (int) ($systemOf[$planetId] ?? 0),
-            ];
-        }
-        foreach ($others as $planet) {
-            $out[] = [
-                'planet_id' => (int) $planet->itemID,
-                'character_id' => null,
-                'character' => '',
-                'characters' => [],
-                'name' => (string) $planet->itemName,
-                'type' => PlanetMaps::typeFromName((string) ($otherTypes[$planet->typeID] ?? '')),
-                'radius_km' => $planet->radius !== null ? (float) $planet->radius / 1000 : null,
-                'pins' => [],
-                'scans' => $scansOf((int) $planet->itemID),
-                'maps' => $mapsOf((int) $planet->itemID),
-                'system_id' => 0,
-                'no_colony' => true,
+                'scans' => $scans->get($planetId, collect())->map(fn (StoredScan $scan): array => [
+                    'resource' => $scan->resource,
+                    'coverage' => round($scan->coverage, 3),
+                    'at' => $scan->updated_at?->getTimestamp(),
+                ])->values()->all(),
             ];
         }
         usort($out, fn (array $a, array $b): int => strnatcmp($a['name'], $b['name']));
@@ -804,11 +790,26 @@ class PiController extends Controller
                         'lon' => (float) $head->longitude,
                     ])->values()->all(),
                 ])->values()->all(),
-                'scans' => $scans->get($planetId, collect())->map(fn (StoredScan $scan): array => [
-                    'resource' => $scan->resource,
-                    'coverage' => round($scan->coverage, 3),
-                    'at' => $scan->updated_at?->getTimestamp(),
-                ])->values()->all(),
+                'scans' => $scansOf((int) $planetId),
+                'maps' => $mapsOf((int) $planetId),
+                'system_id' => (int) ($systemOf[$planetId] ?? 0),
+            ];
+        }
+        // The planet scan (remake): the system's planets without a corp colony too.
+        foreach ($others as $planet) {
+            $out[] = [
+                'planet_id' => (int) $planet->itemID,
+                'character_id' => null,
+                'character' => '',
+                'characters' => [],
+                'name' => (string) $planet->itemName,
+                'type' => PlanetMaps::typeFromName((string) ($otherTypes[$planet->typeID] ?? '')),
+                'radius_km' => $planet->radius !== null ? (float) $planet->radius / 1000 : null,
+                'pins' => [],
+                'scans' => $scansOf((int) $planet->itemID),
+                'maps' => $mapsOf((int) $planet->itemID),
+                'system_id' => 0,
+                'no_colony' => true,
             ];
         }
         usort($out, fn (array $a, array $b): int => strnatcmp($a['name'], $b['name']));
@@ -955,7 +956,10 @@ class PiController extends Controller
     /** The planet scan (remake): remove a shared sky or bare map (whoever saved it last, or a director). */
     public function deletePlanetMap(int $planet, string $kind): JsonResponse
     {
-        $map = PiPlanetMap::query()->where('planet_id', $planet)->where('kind', $kind)->firstOrFail();
+        $map = PiPlanetMap::query()->where('planet_id', $planet)->where('kind', $kind)->first();
+        if ($map === null) {
+            return response()->json(['deleted' => false]);
+        }
         if ($map->user_id !== (int) auth()->id() && ! Gate::allows('devilsrage-leader')) {
             abort(403);
         }

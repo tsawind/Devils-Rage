@@ -254,6 +254,16 @@ case "$ACTION" in
                 echo "sent ", count($planets), " planets", PHP_EOL;
                 foreach (array_slice($planets, 0, 3) as $p) { echo "sent sample ", $p["planet_id"], " ", $p["name"], " maps=", json_encode($p["maps"] ?? "MISSING"), PHP_EOL; }
                 echo "sent ids in maps table: ", implode(",", DevilsRage\Seat\Models\PiPlanetMap::query()->pluck("planet_id")->unique()->all()), PHP_EOL;
+                // The PI page itself (it holds the corp map), loaded as that user.
+                foreach (["devilsrage.pi", "devilsrage.pi.scan.planets"] as $route) {
+                    try {
+                        $res = app(Illuminate\Contracts\Http\Kernel::class)->handle(Illuminate\Http\Request::create(route($route), "GET"));
+                        echo "page ", $route, ": ", $res->getStatusCode(), " (", strlen((string) $res->getContent()), " bytes)", PHP_EOL;
+                        if ($res->getStatusCode() >= 500) { echo "page error: ", substr(strip_tags((string) $res->getContent()), 0, 300), PHP_EOL; }
+                    } catch (Throwable $e) {
+                        echo "page ", $route, ": ", get_class($e), " ", $e->getMessage(), PHP_EOL;
+                    }
+                }
             }
         ' 2>&1 | cut -c1-200
         ;;
