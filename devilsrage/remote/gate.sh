@@ -233,6 +233,16 @@ case "$ACTION" in
             }
         ' 2>&1 | cut -c1-200
         ;;
+    seat-pi-maps)
+        # Planet scan (remake): the shared sky and bare map per planet: kind, size, coverage, who, when.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            echo "table ", Schema::hasTable("devilsrage_pi_planet_maps") ? "present" : "MISSING", PHP_EOL;
+            foreach (DevilsRage\Seat\Models\PiPlanetMap::query()->orderBy("planet_id")->orderBy("kind")->get(["planet_id", "kind", "bytes", "coverage", "character_id", "updated_at"]) as $m) {
+                echo "map ", $m->planet_id, " ", DB::table("planets")->where("planet_id", $m->planet_id)->value("name") ?? DB::table("mapDenormalize")->where("itemID", $m->planet_id)->value("itemName"), " | ", $m->kind, " | ", $m->bytes, " B | ", round($m->coverage, 3), " | ", DB::table("character_infos")->where("character_id", $m->character_id)->value("name"), " | ", $m->updated_at, PHP_EOL;
+            }
+        ' 2>&1 | cut -c1-200
+        ;;
     seat-pi-experiment)
         # PI depletion experiment: for every extractor on a scanned planet, the mean scan heat on
         # each head (within its radius) and in a ring round it (2-4 radii: untouched ground), per dated scan.
