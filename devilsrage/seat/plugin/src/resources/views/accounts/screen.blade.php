@@ -126,6 +126,10 @@
   .pills input { display: none; }
   .pills span { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: #1c1a2a; color: #77708f; border: 1px solid transparent; }
   .pills input:checked + span { background: #2a2340; color: #b9a8ff; border-color: #5a4a9a; }
+  /* ★ corp groups (everyone's) in green, your own in purple. */
+  .pills label.corp span { background: #15231a; color: #6f9a7b; }
+  .pills label.corp input:checked + span { background: #1d3a26; color: #8fe0a6; border-color: #3f8a55; }
+  .groups .g.corp { background: #1d3a26; color: #8fe0a6; }
   .groups { margin-top: 14px; padding-top: 10px; border-top: 1px solid #222228; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
   .groups .g { background: #2a2340; color: #b9a8ff; border-radius: 999px; padding: 1px 4px 1px 9px; display: inline-flex; align-items: center; gap: 2px; }
   .groups input { background: #101014; border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; width: 170px; }
@@ -331,7 +335,7 @@
                   <form class="pills" method="post" action="{{ route('devilsrage.accounts.characters.groups', $link) }}" title="Your own launch groups (only you see them)">
                     @csrf
                     @foreach($ownGroups as $group)
-                      <label><input type="checkbox" name="groups[]" value="{{ $group->id }}" @checked(in_array($group->id, $ticked, true)) onchange="this.form.submit()"><span>{{ $group->user_id === null ? '★ ' : '' }}{{ $group->name }}</span></label>
+                      <label class="{{ $group->user_id === null ? 'corp' : '' }}"><input type="checkbox" name="groups[]" value="{{ $group->id }}" @checked(in_array($group->id, $ticked, true)) onchange="this.form.submit()"><span>{{ $group->user_id === null ? '★ ' : '' }}{{ $group->name }}</span></label>
                     @endforeach
                   </form>
                 @endif
@@ -389,14 +393,14 @@
               @if($group->user_id === null)
                 {{-- Patch 66: a corp launch group from the directors: everyone can tick it. --}}
                 @if($group->key !== null)
-                  <span class="g" title="Used by the Assets page (roles): can't be deleted"><span>★ {{ $group->name }}</span></span>
+                  <span class="g corp" title="Used by the Assets page and the corp: can't be deleted"><span>★ {{ $group->name }}</span></span>
                 @elseif(\Illuminate\Support\Facades\Gate::allows('devilsrage-leader'))
-                  <form method="post" action="{{ route('devilsrage.groups.corp.delete', $group) }}" class="ask g" data-ask="Delete the corp launch group {{ $group->name }} for everyone? Characters stay where they are." data-ask2="⚠ Last check: {{ $group->name }} disappears from every pilot's characters and launch groups in the whole corp. Delete it?">
+                  <form method="post" action="{{ route('devilsrage.groups.corp.delete', $group) }}" class="ask g corp" data-ask="Delete the corp launch group {{ $group->name }} for everyone? Characters stay where they are." data-ask2="⚠ Last check: {{ $group->name }} disappears from every pilot's characters and launch groups in the whole corp. Delete it?">
                     @csrf
                     <span title="Corp launch group (everyone can use it)">★ {{ $group->name }}</span><button class="x" type="submit" title="Delete this corp group">✕</button>
                   </form>
                 @else
-                  <span class="g" title="Corp launch group from the directors: tick it on the characters you bring"><span>★ {{ $group->name }}</span></span>
+                  <span class="g corp" title="Corp launch group from the directors: tick it on the characters you bring"><span>★ {{ $group->name }}</span></span>
                 @endif
               @else
               <form method="post" action="{{ route('devilsrage.groups.delete', $group) }}" class="ask g" data-ask="Delete your launch group {{ $group->name }}? Characters stay where they are.">
