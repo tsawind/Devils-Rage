@@ -135,6 +135,26 @@ case "$ACTION" in
             } }
         ' 2>&1 | cut -c1-200
         ;;
+    seat-price-check)
+        # Assets page prices (read only): which items make the totals, market average vs CCP's
+        # adjusted price, and which columns market_prices has.
+        cd "$HOME/seat-docker"
+        docker compose exec -T front php artisan tinker --execute='
+            echo "columns: ", implode(", ", Schema::getColumnListing("market_prices")), PHP_EOL;
+            $main = Seat\Eveapi\Models\Character\CharacterInfo::query()->where("name", "Tsawind")->value("character_id");
+            $u = Seat\Web\Models\User::query()->where("main_character_id", $main)->first(); auth()->login($u);
+            $d = app()->call([app(DevilsRage\Seat\Http\Controllers\AssetsController::class), "json"])->getData(true);
+            $items = collect($d["items"])->filter(fn ($x) => $x["mine"] !== false && (! $x["division"] || $x["division"] === 7));
+            $tid = DB::table("invTypes")->whereIn("typeName", $items->pluck("type")->unique())->pluck("typeID", "typeName");
+            $mp = DB::table("market_prices")->whereIn("type_id", $tid->values())->get()->keyBy("type_id");
+            $rows = $items->groupBy("type")->map(function ($g, $type) use ($tid, $mp) { $p = $mp[$tid[$type] ?? 0] ?? null; $q = $g->sum("qty"); return ["n" => $q, "value" => $g->sum("value"), "avg" => (float) ($p->average_price ?? 0), "adj" => (float) ($p->adjusted_price ?? 0), "sell" => (float) ($p->sell_price ?? 0)]; });
+            echo "total now ", round($rows->sum("value") / 1e9, 1), "b · at adjusted ", round($rows->sum(fn ($r) => $r["adj"] * $r["n"]) / 1e9, 1), "b · at average ", round($rows->sum(fn ($r) => $r["avg"] * $r["n"]) / 1e9, 1), "b", PHP_EOL;
+            echo "== top 30 types by value", PHP_EOL;
+            foreach ($rows->sortByDesc("value")->take(30) as $t => $r) { echo str_pad(substr($t, 0, 38), 40), " n ", str_pad((string) $r["n"], 8), " ", str_pad(round($r["value"] / 1e9, 2)."b", 9), " avg ", str_pad(round($r["avg"] / 1e6, 1)."m", 10), " adj ", str_pad(round($r["adj"] / 1e6, 1)."m", 10), " sell ", round($r["sell"] / 1e6, 1), "m", PHP_EOL; }
+            echo "== biggest jumps (avg far above adjusted)", PHP_EOL;
+            foreach ($rows->filter(fn ($r) => $r["adj"] > 0 && $r["avg"] > 3 * $r["adj"])->sortByDesc(fn ($r) => ($r["avg"] - $r["adj"]) * $r["n"])->take(20) as $t => $r) { echo str_pad(substr($t, 0, 38), 40), " n ", str_pad((string) $r["n"], 8), " +", round(($r["avg"] - $r["adj"]) * $r["n"] / 1e9, 2), "b  avg ", round($r["avg"] / 1e6, 1), "m adj ", round($r["adj"] / 1e6, 1), "m", PHP_EOL; }
+        '
+        ;;
     seat-asset-space)
         # Assets page: what takes the space in Daisy (read only). Runs the Assets feed as Tsawind's
         # SeAT user, then: m3 by group, containers, ships rigged / not, packaged sizes, freight
