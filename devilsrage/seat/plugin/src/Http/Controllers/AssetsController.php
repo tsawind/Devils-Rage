@@ -123,6 +123,29 @@ class AssetsController extends Controller
         // Ship maintenance bay (attribute 908) of the big hulls.
         $smb = DB::table('dgmTypeAttributes')->where('attributeID', 908)->whereIn('typeID', $typeIds)
             ->get(['typeID', 'valueFloat', 'valueInt'])->mapWithKeys(fn ($r) => [$r->typeID => (float) ($r->valueFloat ?? $r->valueInt)]);
+        // SeAT's SDE can be older than the game (it still says 1,000,000 m³ for a carrier's bay; it's
+        // 2,000,000 now): the big hulls' bay and cargo come from ESI's live type info (cached a week).
+        $hullStats = [];
+        $bigTypes = $types->filter(fn ($t) => in_array($t->groupName ?? '', self::BIG, true));
+        $needStats = [];
+        foreach ($bigTypes as $t) {
+            $hit = Cache::get('devilsrage.hullstats.'.$t->typeID);
+            $hit === null ? $needStats[] = $t : $hullStats[$t->typeID] = $hit;
+        }
+        if ($needStats !== []) {
+            $responses = Http::pool(fn ($pool) => array_map(fn ($t) => $pool->as((string) $t->typeID)->acceptJson()->timeout(8)
+                ->withHeaders(['User-Agent' => "Devil's Rage SeAT plugin"])
+                ->get('https://esi.evetech.net/latest/universe/types/'.$t->typeID.'/'), $needStats));
+            foreach ($needStats as $t) {
+                $response = $responses[(string) $t->typeID] ?? null;
+                if ($response instanceof \Illuminate\Http\Client\Response && $response->successful()) {
+                    $bay = collect($response->json('dogma_attributes') ?? [])->firstWhere('attribute_id', 908);
+                    $stats = ['smb' => (float) ($bay['value'] ?? 0), 'cargo' => (float) ($response->json('capacity') ?? 0)];
+                    Cache::put('devilsrage.hullstats.'.$t->typeID, $stats, now()->addDays(7));
+                    $hullStats[$t->typeID] = $stats;
+                }
+            }
+        }
 
         // Walk up to the structure / station / space: corp hangars sit in an office item, which
         // isn't part of the division, so walk through all the corp's assets.
@@ -211,7 +234,7 @@ class AssetsController extends Controller
             ];
             $items[] = $item;
             if ($isShip && in_array($type->groupName ?? '', self::BIG, true)) {
-                $hulls[] = $item + ['type_id' => (int) $row->type_id, 'cargo' => (float) ($type->capacity ?? 0), 'smb' => (float) ($smb[$row->type_id] ?? 0)];
+                $hulls[] = $item + ['type_id' => (int) $row->type_id, 'cargo' => (float) ($hullStats[$row->type_id]['cargo'] ?? $type->capacity ?? 0), 'smb' => (float) (($hullStats[$row->type_id]['smb'] ?? 0) ?: ($smb[$row->type_id] ?? 0))];
             }
         }
         usort($items, fn ($a, $b) => $b['value'] <=> $a['value']);
