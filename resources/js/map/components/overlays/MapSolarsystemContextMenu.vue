@@ -314,7 +314,7 @@ const inbound = computed(() => {
             {{ isRally ? 'Clear Rally Point' : 'Set as Rally Point' }}
         </ContextMenuItem>
 
-        <ContextMenuItem v-if="can_write && map_solarsystem.hole_slot_high" @select="handleResetNumbers" title="Forget the highest hole number this system handed out: its next holes start again from the lowest free number">
+        <ContextMenuItem v-if="can_write && map_solarsystem.hole_slot_high" @select="handleResetNumbers" title="Forget the hole numbers this system handed out: its next holes start again from the lowest free number">
             <ListRestart class="size-4" />
             Reset hole numbers
         </ContextMenuItem>

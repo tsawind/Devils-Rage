@@ -11,6 +11,7 @@ use App\Models\MapSolarsystem;
 use App\Models\Signature;
 use App\Providers\AppServiceProvider;
 use App\Services\Discord\ChainWayDescriber;
+use App\Support\HoleNumbers;
 use Illuminate\Auth\GenericUser;
 use Illuminate\Http\Request;
 use Illuminate\Session\ArraySessionHandler;
@@ -123,16 +124,22 @@ it('a plain rename refuses a taken name', function () {
     app(MapNamesAction::class)->renameTo($alpha, $four, 'A3', 'plain', null);
 })->throws(Illuminate\Validation\ValidationException::class);
 
-it('remembers the highest hole number a system handed out', function () {
+it('remembers every hole number a system handed out', function () {
     ['alpha' => $alpha] = p39Map();
 
     Signature::factory()->create(['map_solarsystem_id' => $alpha->id, 'signature_id' => 'AAA-111', 'alias' => 'A5', 'map_connection_id' => null]);
     expect($alpha->fresh()->hole_slot_high)->toBe('5');
 
-    // A lower number never lowers it, and names that aren't its numbers don't count.
+    // A lower number is added in slot order; names that aren't its numbers don't count.
     Signature::factory()->create(['map_solarsystem_id' => $alpha->id, 'signature_id' => 'BBB-222', 'alias' => 'A3', 'map_connection_id' => null]);
     Signature::factory()->create(['map_solarsystem_id' => $alpha->id, 'signature_id' => 'CCC-333', 'alias' => 'B111', 'map_connection_id' => null]);
-    expect($alpha->fresh()->hole_slot_high)->toBe('5');
+    Signature::factory()->create(['map_solarsystem_id' => $alpha->id, 'signature_id' => 'DDD-444', 'alias' => 'A5', 'map_connection_id' => null]);
+    expect($alpha->fresh()->hole_slot_high)->toBe('35');
+});
+
+it('keeps handed-out numbers in slot order', function () {
+    expect(HoleNumbers::sorted('4'))->toBe('4')
+        ->and(HoleNumbers::sorted('b51'))->toBe('15B');
 });
 
 it('forgets the highest hole number on a reset, so the next holes start low again', function () {

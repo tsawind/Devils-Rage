@@ -116,7 +116,7 @@ final readonly class MapNamesAction
      * An old chain's row "Keep old": no rename rows for this system any more.
      */
     /**
-     * Forget the highest hole number the system ever handed out: its next holes start again
+     * Forget the hole numbers the system handed out: its next holes start again
      * from the lowest free number (a clean start, e.g. to show a numbering problem again).
      */
     public function resetNumbers(MapSolarsystem $system): void

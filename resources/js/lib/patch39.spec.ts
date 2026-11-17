@@ -32,16 +32,53 @@ describe('patch 39: stamps use "~"', () => {
 describe('patch 39: hole numbers only count up', () => {
     it('skips a freed number while 9 is not reached', () => {
         // A1 had A1, A2, A3; A2 was freed. The next hole is A4, not A2.
-        const planned = planSignatureAliases({ parentAlias: 'A', originIsWormhole: true, aliases: ['A1', 'A3'], countUp: true, slotHigh: '3', signatures: [hole(1)] });
+        const planned = planSignatureAliases({ parentAlias: 'A', originIsWormhole: true, aliases: ['A1', 'A3'], countUp: true, slotHigh: '123', signatures: [hole(1)] });
         expect(planned.get(1)).toBe('A4');
     });
 
     it('refills the gaps once 9 was reached, then letters', () => {
-        const planned = planSignatureAliases({ parentAlias: 'A', originIsWormhole: true, aliases: ['A1', 'A3', 'A9'], countUp: true, slotHigh: '9', signatures: [hole(1), hole(2)] });
+        const planned = planSignatureAliases({ parentAlias: 'A', originIsWormhole: true, aliases: ['A1', 'A3', 'A9'], countUp: true, slotHigh: '123456789', signatures: [hole(1), hole(2)] });
         expect(planned.get(1)).toBe('A2');
         expect(planned.get(2)).toBe('A4');
         const full = planSignatureAliases({ parentAlias: 'A', originIsWormhole: true, aliases: ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9'], countUp: true, signatures: [hole(1)] });
         expect(full.get(1)).toBe('AA');
+    });
+
+    it('a number still in use retires nothing below it', () => {
+        // Only A3 was ever handed out, and it is still on the map: the next hole is A1.
+        expect(planSignatureAliases({ parentAlias: 'A', originIsWormhole: true, aliases: ['A3'], countUp: true, slotHigh: '3', signatures: [hole(1)] }).get(1)).toBe('A1');
+    });
+
+    it("names planned at paste don't shift when the holes are saved in any order", () => {
+        // Tsa's G4 (17 Nov): HOK, LGB, MZJ, UCO, WCJ pasted, then UCO, MZJ, WCJ, HOK, LGB typed one by one.
+        const ids = { HOK: 1, LGB: 2, MZJ: 3, UCO: 4, WCJ: 5 } as const;
+        const locked = new Map<number, string>();
+        let handedOut = '';
+        const plan = () =>
+            planSignatureAliases({
+                parentAlias: 'G4',
+                originIsWormhole: true,
+                aliases: ['G4'],
+                countUp: true,
+                slotHigh: handedOut,
+                signatures: Object.values(ids).map((id) => hole(id, { lockedAlias: locked.get(id) ?? null })),
+            });
+
+        const atPaste = plan();
+        expect([...Object.values(ids)].map((id) => atPaste.get(id))).toEqual(['G41', 'G42', 'G43', 'G44', 'G45']);
+
+        for (const name of ['UCO', 'MZJ', 'WCJ', 'HOK', 'LGB'] as const) {
+            const id = ids[name];
+            const alias = plan().get(id)!;
+            locked.set(id, alias);
+            handedOut += alias.slice(-1);
+            expect(plan()).toEqual(atPaste);
+        }
+    });
+
+    it('a freed number below a held one stays retired', () => {
+        // A1, A2, A3 handed out; A1 and A2 collapsed, A3 is still there: the next hole is A4.
+        expect(planSignatureAliases({ parentAlias: 'A', originIsWormhole: true, aliases: ['A3'], countUp: true, slotHigh: '123', signatures: [hole(1)] }).get(1)).toBe('A4');
     });
 
     it('hubs and home refill at once', () => {
@@ -50,7 +87,7 @@ describe('patch 39: hole numbers only count up', () => {
     });
 
     it('a guess counts up too', () => {
-        expect(guessNextAlias('A1', ['A11'], { countUp: true, slotHigh: '4' })).toBe('A15');
+        expect(guessNextAlias('A1', ['A11'], { countUp: true, slotHigh: '1234' })).toBe('A15');
     });
 
     it('finds the hubs: home, pinned, rage homes and side chain starts', () => {

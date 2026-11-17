@@ -8,10 +8,12 @@ use App\Models\MapSolarsystem;
 use App\Models\Signature;
 
 /**
- * Patch 39: hole numbers only count up per system. Each system remembers the highest
- * number it ever handed out (`hole_slot_high`), so a freed number stays retired until 9
- * is reached; then the gaps are refilled, then letters. Hubs (home, pinned systems, the
- * start of a side chain) refill at once: the browser decides that, this only remembers.
+ * Patch 39: hole numbers only count up per system. Each system remembers every number it
+ * handed out (`hole_slot_high`, e.g. "1245"), so a freed number stays retired until 9 is
+ * reached; then the gaps are refilled, then letters. A number still in use doesn't retire
+ * anything below it, so names planned for the other holes don't shift when one is saved.
+ * Hubs (home, pinned systems, the start of a side chain) refill at once: the browser
+ * decides that, this only remembers.
  */
 final class HoleNumbers
 {
@@ -38,12 +40,20 @@ final class HoleNumbers
             return;
         }
 
-        $current = $system->hole_slot_high;
-        if ($current !== null && mb_strpos(self::SLOTS, $current) !== false && mb_strpos(self::SLOTS, $current) >= mb_strpos(self::SLOTS, $slot)) {
+        $current = (string) $system->hole_slot_high;
+        if (str_contains($current, $slot)) {
             return;
         }
 
-        MapSolarsystem::withHidden()->whereKey($system->id)->update(['hole_slot_high' => $slot]);
+        MapSolarsystem::withHidden()->whereKey($system->id)->update(['hole_slot_high' => self::sorted($current.$slot)]);
+    }
+
+    /**
+     * The handed-out numbers in slot order, each once ("51" → "15").
+     */
+    public static function sorted(string $slots): string
+    {
+        return implode('', array_filter(mb_str_split(self::SLOTS), fn (string $slot): bool => str_contains(mb_strtoupper($slots), $slot)));
     }
 
     /**

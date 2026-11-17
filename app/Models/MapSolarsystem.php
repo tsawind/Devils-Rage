@@ -44,7 +44,7 @@ use Staudenmeir\EloquentHasManyDeep\HasRelationships;
  * @property list<array{peer: int, outgoing: bool, attributes: array<string, mixed>, signature_ids: list<int>}>|null $memory_links Patch 37: pipes to the rest of its cleared chain
  * @property list<string>|null $old_aliases Patch 39: names it was known by before a rename ("was A1~1917")
  * @property bool $name_kept Patch 39: "Keep old" was chosen for an old chain's name
- * @property string|null $hole_slot_high Patch 39: the highest hole number it ever handed out
+ * @property string|null $hole_slot_high Patch 39: every hole number it handed out, in slot order ("1245")
  * @property-read \Carbon\CarbonImmutable $created_at
  * @property-read int|null $signatures_count
  * @property-read int|null $uncategorized_signatures_count

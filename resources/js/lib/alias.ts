@@ -517,7 +517,7 @@ export function planSignatureAliases(params: {
      * pinned systems, the start of a side chain), which refill freed numbers at once.
      */
     countUp?: boolean;
-    /** Patch 39: the highest number this system ever handed out (server memory). */
+    /** Patch 39: every number this system handed out, e.g. "1245" (server memory). */
     slotHigh?: string | null;
 }): Map<number, string> {
     const { base, stamp } = splitStamp(params.parentAlias);
@@ -610,17 +610,19 @@ export function planSignatureAliases(params: {
 const DIGIT_SLOTS = 9;
 
 /**
- * Patch 39: where counting up starts in a system: one past the highest number it ever
- * handed out (`slotHigh`) or that is in use now. Once 9 was reached it starts at the
- * lowest number again (gaps are refilled, then the letters follow).
+ * Patch 39: where counting up starts in a system: one past the highest number it handed
+ * out (`handedOut`, e.g. "1245") that is free again (retired). A number still in use
+ * retires nothing below it, so the names planned for a system's other holes don't shift
+ * when one of them is saved or jumped. Once 9 was retired it starts at the lowest number
+ * again (gaps are refilled, then the letters follow).
  */
-export function countUpStart(prefix: string, slots: string, taken: ReadonlySet<string>, slotHigh?: string | null): number {
-    let high = slotHigh ? slots.indexOf(slotHigh.trim().toUpperCase()) : -1;
+export function countUpStart(prefix: string, slots: string, taken: ReadonlySet<string>, handedOut?: string | null): number {
     const upper = prefix.toUpperCase();
-    for (const alias of taken) {
-        const name = alias.toUpperCase();
-        if (name.length !== upper.length + 1 || !name.startsWith(upper)) continue;
-        high = Math.max(high, slots.indexOf(name.slice(upper.length)));
+    let high = -1;
+    for (const slot of (handedOut ?? '').trim().toUpperCase()) {
+        const index = slots.indexOf(slot);
+        if (index < 0 || taken.has(`${upper}${slot}`)) continue;
+        high = Math.max(high, index);
     }
     return high + 1 >= DIGIT_SLOTS ? 0 : high + 1;
 }
