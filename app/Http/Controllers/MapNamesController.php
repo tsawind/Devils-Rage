@@ -48,6 +48,7 @@ final class MapNamesController extends Controller
             'drop' => $action->drop($mapSolarsystem, $signature, $validated['name'] ?? null),
             'adopt' => $action->adopt($mapSolarsystem, $this->required($signature)),
             'keep' => $action->keep($mapSolarsystem),
+            'reset-numbers' => $action->resetNumbers($mapSolarsystem),
             'hole' => $action->renameHole($mapSolarsystem, $this->required($signature), (string) $validated['name']),
             'rename' => $action->renameTo($mapSolarsystem, $this->required($signature), (string) $validated['name'], (string) ($validated['mode'] ?? 'plain'), $validated['next'] ?? null),
         };

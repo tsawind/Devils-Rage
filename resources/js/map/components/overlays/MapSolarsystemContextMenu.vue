@@ -26,11 +26,12 @@ import { combatColorLabel, describeChainRoute } from '@/lib/combat';
 import { startChainCleanup } from '@/map/actions/chainCleanup';
 import { openClearChain } from '@/map/actions/clearChain';
 import { deleteMapSolarsystem } from '@/map/actions/deleteMapSolarsystem';
+import { changeNames } from '@/map/actions/names';
 import { updateMapSolarsystem } from '@/map/actions/updateMapSolarsystem';
 import { useAddConnectionDialog } from '@/map/interactions/useAddConnectionDialog';
 import { TMapSolarsystem } from '@/pages/maps';
 import { TMapSolarsystemStatus } from '@/types/models';
-import { Brush, Check, Megaphone, ClipboardCopy, Compass, Eraser, Eye, Flag, Home, Map, MapPin, Navigation, NotebookPen, Pin, ShieldAlert, Route, Scissors, Trash2, Users, Volume2, VolumeX, Waypoints } from 'lucide-vue-next';
+import { Brush, Check, Megaphone, ClipboardCopy, Compass, Eraser, Eye, Flag, Home, ListRestart, Map, MapPin, Navigation, NotebookPen, Pin, ShieldAlert, Route, Scissors, Trash2, Users, Volume2, VolumeX, Waypoints } from 'lucide-vue-next';
 import { isSystemMuted, setSystemMuted } from '@/lib/mutedSystems';
 import { setConnectionWatched } from '@/map/actions/holeChecked';
 import { chainParents } from '@/map/store/derived';
@@ -93,6 +94,13 @@ function handleTogglePin() {
 
 function handleSetDestinationAll() {
     setWaypointAll(map_solarsystem.solarsystem_id);
+}
+
+// Its next holes start again from the lowest free number (it forgets the highest it handed out).
+function handleResetNumbers() {
+    changeNames(map_solarsystem.id, { action: 'reset-numbers' }, `Reset hole numbers in ${map_solarsystem.alias ?? 'the system'}`, () =>
+        toast.success(`${map_solarsystem.alias ?? 'The system'}: hole numbers start again from the lowest free one.`),
+    );
 }
 
 function handleRemoveFromMap() {
@@ -306,6 +314,10 @@ const inbound = computed(() => {
             {{ isRally ? 'Clear Rally Point' : 'Set as Rally Point' }}
         </ContextMenuItem>
 
+        <ContextMenuItem v-if="can_write && map_solarsystem.hole_slot_high" @select="handleResetNumbers" title="Forget the highest hole number this system handed out: its next holes start again from the lowest free number">
+            <ListRestart class="size-4" />
+            Reset hole numbers
+        </ContextMenuItem>
         <template v-if="!map_solarsystem.pinned && !isHome && can_write">
             <ContextMenuSeparator />
             <ContextMenuItem @select="handleRemoveFromMap" class="text-destructive focus:text-destructive">

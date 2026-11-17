@@ -28,7 +28,7 @@ final class UpdateMapNamesRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'action' => ['required', Rule::in(['switch', 'drop', 'adopt', 'keep', 'hole', 'rename'])],
+            'action' => ['required', Rule::in(['switch', 'drop', 'adopt', 'keep', 'hole', 'rename', 'reset-numbers'])],
             'signature_id' => ['nullable', 'integer', 'required_if:action,switch,adopt,hole,rename'],
             'name' => ['nullable', 'string', 'max:32', 'required_if:action,hole,rename'],
             'mode' => ['nullable', Rule::in(['plain', 'swap', 'bump', 'float'])],

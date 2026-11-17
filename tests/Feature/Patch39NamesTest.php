@@ -135,6 +135,15 @@ it('remembers the highest hole number a system handed out', function () {
     expect($alpha->fresh()->hole_slot_high)->toBe('5');
 });
 
+it('forgets the highest hole number on a reset, so the next holes start low again', function () {
+    ['alpha' => $alpha] = p39Map();
+    $alpha->update(['hole_slot_high' => '8']);
+
+    app(MapNamesAction::class)->resetNumbers($alpha);
+
+    expect($alpha->fresh()->hole_slot_high)->toBeNull();
+});
+
 it('a jump into a system already on the map keeps its name; the hole keeps its number', function () {
     ['alpha' => $alpha, 'x' => $x] = p39Map();
     $hole = Signature::factory()->create(['map_solarsystem_id' => $alpha->id, 'signature_id' => 'NEW-106', 'alias' => null, 'map_connection_id' => null]);

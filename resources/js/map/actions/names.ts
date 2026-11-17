@@ -12,6 +12,7 @@ export type TNamesChange =
     | { action: 'switch' | 'adopt'; signature_id: number }
     | { action: 'drop'; signature_id?: number | null; name?: string | null }
     | { action: 'keep' }
+    | { action: 'reset-numbers' }
     | { action: 'hole'; signature_id: number; name: string }
     | { action: 'rename'; signature_id: number; name: string; mode: TRenameMode; next?: string | null };
 
