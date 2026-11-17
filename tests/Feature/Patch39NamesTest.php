@@ -126,6 +126,7 @@ it('a plain rename refuses a taken name', function () {
 
 it('remembers every hole number a system handed out', function () {
     ['alpha' => $alpha] = p39Map();
+    $alpha->update(['hole_slot_high' => null]);
 
     Signature::factory()->create(['map_solarsystem_id' => $alpha->id, 'signature_id' => 'AAA-111', 'alias' => 'A5', 'map_connection_id' => null]);
     expect($alpha->fresh()->hole_slot_high)->toBe('5');
