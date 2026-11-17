@@ -701,12 +701,23 @@ class PiController extends Controller
         $owned = RefreshToken::query()->where('user_id', auth()->id())->pluck('character_id')->map(fn ($id): int => (int) $id)->all();
         $characterIds = array_values(array_unique(array_merge($characterIds, $owned)));
         $mine = DB::table('character_planets')->whereIn('character_id', $characterIds)->get(['character_id', 'planet_id', 'solar_system_id']);
-        if ($mine->isEmpty()) {
-            return response()->json(['planets' => []]);
+        // Where your characters are now (a planet can be scanned in any system: out on a chain,
+        // planet types home doesn't have), and every system the corp has mapped planets in.
+        $here = DB::table('character_locations')->whereIn('character_id', $characterIds)->pluck('solar_system_id', 'character_id');
+        $mapped = collect();
+        try {
+            $mappedPlanets = PiPlanetMap::query()->distinct()->pluck('planet_id')->merge(StoredScan::query()->distinct()->pluck('planet_id'))->unique()->values()->all();
+            $mapped = DB::table('mapDenormalize')->whereIn('itemID', $mappedPlanets)->pluck('solarSystemID');
+        } catch (\Throwable) {
+            // No SDE map table: only the systems with colonies and where you are.
         }
         // Patch 73: every corp colony in the systems you have colonies in (anyone's buildings
         // can anchor a scan: EVE shows them with "Show other characters' networks").
-        $systems = $mine->pluck('solar_system_id')->unique()->all();
+        $systems = $mine->pluck('solar_system_id')->merge($here->values())->merge($mapped)
+            ->filter()->map(fn ($id): int => (int) $id)->unique()->values()->all();
+        if ($systems === []) {
+            return response()->json(['planets' => []]);
+        }
         $planets = DB::table('character_planets')->whereIn('solar_system_id', $systems)->get(['character_id', 'planet_id', 'planet_type']);
         $planetIds = $planets->pluck('planet_id')->unique()->map(fn ($id): int => (int) $id)->values()->all();
         $allChars = $planets->pluck('character_id')->unique()->map(fn ($id): int => (int) $id)->values()->all();
@@ -730,7 +741,7 @@ class PiController extends Controller
         $others = collect();
         try {
             $others = DB::table('mapDenormalize')->whereIn('solarSystemID', $systems)->where('groupID', 7)
-                ->whereNotIn('itemID', $planetIds)->get(['itemID', 'itemName', 'typeID', 'radius']);
+                ->whereNotIn('itemID', $planetIds)->get(['itemID', 'itemName', 'typeID', 'radius', 'solarSystemID']);
         } catch (\Throwable) {
             // No SDE map table: only the planets with colonies.
         }
@@ -808,13 +819,18 @@ class PiController extends Controller
                 'pins' => [],
                 'scans' => $scansOf((int) $planet->itemID),
                 'maps' => $mapsOf((int) $planet->itemID),
-                'system_id' => 0,
+                'system_id' => (int) ($planet->solarSystemID ?? 0),
                 'no_colony' => true,
             ];
         }
         usort($out, fn (array $a, array $b): int => strnatcmp($a['name'], $b['name']));
+        $hereNames = CharacterInfo::query()->whereIn('character_id', $here->keys()->all())->pluck('name', 'character_id');
 
-        return response()->json(['planets' => $out]);
+        return response()->json([
+            'planets' => $out,
+            // Your characters and the system each is in now (the app opens the one its EVE client is in).
+            'here' => $here->map(fn ($system, $id): array => ['character_id' => (int) $id, 'name' => (string) ($hereNames[$id] ?? ''), 'system_id' => (int) $system])->values()->all(),
+        ]);
     }
 
     /** Patch 71: one scan's cells (base64), for the app to carry on a scan or show it. */
@@ -839,8 +855,8 @@ class PiController extends Controller
             return response()->json(['message' => 'That scan is not a whole planet map.'], 422);
         }
         $planetId = (int) $data['planet_id'];
-        if (! $this->inCorpSystem($planetId)) {
-            return response()->json(['message' => 'That planet isn\'t in a system where the corp has colonies.'], 422);
+        if (! $this->isPlanet($planetId)) {
+            return response()->json(['message' => 'That isn\'t a planet EVE knows.'], 422);
         }
         $existing = StoredScan::query()->where('planet_id', $planetId)->where('resource', $data['resource'])->first();
         $merged = PiScan::merge($existing?->cells, $cells);
@@ -871,18 +887,20 @@ class PiController extends Controller
     }
 
     /** A planet with a corp colony, or any planet in a system where the corp has colonies. */
-    private function inCorpSystem(int $planetId): bool
+    /**
+     * A real planet (a colony's, or one in EVE's map): any system's planets can be mapped and
+     * scanned, not only where the corp has colonies (planet types home doesn't have, chains).
+     */
+    private function isPlanet(int $planetId): bool
     {
         if (DB::table('character_planets')->where('planet_id', $planetId)->exists()) {
             return true;
         }
         try {
-            $system = DB::table('mapDenormalize')->where('itemID', $planetId)->value('solarSystemID');
+            return DB::table('mapDenormalize')->where('itemID', $planetId)->where('groupID', 7)->exists();
         } catch (\Throwable) {
             return false;
         }
-
-        return $system !== null && DB::table('character_planets')->where('solar_system_id', (int) $system)->exists();
     }
 
     /** The planet scan (remake): one planet's shared sky or bare map (base64), or 404. */
@@ -915,8 +933,8 @@ class PiController extends Controller
             'character_id' => ['nullable', 'integer'],
         ]);
         $planetId = (int) $data['planet_id'];
-        if (! $this->inCorpSystem($planetId)) {
-            return response()->json(['message' => 'That planet isn\'t in a system where the corp has colonies.'], 422);
+        if (! $this->isPlanet($planetId)) {
+            return response()->json(['message' => 'That isn\'t a planet EVE knows.'], 422);
         }
         $key = 'dr-pi-map:'.auth()->id().':'.$data['upload'];
         $part = (int) $data['part'];
