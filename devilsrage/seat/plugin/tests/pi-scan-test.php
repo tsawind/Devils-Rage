@@ -25,6 +25,10 @@ $cap = substr_replace($empty, str_repeat(chr(126), PiScan::GRID_W), 0, PiScan::G
 $equator = substr_replace($empty, str_repeat(chr(126), PiScan::GRID_W), 90 * PiScan::GRID_W, PiScan::GRID_W);
 check('pole rows count less than equator rows', PiScan::coverage($cap) < PiScan::coverage($equator) / 20);
 
+// A whole new scan replaces the old one; a part one only fills what it didn't see.
+$old = str_repeat(chr(200), $cells);
+check('a whole new scan stands on its own', PiScan::merge($old, $full) === $full);
+check('a part scan keeps the old where it saw nothing', PiScan::merge($old, $north) === str_repeat(chr(126), $cells / 2).str_repeat(chr(200), $cells / 2));
 check('heat 0 and 1 encode to 1 and 251', PiScan::encodeHeat(0) === 1 && PiScan::encodeHeat(1) === 251 && PiScan::encodeHeat(7) === 251);
 $one = $empty;
 $one[90 * PiScan::GRID_W + 180] = chr(PiScan::encodeHeat(0.8));

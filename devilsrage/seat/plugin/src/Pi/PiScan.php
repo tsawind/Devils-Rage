@@ -38,10 +38,12 @@ final class PiScan
         return $bytes;
     }
 
-    /** A rescan adds to the old map: cells seen now win, cells not seen now keep the old reading. */
+    /** A rescan adds to the old map: cells seen now win, cells not seen now keep the old reading (a whole-planet scan replaces it). */
     public static function merge(?string $old, string $new): string
     {
-        if ($old === null || strlen($old) !== strlen($new)) {
+        // A whole-planet scan (95 % or more) stands on its own: the app's remake scans each
+        // planet whole, in its own frame, and an older scan (maybe in EVE's frame) mustn't mix in.
+        if ($old === null || strlen($old) !== strlen($new) || self::coverage($new) >= 0.95) {
             return $new;
         }
         $out = $new;
