@@ -122,6 +122,7 @@ final class FarmOverview
             return [];
         }
         $attributes = CharacterAttribute::query()->whereIn('character_id', $characterIds)->get()->keyBy('character_id');
+        $sp = CharacterInfoSkill::query()->whereIn('character_id', $characterIds)->get()->keyBy('character_id');
         $implants = $this->implantBonuses($characterIds);
         $training = $this->trainingWithSkill($characterIds);
         $skillAttrs = DB::table('dgmTypeAttributes')
@@ -155,6 +156,7 @@ final class FarmOverview
                 }
             }
             $result[$characterId] = [
+                'total_sp' => (int) ($sp->get($characterId)?->total_sp ?? 0),
                 'training' => $now === null ? null : [
                     'skill' => $now['skill'],
                     'level' => $now['level'],

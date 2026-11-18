@@ -184,6 +184,8 @@
   .sheet-pop.menu { pointer-events: auto; }
   .sheet-pop b { color: var(--text); }
   .sheet-pop .ok { color: var(--ok); } .sheet-pop .bad { color: var(--warn); }
+  .pp { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  .pp small { font-size: 9.5px; color: var(--muted); line-height: 1; white-space: nowrap; }
   .charinfo { grid-column: 3 / -1; font-size: 11px; color: var(--muted); margin-top: -2px; }
   .errors { background: #3a1416; color: var(--bad); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .row { grid-template-columns: 18px 30px minmax(0,1fr) 90px 80px; } .row select, .row .x { display: none; } }
@@ -359,7 +361,7 @@
                 @php
                   $rowSheet = $sheet[(int) $link->character_id] ?? null;
                 @endphp
-                <img class="pic {{ ($rowSheet['training'] ?? null) ? 'training' : '' }}" data-sheet='@json($rowSheet)' data-name="{{ $link->displayName() }}" src="https://images.evetech.net/characters/{{ $link->character_id }}/portrait?size=64" alt="" loading="lazy">
+                <span class="pp"><img class="pic {{ ($rowSheet['training'] ?? null) ? 'training' : '' }}" data-sheet='@json($rowSheet)' data-name="{{ $link->displayName() }}" src="https://images.evetech.net/characters/{{ $link->character_id }}/portrait?size=64" alt="" loading="lazy">@if(($rowSheet['total_sp'] ?? 0) > 0)<small title="{{ number_format($rowSheet['total_sp']) }} skill points">{{ $rowSheet['total_sp'] >= 1000000 ? number_format($rowSheet['total_sp'] / 1000000, 1).'M' : number_format($rowSheet['total_sp'] / 1000).'k' }}</small>@endif</span>
                 <span class="cn" title="{{ $link->displayName() }}">{{ $link->displayName() }} <button class="incog-toggle" type="button" data-name="{{ $link->displayName() }}" hidden title="This PC only: hide it from the mapper and SeAT features in the app (spy alts)">🕶</button></span>
                 @if(in_array($st['seat'], ['ok', 'external'], true))
                   <span class="chip {{ $lab[1] }}" title="{{ $lab[2] }}">{{ $lab[0] }}</span>
@@ -872,7 +874,7 @@
   const html = (name, s) => {
     if (!s) return `<b>${esc(name)}</b><br><span class="muted">Nothing from SeAT yet.</span>`;
     const t = s.training;
-    const lines = [`<b>${esc(name)}</b>`];
+    const lines = [`<b>${esc(name)}</b>${s.total_sp ? ` <span class="muted">· ${Number(s.total_sp).toLocaleString()} SP</span>` : ''}`];
     lines.push(t ? `Training <b>${esc(t.skill)} ${roman[t.level] || t.level}</b>, ${left(t.ends)} left<br><span class="muted">Queue ends in ${left(t.queue_ends)}</span>` : '<span class="bad">Not training</span>');
     const imp = Object.entries(s.implants || {});
     const set = imp.length ? Math.min(...imp.map(([, v]) => v)) : 0;
