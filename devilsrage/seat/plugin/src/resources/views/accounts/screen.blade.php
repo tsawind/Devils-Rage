@@ -657,8 +657,26 @@
       const row = document.createElement('div');
       row.className = 'row incog';
       const last = c.last ? new Date(c.last).toISOString().slice(0, 10) : '?';
-      row.innerHTML = `<span></span><img class="pic" src="${portrait(c.id)}" alt="" loading="lazy"><span class="cn">${esc(c.name || 'Character ' + c.id)} <span class="muted" style="font-size: 11px">· last played ${last} · ${(c.profiles || []).map((p) => 'settings_' + esc(p)).join(', ')}</span></span><span class="incog-box"><button class="btn sm" type="button">Hide</button></span>`;
-      row.querySelector('button').addEventListener('click', () => { ask(`pc-other-hide?id=${c.id}&hidden=1`); row.remove(); });
+      row.innerHTML = `<span></span><img class="pic" src="${portrait(c.id)}" alt="" loading="lazy"><span class="cn">${esc(c.name || 'Character ' + c.id)} <span class="muted" style="font-size: 11px">· last played ${last} · ${(c.profiles || []).map((p) => 'settings_' + esc(p)).join(', ')}</span></span><span class="incog-box"><button class="btn sm" type="button" title="Take it off this list; its files stay">Hide</button><button class="btn sm" type="button" title="Move its settings files out of the profile folders (into the archive folder beside them; nothing is deleted)">Remove files</button></span>`;
+      const [hide, remove] = row.querySelectorAll('button');
+      hide.addEventListener('click', () => { ask(`pc-other-hide?id=${c.id}&hidden=1`); row.remove(); });
+      remove.addEventListener('click', () => {
+        const box = remove.parentNode;
+        box.innerHTML = `<span>Move ${esc(c.name || 'its')} settings files to the archive folder?</span> <button class="btn sm p" type="button">Move</button> <button class="btn sm" type="button">Cancel</button>`;
+        const [yes, no] = box.querySelectorAll('button');
+        no.addEventListener('click', () => { box.innerHTML = ''; box.append(hide, remove); });
+        yes.addEventListener('click', () => {
+          box.textContent = 'Moving…';
+          const done = (e) => {
+            if (String(e.detail?.id) !== String(c.id)) return;
+            window.removeEventListener('devils-rage-app:pc-archived', done);
+            box.textContent = e.detail.said || '';
+            if (/^Moved/.test(box.textContent)) setTimeout(() => row.remove(), 2500);
+          };
+          window.addEventListener('devils-rage-app:pc-archived', done);
+          ask(`pc-other-archive?id=${c.id}&name=${encodeURIComponent(c.name || '')}`);
+        });
+      });
       box.append(row);
     }
     panels[0]?.parentNode.append(panel);
@@ -693,12 +711,25 @@
     }
     // Running clients: the EVE account each is signed in to (certain). A character here whose client
     // runs on another EVE account than this account's gets a warning.
-    for (const r of pc.running || []) {
+    // Every character seen logged in here, with the EVE account its client was signed in to:
+    // a ✓ when that's this account, a warning when it's another.
+    for (const r of [...(pc.seen || []), ...(pc.running || [])]) {
       const b = [...document.querySelectorAll('.incog-toggle')].find((x) => x.dataset.name.toLowerCase() === String(r.name).toLowerCase());
       const panel = b?.closest('.panel');
-      if (!panel || !panel.dataset.launcher || panel.dataset.launcher === String(r.user_id)) continue;
+      if (!panel || !panel.dataset.launcher) continue;
+      if (panel.dataset.launcher === String(r.user_id)) {
+        if (!b.parentNode.querySelector('.checked')) {
+          const ok = document.createElement('span');
+          ok.className = 'chip ok checked';
+          ok.textContent = '✓ EVE account';
+          ok.title = `Logged in on this EVE account (${r.user_id}), as its own client said: certain`;
+          b.after(ok);
+        }
+        continue;
+      }
+      if (b.closest('.row').querySelector('.wrongacct')) continue;
       const warn = document.createElement('div');
-      warn.className = 'chatlog';
+      warn.className = 'chatlog wrongacct';
       warn.textContent = `⚠ ${r.name}'s client is signed in to another EVE account (${r.user_id}) than account ${panel.dataset.nick}'s (${panel.dataset.launcher}). Wrong account here, or logged in with the wrong login?`;
       b.closest('.row').append(warn);
     }
