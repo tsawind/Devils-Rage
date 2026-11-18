@@ -279,7 +279,7 @@
           $account = $card['account'];
           $om = $omega[$account->id] ?? null;
         @endphp
-        <div class="panel" id="panel-{{ $account->id }}" data-id="{{ $account->id }}" data-launcher="{{ $account->launcher_user_id }}" data-nick="{{ $account->nickname }}" data-free="{{ $maxCharacters - count($card['rows']) }}" data-external="{{ route('devilsrage.accounts.characters.external', $account) }}" data-steps='@json($card['steps'])'>
+        <div class="panel" id="panel-{{ $account->id }}" data-id="{{ $account->id }}" data-launcher="{{ $account->launcher_user_id }}" data-profile="{{ \DevilsRage\Seat\Http\Controllers\LaunchGroupsController::profileFor((string) $account->nickname) }}" data-nick="{{ $account->nickname }}" data-free="{{ $maxCharacters - count($card['rows']) }}" data-external="{{ route('devilsrage.accounts.characters.external', $account) }}" data-steps='@json($card['steps'])'>
           <div class="phead">
             <form method="post" action="{{ route('devilsrage.accounts.rename', $account) }}" style="display: flex; gap: 6px; align-items: center">
               @csrf
@@ -613,18 +613,18 @@
   }
 
   // EVE accounts on this PC with no account here: their own tiles under "This PC only".
-  function pcOnly(user, chars, nameOf) {
+  function pcOnly(user, chars, nameOf, profile) {
     const list = document.getElementById('pc-only');
     if (list.hidden) { list.hidden = false; list.innerHTML = '<h4 title="EVE accounts the launcher used on this PC that aren\'t on SeAT. Only this PC sees them.">This PC only</h4>'; }
     const tile = document.createElement('div');
     tile.className = 'acct pc';
     tile.dataset.id = 'pc-' + user;
-    tile.innerHTML = `<span class="grip"> </span>${chars.map((id) => `<img class="pic ghost" src="${portrait(id)}" alt="">`).join('')}<span class="nick"><b>PC</b><br><span class="om unknown">incognito</span></span>`;
+    tile.innerHTML = `<span class="grip"> </span>${chars.map((id) => `<img class="pic ghost" src="${portrait(id)}" alt="">`).join('')}<span class="nick"><b>${profile ? esc(profile) : 'PC'}</b><br><span class="om unknown">incognito</span></span>`;
     list.append(tile);
     const panel = document.createElement('div');
     panel.className = 'panel';
     panel.dataset.id = 'pc-' + user;
-    panel.innerHTML = `<div class="phead"><span class="name">An EVE account on this PC</span><span class="muted">not on SeAT · only this PC sees it</span></div><div class="chars"></div><div class="foot"><span class="muted" style="font-size: 12px">Untick Incognito to share a character with the corp (it goes on SeAT by name into the account you pick). To make this a whole account: + New account, then share its characters into it.</span></div>`;
+    panel.innerHTML = `<div class="phead"><span class="name">An EVE account on this PC</span><span class="muted">${profile ? 'profile settings_' + esc(profile) + ' · ' : ''}not on SeAT · only this PC sees it</span></div><div class="chars"></div><div class="foot"><span class="muted" style="font-size: 12px">Untick Incognito to share a character with the corp (it goes on SeAT by name into the account you pick). To make this a whole account: + New account, then share its characters into it.</span></div>`;
     const box = panel.querySelector('.chars');
     chars.forEach((id) => box.append(incognitoRow(id, nameOf[id], panels)));
     panels[0]?.parentNode.append(panel);
@@ -644,8 +644,12 @@
 
     // Known characters not yet in their EVE account's place: group them (only SeAT's own ids are sent).
     const byLauncher = new Map(panels.filter((p) => p.dataset.launcher).map((p) => [p.dataset.launcher, p]));
+    const byProfile = new Map(panels.filter((p) => p.dataset.profile).map((p) => [p.dataset.profile, p]));
+    // Its account here: the one tied to this EVE account, else the one for its own profile folder (account 11 ↔ settings_11).
+    const panelFor = (a) => byLauncher.get(String(a.user_id)) || (a.profile ? byProfile.get(String(a.profile)) : undefined);
+    // Only what the launcher itself said is used to move characters on SeAT (the profile folders are a good guess, not certain).
     const wanted = accounts
-      .map((a) => ({ user_id: a.user_id, character_ids: a.characters.map((c) => c.id).filter((id) => mine.has(id)).slice(0, 3) }))
+      .map((a) => ({ user_id: a.user_id, character_ids: a.characters.filter((c) => c.how !== 'profiles').map((c) => c.id).filter((id) => mine.has(id)).slice(0, 3) }))
       .filter((a) => a.character_ids.length && a.character_ids.some((id) => !byLauncher.get(String(a.user_id))?.querySelector(`.row[data-char="${id}"]`)));
     const key = JSON.stringify(wanted);
     let tried = null;
@@ -657,14 +661,14 @@
     }
 
     // The rest: incognito, greyed in their account (or under This PC only).
-    const unknown = accounts.map((a) => ({ user: String(a.user_id), ids: a.characters.map((c) => c.id).filter((id) => !mine.has(id) && !placed.has(id)) })).filter((a) => a.ids.length);
+    const unknown = accounts.map((a) => ({ account: a, user: String(a.user_id), ids: a.characters.map((c) => c.id).filter((id) => !mine.has(id) && !placed.has(id)) })).filter((a) => a.ids.length);
     if (!unknown.length) return;
     // Names from the app (it asks EVE's public lookup from your PC); this page's own lookup fills any gaps.
     const nameOf = Object.fromEntries(accounts.flatMap((a) => a.characters.filter((c) => c.name).map((c) => [c.id, c.name])));
     Object.assign(nameOf, await names(unknown.flatMap((a) => a.ids).filter((id) => !nameOf[id])));
-    for (const { user, ids } of unknown) {
-      const panel = byLauncher.get(user);
-      if (!panel) { pcOnly(user, ids, nameOf); continue; }
+    for (const { account, user, ids } of unknown) {
+      const panel = panelFor(account);
+      if (!panel) { pcOnly(user, ids, nameOf, account.profile); continue; }
       const box = panel.querySelector('.chars');
       const tile = document.querySelector(`.acct[data-id="${panel.dataset.id}"]`);
       ids.slice(0, Math.max(0, Number(panel.dataset.free))).forEach((id) => {
