@@ -594,10 +594,11 @@
     holder.append(box);
   }
 
+  const guessed = new Set();
   function incognitoRow(id, name, accountPanels) {
     const row = document.createElement('div');
     row.className = 'row incog';
-    row.innerHTML = `<span></span><img class="pic" src="${portrait(id)}" alt="" loading="lazy"><span class="cn" title="On this PC only">${esc(name || 'Character ' + id)} <span class="muted" style="font-size: 11px">· incognito</span></span>`;
+    row.innerHTML = `<span></span><img class="pic" src="${portrait(id)}" alt="" loading="lazy"><span class="cn" title="On this PC only">${esc(name || 'Character ' + id)} <span class="muted" style="font-size: 11px">· incognito${guessed.has(id) ? ' · placed from its profile folder' : ''}</span></span>`;
     shareBox(row, name, accountPanels);
     return row;
   }
@@ -664,6 +665,7 @@
     const unknown = accounts.map((a) => ({ account: a, user: String(a.user_id), ids: a.characters.map((c) => c.id).filter((id) => !mine.has(id) && !placed.has(id)) })).filter((a) => a.ids.length);
     if (!unknown.length) return;
     // Names from the app (it asks EVE's public lookup from your PC); this page's own lookup fills any gaps.
+    accounts.forEach((a) => a.characters.forEach((c) => { if (c.how === 'profiles') guessed.add(c.id); }));
     const nameOf = Object.fromEntries(accounts.flatMap((a) => a.characters.filter((c) => c.name).map((c) => [c.id, c.name])));
     Object.assign(nameOf, await names(unknown.flatMap((a) => a.ids).filter((id) => !nameOf[id])));
     for (const { account, user, ids } of unknown) {
