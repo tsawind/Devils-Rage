@@ -909,7 +909,19 @@ useOnClient(() => {
         reportClients();
     });
 });
+// Patch 74 (app): the client bar's 📹 Camera on / off for one EVE client, same as the map's control.
+function cameraFromApp(event: Event): void {
+    const detail = (event as CustomEvent<{ client?: unknown; on?: unknown }>).detail;
+    if (!detail || typeof detail.client !== 'string' || typeof detail.on !== 'boolean') return;
+    const client = detail.client;
+    if (!sources.value.some((item) => item.client === client)) return;
+    void setClientOn(client, detail.on);
+    reportClients();
+}
+useOnClient(() => window.addEventListener('devils-rage-app:camera', cameraFromApp));
+
 onBeforeUnmount(() => {
+    window.removeEventListener('devils-rage-app:camera', cameraFromApp);
     if (reportTimer) clearTimeout(reportTimer);
     void jsonFetch(MapCameraClientController.report(props.map.slug).url, 'PUT', { clients: [] });
 });
