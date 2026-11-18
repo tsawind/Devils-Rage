@@ -398,15 +398,7 @@
                   </form>
                 @endif
               </div>
-            @endifeach
-                      </select>
-                    </form>
-                  @endif
-                @else
-                  <span class="muted" style="grid-column: span 3">empty slot</span>
-                @endif
-              </div>
-            @endfor
+            @endif
           </div>
 
           <div class="choice" id="choice-{{ $account->id }}">
