@@ -641,6 +641,17 @@
     const pc = await back;
     if (!pc) return;
     toggles(new Set((pc.hidden || []).map((n) => String(n).toLowerCase())));
+    // Running clients: the EVE account each is signed in to (certain). A character here whose client
+    // runs on another EVE account than this account's gets a warning.
+    for (const r of pc.running || []) {
+      const b = [...document.querySelectorAll('.incog-toggle')].find((x) => x.dataset.name.toLowerCase() === String(r.name).toLowerCase());
+      const panel = b?.closest('.panel');
+      if (!panel || !panel.dataset.launcher || panel.dataset.launcher === String(r.user_id)) continue;
+      const warn = document.createElement('div');
+      warn.className = 'chatlog';
+      warn.textContent = `⚠ ${r.name}'s client is signed in to another EVE account (${r.user_id}) than account ${panel.dataset.nick}'s (${panel.dataset.launcher}). Wrong account here, or logged in with the wrong login?`;
+      b.closest('.row').append(warn);
+    }
     const accounts = pc.accounts || [];
 
     // Known characters not yet in their EVE account's place: group them (only SeAT's own ids are sent).
