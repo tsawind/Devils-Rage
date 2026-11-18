@@ -527,7 +527,7 @@
   const answer = () => new Promise((resolve) => {
     const done = (e) => { window.removeEventListener('devils-rage-app:pc-accounts', done); resolve(e.detail || null); };
     window.addEventListener('devils-rage-app:pc-accounts', done);
-    setTimeout(() => { window.removeEventListener('devils-rage-app:pc-accounts', done); resolve(null); }, 4000);
+    setTimeout(() => { window.removeEventListener('devils-rage-app:pc-accounts', done); resolve(null); }, 20000);
   });
   const csrf = document.querySelector('meta[name="csrf-token"]').content;
   const mine = new Set(@json($mineIds));
@@ -659,7 +659,9 @@
     // The rest: incognito, greyed in their account (or under This PC only).
     const unknown = accounts.map((a) => ({ user: String(a.user_id), ids: a.characters.map((c) => c.id).filter((id) => !mine.has(id) && !placed.has(id)) })).filter((a) => a.ids.length);
     if (!unknown.length) return;
-    const nameOf = await names(unknown.flatMap((a) => a.ids));
+    // Names from the app (it asks EVE's public lookup from your PC); this page's own lookup fills any gaps.
+    const nameOf = Object.fromEntries(accounts.flatMap((a) => a.characters.filter((c) => c.name).map((c) => [c.id, c.name])));
+    Object.assign(nameOf, await names(unknown.flatMap((a) => a.ids).filter((id) => !nameOf[id])));
     for (const { user, ids } of unknown) {
       const panel = byLauncher.get(user);
       if (!panel) { pcOnly(user, ids, nameOf); continue; }
