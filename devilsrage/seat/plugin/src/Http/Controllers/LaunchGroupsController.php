@@ -64,6 +64,9 @@ class LaunchGroupsController extends Controller
                 // "29" → client profile settings_29 (how Tsa numbers accounts and profiles).
                 'profile' => self::profileFor((string) $account->nickname),
                 'order' => $index + 1,
+                // Patch 74: the EVE account it is (from the launcher), so the app knows a login
+                // screen's account for certain (its sign-in token says which EVE account).
+                'launcher_user_id' => $account->launcher_user_id === null ? null : (int) $account->launcher_user_id,
                 'characters' => $chars,
             ];
         }
