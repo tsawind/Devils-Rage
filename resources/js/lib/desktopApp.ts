@@ -46,6 +46,24 @@ export function appSignal(what: string): boolean {
 }
 
 /**
+ * Patch 74: tell the app which characters are linked to this login. Only those (and the ones on
+ * your SeAT accounts) are ever named back to the mapper; every other character on the PC stays
+ * incognito in the app. Sent once per distinct list.
+ */
+let lastKnown = '';
+export function tellAppKnownCharacters(characters: { id: number; name: string }[] | null | undefined): void {
+    if (!inDesktopApp() || !Array.isArray(characters) || characters.length === 0) return;
+    const list = characters
+        .filter((character) => character.id > 0 && character.name)
+        .map((character) => `c=${encodeURIComponent(`${character.id}:${character.name}`)}`)
+        .sort()
+        .join('&');
+    if (list === '' || list === lastKnown) return;
+    lastKnown = list;
+    appSignal(`known-characters?${list}`);
+}
+
+/**
  * Patch 47: the app writes the clipboard for us, even while EVE has focus (a browser can only
  * write it from the focused window). Returns false outside the app.
  */

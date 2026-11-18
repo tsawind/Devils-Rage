@@ -7,6 +7,7 @@ import { initializeRouting } from './composables/useRoutingWorker';
 import { preloadSovereigntyData } from './composables/useSovereigntyData';
 import { preloadStaticData } from './composables/useStaticData';
 import { initServerReconnect } from './lib/serverReconnect';
+import { tellAppKnownCharacters } from './lib/desktopApp';
 import { driverFromUrl, driverHeaders, initDriver, initSolo } from './lib/windowDriver';
 
 configureEcho({
@@ -37,6 +38,11 @@ initSolo();
 const driver = login === null ? (driverFromUrl(window.location.href) === null ? null : initDriver(null)) : initDriver(login);
 router.on('before', (event) => {
     Object.assign(event.detail.visit.headers, driverHeaders());
+});
+// Patch 74: the desktop app learns which characters are yours (the rest stay incognito there).
+router.on('navigate', (event) => {
+    const user = (event.detail.page.props as { auth?: { user?: { characters?: { id: number; name: string }[] } | null } }).auth?.user;
+    tellAppKnownCharacters(user?.characters);
 });
 
 void preloadStaticData();
