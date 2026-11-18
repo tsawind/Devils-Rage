@@ -522,7 +522,13 @@
 (() => {
   const app = window.__DEVILS_RAGE_APP__;
   if (!app || !app.capture) return;
-  const bridge = 'http://drcap.localhost';
+  // Asks go to the app like the mapper's (a fake address the app catches); answers come back as an event.
+  const ask = (what) => { try { window.open('https://dr-app.invalid/' + what, '_blank'); } catch (e) {} };
+  const answer = () => new Promise((resolve) => {
+    const done = (e) => { window.removeEventListener('devils-rage-app:pc-accounts', done); resolve(e.detail || null); };
+    window.addEventListener('devils-rage-app:pc-accounts', done);
+    setTimeout(() => { window.removeEventListener('devils-rage-app:pc-accounts', done); resolve(null); }, 4000);
+  });
   const csrf = document.querySelector('meta[name="csrf-token"]').content;
   const mine = new Set(@json($mineIds));
   const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -552,8 +558,10 @@
       b.addEventListener('click', async (e) => {
         e.stopPropagation();
         const on = !b.classList.contains('on');
-        const r = await fetch(bridge + '/incognito-hide', { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify({ name: b.dataset.name, hidden: on }) }).catch(() => null);
-        if (r && r.ok) set(on);
+        const back = answer();
+        ask(`incognito-hide?name=${encodeURIComponent(b.dataset.name)}&hidden=${on ? 1 : 0}`);
+        const pc = await back;
+        if (pc) set((pc.hidden || []).map((n) => String(n).toLowerCase()).includes(b.dataset.name.toLowerCase()));
       });
     });
   }
@@ -627,7 +635,9 @@
   }
 
   (async () => {
-    const pc = await fetch(bridge + '/pc-accounts').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const back = answer();
+    ask('pc-accounts');
+    const pc = await back;
     if (!pc) return;
     toggles(new Set((pc.hidden || []).map((n) => String(n).toLowerCase())));
     const accounts = pc.accounts || [];
