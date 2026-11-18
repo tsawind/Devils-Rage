@@ -236,6 +236,8 @@ class AccountsController extends Controller
             // Patch 74: in the app, characters on this PC that SeAT doesn't know stay there
             // (incognito); only these may be sent back for grouping by EVE account.
             'mineIds' => array_map('intval', $user->associatedCharacterIds()),
+            // Patch 74: what each character trains, its implants and remap (hover / right-click a portrait).
+            'sheet' => app(\DevilsRage\Seat\Services\FarmOverview::class)->trainingSheet(array_map('intval', $assigned)),
         ]);
     }
 

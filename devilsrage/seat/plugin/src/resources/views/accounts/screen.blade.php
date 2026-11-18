@@ -170,6 +170,21 @@
   #pc-only { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
   #pc-only h4 { margin: 4px 0 0; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
   .acct.pc { border-style: dashed; opacity: .8; }
+  /* Patch 74: the account list scrolls on its own; training portraits pulse; options. */
+  .grid > div:first-child { position: sticky; top: 8px; }
+  #acct-list { max-height: calc(100vh - 150px); overflow-y: auto; padding-right: 4px; scrollbar-width: thin; scrollbar-color: #3a3a44 transparent; }
+  .opts { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin: -6px 0 6px; }
+  .opts input { accent-color: var(--red-hi); vertical-align: -2px; }
+  .hide-alpha .acct.is-alpha { display: none; }
+  .login-name { color: var(--muted); font-weight: 400; font-size: 11px; margin-left: 5px; display: none; }
+  .show-login .login-name { display: inline; }
+  @keyframes dr-train { 0%, 100% { box-shadow: 0 0 0 0 rgba(63, 191, 95, .0); } 50% { box-shadow: 0 0 0 3px rgba(63, 191, 95, .55); } }
+  .pic.training { animation: dr-train 2.4s ease-in-out infinite; }
+  .sheet-pop { position: fixed; z-index: 60; background: var(--card2); border: 1px solid #3a3a44; border-radius: 8px; padding: 8px 10px; font-size: 12px; max-width: 320px; box-shadow: 0 6px 18px rgba(0,0,0,.5); pointer-events: none; }
+  .sheet-pop.menu { pointer-events: auto; }
+  .sheet-pop b { color: var(--text); }
+  .sheet-pop .ok { color: var(--ok); } .sheet-pop .bad { color: var(--warn); }
+  .charinfo { grid-column: 3 / -1; font-size: 11px; color: var(--muted); margin-top: -2px; }
   .errors { background: #3a1416; color: var(--bad); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .row { grid-template-columns: 18px 30px minmax(0,1fr) 90px 80px; } .row select, .row .x { display: none; } }
 </style>
@@ -192,6 +207,10 @@
     <a class="btn" href="{{ route('devilsrage.accounts.index') }}" title="The full page in SeAT: launch groups, Omega, MCT, PLEX">More in SeAT</a>
     <button class="btn" type="button" id="next-account" title="Logs you out of EVE's login page, so the next login asks for the next account's username and password">Next EVE account</button>
     <button class="btn" type="button" id="new-account-btn">+ New account</button>
+  </div>
+  <div class="opts">
+    <label title="Hide accounts that are Alpha (or whose Omega ended)"><input type="checkbox" id="opt-alpha"> Hide Alpha accounts</label>
+    <label title="In the app: show each account's EVE login name next to its number (from its last login on this PC; this PC only)"><input type="checkbox" id="opt-login"> Show EVE login names</label>
   </div>
 
   @if($errors->any())
@@ -247,11 +266,14 @@
                 default => ['Ω ?', 'unknown', 'No Omega date entered (Omega, MCT, PLEX)'],
             };
           @endphp
-          <div class="acct {{ $todo ? 'todo' : '' }}" draggable="true" data-id="{{ $account->id }}" data-launcher="{{ $account->launcher_user_id }}" title="Drag ⋮⋮ to change the order{{ $todo ? ' · '.(count($card['steps']) ? count($card['steps']).' to fix' : 'empty') : '' }}">
+          <div class="acct {{ $todo ? 'todo' : '' }} {{ in_array($tileCls, ['alpha', 'ended'], true) ? 'is-alpha' : '' }}" draggable="true" data-id="{{ $account->id }}" data-launcher="{{ $account->launcher_user_id }}" title="Drag ⋮⋮ to change the order{{ $todo ? ' · '.(count($card['steps']) ? count($card['steps']).' to fix' : 'empty') : '' }}">
             <span class="grip">⋮⋮</span>
             @for($i = 0; $i < $maxCharacters; $i++)
               @if(isset($account->characters[$i]))
-                <img class="pic" src="https://images.evetech.net/characters/{{ $account->characters[$i]->character_id }}/portrait?size=64" alt="" loading="lazy">
+                @php
+                  $tileSheet = $sheet[(int) $account->characters[$i]->character_id] ?? null;
+                @endphp
+                <img class="pic {{ ($tileSheet['training'] ?? null) ? 'training' : '' }}" data-sheet='@json($tileSheet)' data-name="{{ $account->characters[$i]->displayName() }}" src="https://images.evetech.net/characters/{{ $account->characters[$i]->character_id }}/portrait?size=64" alt="" loading="lazy">
               @else
                 <span class="pic empty"></span>
               @endif
@@ -322,7 +344,7 @@
             </div>
           </form>
 
-          <div class="hint"><span>🔑 Login hint</span><input type="text" data-hint="{{ $account->id }}" maxlength="80" placeholder="e.g. tsawind10 / gmail"><span>saved on this PC only</span></div>
+          <div class="hint"><span>🔑 Login hint</span><input type="text" data-hint="{{ $account->id }}" maxlength="80" placeholder="e.g. the account's e-mail, a password hint"><span>saved on this PC only</span></div>
 
           <div class="chars" data-account="{{ $account->id }}">
             @foreach($card['rows'] as $row)
@@ -334,7 +356,10 @@
               @endphp
               <div class="row" draggable="true" data-id="{{ $link->id }}" data-char="{{ $link->character_id }}">
                 <span class="grip">⋮⋮</span>
-                <img class="pic" src="https://images.evetech.net/characters/{{ $link->character_id }}/portrait?size=64" alt="" loading="lazy">
+                @php
+                  $rowSheet = $sheet[(int) $link->character_id] ?? null;
+                @endphp
+                <img class="pic {{ ($rowSheet['training'] ?? null) ? 'training' : '' }}" data-sheet='@json($rowSheet)' data-name="{{ $link->displayName() }}" src="https://images.evetech.net/characters/{{ $link->character_id }}/portrait?size=64" alt="" loading="lazy">
                 <span class="cn" title="{{ $link->displayName() }}">{{ $link->displayName() }} <button class="incog-toggle" type="button" data-name="{{ $link->displayName() }}" hidden title="This PC only: hide it from the mapper and SeAT features in the app (spy alts)">🕶</button></span>
                 @if(in_array($st['seat'], ['ok', 'external'], true))
                   <span class="chip {{ $lab[1] }}" title="{{ $lab[2] }}">{{ $lab[0] }}</span>
@@ -657,8 +682,33 @@
       const row = document.createElement('div');
       row.className = 'row incog';
       const last = c.last ? new Date(c.last).toISOString().slice(0, 10) : '?';
-      row.innerHTML = `<span></span><img class="pic" src="${portrait(c.id)}" alt="" loading="lazy"><span class="cn">${esc(c.name || 'Character ' + c.id)} <span class="muted" style="font-size: 11px">· last played ${last} · ${(c.profiles || []).map((p) => 'settings_' + esc(p)).join(', ')}</span></span><span class="incog-box"><button class="btn sm" type="button" title="Take it off this list; its files stay">Hide</button><button class="btn sm" type="button" title="Move its settings files out of the profile folders (into the archive folder beside them; nothing is deleted)">Remove files</button></span>`;
-      const [hide, remove] = row.querySelectorAll('button');
+      row.innerHTML = `<span></span><img class="pic" src="${portrait(c.id)}" alt="" loading="lazy"><span class="cn">${esc(c.name || 'Character ' + c.id)} <span class="muted" style="font-size: 11px">· last played ${last} · ${(c.profiles || []).map((p) => 'settings_' + esc(p)).join(', ')}</span></span><span class="incog-box"><button class="btn sm" type="button" title="Take it off this list; its files stay">Hide</button><button class="btn sm" type="button" title="Recommended: move its settings files out of the profile folders into the archive folder beside them (nothing is deleted)">Archive files</button><button class="btn sm" type="button" title="Delete its settings files for good (asks twice)">Delete</button><button class="btn sm" type="button" title="Show its settings file in File Explorer">📂</button></span>`;
+      const [hide, remove, del, open] = row.querySelectorAll('button');
+      open.addEventListener('click', () => ask(`pc-open-folder?id=${c.id}`));
+      del.addEventListener('click', () => {
+        const box = del.parentNode;
+        const kids = [...box.childNodes];
+        const back = () => { box.innerHTML = ''; kids.forEach((k) => box.append(k)); };
+        box.innerHTML = `<span>Delete ${esc(c.name || 'its')} settings files for good? Archive keeps them instead.</span> <button class="btn sm" type="button">Delete</button> <button class="btn sm p" type="button">Cancel</button>`;
+        const [yes1, no1] = box.querySelectorAll('button');
+        no1.addEventListener('click', back);
+        yes1.addEventListener('click', () => {
+          box.innerHTML = `<span><b>Last check:</b> ${esc(c.name || 'this character')}'s window layout and settings are gone for good.</span> <button class="btn sm" type="button">Yes, delete</button> <button class="btn sm p" type="button">Cancel</button>`;
+          const [yes2, no2] = box.querySelectorAll('button');
+          no2.addEventListener('click', back);
+          yes2.addEventListener('click', () => {
+            box.textContent = 'Deleting…';
+            const done = (e) => {
+              if (String(e.detail?.id) !== String(c.id)) return;
+              window.removeEventListener('devils-rage-app:pc-archived', done);
+              box.textContent = e.detail.said || '';
+              if (/^(Moved|Deleted)/.test(box.textContent)) setTimeout(() => row.remove(), 2500);
+            };
+            window.addEventListener('devils-rage-app:pc-archived', done);
+            ask(`pc-other-delete?id=${c.id}&name=${encodeURIComponent(c.name || '')}`);
+          });
+        });
+      });
       hide.addEventListener('click', () => { ask(`pc-other-hide?id=${c.id}&hidden=1`); row.remove(); });
       remove.addEventListener('click', () => {
         const box = remove.parentNode;
@@ -698,15 +748,22 @@
     for (const panel of panels) {
       const i = panel.dataset.launcher ? info[panel.dataset.launcher] : null;
       if (!i) continue;
-      const hint = panel.querySelector('input[data-hint]');
-      if (hint && !hint.value && i.login) {
-        hint.value = i.login;
-        try { localStorage.setItem('dr-login-hint-' + hint.dataset.hint, i.login); } catch (e) {}
+      if (i.login) {
+        const nick = document.querySelector(`.acct[data-id="${panel.dataset.id}"] .nick b`);
+        const head = panel.querySelector('.phead form');
+        for (const where of [nick, head]) {
+          if (!where || where.querySelector('.login-name')) continue;
+          const l = document.createElement('span');
+          l.className = 'login-name';
+          l.textContent = i.login;
+          l.title = 'EVE login name (from its last login on this PC; only this PC sees it)';
+          where.append(l);
+        }
       }
       const om = document.querySelector(`.acct[data-id="${panel.dataset.id}"] .om`);
       const tier = String(i.tier || '').toLowerCase();
       const when = i.at ? ' (EVE said so at its last login, ' + new Date(i.at * 1000).toISOString().slice(0, 10) + ')' : ' (EVE said so at its last login)';
-      if (om && tier.includes('alpha')) { om.textContent = 'α'; om.className = 'om alpha'; om.title = 'Alpha' + when; }
+      if (om && tier.includes('alpha')) { om.textContent = 'α'; om.className = 'om alpha'; om.title = 'Alpha' + when; om.closest('.acct')?.classList.add('is-alpha'); }
       else if (om && tier.includes('omega') && (om.textContent.trim() === 'Ω ?' || om.textContent.trim() === '')) { om.textContent = 'Ω'; om.className = 'om om'; om.title = 'Omega' + when + '; enter its end date under Omega, MCT, PLEX for the days left'; }
     }
     // Running clients: the EVE account each is signed in to (certain). A character here whose client
@@ -753,6 +810,17 @@
       if (r && (r.moved > 0 || r.created > 0)) { location.reload(); return; }
     }
 
+    // Every character here: when it was last played on this PC and with which profile folders.
+    for (const [id, c] of Object.entries(pc.chars || {})) {
+      const row = document.querySelector(`.row[data-char="${id}"]`);
+      if (!row || row.querySelector('.charinfo')) continue;
+      const line = document.createElement('div');
+      line.className = 'charinfo';
+      line.textContent = `last played here ${c.last ? new Date(c.last).toISOString().slice(0, 10) : '?'} · ${(c.profiles || []).map((p) => 'settings_' + p).join(', ')}`;
+      line.title = 'From EVE\'s settings files on this PC';
+      const pills = row.querySelector('.pills');
+      (pills || row.querySelector('.cn')).after(line);
+    }
     otherChars(pc.others || []);
 
     // The rest: incognito, greyed in their account (or under This PC only).
@@ -773,6 +841,71 @@
       });
     }
   })();
+})();
+
+// Options (remembered on this PC).
+(() => {
+  const opt = (id, key, apply) => {
+    const box = document.getElementById(id);
+    let on = false;
+    try { on = localStorage.getItem(key) === '1'; } catch (e) {}
+    box.checked = on;
+    apply(on);
+    box.addEventListener('change', () => { try { localStorage.setItem(key, box.checked ? '1' : '0'); } catch (e) {} apply(box.checked); });
+  };
+  opt('opt-alpha', 'dr-hide-alpha', (on) => document.body.classList.toggle('hide-alpha', on));
+  opt('opt-login', 'dr-show-login', (on) => document.body.classList.toggle('show-login', on));
+  if (!window.__DEVILS_RAGE_APP__) document.getElementById('opt-login').closest('label').hidden = true;
+})();
+
+// A portrait: hover for what it trains, implants and remap; right-click keeps it open.
+(() => {
+  const ATTR = { Per: 'Perception', Wil: 'Willpower', Int: 'Intelligence', Mem: 'Memory', Cha: 'Charisma' };
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const roman = ['', 'I', 'II', 'III', 'IV', 'V'];
+  const left = (iso) => {
+    const ms = new Date(iso) - Date.now();
+    if (!(ms > 0)) return 'now';
+    const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4);
+    return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
+  };
+  const html = (name, s) => {
+    if (!s) return `<b>${esc(name)}</b><br><span class="muted">Nothing from SeAT yet.</span>`;
+    const t = s.training;
+    const lines = [`<b>${esc(name)}</b>`];
+    lines.push(t ? `Training <b>${esc(t.skill)} ${roman[t.level] || t.level}</b>, ${left(t.ends)} left<br><span class="muted">Queue ends in ${left(t.queue_ends)}</span>` : '<span class="bad">Not training</span>');
+    const imp = Object.entries(s.implants || {});
+    const set = imp.length ? Math.min(...imp.map(([, v]) => v)) : 0;
+    lines.push(imp.length ? `Implants: ${imp.map(([k, v]) => `${k} +${v}`).join(', ')}${imp.length === 5 ? ` <span class="ok">(full +${set} set)</span>` : ''}` : '<span class="muted">No attribute implants</span>');
+    if (s.remap === 'even') lines.push('Attributes: not remapped (even)');
+    else if (s.remap) lines.push(`Mapped for <b>${s.remap.split('/').map((a) => ATTR[a] || a).join(' / ')}</b>` + (s.remap_fits === true ? ` <span class="ok">✓ fits ${esc(t?.skill || '')}</span>` : s.remap_fits === false ? ` <span class="bad">⚠ ${esc(t?.skill || 'this skill')} wants ${esc(t?.wants || '?')}</span>` : ''));
+    const remaps = [];
+    if (s.bonus_remaps) remaps.push(`${s.bonus_remaps} bonus remap${s.bonus_remaps === 1 ? '' : 's'}`);
+    if (s.remap_ready) remaps.push(new Date(s.remap_ready) <= new Date() ? 'yearly remap ready' : `yearly remap in ${left(s.remap_ready)}`);
+    if (remaps.length) lines.push(`<span class="muted">${remaps.join(' · ')}</span>`);
+    return lines.join('<br>');
+  };
+  let pop = null;
+  const close = () => { pop?.remove(); pop = null; };
+  const show = (img, menu) => {
+    close();
+    let sheet = null;
+    try { sheet = JSON.parse(img.dataset.sheet || 'null'); } catch (e) {}
+    pop = document.createElement('div');
+    pop.className = 'sheet-pop' + (menu ? ' menu' : '');
+    pop.innerHTML = html(img.dataset.name || '', sheet);
+    document.body.append(pop);
+    const r = img.getBoundingClientRect();
+    pop.style.left = Math.min(window.innerWidth - pop.offsetWidth - 8, r.right + 8) + 'px';
+    pop.style.top = Math.min(window.innerHeight - pop.offsetHeight - 8, r.top) + 'px';
+  };
+  document.querySelectorAll('img.pic[data-sheet]').forEach((img) => {
+    img.addEventListener('mouseenter', () => { if (!pop?.classList.contains('menu')) show(img, false); });
+    img.addEventListener('mouseleave', () => { if (!pop?.classList.contains('menu')) close(); });
+    img.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); show(img, true); });
+  });
+  document.addEventListener('click', (e) => { if (pop && !pop.contains(e.target)) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 })();
 
 // Launch groups on a character: only the ones it's in; + shows the rest.

@@ -109,6 +109,104 @@ final class FarmOverview
     }
 
     /**
+     * Patch 74: for Your accounts: what each character trains (and when its queue ends), its
+     * attribute implants, the two attributes it's mapped for (implants taken off), whether that
+     * fits the skill it's training now, and its remaps.
+     *
+     * @param  list<int>  $characterIds
+     * @return array<int, array<string, mixed>>
+     */
+    public function trainingSheet(array $characterIds): array
+    {
+        if ($characterIds === []) {
+            return [];
+        }
+        $attributes = CharacterAttribute::query()->whereIn('character_id', $characterIds)->get()->keyBy('character_id');
+        $implants = $this->implantBonuses($characterIds);
+        $training = $this->trainingWithSkill($characterIds);
+        $skillAttrs = DB::table('dgmTypeAttributes')
+            ->whereIn('typeID', array_values(array_filter(array_map(fn (array $t): int => $t['skill_id'], $training))))
+            ->whereIn('attributeID', [180, 181])
+            ->get(['typeID', 'attributeID', 'valueInt', 'valueFloat'])
+            ->groupBy('typeID');
+        $shortOf = [164 => 'Cha', 165 => 'Int', 166 => 'Mem', 167 => 'Per', 168 => 'Wil'];
+
+        $result = [];
+        foreach ($characterIds as $characterId) {
+            $bonus = $implants[$characterId] ?? [];
+            $attr = $attributes->get($characterId);
+            $remap = $this->remap($attr, $bonus);
+            $now = $training[$characterId] ?? null;
+            $fits = null;
+            if ($now !== null && $remap !== null && $remap !== 'even') {
+                $wanted = [];
+                foreach ($skillAttrs->get($now['skill_id']) ?? [] as $row) {
+                    $wanted[(int) $row->attributeID] = $shortOf[(int) ($row->valueInt ?? $row->valueFloat)] ?? null;
+                }
+                $pair = array_filter([$wanted[180] ?? null, $wanted[181] ?? null]);
+                $mapped = explode('/', $remap);
+                $fits = $pair !== [] && array_diff($pair, $mapped) === [];
+                $now['wants'] = implode('/', $pair);
+            }
+            $base = [];
+            if ($attr !== null) {
+                foreach (self::COLUMNS as $short => $column) {
+                    $base[$short] = (int) $attr->{$column} - ($bonus[$short] ?? 0);
+                }
+            }
+            $result[$characterId] = [
+                'training' => $now === null ? null : [
+                    'skill' => $now['skill'],
+                    'level' => $now['level'],
+                    'ends' => $now['ends']->toIso8601String(),
+                    'queue_ends' => $now['queue_ends']->toIso8601String(),
+                    'wants' => $now['wants'] ?? null,
+                ],
+                'implants' => $bonus,
+                'base' => $base,
+                'remap' => $remap,
+                'remap_fits' => $fits,
+                'bonus_remaps' => $attr === null ? null : (int) ($attr->bonus_remaps ?? 0),
+                'remap_ready' => $attr?->accrued_remap_cooldown_date === null ? null : Carbon::parse($attr->accrued_remap_cooldown_date)->toIso8601String(),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * `training` plus the skill's id.
+     *
+     * @param  list<int>  $characterIds
+     * @return array<int, array{skill: string, skill_id: int, level: int, ends: Carbon, queue_ends: Carbon}>
+     */
+    private function trainingWithSkill(array $characterIds): array
+    {
+        $now = Carbon::now();
+        $queue = CharacterSkillQueue::query()
+            ->whereIn('character_id', $characterIds)
+            ->where('finish_date', '>', $now)
+            ->orderBy('queue_position')
+            ->get()
+            ->groupBy('character_id');
+        $names = InvType::query()->whereIn('typeID', $queue->flatten()->pluck('skill_id')->unique()->all())->pluck('typeName', 'typeID');
+
+        $result = [];
+        foreach ($queue as $characterId => $entries) {
+            $current = $entries->first();
+            $result[(int) $characterId] = [
+                'skill' => (string) ($names[$current->skill_id] ?? $current->skill_id),
+                'skill_id' => (int) $current->skill_id,
+                'level' => (int) $current->finished_level,
+                'ends' => Carbon::parse($current->finish_date),
+                'queue_ends' => Carbon::parse($entries->max('finish_date')),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
      * Skills nobody should extract: anything a seat-fitting fit or a corp skill plan
      * needs (with prerequisites), plus the keep list. Cached for an hour.
      *
