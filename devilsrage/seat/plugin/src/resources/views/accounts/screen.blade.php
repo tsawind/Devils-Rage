@@ -635,12 +635,62 @@
     });
   }
 
+  // Every other character with settings on this PC that no account list has (old, deleted,
+  // never launched through the launcher here). Hide takes it off this list (this PC only).
+  function otherChars(list) {
+    const rows = list.filter((c) => !placed.has(Number(c.id)));
+    if (!rows.length) return;
+    const holder = document.getElementById('pc-only');
+    if (holder.hidden) { holder.hidden = false; holder.innerHTML = '<h4 title="Only this PC sees these">This PC only</h4>'; }
+    const tile = document.createElement('div');
+    tile.className = 'acct pc';
+    tile.dataset.id = 'pc-others';
+    tile.innerHTML = `<span class="grip"> </span>${rows.slice(0, 3).map((c) => `<img class="pic ghost" src="${portrait(c.id)}" alt="">`).join('')}<span class="nick"><b>${rows.length}</b><br><span class="om unknown">no account</span></span>`;
+    tile.title = 'Characters with settings on this PC whose EVE account isn\'t known (old, deleted, or not launched through the launcher here). Log one in and it goes to its account.';
+    holder.append(tile);
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+    panel.dataset.id = 'pc-others';
+    panel.innerHTML = `<div class="phead"><span class="name">Other characters on this PC</span><span class="muted">${rows.length} · account not known · only this PC sees them</span></div><div class="chars"></div><div class="foot"><span class="muted" style="font-size: 12px">From EVE's profile folders. Log a character in (any way) and the app learns its EVE account for certain, then it moves to that account. Hide takes one off this list on this PC; its settings files stay (the profile clean-up will archive old ones).</span></div>`;
+    const box = panel.querySelector('.chars');
+    for (const c of rows) {
+      const row = document.createElement('div');
+      row.className = 'row incog';
+      const last = c.last ? new Date(c.last).toISOString().slice(0, 10) : '?';
+      row.innerHTML = `<span></span><img class="pic" src="${portrait(c.id)}" alt="" loading="lazy"><span class="cn">${esc(c.name || 'Character ' + c.id)} <span class="muted" style="font-size: 11px">· last played ${last} · ${(c.profiles || []).map((p) => 'settings_' + esc(p)).join(', ')}</span></span><span class="incog-box"><button class="btn sm" type="button">Hide</button></span>`;
+      row.querySelector('button').addEventListener('click', () => { ask(`pc-other-hide?id=${c.id}&hidden=1`); row.remove(); });
+      box.append(row);
+    }
+    panels[0]?.parentNode.append(panel);
+    tile.addEventListener('click', () => {
+      document.querySelectorAll('.acct').forEach((a) => a.classList.toggle('sel', a === tile));
+      document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('show', p === panel));
+    });
+  }
+
   (async () => {
     const back = answer();
     ask('pc-accounts');
     const pc = await back;
     if (!pc) return;
     toggles(new Set((pc.hidden || []).map((n) => String(n).toLowerCase())));
+    // What each EVE account's sign-in token said: its login name (the login hint, when empty;
+    // kept on this PC only) and Omega / Alpha.
+    const info = pc.info || {};
+    for (const panel of panels) {
+      const i = panel.dataset.launcher ? info[panel.dataset.launcher] : null;
+      if (!i) continue;
+      const hint = panel.querySelector('input[data-hint]');
+      if (hint && !hint.value && i.login) {
+        hint.value = i.login;
+        try { localStorage.setItem('dr-login-hint-' + hint.dataset.hint, i.login); } catch (e) {}
+      }
+      const om = document.querySelector(`.acct[data-id="${panel.dataset.id}"] .om`);
+      const tier = String(i.tier || '').toLowerCase();
+      const when = i.at ? ' (EVE said so at its last login, ' + new Date(i.at * 1000).toISOString().slice(0, 10) + ')' : ' (EVE said so at its last login)';
+      if (om && tier.includes('alpha')) { om.textContent = 'α'; om.className = 'om alpha'; om.title = 'Alpha' + when; }
+      else if (om && tier.includes('omega') && (om.textContent.trim() === 'Ω ?' || om.textContent.trim() === '')) { om.textContent = 'Ω'; om.className = 'om om'; om.title = 'Omega' + when + '; enter its end date under Omega, MCT, PLEX for the days left'; }
+    }
     // Running clients: the EVE account each is signed in to (certain). A character here whose client
     // runs on another EVE account than this account's gets a warning.
     for (const r of pc.running || []) {
@@ -671,6 +721,8 @@
       const r = await fetch(@json(route('devilsrage.accounts.launcher')), { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf }, body: JSON.stringify({ accounts: wanted }) }).then((x) => x.json()).catch(() => null);
       if (r && (r.moved > 0 || r.created > 0)) { location.reload(); return; }
     }
+
+    otherChars(pc.others || []);
 
     // The rest: incognito, greyed in their account (or under This PC only).
     const unknown = accounts.map((a) => ({ account: a, user: String(a.user_id), ids: a.characters.map((c) => c.id).filter((id) => !mine.has(id) && !placed.has(id)) })).filter((a) => a.ids.length);
