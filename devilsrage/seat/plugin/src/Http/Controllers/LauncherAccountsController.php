@@ -72,6 +72,6 @@ class LauncherAccountsController extends Controller
             }
         });
 
-        return response()->json(['message' => "Your accounts: {$moved} characters placed, {$created} new accounts (rename them on Your accounts)."]);
+        return response()->json(['message' => "Your accounts: {$moved} characters placed, {$created} new accounts (rename them on Your accounts).", 'moved' => $moved, 'created' => $created]);
     }
 }

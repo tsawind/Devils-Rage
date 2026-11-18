@@ -146,6 +146,30 @@
   .confirm .box { background: var(--card2); border: 1px solid #3a3a44; border-radius: 10px; padding: 16px 18px; max-width: 420px; }
   .confirm .box p { margin: 0 0 12px; }
   .confirm .box div { display: flex; gap: 8px; justify-content: flex-end; }
+  /* Patch 74: Ω / α on the tiles, a red dot for something to fix, incognito characters greyed. */
+  .acct { border-left-color: #2f2f36; }
+  .acct.todo { border-left-color: #2f2f36; }
+  .acct.sel { border-left-color: var(--red-hi); }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--red-hi); margin-right: 5px; vertical-align: 2px; }
+  .om { font-size: 11px; font-weight: 600; }
+  .om.om { color: #e8c35a; } .om.soon { color: var(--warn); } .om.alpha { color: #9aa4b5; } .om.ended { color: var(--bad); } .om.unknown { color: var(--muted); font-weight: 400; }
+  .pills label:not(:has(input:checked)) { display: none; }
+  .pills.open label { display: inline; }
+  .pills .more { background: none; border: 1px dashed #3a3a44; border-radius: 999px; color: var(--muted); font-size: 11px; padding: 0 7px; cursor: pointer; order: 99; }
+  .pills .more:hover { color: var(--text); border-color: #5a5a66; }
+  .pills { display: flex; }
+  .incog-toggle { background: none; border: 0; padding: 0 2px; cursor: pointer; opacity: .35; font-size: 12px; }
+  .incog-toggle:hover, .incog-toggle.on { opacity: 1; }
+  .row.hidden-pc .cn { color: var(--muted); }
+  .row.incog { opacity: .75; }
+  .row.incog .pic { filter: grayscale(1); opacity: .6; }
+  .row.incog .cn { color: var(--muted); }
+  .incog-box { grid-column: 4 / -1; display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+  .incog-box input { accent-color: #8a8a92; }
+  .pic.ghost { filter: grayscale(1); opacity: .5; }
+  #pc-only { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  #pc-only h4 { margin: 4px 0 0; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .acct.pc { border-style: dashed; opacity: .8; }
   .errors { background: #3a1416; color: var(--bad); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .row { grid-template-columns: 18px 30px minmax(0,1fr) 90px 80px; } .row select, .row .x { display: none; } }
 </style>
@@ -212,7 +236,18 @@
             $account = $card['account'];
             $todo = count($card['steps']) + ($account->characters->count() === 0 ? 1 : 0);
           @endphp
-          <div class="acct {{ $todo ? 'todo' : '' }}" draggable="true" data-id="{{ $account->id }}" title="Drag ⋮⋮ to change the order">
+          @php
+            $tileOm = $omega[$account->id] ?? null;
+            [$tileSym, $tileCls, $tileTip] = match (true) {
+                $tileOm === null => ['', '', ''],
+                (bool) $tileOm['alpha'] => ['α', 'alpha', 'Alpha (a character trains at Alpha speed)'],
+                $tileOm['state'] === 'expired' => ['α', 'ended', 'Omega ended '.$tileOm['until']->format('Y-m-d')],
+                $tileOm['state'] === 'auto' => ['Ω auto', 'om', 'Omega renews by itself'],
+                in_array($tileOm['state'], ['ok', 'soon'], true) => ['Ω '.$tileOm['days_left'].'d', $tileOm['state'] === 'soon' ? 'soon' : 'om', 'Omega until '.$tileOm['until']->format('Y-m-d')],
+                default => ['Ω ?', 'unknown', 'No Omega date entered (Omega, MCT, PLEX)'],
+            };
+          @endphp
+          <div class="acct {{ $todo ? 'todo' : '' }}" draggable="true" data-id="{{ $account->id }}" data-launcher="{{ $account->launcher_user_id }}" title="Drag ⋮⋮ to change the order{{ $todo ? ' · '.(count($card['steps']) ? count($card['steps']).' to fix' : 'empty') : '' }}">
             <span class="grip">⋮⋮</span>
             @for($i = 0; $i < $maxCharacters; $i++)
               @if(isset($account->characters[$i]))
@@ -221,9 +256,11 @@
                 <span class="pic empty"></span>
               @endif
             @endfor
-            <span class="nick"><b>{{ $account->nickname }}</b><br><span style="font-size: 11px; color: {{ $todo ? 'var(--warn)' : 'var(--ok)' }}">{{ $todo ? (count($card['steps']) ? count($card['steps']).' to fix' : 'empty') : '✓' }}</span></span>
+            <span class="nick"><b>@if($todo)<i class="dot" title="{{ count($card['steps']) ? count($card['steps']).' to fix' : 'empty' }}"></i>@endif
+              {{ $account->nickname }}</b><br><span class="om {{ $tileCls }}" title="{{ $tileTip }}">{{ $tileSym }}</span></span>
           </div>
         @endforeach
+        <div id="pc-only" hidden></div>
         @if($unassigned->isNotEmpty())
           <div class="muted" style="font-size: 12px; margin-top: 6px">Not in an account: {{ $unassigned->pluck('name')->implode(', ') }}</div>
         @endif
@@ -242,7 +279,7 @@
           $account = $card['account'];
           $om = $omega[$account->id] ?? null;
         @endphp
-        <div class="panel" id="panel-{{ $account->id }}" data-id="{{ $account->id }}" data-steps='@json($card['steps'])'>
+        <div class="panel" id="panel-{{ $account->id }}" data-id="{{ $account->id }}" data-launcher="{{ $account->launcher_user_id }}" data-nick="{{ $account->nickname }}" data-free="{{ $maxCharacters - count($card['rows']) }}" data-external="{{ route('devilsrage.accounts.characters.external', $account) }}" data-steps='@json($card['steps'])'>
           <div class="phead">
             <form method="post" action="{{ route('devilsrage.accounts.rename', $account) }}" style="display: flex; gap: 6px; align-items: center">
               @csrf
@@ -295,10 +332,10 @@
                 $lab = $labels[$st['seat']] ?? $labels['missing'];
                 $corpPick = $link->launchGroups->firstWhere('locked', true);
               @endphp
-              <div class="row" draggable="true" data-id="{{ $link->id }}">
+              <div class="row" draggable="true" data-id="{{ $link->id }}" data-char="{{ $link->character_id }}">
                 <span class="grip">⋮⋮</span>
                 <img class="pic" src="https://images.evetech.net/characters/{{ $link->character_id }}/portrait?size=64" alt="" loading="lazy">
-                <span class="cn" title="{{ $link->displayName() }}">{{ $link->displayName() }}</span>
+                <span class="cn" title="{{ $link->displayName() }}">{{ $link->displayName() }} <button class="incog-toggle" type="button" data-name="{{ $link->displayName() }}" hidden title="This PC only: hide it from the mapper and SeAT features in the app (spy alts)">🕶</button></span>
                 @if(in_array($st['seat'], ['ok', 'external'], true))
                   <span class="chip {{ $lab[1] }}" title="{{ $lab[2] }}">{{ $lab[0] }}</span>
                 @elseif($st['seat'] === 'public')
@@ -332,8 +369,9 @@
                   @php
                     $ticked = $link->launchGroups->pluck('id')->all();
                   @endphp
-                  <form class="pills" method="post" action="{{ route('devilsrage.accounts.characters.groups', $link) }}" title="Your own launch groups (only you see them)">
+                  <form class="pills" method="post" action="{{ route('devilsrage.accounts.characters.groups', $link) }}" title="Launch groups this character is in. + shows the rest.">
                     @csrf
+                    <button class="more" type="button" title="Show every launch group to tick">+</button>
                     @foreach($ownGroups as $group)
                       <label class="{{ $group->user_id === null ? 'corp' : '' }}"><input type="checkbox" name="groups[]" value="{{ $group->id }}" @checked(in_array($group->id, $ticked, true)) onchange="this.form.submit()"><span>{{ $group->user_id === null ? '★ ' : '' }}{{ $group->name }}</span></label>
                     @endforeach
@@ -344,19 +382,23 @@
                 @endif
               </div>
             @endforeach
-            @for($slot = count($card['rows']); $slot < $maxCharacters; $slot++)
-              <div class="row">
+            @if(count($card['rows']) < $maxCharacters)
+              <div class="row addrow">
                 <span></span><span class="pic empty"></span>
-                @if($slot === count($card['rows']))
-                  <span class="add" data-choice="{{ $account->id }}" style="grid-column: span 3">+ Add a character</span>
-                  @if($unassigned->isNotEmpty())
-                    <form method="post" action="{{ route('devilsrage.accounts.characters.add', $account) }}" style="grid-column: span 2; display: flex; gap: 4px">
-                      @csrf
-                      <select class="grp" name="character_id" aria-label="Character already on SeAT" onchange="if (this.value) this.form.submit()">
-                        <option value="">or one already on SeAT…</option>
-                        @foreach($unassigned as $character)
-                          <option value="{{ $character->character_id }}">{{ $character->name }}</option>
-                        @endforeach
+                <span class="add" data-choice="{{ $account->id }}" style="grid-column: span 3">+ Add a character <span class="muted">({{ $maxCharacters - count($card['rows']) }} free)</span></span>
+                @if($unassigned->isNotEmpty())
+                  <form method="post" action="{{ route('devilsrage.accounts.characters.add', $account) }}" style="grid-column: span 2; display: flex; gap: 4px">
+                    @csrf
+                    <select class="grp" name="character_id" aria-label="Character already on SeAT" onchange="if (this.value) this.form.submit()">
+                      <option value="">or one already on SeAT…</option>
+                      @foreach($unassigned as $character)
+                        <option value="{{ $character->character_id }}">{{ $character->name }}</option>
+                      @endforeach
+                    </select>
+                  </form>
+                @endif
+              </div>
+            @endifeach
                       </select>
                     </form>
                   @endif
@@ -478,6 +520,162 @@
   // From app dev.71 the app reads them itself when this page opens; this is only the old way.
   sync().then(offerImport).catch(() => said(''));
 })();
+</script>
+<script>
+// Patch 74: in the desktop app, Your accounts also shows what's on this PC. The EVE launcher's
+// logs say which characters sit on which EVE account: characters SeAT knows are put into their
+// account by themselves; the rest (spies, extra alts) show greyed in that account, incognito:
+// the app keeps them on this PC and this page never sends them anywhere unless you untick
+// Incognito (then it goes on SeAT by name, public info only).
+(() => {
+  const app = window.__DEVILS_RAGE_APP__;
+  if (!app || !app.capture) return;
+  const bridge = 'http://drcap.localhost';
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  const mine = new Set(@json($mineIds));
+  const esc = (t) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const panels = [...document.querySelectorAll('.panel[data-launcher]')];
+  const placed = new Set([...document.querySelectorAll('.row[data-char]')].map((r) => Number(r.dataset.char)));
+  const portrait = (id) => `https://images.evetech.net/characters/${id}/portrait?size=64`;
+
+  async function names(ids) {
+    if (!ids.length) return {};
+    try {
+      const r = await fetch('https://esi.evetech.net/latest/universe/names/?datasource=tranquility', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ids) });
+      const list = r.ok ? await r.json() : [];
+      return Object.fromEntries(list.map((x) => [x.id, x.name]));
+    } catch (e) { return {}; }
+  }
+
+  // Shared again / hidden by hand (characters SeAT knows), this PC only.
+  function toggles(hidden) {
+    document.querySelectorAll('.incog-toggle').forEach((b) => {
+      const set = (on) => {
+        b.classList.toggle('on', on);
+        b.closest('.row').classList.toggle('hidden-pc', on);
+        b.title = on ? 'Incognito on this PC: the app keeps it from the mapper and SeAT features. Click to share it again.' : 'Click to make it incognito on this PC (hidden from the mapper and SeAT features in the app)';
+      };
+      set(hidden.has(b.dataset.name.toLowerCase()));
+      b.hidden = false;
+      b.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const on = !b.classList.contains('on');
+        const r = await fetch(bridge + '/incognito-hide', { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify({ name: b.dataset.name, hidden: on }) }).catch(() => null);
+        if (r && r.ok) set(on);
+      });
+    });
+  }
+
+  // Untick Incognito: put it on SeAT by name (public info only) in an account.
+  function shareBox(holder, name, accountPanels) {
+    const box = document.createElement('label');
+    box.className = 'incog-box';
+    box.innerHTML = `<input type="checkbox" checked> Incognito (this PC only) <span class="muted">· untick to share it with the corp</span>`;
+    const tick = box.querySelector('input');
+    tick.addEventListener('change', () => {
+      if (tick.checked) return;
+      const ask = document.createElement('span');
+      const options = accountPanels.filter((p) => Number(p.dataset.free) > 0);
+      if (!options.length) { ask.textContent = ' No account has a free slot.'; box.append(ask); tick.checked = true; return; }
+      ask.innerHTML = ` Share <b>${esc(name)}</b>${options.length > 1 ? ' in account <select class="grp">' + options.map((p) => `<option value="${esc(p.dataset.external)}">${esc(p.dataset.nick)}</option>`).join('') + '</select>' : ''}? It goes on SeAT by name (public info only). <button class="btn sm p" type="button">Share</button> <button class="btn sm" type="button">Cancel</button>`;
+      box.append(ask);
+      const [yes, no] = ask.querySelectorAll('button');
+      no.addEventListener('click', (e) => { e.preventDefault(); ask.remove(); tick.checked = true; });
+      yes.addEventListener('click', (e) => {
+        e.preventDefault();
+        const form = document.createElement('form');
+        form.method = 'post';
+        form.action = ask.querySelector('select')?.value || options[0].dataset.external;
+        form.innerHTML = `<input type="hidden" name="_token" value="${esc(csrf)}"><input type="hidden" name="name" value="${esc(name)}">`;
+        document.body.append(form);
+        form.submit();
+      });
+    });
+    holder.append(box);
+  }
+
+  function incognitoRow(id, name, accountPanels) {
+    const row = document.createElement('div');
+    row.className = 'row incog';
+    row.innerHTML = `<span></span><img class="pic" src="${portrait(id)}" alt="" loading="lazy"><span class="cn" title="On this PC only">${esc(name || 'Character ' + id)} <span class="muted" style="font-size: 11px">· incognito</span></span>`;
+    shareBox(row, name, accountPanels);
+    return row;
+  }
+
+  function ghostOnTile(tile, id) {
+    const empty = tile?.querySelector('.pic.empty');
+    if (!empty) return;
+    const img = document.createElement('img');
+    img.className = 'pic ghost';
+    img.src = portrait(id);
+    img.alt = '';
+    empty.replaceWith(img);
+  }
+
+  // EVE accounts on this PC with no account here: their own tiles under "This PC only".
+  function pcOnly(user, chars, nameOf) {
+    const list = document.getElementById('pc-only');
+    if (list.hidden) { list.hidden = false; list.innerHTML = '<h4 title="EVE accounts the launcher used on this PC that aren\'t on SeAT. Only this PC sees them.">This PC only</h4>'; }
+    const tile = document.createElement('div');
+    tile.className = 'acct pc';
+    tile.dataset.id = 'pc-' + user;
+    tile.innerHTML = `<span class="grip"> </span>${chars.map((id) => `<img class="pic ghost" src="${portrait(id)}" alt="">`).join('')}<span class="nick"><b>PC</b><br><span class="om unknown">incognito</span></span>`;
+    list.append(tile);
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+    panel.dataset.id = 'pc-' + user;
+    panel.innerHTML = `<div class="phead"><span class="name">An EVE account on this PC</span><span class="muted">not on SeAT · only this PC sees it</span></div><div class="chars"></div><div class="foot"><span class="muted" style="font-size: 12px">Untick Incognito to share a character with the corp (it goes on SeAT by name into the account you pick). To make this a whole account: + New account, then share its characters into it.</span></div>`;
+    const box = panel.querySelector('.chars');
+    chars.forEach((id) => box.append(incognitoRow(id, nameOf[id], panels)));
+    panels[0]?.parentNode.append(panel);
+    tile.addEventListener('click', () => {
+      document.querySelectorAll('.acct').forEach((a) => a.classList.toggle('sel', a === tile));
+      document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('show', p === panel));
+    });
+  }
+
+  (async () => {
+    const pc = await fetch(bridge + '/pc-accounts').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!pc) return;
+    toggles(new Set((pc.hidden || []).map((n) => String(n).toLowerCase())));
+    const accounts = pc.accounts || [];
+
+    // Known characters not yet in their EVE account's place: group them (only SeAT's own ids are sent).
+    const byLauncher = new Map(panels.filter((p) => p.dataset.launcher).map((p) => [p.dataset.launcher, p]));
+    const wanted = accounts
+      .map((a) => ({ user_id: a.user_id, character_ids: a.characters.map((c) => c.id).filter((id) => mine.has(id)).slice(0, 3) }))
+      .filter((a) => a.character_ids.length && a.character_ids.some((id) => !byLauncher.get(String(a.user_id))?.querySelector(`.row[data-char="${id}"]`)));
+    const key = JSON.stringify(wanted);
+    let tried = null;
+    try { tried = sessionStorage.getItem('dr-launcher-import'); } catch (e) {}
+    if (wanted.length && tried !== key) {
+      try { sessionStorage.setItem('dr-launcher-import', key); } catch (e) {}
+      const r = await fetch(@json(route('devilsrage.accounts.launcher')), { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf }, body: JSON.stringify({ accounts: wanted }) }).then((x) => x.json()).catch(() => null);
+      if (r && (r.moved > 0 || r.created > 0)) { location.reload(); return; }
+    }
+
+    // The rest: incognito, greyed in their account (or under This PC only).
+    const unknown = accounts.map((a) => ({ user: String(a.user_id), ids: a.characters.map((c) => c.id).filter((id) => !mine.has(id) && !placed.has(id)) })).filter((a) => a.ids.length);
+    if (!unknown.length) return;
+    const nameOf = await names(unknown.flatMap((a) => a.ids));
+    for (const { user, ids } of unknown) {
+      const panel = byLauncher.get(user);
+      if (!panel) { pcOnly(user, ids, nameOf); continue; }
+      const box = panel.querySelector('.chars');
+      const tile = document.querySelector(`.acct[data-id="${panel.dataset.id}"]`);
+      ids.slice(0, Math.max(0, Number(panel.dataset.free))).forEach((id) => {
+        box.insertBefore(incognitoRow(id, nameOf[id], [panel]), box.querySelector('.addrow'));
+        ghostOnTile(tile, id);
+      });
+    }
+  })();
+})();
+
+// Launch groups on a character: only the ones it's in; + shows the rest.
+document.querySelectorAll('.pills .more').forEach((b) => b.addEventListener('click', () => {
+  const open = b.closest('.pills').classList.toggle('open');
+  b.textContent = open ? '−' : '+';
+}));
 </script>
 <script>
 (() => {

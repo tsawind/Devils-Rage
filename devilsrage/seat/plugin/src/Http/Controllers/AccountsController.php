@@ -233,6 +233,9 @@ class AccountsController extends Controller
             'mapperUrl' => rtrim((string) config('devilsrage.mapper_url', ''), '/'),
             'maxCharacters' => Account::MAX_CHARACTERS,
             'done' => request()->boolean('done'),
+            // Patch 74: in the app, characters on this PC that SeAT doesn't know stay there
+            // (incognito); only these may be sent back for grouping by EVE account.
+            'mineIds' => array_map('intval', $user->associatedCharacterIds()),
         ]);
     }
 
