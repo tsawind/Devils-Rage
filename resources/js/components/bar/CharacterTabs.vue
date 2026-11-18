@@ -34,7 +34,7 @@ import type { TCharacter, TStringedSolarsystemClass } from '@/types/models';
 import { router, usePage } from '@inertiajs/vue3';
 import { AppWindow, ChevronDown, ExternalLink, Eye, Link2, PictureInPicture2, Plus, Repeat, Video, X } from 'lucide-vue-next';
 import { addCharacterTab, characterTabIds, draggedCharacter, isCharacterDrag, placeCharacterTab, removeCharacterTab, startCharacterDrag } from '@/lib/characterTabs';
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 /**
  * Patch 41b: only the characters you add get a tab (+ ▾ adds one; a pop-out or its own window
@@ -153,6 +153,15 @@ function closeTab(character: TCharacter): void {
 function openAs(character: TCharacter, how: TOpenHow): void {
     void openCharacter(character, how);
 }
+
+// Patch 74 (app): the desktop app's client bar asks for one character's pop-out (on top of EVE).
+function popOutFromApp(event: Event): void {
+    const detail = (event as CustomEvent<{ id?: unknown; name?: unknown }>).detail;
+    if (!detail || typeof detail.id !== 'number' || typeof detail.name !== 'string') return;
+    void openCharacter({ id: detail.id, name: detail.name }, 'popout');
+}
+onMounted(() => window.addEventListener('devils-rage-app:popout', popOutFromApp));
+onBeforeUnmount(() => window.removeEventListener('devils-rage-app:popout', popOutFromApp));
 </script>
 
 <template>
