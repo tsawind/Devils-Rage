@@ -31,9 +31,10 @@ final class LoginStatus
      *
      * @param  list<int>  $characterIds
      * @param  list<int>  $publicOnly  characters the pilot logged in with public data only
+     * @param  array<int, list<string>>  $chosen  Patch 74: the permissions an ally / partial character chose (instead of all)
      * @return array<int, string>
      */
-    public function seat(array $characterIds, array $publicOnly = []): array
+    public function seat(array $characterIds, array $publicOnly = [], array $chosen = []): array
     {
         $tokens = RefreshToken::withTrashed()
             ->whereIn('character_id', $characterIds)
@@ -50,7 +51,7 @@ final class LoginStatus
                 $status[$id] = self::EXPIRED;
             } elseif (in_array($id, $publicOnly, true)) {
                 $status[$id] = self::PUBLIC;
-            } elseif (array_diff($required, (array) $token->scopes) !== []) {
+            } elseif (array_diff(isset($chosen[$id]) ? array_values(array_diff($chosen[$id], ['publicData'])) : $required, (array) $token->scopes) !== []) {
                 $status[$id] = self::SCOPES;
             } else {
                 $status[$id] = self::OK;

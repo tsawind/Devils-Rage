@@ -12,6 +12,7 @@ use DevilsRage\Seat\Models\LaunchGroup;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Services\Leadership;
 use DevilsRage\Seat\Services\LoginReturn;
+use DevilsRage\Seat\Services\AccessScopes;
 use DevilsRage\Seat\Services\LoginStatus;
 use DevilsRage\Seat\Services\Holdings;
 use DevilsRage\Seat\Services\OmegaStatus;
@@ -125,6 +126,53 @@ class AccountsController extends Controller
     }
 
     /**
+     * Patch 74: how much a character shares: devil, ally (template), partial (the pilot's own
+     * ticks) or public. Saved, then the page sends it to EVE's login for exactly that.
+     */
+    public function setAccess(Request $request, AccountCharacter $accountCharacter, LoginStatus $logins): JsonResponse
+    {
+        $this->authorizeOwner($accountCharacter->account);
+        $data = $request->validate([
+            'level' => ['required', 'in:devil,ally,partial,public'],
+            'groups' => ['array', 'max:20'],
+            'groups.*' => ['string', 'in:'.implode(',', array_keys(AccessScopes::GROUPS))],
+        ]);
+        $all = $logins->requiredScopes();
+        $level = $data['level'];
+        $scopes = in_array($level, ['ally', 'partial'], true) ? AccessScopes::scopesFor($data['groups'] ?? [], $all) : null;
+        if ($level === 'partial' && $scopes === []) {
+            return response()->json(['error' => 'Tick at least one thing to share, or pick Public.'], 422);
+        }
+        $accountCharacter->update([
+            'access_level' => $level === 'devil' ? null : $level,
+            'access_scopes' => $scopes,
+            'public_only' => $level === 'public',
+        ]);
+        $login = match ($level) {
+            'public' => route('devilsrage.accounts.login', array_filter([$accountCharacter->account_id, 'screen' => 1, 'public' => 1])),
+            'devil' => route('devilsrage.accounts.login', array_filter([$accountCharacter->account_id, 'screen' => 1])),
+            default => route('devilsrage.accounts.login-access', $accountCharacter),
+        };
+
+        return response()->json(['saved' => true, 'login' => $login]);
+    }
+
+    /**
+     * Patch 74: EVE's login asking for exactly the permissions this character shares (ally / partial).
+     */
+    public function loginAccess(AccountCharacter $accountCharacter): RedirectResponse
+    {
+        $this->authorizeOwner($accountCharacter->account);
+        $scopes = array_values(array_unique(['publicData', ...((array) $accountCharacter->access_scopes)]));
+        session()->put(LoginReturn::PENDING, ['account' => $accountCharacter->account_id, 'public' => false]);
+        session()->put('url.intended', route('devilsrage.your-accounts', ['done' => 1]));
+        session()->put('scopes', $scopes);
+        session()->put('scopes_profile_id', 0);
+
+        return \Laravel\Socialite\Facades\Socialite::driver('eveonline')->scopes($scopes)->redirect();
+    }
+
+    /**
      * Patch 49: SeAT gives every newly added character the permissions your MAIN's login has.
      * When the main's login misses some, it is renewed by logging in with the main afresh
      * (signed out, so SeAT asks EVE for the full set), then you're back on My accounts.
@@ -192,8 +240,15 @@ class AccountsController extends Controller
             $links->pluck('character_id')->map(fn ($id): int => (int) $id)->all(),
         )));
         $public = $links->where('public_only', true)->pluck('character_id')->map(fn ($id): int => (int) $id)->values()->all();
+        // Patch 74: an ally / partial character is fine with the permissions it chose.
+        $chosen = [];
+        foreach ($links as $link) {
+            if (in_array($link->accessLevel(), ['ally', 'partial'], true)) {
+                $chosen[(int) $link->character_id] = (array) $link->access_scopes;
+            }
+        }
 
-        return [$logins->seat($ids, $public), $logins->mapper($ids, $public)];
+        return [$logins->seat($ids, $public, $chosen), $logins->mapper($ids, $public)];
     }
 
     /**
@@ -238,6 +293,9 @@ class AccountsController extends Controller
             'mineIds' => array_map('intval', $user->associatedCharacterIds()),
             // Patch 74: what each character trains, its implants and remap (hover / right-click a portrait).
             'sheet' => app(\DevilsRage\Seat\Services\FarmOverview::class)->trainingSheet(array_map('intval', $assigned)),
+            // Patch 74: the permission groups to tick (only the ones SeAT asks for).
+            'accessGroups' => array_intersect_key(AccessScopes::GROUPS, AccessScopes::grouped($logins->requiredScopes())),
+            'allScopes' => $logins->requiredScopes(),
         ]);
     }
 

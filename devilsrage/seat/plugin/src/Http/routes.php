@@ -67,6 +67,8 @@ Route::group([
     Route::post('accounts/{account}/external', [AccountsController::class, 'addExternal'])->name('devilsrage.accounts.characters.external');
     Route::post('account-characters/{accountCharacter}/fits', [AccountsController::class, 'setExternalFits'])->name('devilsrage.accounts.characters.fits');
     Route::post('account-characters/{accountCharacter}/groups', [AccountsController::class, 'setGroups'])->name('devilsrage.accounts.characters.groups');
+    Route::post('account-characters/{accountCharacter}/access', [AccountsController::class, 'setAccess'])->name('devilsrage.accounts.characters.access');
+    Route::get('account-characters/{accountCharacter}/login', [AccountsController::class, 'loginAccess'])->name('devilsrage.accounts.login-access');
     Route::post('account-characters/{accountCharacter}/corp-group', [AccountsController::class, 'setCorpGroup'])->name('devilsrage.accounts.characters.corpgroup');
     Route::post('accounts/{account}/omega', [AccountsController::class, 'setOmega'])->name('devilsrage.accounts.omega');
     Route::post('account-characters/{accountCharacter}/move', [AccountsController::class, 'moveCharacter'])->name('devilsrage.accounts.characters.move');

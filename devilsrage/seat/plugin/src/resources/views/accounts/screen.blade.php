@@ -18,12 +18,19 @@
       $steps = [];
       foreach ($account->characters as $link) {
           $st = $link->external ? ['seat' => 'external', 'mapper' => null, 'ok' => true] : $statusOf((int) $link->character_id);
+          // Patch 74: an ally / partial character only needs the mapper when it shares its location.
+          $level = $link->accessLevel();
+          $sharesLocation = ! in_array($level, ['ally', 'partial'], true) || in_array('location', \DevilsRage\Seat\Services\AccessScopes::groupsOf((array) $link->access_scopes, $allScopes), true);
+          if (! $sharesLocation && ! $link->external) {
+              $st['mapper'] = null;
+              $st['ok'] = in_array($st['seat'], ['ok', 'public'], true);
+          }
           $rows[] = ['link' => $link, 'st' => $st];
           if (! $link->external) {
               $total++;
               $ready += $st['ok'] ? 1 : 0;
               if (! in_array($st['seat'], ['ok', 'public'], true)) {
-                  $steps[] = ['kind' => 'seat', 'name' => $link->displayName(), 'url' => $seatLogin($account)];
+                  $steps[] = ['kind' => 'seat', 'name' => $link->displayName(), 'url' => in_array($level, ['ally', 'partial'], true) ? route('devilsrage.accounts.login-access', $link) : $seatLogin($account, $level === 'public')];
               }
               if ($st['mapper'] === false) {
                   $steps[] = ['kind' => 'mapper', 'name' => $link->displayName(), 'url' => $mapperAdd($link->public_only)];
@@ -37,7 +44,7 @@
       $ready += $statusOf((int) $character->character_id)['ok'] ? 1 : 0;
   }
   $labels = [
-      'ok' => ['SeAT ✓', 'ok', 'SeAT login works, all permissions'],
+      'ok' => ['SeAT ✓', 'ok', 'SeAT login works, with everything it chose to share'],
       'public' => ['Public only', 'pub', 'Logged in with public data only: proves it is yours, shares nothing else'],
       'scopes' => ['SeAT renew', 'todo', 'SeAT login is missing permissions: log it in again'],
       'expired' => ['SeAT expired', 'bad', 'SeAT login expired: log it in again'],
@@ -167,6 +174,7 @@
   .incog-box { grid-column: 4 / -1; display: flex; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
   .incog-box input { accent-color: #8a8a92; }
   .pic.ghost { filter: grayscale(1); opacity: .5; }
+  body:not(.advanced) #pc-only, body:not(.advanced) .row.incog, body:not(.advanced) .incog-toggle, body:not(.advanced) details.profs .prow button { display: none !important; }
   #pc-only { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
   #pc-only h4 { margin: 4px 0 0; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
   .acct.pc { border-style: dashed; opacity: .8; }
@@ -201,6 +209,19 @@
   .ownprof { font-size: 12px; color: var(--muted); margin: -4px 0 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .ownprof details { width: 100%; }
   .charinfo { grid-column: 3 / -1; font-size: 11px; color: var(--muted); margin-top: -2px; }
+  /* Patch 74: what each character shares. A ring on the portrait for anything less than a Devil's. */
+  .access { grid-column: 3 / -1; display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--muted); }
+  .access select.lvl { background: #101014; border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px; font-size: 11.5px; max-width: 150px; }
+  .row.lvl-ally .pp .pic { outline: 2px solid #7ab8f2; outline-offset: 1px; }
+  .row.lvl-partial .pp .pic { outline: 2px solid #b9a8ff; outline-offset: 1px; }
+  .row.lvl-public .pp .pic { outline: 2px solid #8a8a92; outline-offset: 1px; }
+  .row.lvl-spy .pp .pic { outline: 2px dashed var(--bad); outline-offset: 1px; }
+  .row.lvl-spy .cn::before { content: '🔒 '; }
+  .checklist { grid-column: 3 / -1; background: #101014; border: 1px solid #3a3a44; border-radius: 8px; padding: 8px 10px; margin: 4px 0; font-size: 12px; }
+  .checklist label { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; }
+  .checklist label small { color: var(--muted); }
+  .checklist .acts { display: flex; gap: 8px; margin-top: 6px; align-items: center; flex-wrap: wrap; }
+  body:not(.advanced) .adv-only { display: none !important; }
   .errors { background: #3a1416; color: var(--bad); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .row { grid-template-columns: 18px 30px minmax(0,1fr) 90px 80px; } .row select, .row .x { display: none; } }
 </style>
@@ -227,6 +248,7 @@
   <div class="opts">
     <label title="Hide accounts that are Alpha, whose Omega ended, or with no Omega known (Ω ?)"><input type="checkbox" id="opt-alpha"> Hide Alpha accounts</label>
     <label title="In the app: show each account's EVE login name next to its number (from its last login on this PC; this PC only)"><input type="checkbox" id="opt-login"> Show EVE login names</label>
+    <label title="Spies, incognito characters, this PC's other characters and their settings files"><input type="checkbox" id="opt-advanced"> Advanced</label>
   </div>
 
   @if($errors->any())
@@ -370,7 +392,11 @@
                 $lab = $labels[$st['seat']] ?? $labels['missing'];
                 $corpPick = $link->launchGroups->firstWhere('locked', true);
               @endphp
-              <div class="row" draggable="true" data-id="{{ $link->id }}" data-char="{{ $link->character_id }}">
+              @php
+                $lvl = $link->accessLevel();
+                $shareGroups = in_array($lvl, ['ally', 'partial'], true) ? \DevilsRage\Seat\Services\AccessScopes::groupsOf((array) $link->access_scopes, $allScopes) : [];
+              @endphp
+              <div class="row lvl-{{ $lvl }}" draggable="true" data-id="{{ $link->id }}" data-char="{{ $link->character_id }}" data-level="{{ $lvl }}" data-groups='@json($shareGroups)' data-access="{{ route('devilsrage.accounts.characters.access', $link) }}">
                 <span class="grip">⋮⋮</span>
                 @php
                   $rowSheet = $sheet[(int) $link->character_id] ?? null;
@@ -384,8 +410,8 @@
                 @else
                   <a class="chip {{ $lab[1] }} login" href="{{ $seatLogin($account, (bool) $link->public_only) }}" title="{{ $lab[2] }}: pick {{ $link->displayName() }}, Authorize">{{ $lab[0] }}</a>
                 @endif
-                @if($link->external)
-                  <span class="chip muted">—</span>
+                @if($link->external || $st['mapper'] === null && in_array($lvl, ['ally', 'partial'], true))
+                  <span class="chip muted" title="{{ $link->external ? '' : 'Doesn\'t share its location, so no mapper login is needed' }}">—</span>
                 @elseif($st['mapper'] === true)
                   <span class="chip ok" title="In the mapper">Mapper ✓</span>
                 @elseif($st['mapper'] === false)
@@ -418,6 +444,17 @@
                     @endforeach
                   </form>
                 @endif
+                @unless($link->external)
+                  <div class="access">
+                    <select class="lvl" aria-label="What it shares" title="How much this character shares with the corp">
+                      @foreach(['devil' => 'Devil: shares everything', 'ally' => 'Ally: everything but assets and corp-officer data', 'partial' => 'Partial: what you tick', 'public' => 'Public: name, corp and alliance only'] as $value => $label)
+                        <option value="{{ $value }}" @selected($lvl === $value)>{{ $label }}</option>
+                      @endforeach
+                      <option value="spy" class="adv-only">Spy: locked on this PC (the app)</option>
+                    </select>
+                    <span class="shares">@if($lvl === 'devil')Shares everything @elseif($lvl === 'public')Shares name, corp and alliance only @else Shares: {{ $shareGroups ? implode(', ', array_map(fn ($g) => $accessGroups[$g][0] ?? $g, $shareGroups)) : 'nothing yet' }} @endif</span>
+                  </div>
+                @endunless
                 @if(! $link->external && in_array((int) $link->character_id, $chatLogOff ?? [], true))
                   <div class="chatlog" title="Without chat logs the app can't move {{ $link->displayName() }} on the map instantly (it waits for ESI) or tell whose probe scan it copied.">⚠ Log Chat to File is off in EVE. Turn it on: Esc → Gameplay → Chat → Log Chat to File.</div>
                 @endif
@@ -503,6 +540,17 @@
     </div>
   </div>
 </div>
+
+<template id="checklist-tpl">
+  <div class="checklist">
+    <div class="muted" style="margin-bottom: 4px">What this character shares (only these permissions are asked for at EVE's login):</div>
+    @foreach($accessGroups as $key => [$label, $why])
+      <label><input type="checkbox" value="{{ $key }}"> <span>{{ $label }} <small>· {{ $why }}</small></span></label>
+    @endforeach
+    <div class="acts"><button class="btn sm p" type="button" data-go>Save and log it in</button><button class="btn sm" type="button" data-no>Cancel</button><span class="muted" data-say></span></div>
+    <div class="muted" style="margin-top: 6px; font-size: 11px">Sharing less later: tick less and log it in again (SeAT then keeps only that). To take every permission back from EVE itself: <a href="https://community.eveonline.com/support/third-party-applications/" target="_blank" rel="noopener">EVE's third-party applications page</a>.</div>
+  </div>
+</template>
 
 <div class="confirm" id="confirm" role="dialog" aria-modal="true">
   <div class="box"><p id="confirm-text"></p><div><button class="btn" type="button" id="confirm-no">Cancel</button><button class="btn p" type="button" id="confirm-yes">Yes, remove</button></div></div>
@@ -812,6 +860,12 @@
     const pc = await back;
     if (!pc) return;
     toggles(new Set((pc.hidden || []).map((n) => String(n).toLowerCase())));
+    // Spies (this PC only): locked rows.
+    const spies = new Set((pc.spies || []).map((n) => String(n).toLowerCase()));
+    document.querySelectorAll('.row[data-level]').forEach((row) => {
+      const name = row.querySelector('.incog-toggle')?.dataset.name || '';
+      if (spies.has(name.toLowerCase())) window.drMarkSpy?.(row, true);
+    });
     // What each EVE account's sign-in token said: its login name (the login hint, when empty;
     // kept on this PC only) and Omega / Alpha.
     const info = pc.info || {};
@@ -931,6 +985,102 @@
   })();
 })();
 
+// Patch 74: what each character shares. Picking a level saves it and opens EVE's login for exactly
+// that; Ally / Partial first show the checklist. Spy (the app) locks the row on this PC.
+(() => {
+  const csrf = document.querySelector('meta[name="csrf-token"]').content;
+  const inApp = !!window.__DEVILS_RAGE_APP__;
+  const ally = @json(\DevilsRage\Seat\Services\AccessScopes::template('ally'));
+  const ask = (what) => { try { window.open('https://dr-app.invalid/' + what, '_blank'); } catch (e) {} };
+  const openLogin = (url) => { const w = window.open(url, 'dr-login', 'popup=yes,width=820,height=900'); if (!w) location.href = url; };
+  const nameOf = (row) => row.querySelector('.incog-toggle')?.dataset.name || '';
+  // Ask twice, inline, in `box`; then `yes`.
+  const twice = (box, first, second, yes, no) => {
+    const keep = [...box.childNodes];
+    const back = () => { box.innerHTML = ''; keep.forEach((k) => box.append(k)); no?.(); };
+    box.innerHTML = `<span>${first}</span> <button class="btn sm" type="button">Yes</button> <button class="btn sm p" type="button">Cancel</button>`;
+    const [y1, n1] = box.querySelectorAll('button');
+    n1.addEventListener('click', back);
+    y1.addEventListener('click', () => {
+      box.innerHTML = `<span><b>Last check:</b> ${second}</span> <button class="btn sm" type="button">Yes</button> <button class="btn sm p" type="button">Cancel</button>`;
+      const [y2, n2] = box.querySelectorAll('button');
+      n2.addEventListener('click', back);
+      y2.addEventListener('click', () => { back(); yes(); });
+    });
+  };
+  // A spy row: marked, and locked until unlocked (asks twice); only on this PC.
+  window.drMarkSpy = (row, on) => {
+    row.classList.toggle('lvl-spy', on);
+    row.querySelector('select.lvl').value = on ? 'spy' : row.dataset.level;
+    row.querySelector('.shares').textContent = on ? 'Spy: locked on this PC, never shared' : row.querySelector('.shares').dataset.was || row.querySelector('.shares').textContent;
+    row.querySelectorAll('form, .pills, select.grp, .x, .profs button').forEach((el) => { el.style.pointerEvents = on ? 'none' : ''; el.style.opacity = on ? '.45' : ''; });
+    let lock = row.querySelector('.unlock');
+    if (on && !lock) {
+      lock = document.createElement('button');
+      lock.className = 'btn sm unlock';
+      lock.type = 'button';
+      lock.textContent = '🔒 Unlock to change';
+      lock.addEventListener('click', () => twice(lock.parentNode, `Unlock ${nameOf(row)} for changes?`, `${nameOf(row)} is marked as a spy. Changes can share it.`, () => {
+        row.querySelectorAll('form, .pills, select.grp, .x, .profs button').forEach((el) => { el.style.pointerEvents = ''; el.style.opacity = ''; });
+        row.querySelector('.unlock')?.remove();
+      }));
+      row.querySelector('.access').append(lock);
+    }
+    if (!on) row.querySelector('.unlock')?.remove();
+  };
+  document.querySelectorAll('.row[data-level]').forEach((row) => {
+    const select = row.querySelector('select.lvl');
+    const shares = row.querySelector('.shares');
+    shares.dataset.was = shares.textContent;
+    if (!inApp) select.querySelector('option[value="spy"]')?.remove();
+    const save = async (level, groups) => {
+      const r = await fetch(row.dataset.access, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf }, body: JSON.stringify({ level, groups }) }).then((x) => x.json().then((j) => ({ ok: x.ok, j }))).catch(() => null);
+      if (!r || !r.ok) return { error: r?.j?.error || 'Couldn\'t save. Reload and try again.' };
+      return r.j;
+    };
+    const choose = async (level) => {
+      row.querySelector('.checklist')?.remove();
+      if (level === 'spy') {
+        twice(row.querySelector('.access'), `Mark ${nameOf(row)} as a spy on this PC?`, 'it is hidden from the mapper and SeAT features in the app, and its row is locked here.', () => {
+          ask(`pc-spy?name=${encodeURIComponent(nameOf(row))}&on=1`);
+          window.drMarkSpy(row, true);
+        }, () => { select.value = row.dataset.level; });
+        return;
+      }
+      if (level === 'ally' || level === 'partial') {
+        const list = document.getElementById('checklist-tpl').content.firstElementChild.cloneNode(true);
+        const mine = JSON.parse(row.dataset.groups || '[]');
+        const ticked = level === row.dataset.level && mine.length ? mine : level === 'ally' ? ally : [];
+        list.querySelectorAll('input[type=checkbox]').forEach((b) => { b.checked = ticked.includes(b.value); });
+        list.querySelector('[data-no]').addEventListener('click', () => { list.remove(); select.value = row.dataset.level; });
+        list.querySelector('[data-go]').addEventListener('click', async () => {
+          const groups = [...list.querySelectorAll('input:checked')].map((b) => b.value);
+          const r = await save(level, groups);
+          if (r.error) { list.querySelector('[data-say]').textContent = r.error; return; }
+          openLogin(r.login);
+        });
+        row.append(list);
+        return;
+      }
+      const r = await save(level, []);
+      if (r.error) { shares.textContent = r.error; return; }
+      openLogin(r.login);
+    };
+    select.addEventListener('change', () => {
+      const level = select.value;
+      if (row.classList.contains('lvl-spy') && level !== 'spy') {
+        twice(row.querySelector('.access'), `Take the spy mark off ${nameOf(row)}?`, 'it can be shared again.', () => {
+          ask(`pc-spy?name=${encodeURIComponent(nameOf(row))}&on=0`);
+          window.drMarkSpy(row, false);
+          choose(level);
+        }, () => { select.value = 'spy'; });
+        return;
+      }
+      choose(level);
+    });
+  });
+})();
+
 // Options (remembered on this PC).
 (() => {
   const opt = (id, key, apply) => {
@@ -943,6 +1093,7 @@
   };
   opt('opt-alpha', 'dr-hide-alpha', (on) => document.body.classList.toggle('hide-alpha', on));
   opt('opt-login', 'dr-show-login', (on) => document.body.classList.toggle('show-login', on));
+  opt('opt-advanced', 'dr-advanced', (on) => document.body.classList.toggle('advanced', on));
   if (!window.__DEVILS_RAGE_APP__) document.getElementById('opt-login').closest('label').hidden = true;
 })();
 

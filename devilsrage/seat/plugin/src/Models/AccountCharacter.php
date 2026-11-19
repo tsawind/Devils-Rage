@@ -28,10 +28,22 @@ class AccountCharacter extends Model
 
     public const EXTERNAL_FITS = 'devilsrage_external_fits';
 
-    protected $fillable = ['account_id', 'character_id', 'position', 'external', 'public_only', 'external_name', 'external_corporation', 'external_alliance'];
+    protected $fillable = ['account_id', 'character_id', 'position', 'external', 'public_only', 'access_level', 'access_scopes', 'external_name', 'external_corporation', 'external_alliance'];
 
     /** @var array<string, string> */
-    protected $casts = ['character_id' => 'integer', 'account_id' => 'integer', 'position' => 'integer', 'external' => 'boolean', 'public_only' => 'boolean'];
+    protected $casts = ['character_id' => 'integer', 'account_id' => 'integer', 'position' => 'integer', 'external' => 'boolean', 'public_only' => 'boolean', 'access_scopes' => 'array'];
+
+    /**
+     * Patch 74: how much it shares: devil (everything), ally, partial or public.
+     */
+    public function accessLevel(): string
+    {
+        if ($this->public_only) {
+            return 'public';
+        }
+
+        return in_array($this->access_level, ['ally', 'partial'], true) ? $this->access_level : 'devil';
+    }
 
     /**
      * Name for display: SeAT's character, or the public name of an external one.
