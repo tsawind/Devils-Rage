@@ -225,7 +225,7 @@
     <button class="btn" type="button" id="new-account-btn">+ New account</button>
   </div>
   <div class="opts">
-    <label title="Hide accounts that are Alpha (or whose Omega ended)"><input type="checkbox" id="opt-alpha"> Hide Alpha accounts</label>
+    <label title="Hide accounts that are Alpha, whose Omega ended, or with no Omega known (Ω ?)"><input type="checkbox" id="opt-alpha"> Hide Alpha accounts</label>
     <label title="In the app: show each account's EVE login name next to its number (from its last login on this PC; this PC only)"><input type="checkbox" id="opt-login"> Show EVE login names</label>
   </div>
 
@@ -282,7 +282,7 @@
                 default => ['Ω ?', 'unknown', 'No Omega date entered (Omega, MCT, PLEX)'],
             };
           @endphp
-          <div class="acct {{ $todo ? 'todo' : '' }} {{ in_array($tileCls, ['alpha', 'ended'], true) ? 'is-alpha' : '' }}" draggable="true" data-id="{{ $account->id }}" data-launcher="{{ $account->launcher_user_id }}" title="Drag ⋮⋮ to change the order{{ $todo ? ' · '.(count($card['steps']) ? count($card['steps']).' to fix' : 'empty') : '' }}">
+          <div class="acct {{ $todo ? 'todo' : '' }} {{ in_array($tileCls, ['alpha', 'ended', 'unknown'], true) ? 'is-alpha' : '' }}" draggable="true" data-id="{{ $account->id }}" data-launcher="{{ $account->launcher_user_id }}" title="Drag ⋮⋮ to change the order{{ $todo ? ' · '.(count($card['steps']) ? count($card['steps']).' to fix' : 'empty') : '' }}">
             <span class="grip">⋮⋮</span>
             @for($i = 0; $i < $maxCharacters; $i++)
               @if(isset($account->characters[$i]))
@@ -677,6 +677,33 @@
     });
   }
 
+  const profileLines = (pc) => {
+  // Every character here: its profile folders on this PC, newest first, with dates; the newest
+    // two on the line, the rest in the dropdown, each with 📂 / Archive / Delete.
+    const day = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '?');
+    for (const [id, c] of Object.entries(pc.chars || {})) {
+      const row = document.querySelector(`.row[data-char="${id}"]`);
+      if (!row || row.querySelector('.profs')) continue;
+      const name = row.querySelector('.cn')?.childNodes[0]?.textContent?.trim() || '';
+      const profs = c.profiles || [];
+      const d = document.createElement('details');
+      d.className = 'profs';
+      d.innerHTML = `<summary title="Its settings files on this PC, by profile folder">last played here ${day(c.last)} · ${profs.slice(0, 2).map((p) => `settings_${esc(p.name)} (${day(p.at).slice(5)})`).join(', ')}${profs.length > 2 ? ` · +${profs.length - 2} more` : ''}</summary>`;
+      for (const p of profs) {
+        const line = document.createElement('div');
+        line.className = 'prow';
+        line.innerHTML = `<span>settings_${esc(p.name)}</span><span>${day(p.at)}</span><button type="button" title="Show this file in File Explorer">📂</button><button type="button" title="Recommended: move this file to the archive folder (nothing is deleted)">Archive</button><button type="button" title="Delete this file for good (asks twice)">Delete</button><span class="said"></span>`;
+        const [open, arch, del] = line.querySelectorAll('button');
+        open.addEventListener('click', () => ask(`pc-open-folder?id=${id}&profile=${encodeURIComponent(p.name)}`));
+        arch.addEventListener('click', () => fileAction('archive', id, name, p.name, line));
+        del.addEventListener('click', () => fileAction('delete', id, name, p.name, line));
+        d.append(line);
+      }
+      const pills = row.querySelector('.pills');
+      (pills || row.querySelector('.cn')).after(d);
+    }
+  };
+
   // Archive (recommended) or delete one settings file (asks twice), answer shown in `box`.
   function fileAction(kind, id, name, profile, box) {
     const said = box.querySelector('.said') || box;
@@ -807,7 +834,7 @@
       const tier = String(i.tier || '').toLowerCase();
       const when = i.at ? ' (EVE said so at its last login, ' + new Date(i.at * 1000).toISOString().slice(0, 10) + ')' : ' (EVE said so at its last login)';
       if (om && tier.includes('alpha')) { om.textContent = 'α'; om.className = 'om alpha'; om.title = 'Alpha' + when; om.closest('.acct')?.classList.add('is-alpha'); }
-      else if (om && tier.includes('omega') && (om.textContent.trim() === 'Ω ?' || om.textContent.trim() === '')) { om.textContent = 'Ω'; om.className = 'om om'; om.title = 'Omega' + when + '; enter its end date under Omega, MCT, PLEX for the days left'; }
+      else if (om && tier.includes('omega') && (om.textContent.trim() === 'Ω ?' || om.textContent.trim() === '')) { om.textContent = 'Ω'; om.className = 'om om'; om.title = 'Omega' + when + '; enter its end date under Omega, MCT, PLEX for the days left'; om.closest('.acct')?.classList.remove('is-alpha'); }
     }
     // Running clients: the EVE account each is signed in to (certain). A character here whose client
     // runs on another EVE account than this account's gets a warning.
@@ -853,30 +880,6 @@
       if (r && (r.moved > 0 || r.created > 0)) { location.reload(); return; }
     }
 
-    // Every character here: its profile folders on this PC, newest first, with dates; the newest
-    // two on the line, the rest in the dropdown, each with 📂 / Archive / Delete.
-    const day = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '?');
-    for (const [id, c] of Object.entries(pc.chars || {})) {
-      const row = document.querySelector(`.row[data-char="${id}"]`);
-      if (!row || row.querySelector('.profs')) continue;
-      const name = row.querySelector('.cn')?.childNodes[0]?.textContent?.trim() || '';
-      const profs = c.profiles || [];
-      const d = document.createElement('details');
-      d.className = 'profs';
-      d.innerHTML = `<summary title="Its settings files on this PC, by profile folder">last played here ${day(c.last)} · ${profs.slice(0, 2).map((p) => `settings_${esc(p.name)} (${day(p.at).slice(5)})`).join(', ')}${profs.length > 2 ? ` · +${profs.length - 2} more` : ''}</summary>`;
-      for (const p of profs) {
-        const line = document.createElement('div');
-        line.className = 'prow';
-        line.innerHTML = `<span>settings_${esc(p.name)}</span><span>${day(p.at)}</span><button type="button" title="Show this file in File Explorer">📂</button><button type="button" title="Recommended: move this file to the archive folder (nothing is deleted)">Archive</button><button type="button" title="Delete this file for good (asks twice)">Delete</button><span class="said"></span>`;
-        const [open, arch, del] = line.querySelectorAll('button');
-        open.addEventListener('click', () => ask(`pc-open-folder?id=${id}&profile=${encodeURIComponent(p.name)}`));
-        arch.addEventListener('click', () => fileAction('archive', id, name, p.name, line));
-        del.addEventListener('click', () => fileAction('delete', id, name, p.name, line));
-        d.append(line);
-      }
-      const pills = row.querySelector('.pills');
-      (pills || row.querySelector('.cn')).after(d);
-    }
     // Each account's own profile folder (named after its EVE login): there, or make it.
     for (const panel of panels) {
       const i = panel.dataset.launcher ? (pc.info || {})[panel.dataset.launcher] : null;
@@ -904,6 +907,7 @@
       const hint = panel.querySelector('.hint');
       hint.after(box);
     }
+    profileLines(pc);
     otherChars(pc.others || []);
 
     // The rest: incognito, greyed in their account (or under This PC only).
@@ -923,6 +927,7 @@
         ghostOnTile(tile, id);
       });
     }
+    profileLines(pc);
   })();
 })();
 
