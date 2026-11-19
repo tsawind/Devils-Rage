@@ -186,6 +186,20 @@
   .sheet-pop .ok { color: var(--ok); } .sheet-pop .bad { color: var(--warn); }
   .pp { display: flex; flex-direction: column; align-items: center; gap: 1px; }
   .pp small { font-size: 9.5px; color: var(--muted); line-height: 1; white-space: nowrap; }
+  .pp.tile small { font-size: 9px; min-height: 9px; }
+  .acct { padding-top: 5px; padding-bottom: 5px; }
+  .acct .pic.empty { margin-bottom: 10px; }
+  details.profs { grid-column: 3 / -1; font-size: 11px; color: var(--muted); margin-top: -2px; }
+  details.profs summary { cursor: pointer; list-style: none; }
+  details.profs summary::-webkit-details-marker { display: none; }
+  details.profs summary::after { content: ' ▾'; }
+  details.profs[open] summary::after { content: ' ▴'; }
+  details.profs .prow { display: flex; gap: 8px; align-items: center; padding: 2px 0 2px 10px; }
+  details.profs .prow span:first-child { width: 150px; }
+  details.profs .prow button { background: none; border: 1px solid #3a3a44; border-radius: 4px; color: var(--muted); font-size: 11px; padding: 0 6px; cursor: pointer; }
+  details.profs .prow button:hover { color: var(--text); }
+  .ownprof { font-size: 12px; color: var(--muted); margin: -4px 0 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .ownprof details { width: 100%; }
   .charinfo { grid-column: 3 / -1; font-size: 11px; color: var(--muted); margin-top: -2px; }
   .errors { background: #3a1416; color: var(--bad); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .row { grid-template-columns: 18px 30px minmax(0,1fr) 90px 80px; } .row select, .row .x { display: none; } }
@@ -275,7 +289,7 @@
                 @php
                   $tileSheet = $sheet[(int) $account->characters[$i]->character_id] ?? null;
                 @endphp
-                <img class="pic {{ ($tileSheet['training'] ?? null) ? 'training' : '' }}" data-sheet='@json($tileSheet)' data-name="{{ $account->characters[$i]->displayName() }}" src="https://images.evetech.net/characters/{{ $account->characters[$i]->character_id }}/portrait?size=64" alt="" loading="lazy">
+                <span class="pp tile"><img class="pic {{ ($tileSheet['training'] ?? null) ? 'training' : '' }}" data-sheet='@json($tileSheet)' data-name="{{ $account->characters[$i]->displayName() }}" src="https://images.evetech.net/characters/{{ $account->characters[$i]->character_id }}/portrait?size=64" alt="" loading="lazy"><small>{{ ($tileSheet['total_sp'] ?? 0) >= 1000000 ? number_format($tileSheet['total_sp'] / 1000000, 1).'M' : (($tileSheet['total_sp'] ?? 0) > 0 ? number_format($tileSheet['total_sp'] / 1000).'k' : '') }}</small></span>
               @else
                 <span class="pic empty"></span>
               @endif
@@ -625,6 +639,7 @@
   function incognitoRow(id, name, accountPanels) {
     const row = document.createElement('div');
     row.className = 'row incog';
+    row.dataset.char = id;
     row.innerHTML = `<span></span><img class="pic" src="${portrait(id)}" alt="" loading="lazy"><span class="cn" title="On this PC only">${esc(name || 'Character ' + id)} <span class="muted" style="font-size: 11px">· incognito${guessed.has(id) ? ' · placed from its profile folder' : ''}</span></span>`;
     shareBox(row, name, accountPanels);
     return row;
@@ -659,6 +674,32 @@
     tile.addEventListener('click', () => {
       document.querySelectorAll('.acct').forEach((a) => a.classList.toggle('sel', a === tile));
       document.querySelectorAll('.panel').forEach((p) => p.classList.toggle('show', p === panel));
+    });
+  }
+
+  // Archive (recommended) or delete one settings file (asks twice), answer shown in `box`.
+  function fileAction(kind, id, name, profile, box) {
+    const said = box.querySelector('.said') || box;
+    const go = () => {
+      said.textContent = kind === 'archive' ? 'Moving…' : 'Deleting…';
+      const done = (e) => {
+        if (String(e.detail?.id) !== String(id)) return;
+        window.removeEventListener('devils-rage-app:pc-archived', done);
+        said.textContent = e.detail.said || '';
+        if (/^(Moved|Deleted) [1-9]/.test(said.textContent)) box.style.opacity = '.4';
+      };
+      window.addEventListener('devils-rage-app:pc-archived', done);
+      ask(`pc-other-${kind}?id=${id}&name=${encodeURIComponent(name || '')}&profile=${encodeURIComponent(profile || '')}`);
+    };
+    if (kind === 'archive') { go(); return; }
+    said.innerHTML = `Delete settings_${esc(profile)}'s file for ${esc(name || 'this character')}? Archive keeps it. <button type="button">Delete</button> <button type="button">Cancel</button>`;
+    const [y1, n1] = said.querySelectorAll('button');
+    n1.addEventListener('click', () => { said.textContent = ''; });
+    y1.addEventListener('click', () => {
+      said.innerHTML = `<b>Last check:</b> its window layout there is gone for good. <button type="button">Yes, delete</button> <button type="button">Cancel</button>`;
+      const [y2, n2] = said.querySelectorAll('button');
+      n2.addEventListener('click', () => { said.textContent = ''; });
+      y2.addEventListener('click', go);
     });
   }
 
@@ -812,16 +853,56 @@
       if (r && (r.moved > 0 || r.created > 0)) { location.reload(); return; }
     }
 
-    // Every character here: when it was last played on this PC and with which profile folders.
+    // Every character here: its profile folders on this PC, newest first, with dates; the newest
+    // two on the line, the rest in the dropdown, each with 📂 / Archive / Delete.
+    const day = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '?');
     for (const [id, c] of Object.entries(pc.chars || {})) {
       const row = document.querySelector(`.row[data-char="${id}"]`);
-      if (!row || row.querySelector('.charinfo')) continue;
-      const line = document.createElement('div');
-      line.className = 'charinfo';
-      line.textContent = `last played here ${c.last ? new Date(c.last).toISOString().slice(0, 10) : '?'} · ${(c.profiles || []).map((p) => 'settings_' + p).join(', ')}`;
-      line.title = 'From EVE\'s settings files on this PC';
+      if (!row || row.querySelector('.profs')) continue;
+      const name = row.querySelector('.cn')?.childNodes[0]?.textContent?.trim() || '';
+      const profs = c.profiles || [];
+      const d = document.createElement('details');
+      d.className = 'profs';
+      d.innerHTML = `<summary title="Its settings files on this PC, by profile folder">last played here ${day(c.last)} · ${profs.slice(0, 2).map((p) => `settings_${esc(p.name)} (${day(p.at).slice(5)})`).join(', ')}${profs.length > 2 ? ` · +${profs.length - 2} more` : ''}</summary>`;
+      for (const p of profs) {
+        const line = document.createElement('div');
+        line.className = 'prow';
+        line.innerHTML = `<span>settings_${esc(p.name)}</span><span>${day(p.at)}</span><button type="button" title="Show this file in File Explorer">📂</button><button type="button" title="Recommended: move this file to the archive folder (nothing is deleted)">Archive</button><button type="button" title="Delete this file for good (asks twice)">Delete</button><span class="said"></span>`;
+        const [open, arch, del] = line.querySelectorAll('button');
+        open.addEventListener('click', () => ask(`pc-open-folder?id=${id}&profile=${encodeURIComponent(p.name)}`));
+        arch.addEventListener('click', () => fileAction('archive', id, name, p.name, line));
+        del.addEventListener('click', () => fileAction('delete', id, name, p.name, line));
+        d.append(line);
+      }
       const pills = row.querySelector('.pills');
-      (pills || row.querySelector('.cn')).after(line);
+      (pills || row.querySelector('.cn')).after(d);
+    }
+    // Each account's own profile folder (named after its EVE login): there, or make it.
+    for (const panel of panels) {
+      const i = panel.dataset.launcher ? (pc.info || {})[panel.dataset.launcher] : null;
+      if (!i || panel.querySelector('.ownprof')) continue;
+      const box = document.createElement('div');
+      box.className = 'ownprof';
+      const how = `<details><summary>How, and why</summary><p style="margin: 6px 0">In the <b>EVE launcher</b>: click this account → <b>Account Settings</b> → <b>Select Client Profile</b> → pick <b>${esc(i.own || '(its login name)')}</b>. Every client of this account then starts with it: from the launcher by hand, from a launch group, or from the app.</p><p style="margin: 6px 0">Why: one folder per account keeps its windows, overview and keys apart from every other account's, so a launch with another account's profile can't change them, and the app knows which settings belong to it. Shared profiles (Alphas, Default) mix many accounts' files and the last client to close wins.</p></details>`;
+      if (i.own) {
+        box.innerHTML = `<span>Profile: <b>settings_${esc(i.own)}</b> <span class="ok" style="color: var(--ok)">✓ its own</span>${i.profile && i.profile !== i.own ? ` · <span style="color: var(--warn)">last started with settings_${esc(i.profile)}: pick ${esc(i.own)} in the launcher</span>` : ''}</span>${how}`;
+      } else if (i.login) {
+        box.innerHTML = `<span>Profile: ${i.profile ? 'started with <b>settings_' + esc(i.profile) + '</b>' : 'not seen yet'}</span><button class="btn sm" type="button" title="Copy its current profile's game settings plus only this account's files into settings_${esc(i.login)}">Make its own profile</button><span class="said"></span>${how}`;
+        const btn = box.querySelector('button');
+        btn.addEventListener('click', () => {
+          btn.disabled = true;
+          const done = (e) => {
+            if (String(e.detail?.user) !== String(panel.dataset.launcher)) return;
+            window.removeEventListener('devils-rage-app:pc-profile', done);
+            box.querySelector('.said').textContent = e.detail.said || '';
+            btn.disabled = false;
+          };
+          window.addEventListener('devils-rage-app:pc-profile', done);
+          ask(`pc-account-profile?user=${panel.dataset.launcher}`);
+        });
+      } else continue;
+      const hint = panel.querySelector('.hint');
+      hint.after(box);
     }
     otherChars(pc.others || []);
 
