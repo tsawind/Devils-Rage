@@ -211,7 +211,7 @@
   .charinfo { grid-column: 3 / -1; font-size: 11px; color: var(--muted); margin-top: -2px; }
   /* Patch 74: what each character shares. A ring on the portrait for anything less than a Devil's. */
   .access { grid-column: 3 / -1; display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--muted); }
-  .access select.lvl { background: #101014; border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px; font-size: 11.5px; max-width: 150px; }
+  .access select.lvl { background: #101014; border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px; font-size: 11.5px; max-width: 240px; }
   .row.lvl-ally .pp .pic { outline: 2px solid #7ab8f2; outline-offset: 1px; }
   .row.lvl-partial .pp .pic { outline: 2px solid #b9a8ff; outline-offset: 1px; }
   .row.lvl-public .pp .pic { outline: 2px solid #8a8a92; outline-offset: 1px; }
@@ -447,7 +447,7 @@
                 @unless($link->external)
                   <div class="access">
                     <select class="lvl" aria-label="What it shares" title="How much this character shares with the corp">
-                      @foreach(['devil' => 'Devil: shares everything', 'ally' => 'Ally: everything but assets and corp-officer data', 'partial' => 'Partial: what you tick', 'public' => 'Public: name, corp and alliance only'] as $value => $label)
+                      @foreach(['devil' => 'Devil: shares everything', 'ally' => 'Ally: location, skills, fits, fleets, kills', 'partial' => 'Partial: what you tick', 'public' => 'Public: name, corp and alliance only'] as $value => $label)
                         <option value="{{ $value }}" @selected($lvl === $value)>{{ $label }}</option>
                       @endforeach
                       <option value="spy" class="adv-only">Spy: locked on this PC (the app)</option>
@@ -940,24 +940,39 @@
       if (!i || panel.querySelector('.ownprof')) continue;
       const box = document.createElement('div');
       box.className = 'ownprof';
-      const how = `<details><summary>How, and why</summary><p style="margin: 6px 0">In the <b>EVE launcher</b>: click this account → <b>Account Settings</b> → <b>Select Client Profile</b> → pick <b>${esc(i.own || '(its login name)')}</b>. Every client of this account then starts with it: from the launcher by hand, from a launch group, or from the app.</p><p style="margin: 6px 0">Why: one folder per account keeps its windows, overview and keys apart from every other account's, so a launch with another account's profile can't change them, and the app knows which settings belong to it. Shared profiles (Alphas, Default) mix many accounts' files and the last client to close wins.</p></details>`;
+      const how = `<details><summary>How, and why</summary><p style="margin: 6px 0">In the <b>EVE launcher</b>: click this account → <b>Account Settings</b> → <b>Select Client Profile</b> → pick <b>${esc(i.own || 'its new profile')}</b>. Not in the list? Close the launcher fully (its tray icon too) and open it again. Every client of this account then starts with it: from the launcher by hand, from a launch group, or from the app.</p><p style="margin: 6px 0">Why: one folder per account keeps its windows, overview and keys apart from every other account's, so a launch with another account's profile can't change them, and the app knows which settings belong to it. Shared profiles (Alphas, Default) mix many accounts' files and the last client to close wins.</p><p style="margin: 6px 0">The name is yours to pick: it only shows in the EVE launcher and as a folder on this PC. The app never sends it anywhere.</p></details>`;
       if (i.own) {
         box.innerHTML = `<span>Profile: <b>settings_${esc(i.own)}</b> <span class="ok" style="color: var(--ok)">✓ its own</span>${i.profile && i.profile !== i.own ? ` · <span style="color: var(--warn)">last started with settings_${esc(i.profile)}: pick ${esc(i.own)} in the launcher</span>` : ''}</span>${how}`;
-      } else if (i.login) {
-        box.innerHTML = `<span>Profile: ${i.profile ? 'started with <b>settings_' + esc(i.profile) + '</b>' : 'not seen yet'}</span><button class="btn sm" type="button" title="Copy its current profile's game settings plus only this account's files into settings_${esc(i.login)}">Make its own profile</button><span class="said"></span>${how}`;
-        const btn = box.querySelector('button');
-        btn.addEventListener('click', () => {
-          btn.disabled = true;
+      } else {
+        // Where to start from: the profiles this account's characters were played with, newest first.
+        const ids = [...panel.querySelectorAll('.row[data-char]')].map((r) => r.dataset.char);
+        const seenAt = new Map();
+        for (const id of ids) for (const p of (pc.chars || {})[id]?.profiles || []) seenAt.set(p.name, Math.max(seenAt.get(p.name) || 0, p.at || 0));
+        if (i.profile && !seenAt.has(i.profile)) seenAt.set(i.profile, Infinity);
+        const froms = [...seenAt.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+        const first = i.profile && froms.includes(i.profile) ? i.profile : froms[0];
+        const opts = froms.map((n) => `<option value="${esc(n)}"${n === first ? ' selected' : ''}>settings_${esc(n)}${n === i.profile ? ' (started with last)' : ''}</option>`).join('') + '<option value="fresh">Fresh: EVE\'s default settings</option>';
+        const suggest = (i.login || '').replace(/[^A-Za-z0-9_-]/g, '');
+        box.innerHTML = `<span>Profile: ${i.profile ? 'started with <b>settings_' + esc(i.profile) + '</b>' : 'not seen yet'}</span><button class="btn sm" type="button">Make its own profile</button><span class="said"></span><div class="mk" style="width: 100%; display: none; gap: 6px; align-items: center; flex-wrap: wrap"><label>Name settings_<input class="nm" maxlength="40" size="14" value="${esc(suggest)}" placeholder="e.g. main, acct01"></label><label>start from <select class="fr">${opts}</select></label><button class="btn sm go" type="button" title="Copies that profile's game settings plus only this account's files (nothing else is changed)">Make it</button><button class="btn sm no" type="button">Cancel</button><span style="flex-basis: 100%">Any name: it only shows in the EVE launcher and on this PC. Your login name is the default because it never changes.</span></div>${how}`;
+        const [btn, go, no] = [box.querySelector('button'), box.querySelector('.go'), box.querySelector('.no')];
+        const mk = box.querySelector('.mk');
+        btn.addEventListener('click', () => { mk.style.display = 'flex'; btn.hidden = true; box.querySelector('.nm').focus(); });
+        no.addEventListener('click', () => { mk.style.display = 'none'; btn.hidden = false; });
+        go.addEventListener('click', () => {
+          const name = box.querySelector('.nm').value.trim();
+          if (!/^[A-Za-z0-9_-]{1,40}$/.test(name)) { box.querySelector('.said').textContent = 'Letters, numbers, - and _ only.'; return; }
+          go.disabled = true;
           const done = (e) => {
             if (String(e.detail?.user) !== String(panel.dataset.launcher)) return;
             window.removeEventListener('devils-rage-app:pc-profile', done);
             box.querySelector('.said').textContent = e.detail.said || '';
-            btn.disabled = false;
+            go.disabled = false;
+            if (/^Made /.test(e.detail.said || '')) { mk.style.display = 'none'; }
           };
           window.addEventListener('devils-rage-app:pc-profile', done);
-          ask(`pc-account-profile?user=${panel.dataset.launcher}`);
+          ask(`pc-account-profile?user=${panel.dataset.launcher}&name=${encodeURIComponent(name)}&from=${encodeURIComponent(box.querySelector('.fr').value)}`);
         });
-      } else continue;
+      }
       const hint = panel.querySelector('.hint');
       hint.after(box);
     }
