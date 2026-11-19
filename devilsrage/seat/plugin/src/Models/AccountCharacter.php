@@ -42,7 +42,8 @@ class AccountCharacter extends Model
             return 'public';
         }
 
-        return in_array($this->access_level, ['ally', 'partial'], true) ? $this->access_level : 'devil';
+        // 19 Nov: Partial folded into Ally (an ally with its own ticks).
+        return in_array($this->access_level, ['ally', 'partial'], true) ? 'ally' : 'devil';
     }
 
     /**

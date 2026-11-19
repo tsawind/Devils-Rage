@@ -138,9 +138,9 @@ class AccountsController extends Controller
             'groups.*' => ['string', 'in:'.implode(',', array_keys(AccessScopes::GROUPS))],
         ]);
         $all = $logins->requiredScopes();
-        $level = $data['level'];
-        $scopes = in_array($level, ['ally', 'partial'], true) ? AccessScopes::scopesFor($data['groups'] ?? [], $all) : null;
-        if ($level === 'partial' && $scopes === []) {
+        $level = $data['level'] === 'partial' ? 'ally' : $data['level'];
+        $scopes = $level === 'ally' ? AccessScopes::scopesFor($data['groups'] ?? AccessScopes::template('ally'), $all) : null;
+        if ($level === 'ally' && $scopes === []) {
             return response()->json(['error' => 'Tick at least one thing to share, or pick Public.'], 422);
         }
         $accountCharacter->update([

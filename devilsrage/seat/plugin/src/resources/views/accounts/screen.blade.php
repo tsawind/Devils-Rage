@@ -212,11 +212,19 @@
   /* Patch 74: what each character shares. A ring on the portrait for anything less than a Devil's. */
   .access { grid-column: 3 / -1; display: flex; gap: 8px; align-items: center; font-size: 11.5px; color: var(--muted); }
   .access select.lvl { background: #101014; border: 1px solid var(--line); border-radius: 4px; padding: 1px 4px; font-size: 11.5px; max-width: 240px; }
-  .row.lvl-ally .pp .pic { outline: 2px solid #7ab8f2; outline-offset: 1px; }
-  .row.lvl-partial .pp .pic { outline: 2px solid #b9a8ff; outline-offset: 1px; }
-  .row.lvl-public .pp .pic { outline: 2px solid #8a8a92; outline-offset: 1px; }
-  .row.lvl-spy .pp .pic { outline: 2px dashed var(--bad); outline-offset: 1px; }
+  /* 19 Nov: one look everywhere: Ally blue, Public purple, Spy red with an ✕ (Devils plain). */
+  .pp { position: relative; }
+  .row.lvl-ally .pp .pic, .pp.lvl-ally .pic { outline: 2px solid #3d8bfd; outline-offset: 1px; }
+  .row.lvl-public .pp .pic, .pp.lvl-public .pic { outline: 2px solid #a370f7; outline-offset: 1px; }
+  .row.lvl-spy .pp .pic, .pp.lvl-spy .pic { outline: 2px solid var(--bad); outline-offset: 1px; filter: grayscale(.6); }
+  .row.lvl-spy .pp::after, .pp.lvl-spy::after { content: '✕'; position: absolute; top: -5px; right: -5px; width: 15px; height: 15px; border-radius: 50%; background: var(--bad); color: #fff; font: 700 10px/15px sans-serif; text-align: center; pointer-events: none; }
   .row.lvl-spy .cn::before { content: '🔒 '; }
+  .lvl-key { display: inline-flex; gap: 10px; font-size: 11px; color: var(--muted); }
+  .lvl-key i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 3px; vertical-align: -1px; }
+  .eveapps { font-size: 12px; color: var(--muted); margin: -4px 0 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .eveapps a { color: #7ab8f2; }
+  .ownprof.setup { border: 1px solid #3a3a44; border-radius: 8px; padding: 8px 10px; background: #101014; margin: 0 0 10px; }
+  .ownprof.setup .opt { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 100%; }
   .checklist { grid-column: 3 / -1; background: #101014; border: 1px solid #3a3a44; border-radius: 8px; padding: 8px 10px; margin: 4px 0; font-size: 12px; }
   .checklist label { display: flex; gap: 6px; align-items: baseline; padding: 2px 0; }
   .checklist label small { color: var(--muted); }
@@ -248,7 +256,8 @@
   <div class="opts">
     <label title="Hide accounts that are Alpha, whose Omega ended, or with no Omega known (Ω ?)"><input type="checkbox" id="opt-alpha"> Hide Alpha accounts</label>
     <label title="In the app: show each account's EVE login name next to its number (from its last login on this PC; this PC only)"><input type="checkbox" id="opt-login"> Show EVE login names</label>
-    <label title="Spies, incognito characters, this PC's other characters and their settings files"><input type="checkbox" id="opt-advanced"> Advanced</label>
+    <label title="Edit, archive or delete what's set up: each character's ticks, profiles and settings files, incognito characters and this PC's other characters"><input type="checkbox" id="opt-advanced"> Advanced editing / deleting</label>
+    <span class="lvl-key" title="The ring on a portrait says how much that character shares"><span><i style="background:#3d8bfd"></i>Ally</span><span><i style="background:#a370f7"></i>Public</span><span><i style="background:var(--bad)"></i>Spy</span></span>
   </div>
 
   @if($errors->any())
@@ -311,7 +320,7 @@
                 @php
                   $tileSheet = $sheet[(int) $account->characters[$i]->character_id] ?? null;
                 @endphp
-                <span class="pp tile"><img class="pic {{ ($tileSheet['training'] ?? null) ? 'training' : '' }}" data-sheet='@json($tileSheet)' data-name="{{ $account->characters[$i]->displayName() }}" src="https://images.evetech.net/characters/{{ $account->characters[$i]->character_id }}/portrait?size=64" alt="" loading="lazy"><small>{{ ($tileSheet['total_sp'] ?? 0) >= 1000000 ? number_format($tileSheet['total_sp'] / 1000000, 1).'M' : (($tileSheet['total_sp'] ?? 0) > 0 ? number_format($tileSheet['total_sp'] / 1000).'k' : '') }}</small></span>
+                <span class="pp tile lvl-{{ $account->characters[$i]->accessLevel() }}"><img class="pic {{ ($tileSheet['training'] ?? null) ? 'training' : '' }}" data-sheet='@json($tileSheet)' data-name="{{ $account->characters[$i]->displayName() }}" src="https://images.evetech.net/characters/{{ $account->characters[$i]->character_id }}/portrait?size=64" alt="" loading="lazy"><small>{{ ($tileSheet['total_sp'] ?? 0) >= 1000000 ? number_format($tileSheet['total_sp'] / 1000000, 1).'M' : (($tileSheet['total_sp'] ?? 0) > 0 ? number_format($tileSheet['total_sp'] / 1000).'k' : '') }}</small></span>
               @else
                 <span class="pic empty"></span>
               @endif
@@ -383,6 +392,12 @@
           </form>
 
           <div class="hint"><span>🔑 Login hint</span><input type="text" data-hint="{{ $account->id }}" maxlength="80" placeholder="e.g. the account's e-mail, a password hint"><span>saved on this PC only</span></div>
+          @php
+            $appsChar = collect($card['rows'])->map(fn ($r) => $r['link'])->first(fn ($l) => ! $l->external)?->character_id;
+          @endphp
+          @if($appsChar)
+            <div class="eveapps"><span>🔐 Apps with access to these characters:</span><a href="https://developers.eveonline.com/authorized-apps?character={{ $appsChar }}" target="_blank" rel="noopener" data-apps="{{ $appsChar }}">EVE's third-party apps page ↗</a><span class="apps-tip">Top right there should say this account's login; if not, log out there and click again. Revoke old corps, old tools and temporary allies; keep devilsrage SeAT and devilsrage mapper.</span></div>
+          @endif
 
           <div class="chars" data-account="{{ $account->id }}">
             @foreach($card['rows'] as $row)
@@ -447,12 +462,13 @@
                 @unless($link->external)
                   <div class="access">
                     <select class="lvl" aria-label="What it shares" title="How much this character shares with the corp">
-                      @foreach(['devil' => 'Devil: shares everything', 'ally' => 'Ally: location, skills, fits, fleets, kills', 'partial' => 'Partial: what you tick', 'public' => 'Public: name, corp and alliance only'] as $value => $label)
+                      @foreach(['devil' => 'Devil: shares everything', 'ally' => 'Ally: location, skills, fits, fleets, kills', 'public' => 'Public: name, corp and alliance only'] as $value => $label)
                         <option value="{{ $value }}" @selected($lvl === $value)>{{ $label }}</option>
                       @endforeach
-                      <option value="spy" class="adv-only">Spy: locked on this PC (the app)</option>
+                      <option value="spy">Spy: locked on this PC, never shared</option>
                     </select>
                     <span class="shares">@if($lvl === 'devil')Shares everything @elseif($lvl === 'public')Shares name, corp and alliance only @else Shares: {{ $shareGroups ? implode(', ', array_map(fn ($g) => $accessGroups[$g][0] ?? $g, $shareGroups)) : 'nothing yet' }} @endif</span>
+                    @if($lvl === 'ally')<button class="btn sm adv-only edit-ticks" type="button">Edit what it shares</button>@endif
                   </div>
                 @endunless
                 @if(! $link->external && in_array((int) $link->character_id, $chatLogOff ?? [], true))
@@ -934,47 +950,79 @@
       if (r && (r.moved > 0 || r.created > 0)) { location.reload(); return; }
     }
 
-    // Each account's own profile folder (named after its EVE login): there, or make it.
+    // Each account's own profile folder: a one-time setup step until it has one; then one line
+    // (changing or forgetting it is under Advanced editing).
+    window.__drPc = pc;
+    const folders = pc.folders || {};
+    const how = `<details><summary>How, and why</summary><p style="margin: 6px 0">In the <b>EVE launcher</b>: click this account → <b>Account Settings</b> → <b>Select Client Profile</b> → pick its profile. Not in the list? Close the launcher fully (its tray icon too) and open it again. Every client of this account then starts with it: from the launcher by hand, from a launch group, or from the app.</p><p style="margin: 6px 0">Why: one profile per account keeps its windows, overview and keys apart from every other account's, so a launch with another account's profile can't change them, and the app knows which settings belong to it. Shared profiles (Alphas, Default) mix many accounts' files and the last client to close wins.</p><p style="margin: 6px 0">The name is yours to pick: it only shows in the EVE launcher and as a folder on this PC. The app never sends it anywhere.</p></details>`;
     for (const panel of panels) {
       const i = panel.dataset.launcher ? (pc.info || {})[panel.dataset.launcher] : null;
       if (!i || panel.querySelector('.ownprof')) continue;
+      const user = Number(panel.dataset.launcher);
       const box = document.createElement('div');
       box.className = 'ownprof';
-      const how = `<details><summary>How, and why</summary><p style="margin: 6px 0">In the <b>EVE launcher</b>: click this account → <b>Account Settings</b> → <b>Select Client Profile</b> → pick <b>${esc(i.own || 'its new profile')}</b>. Not in the list? Close the launcher fully (its tray icon too) and open it again. Every client of this account then starts with it: from the launcher by hand, from a launch group, or from the app.</p><p style="margin: 6px 0">Why: one folder per account keeps its windows, overview and keys apart from every other account's, so a launch with another account's profile can't change them, and the app knows which settings belong to it. Shared profiles (Alphas, Default) mix many accounts' files and the last client to close wins.</p><p style="margin: 6px 0">The name is yours to pick: it only shows in the EVE launcher and as a folder on this PC. The app never sends it anywhere.</p></details>`;
+      const send = (query, after) => {
+        const done = (e) => {
+          if (String(e.detail?.user) !== String(user)) return;
+          window.removeEventListener('devils-rage-app:pc-profile', done);
+          after(e.detail.said || '');
+        };
+        window.addEventListener('devils-rage-app:pc-profile', done);
+        ask(`pc-account-profile?user=${user}&${query}`);
+      };
+      const reload = (said) => { sessionStorage.setItem('dr-said-' + user, said); location.reload(); };
+      let said = '';
+      try { said = sessionStorage.getItem('dr-said-' + user) || ''; sessionStorage.removeItem('dr-said-' + user); } catch (e) {}
       if (i.own) {
-        box.innerHTML = `<span>Profile: <b>settings_${esc(i.own)}</b> <span class="ok" style="color: var(--ok)">✓ its own</span>${i.profile && i.profile !== i.own ? ` · <span style="color: var(--warn)">last started with settings_${esc(i.profile)}: pick ${esc(i.own)} in the launcher</span>` : ''}</span>${how}`;
-      } else {
-        // Where to start from: the profiles this account's characters were played with, newest first.
-        const ids = [...panel.querySelectorAll('.row[data-char]')].map((r) => r.dataset.char);
-        const seenAt = new Map();
-        for (const id of ids) for (const p of (pc.chars || {})[id]?.profiles || []) seenAt.set(p.name, Math.max(seenAt.get(p.name) || 0, p.at || 0));
-        if (i.profile && !seenAt.has(i.profile)) seenAt.set(i.profile, Infinity);
-        const froms = [...seenAt.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
-        const first = i.profile && froms.includes(i.profile) ? i.profile : froms[0];
-        const opts = froms.map((n) => `<option value="${esc(n)}"${n === first ? ' selected' : ''}>settings_${esc(n)}${n === i.profile ? ' (started with last)' : ''}</option>`).join('') + '<option value="fresh">Fresh: EVE\'s default settings</option>';
-        const suggest = (i.login || '').replace(/[^A-Za-z0-9_-]/g, '');
-        box.innerHTML = `<span>Profile: ${i.profile ? 'started with <b>settings_' + esc(i.profile) + '</b>' : 'not seen yet'}</span><button class="btn sm" type="button">Make its own profile</button><span class="said"></span><div class="mk" style="width: 100%; display: none; gap: 6px; align-items: center; flex-wrap: wrap"><label>Name settings_<input class="nm" maxlength="40" size="14" value="${esc(suggest)}" placeholder="e.g. main, acct01"></label><label>start from <select class="fr">${opts}</select></label><button class="btn sm go" type="button" title="Copies that profile's game settings plus only this account's files (nothing else is changed)">Make it</button><button class="btn sm no" type="button">Cancel</button><span style="flex-basis: 100%">Any name: it only shows in the EVE launcher and on this PC. Your login name is the default because it never changes.</span></div>${how}`;
-        const [btn, go, no] = [box.querySelector('button'), box.querySelector('.go'), box.querySelector('.no')];
-        const mk = box.querySelector('.mk');
-        btn.addEventListener('click', () => { mk.style.display = 'flex'; btn.hidden = true; box.querySelector('.nm').focus(); });
-        no.addEventListener('click', () => { mk.style.display = 'none'; btn.hidden = false; });
-        go.addEventListener('click', () => {
-          const name = box.querySelector('.nm').value.trim();
-          if (!/^[A-Za-z0-9_-]{1,40}$/.test(name)) { box.querySelector('.said').textContent = 'Letters, numbers, - and _ only.'; return; }
-          go.disabled = true;
-          const done = (e) => {
-            if (String(e.detail?.user) !== String(panel.dataset.launcher)) return;
-            window.removeEventListener('devils-rage-app:pc-profile', done);
-            box.querySelector('.said').textContent = e.detail.said || '';
-            go.disabled = false;
-            if (/^Made /.test(e.detail.said || '')) { mk.style.display = 'none'; }
-          };
-          window.addEventListener('devils-rage-app:pc-profile', done);
-          ask(`pc-account-profile?user=${panel.dataset.launcher}&name=${encodeURIComponent(name)}&from=${encodeURIComponent(box.querySelector('.fr').value)}`);
-        });
+        box.innerHTML = `<span>Profile: <b>settings_${esc(i.own)}</b> <span style="color: var(--ok)">✓ its own</span>${i.profile && i.profile !== i.own ? ` · <span style="color: var(--warn)">last started with settings_${esc(i.profile)}: pick ${esc(i.own)} in the launcher</span>` : ''}</span><button class="btn sm adv-only" type="button" data-change>Change</button><button class="btn sm adv-only" type="button" data-forget title="The folder stays; the app just stops calling it this account's own">Forget</button><span class="said">${esc(said)}</span>${how}`;
+        box.querySelector('[data-change]').addEventListener('click', () => { box.remove(); drawSetup(panel, i, true); });
+        box.querySelector('[data-forget]').addEventListener('click', () => send('forget=1', reload));
+        panel.querySelector('.hint').after(box);
+        continue;
       }
-      const hint = panel.querySelector('.hint');
-      hint.after(box);
+      drawSetup(panel, i, false, said);
+    }
+    function drawSetup(panel, i, changing, said = '') {
+      const user = Number(panel.dataset.launcher);
+      const send = (query, after) => {
+        const done = (e) => {
+          if (String(e.detail?.user) !== String(user)) return;
+          window.removeEventListener('devils-rage-app:pc-profile', done);
+          after(e.detail.said || '');
+        };
+        window.addEventListener('devils-rage-app:pc-profile', done);
+        ask(`pc-account-profile?user=${user}&${query}`);
+      };
+      const reload = (text) => { try { sessionStorage.setItem('dr-said-' + user, text); } catch (e) {} location.reload(); };
+      // Profiles this account's characters were played with, newest first.
+      const ids = [...panel.querySelectorAll('.row[data-char]')].map((r) => r.dataset.char);
+      const seenAt = new Map();
+      for (const id of ids) for (const p of (pc.chars || {})[id]?.profiles || []) seenAt.set(p.name, Math.max(seenAt.get(p.name) || 0, p.at || 0));
+      if (i.profile && !seenAt.has(i.profile)) seenAt.set(i.profile, Infinity);
+      const froms = [...seenAt.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+      // Already its own: the profile it starts with holds only this account's files.
+      const onlyMine = (n) => { const u = folders[n] || []; return u.length === 1 && Number(u[0]) === user; };
+      const already = [i.profile, ...froms].filter(Boolean).find(onlyMine);
+      const shared = i.profile && !onlyMine(i.profile) ? (folders[i.profile] || []).length : 0;
+      const first = i.profile && froms.includes(i.profile) ? i.profile : froms[0];
+      const opts = froms.map((n) => `<option value="${esc(n)}"${n === first ? ' selected' : ''}>settings_${esc(n)}${n === i.profile ? ' (started with last)' : ''}</option>`).join('') + `<option value="fresh">Fresh: EVE's default settings</option>`;
+      const suggest = (i.login || '').replace(/[^A-Za-z0-9_-]/g, '');
+      const box = document.createElement('div');
+      box.className = 'ownprof setup';
+      box.innerHTML = `<b style="width: 100%">${changing ? 'Change its profile' : 'One-time setup: give this account its own EVE profile'}</b>
+        ${already ? `<div class="opt"><span><b>settings_${esc(already)}</b> already holds only this account's settings.</span><button class="btn sm p" type="button" data-use="${esc(already)}">Use settings_${esc(already)} (recommended)</button></div>` : ''}
+        ${shared ? `<div class="opt" style="color: var(--warn)">It starts with settings_${esc(i.profile)}, which ${shared} accounts share.</div>` : ''}
+        <div class="opt"><span>${already ? 'Or make a new one:' : 'Make one:'}</span><label>settings_<input class="nm" maxlength="40" size="14" value="${esc(suggest)}" placeholder="e.g. 01, main"></label><label>from <select class="fr">${opts}</select></label><button class="btn sm" type="button" data-make title="Copies that profile's game settings plus only this account's files; nothing else changes">Make it</button></div>
+        <div class="opt" style="font-size: 11px">Then pick it for this account in the EVE launcher (How, below). Any name works: it only shows in the launcher and on this PC.${changing ? ' <button class="btn sm" type="button" data-cancel>Cancel</button>' : ''}</div>
+        <span class="said">${esc(said)}</span>${how}`;
+      box.querySelector('[data-use]')?.addEventListener('click', (e) => send('use=' + encodeURIComponent(e.target.dataset.use), reload));
+      box.querySelector('[data-cancel]')?.addEventListener('click', () => location.reload());
+      box.querySelector('[data-make]').addEventListener('click', () => {
+        const name = box.querySelector('.nm').value.trim();
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(name)) { box.querySelector('.said').textContent = 'Letters, numbers, - and _ only.'; return; }
+        send(`name=${encodeURIComponent(name)}&from=${encodeURIComponent(box.querySelector('.fr').value)}`, (text) => (/^Made /.test(text) ? reload(text) : (box.querySelector('.said').textContent = text)));
+      });
+      panel.querySelector('.hint').after(box);
     }
     profileLines(pc);
     otherChars(pc.others || []);
@@ -1026,6 +1074,7 @@
   // A spy row: marked, and locked until unlocked (asks twice); only on this PC.
   window.drMarkSpy = (row, on) => {
     row.classList.toggle('lvl-spy', on);
+    document.querySelectorAll('.pp.tile img[data-name]').forEach((img) => { if (img.dataset.name.toLowerCase() === nameOf(row).toLowerCase()) img.parentNode.classList.toggle('lvl-spy', on); });
     row.querySelector('select.lvl').value = on ? 'spy' : row.dataset.level;
     row.querySelector('.shares').textContent = on ? 'Spy: locked on this PC, never shared' : row.querySelector('.shares').dataset.was || row.querySelector('.shares').textContent;
     row.querySelectorAll('form, .pills, select.grp, .x, .profs button').forEach((el) => { el.style.pointerEvents = on ? 'none' : ''; el.style.opacity = on ? '.45' : ''; });
@@ -1062,10 +1111,17 @@
         }, () => { select.value = row.dataset.level; });
         return;
       }
-      if (level === 'ally' || level === 'partial') {
+      const mine = JSON.parse(row.dataset.groups || '[]');
+      // Ally: its own ticks, else the template. The checklist only in Advanced editing.
+      if (level === 'ally' && !document.body.classList.contains('advanced')) {
+        const r = await save('ally', row.dataset.level === 'ally' && mine.length ? mine : ally);
+        if (r.error) { shares.textContent = r.error; return; }
+        openLogin(r.login);
+        return;
+      }
+      if (level === 'ally') {
         const list = document.getElementById('checklist-tpl').content.firstElementChild.cloneNode(true);
-        const mine = JSON.parse(row.dataset.groups || '[]');
-        const ticked = level === row.dataset.level && mine.length ? mine : level === 'ally' ? ally : [];
+        const ticked = row.dataset.level === 'ally' && mine.length ? mine : ally;
         list.querySelectorAll('input[type=checkbox]').forEach((b) => { b.checked = ticked.includes(b.value); });
         list.querySelector('[data-no]').addEventListener('click', () => { list.remove(); select.value = row.dataset.level; });
         list.querySelector('[data-go]').addEventListener('click', async () => {
@@ -1081,6 +1137,7 @@
       if (r.error) { shares.textContent = r.error; return; }
       openLogin(r.login);
     };
+    row.querySelector('.edit-ticks')?.addEventListener('click', () => { document.body.classList.add('advanced'); choose('ally'); });
     select.addEventListener('change', () => {
       const level = select.value;
       if (row.classList.contains('lvl-spy') && level !== 'spy') {
@@ -1092,6 +1149,21 @@
         return;
       }
       choose(level);
+    });
+  });
+})();
+
+// 19 Nov: EVE's third-party apps page. In the app it opens in its own window, with a strip
+// saying which EVE account should be signed in there (and a Switch account button).
+(() => {
+  if (!window.__DEVILS_RAGE_APP__) return;
+  document.querySelectorAll('a[data-apps]').forEach((a) => {
+    const tip = a.parentNode.querySelector('.apps-tip');
+    if (tip) tip.textContent = 'Opens in its own window: the strip at its bottom says whether the right EVE account is signed in there.';
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      const login = a.closest('.panel')?.querySelector('.login-name')?.textContent || '';
+      try { window.open(`https://dr-app.invalid/eve-apps?character=${a.dataset.apps}&login=${encodeURIComponent(login)}`, '_blank'); } catch (x) {}
     });
   });
 })();
