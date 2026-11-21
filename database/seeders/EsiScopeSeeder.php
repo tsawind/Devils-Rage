@@ -29,6 +29,9 @@ final class EsiScopeSeeder extends Seeder
             EsiScope::ReadImplants,
             EsiScope::ReadCharacterStandings,
             EsiScope::ReadCorporationStandings,
+            EsiScope::ReadStructures,
+            EsiScope::SearchStructures,
+            EsiScope::ReadFatigue,
         ];
         foreach (EsiScope::cases() as $scope) {
             \App\Models\EsiScope::query()->updateOrCreate(

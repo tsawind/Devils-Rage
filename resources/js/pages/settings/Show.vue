@@ -58,6 +58,10 @@ const managedScopes = [
     { scope: 'esi-clones.read_implants.v1', name: 'Implants' },
     { scope: 'esi-characters.read_standings.v1', name: 'Standings' },
     { scope: 'esi-corporations.read_standings.v1', name: 'Corp standings' },
+    // 20 Nov: names of the citadels you can dock in (where you're docked, find one by name), and jump fatigue.
+    { scope: 'esi-universe.read_structures.v1', name: 'Structure names' },
+    { scope: 'esi-search.search_structures.v1', name: 'Find structures' },
+    { scope: 'esi-characters.read_fatigue.v1', name: 'Jump fatigue' },
 ];
 const allScopeNames = managedScopes.map(({ scope }) => scope).join(',');
 const preferredCharacterId = computed(() => props.characters.find((character) => character.is_preferred)?.id.toString());

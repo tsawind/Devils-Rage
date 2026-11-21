@@ -19,3 +19,13 @@ it('patch 37: logging in asks for the fleet, mail, window, fitting, skill, impla
         'esi-corporations.read_standings.v1',
     );
 });
+
+it('asks for structure names and jump fatigue when logging in', function () {
+    $defaults = EsiScope::query()->where('is_default', true)->pluck('name')->all();
+
+    expect($defaults)->toContain(
+        'esi-universe.read_structures.v1',
+        'esi-search.search_structures.v1',
+        'esi-characters.read_fatigue.v1',
+    );
+});
