@@ -311,6 +311,7 @@ export type TCharacterStatus = {
     is_online: boolean;
     station_id: number | null;
     structure_id: number | null;
+    structure_name?: string | null;
     last_online_at: string | null;
     checked_last_online_at: string | null;
     checked_location_at: string | null;

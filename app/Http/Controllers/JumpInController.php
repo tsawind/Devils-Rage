@@ -9,6 +9,7 @@ use App\Models\MapSolarsystem;
 use App\Models\Type;
 use App\Models\User;
 use App\Support\JumpPlanner;
+use App\Support\PilotJumpFatigue;
 use App\Support\PilotJumpSkills;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Http\JsonResponse;
@@ -21,7 +22,7 @@ use Illuminate\Support\Facades\Gate;
  */
 final class JumpInController extends Controller
 {
-    public function show(Request $request, Map $map, #[CurrentUser] User $user, PilotJumpSkills $pilotJumpSkills): JsonResponse
+    public function show(Request $request, Map $map, #[CurrentUser] User $user, PilotJumpSkills $pilotJumpSkills, PilotJumpFatigue $pilotJumpFatigue): JsonResponse
     {
         Gate::authorize('view', $map);
         $validated = $request->validate(['to' => ['required', 'integer']]);
@@ -36,7 +37,7 @@ final class JumpInController extends Controller
             return response()->json(['ok' => false, 'reason' => 'No system near it can take a cyno.']);
         }
 
-        $pilots = $this->pilots($user, $pilotJumpSkills);
+        $pilots = $this->pilots($user, $pilotJumpSkills, $pilotJumpFatigue);
         $known = array_filter($pilots, fn (array $pilot): bool => $pilot['skills_read']);
         $best = fn (string $key): float => $known === [] ? ($key === 'blops' ? JumpPlanner::range(JumpPlanner::BLOPS_BASE_LY, 5) : JumpPlanner::range(JumpPlanner::CARRIER_BASE_LY, 5)) : max(array_column($known, $key.'_ly'));
 
@@ -69,13 +70,14 @@ final class JumpInController extends Controller
     }
 
     /**
-     * @return list<array{name: string, ship: string|null, skills_read: bool, jdc: int, blops_ly: float, carrier_ly: float, conduit_ships: int, command_ships: int|null, advice: string|null}>
+     * @return list<array{name: string, ship: string|null, skills_read: bool, jdc: int, blops_ly: float, carrier_ly: float, conduit_ships: int, command_ships: int|null, advice: string|null, fatigue_read: bool, fatigue_ends: string|null, last_jump: string|null}>
      */
-    private function pilots(User $user, PilotJumpSkills $pilotJumpSkills): array
+    private function pilots(User $user, PilotJumpSkills $pilotJumpSkills, PilotJumpFatigue $pilotJumpFatigue): array
     {
         $pilots = [];
         foreach ($user->characters()->with('characterStatus')->get() as $character) {
             $levels = $pilotJumpSkills->levels($character);
+            $fatigue = $pilotJumpFatigue->of($character);
             $shipTypeId = $character->characterStatus?->ship_type_id;
             $ship = $shipTypeId !== null ? Type::query()->whereKey($shipTypeId)->value('name') : null;
             $jdc = $levels['jdc'] ?? 0;
@@ -90,6 +92,9 @@ final class JumpInController extends Controller
                 'conduit_ships' => JumpPlanner::conduitShips($levels['portal'] ?? 0),
                 'command_ships' => ($levels['command'] ?? 0) > 0 ? JumpPlanner::conduitShips($levels['portal'] ?? 0, true, $racial) : null,
                 'advice' => $levels !== null && $jdc < JumpPlanner::JDC_ADVISED ? sprintf('Jump Drive Calibration %d: train or inject it to IV or V', $jdc) : null,
+                'fatigue_read' => $fatigue !== null,
+                'fatigue_ends' => $fatigue['ends'] ?? null,
+                'last_jump' => $fatigue['last_jump'] ?? null,
             ];
         }
 

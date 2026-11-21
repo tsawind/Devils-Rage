@@ -78,7 +78,12 @@ function onRouteHover(hovered: boolean): void {
 
         <div class="flex min-w-0 items-center gap-1">
             <span class="truncate text-xs">{{ character.name }}</span>
-            <span v-if="is_docked" class="shrink-0 text-[11px] text-muted-foreground">(D)</span>
+            <Tooltip v-if="is_docked">
+                <TooltipTrigger as-child>
+                    <span class="shrink-0 text-[11px] text-muted-foreground">(D)</span>
+                </TooltipTrigger>
+                <TooltipContent>{{ character.status?.structure_name ? `Docked in ${character.status.structure_name}` : 'Docked' }}</TooltipContent>
+            </Tooltip>
             <Tooltip v-else-if="is_scanner">
                 <TooltipTrigger as-child>
                     <span class="shrink-0 text-[11px] text-amber-400">(S)</span>

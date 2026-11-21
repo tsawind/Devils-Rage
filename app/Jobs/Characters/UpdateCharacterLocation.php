@@ -96,6 +96,9 @@ final class UpdateCharacterLocation implements ShouldQueue
             return;
         }
 
+        // 20 Nov: docked in a citadel the mapper has no name for yet: read it (queued).
+        ResolveStructureName::askFor($characterStatus->character, $location->structure_id);
+
         $characterStatus->update([
             'solarsystem_id' => $location->solar_system_id,
             'station_id' => $location->station_id,

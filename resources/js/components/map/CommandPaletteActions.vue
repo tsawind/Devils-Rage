@@ -19,7 +19,7 @@ import { toast } from 'vue-sonner';
 type TTarget = { id: number; name: string; security: number; class: string | number | null };
 type TExit = { from: string; from_id: number; alias: string | null; ly: number; direct: boolean; via: { id: number; name: string; gates: number } | null; highsec: boolean };
 type TKind = { key: 'blops' | 'carrier'; label: string; range_ly: number; assumed: boolean; exits: TExit[] };
-type TPilot = { name: string; ship: string | null; skills_read: boolean; jdc: number; blops_ly: number; carrier_ly: number; conduit_ships: number; command_ships: number | null; advice: string | null };
+type TPilot = { name: string; ship: string | null; skills_read: boolean; jdc: number; blops_ly: number; carrier_ly: number; conduit_ships: number; command_ships: number | null; advice: string | null; fatigue_read?: boolean; fatigue_ends?: string | null; last_jump?: string | null };
 type TJumpIn =
     | { ok: true; target: { id: number; name: string; security: number }; landing: { id: number; name: string; gates: number }; kinds: TKind[]; pilots: TPilot[] }
     | { ok: false; reason: string };
@@ -65,6 +65,13 @@ watch(
     },
     { immediate: true },
 );
+
+/** Jump fatigue left until `ends` (ISO), as "1h 23m" (the panel is read right after it opens). */
+function fatigueLeft(ends: string): string {
+    const minutes = Math.max(0, Math.round((Date.parse(ends) - Date.now()) / 60000));
+    const hours = Math.floor(minutes / 60);
+    return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+}
 
 async function loadJumpIn(id: number): Promise<void> {
     try {
@@ -187,6 +194,8 @@ const order = computed(() => (command === 'blops' || command === 'carrier' ? ['j
                             <span v-if="pilot.advice" class="text-amber-400"> · {{ pilot.advice }}</span>
                         </template>
                         <template v-else>{{ pilot.name }}: skills not shared (Settings → EVE characters → Grant all permissions)</template>
+                        <span v-if="pilot.fatigue_read && pilot.fatigue_ends" class="text-amber-400"> · fatigue {{ fatigueLeft(pilot.fatigue_ends) }}</span>
+                        <span v-else-if="pilot.fatigue_read"> · no jump fatigue</span>
                     </span>
                 </div>
             </template>
