@@ -3,7 +3,7 @@
  * "cap Amamake" (or "carrier"). The command picks which actions come first; the rest is the
  * system to search for.
  */
-export type TPaletteCommand = 'dest' | 'route' | 'blops' | 'carrier' | null;
+export type TPaletteCommand = 'dest' | 'route' | 'blops' | 'carrier' | 'dock' | null;
 
 const COMMANDS: Record<string, Exclude<TPaletteCommand, null>> = {
     dest: 'dest',
@@ -14,6 +14,10 @@ const COMMANDS: Record<string, Exclude<TPaletteCommand, null>> = {
     cap: 'carrier',
     carrier: 'carrier',
     conduit: 'carrier',
+    // 20 Nov: "dock Home Fort": a player structure as the destination.
+    dock: 'dock',
+    citadel: 'dock',
+    structure: 'dock',
 };
 
 export function parsePaletteCommand(text: string): { command: TPaletteCommand; query: string } {

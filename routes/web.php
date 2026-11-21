@@ -78,6 +78,7 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\SignatureArmController;
 use App\Http\Controllers\SignatureController;
 use App\Http\Controllers\StatisticsController;
+use App\Http\Controllers\StructureSearchController;
 use App\Http\Controllers\SystemIntelController;
 use App\Http\Controllers\SystemNoteController;
 use App\Http\Controllers\TokenManagementController;
@@ -217,6 +218,8 @@ Route::middleware('auth')->group(function () {
     Route::post('tracking', [TrackingController::class, 'store'])->name('tracking.store');
 
     Route::post('waypoints', [WaypointController::class, 'store'])->name('waypoints.store');
+    // 20 Nov: "dock <name>" in the search.
+    Route::get('structures/search', [StructureSearchController::class, 'index'])->middleware('throttle:30,1')->name('structures.search');
     Route::post('waypoints/bulk', [BulkWaypointController::class, 'store'])->name('waypoints.bulk');
     Route::post('waypoints/route', [RouteWaypointController::class, 'store'])->name('waypoints.route');
     // Patch 37: viewer links (Share button) and the mailed route report.

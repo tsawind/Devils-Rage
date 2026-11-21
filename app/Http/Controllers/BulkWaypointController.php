@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Actions\SetWaypointAction;
 use App\Builders\EsiTokenBuilder;
 use App\Models\User;
+use App\Rules\WaypointDestination;
 use App\Scopes\CharacterIsOnline;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,7 +23,7 @@ final class BulkWaypointController extends Controller
     public function store(Request $request, #[CurrentUser] User $user, SetWaypointAction $setWaypointAction): RedirectResponse
     {
         $validated = $request->validate([
-            'destination_id' => ['required', 'integer', 'exists:solarsystems,id'],
+            'destination_id' => ['required', 'integer', new WaypointDestination()],
             'clear_other_waypoints' => ['sometimes', 'boolean'],
             'add_to_beginning' => ['sometimes', 'boolean'],
         ]);

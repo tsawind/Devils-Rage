@@ -2,6 +2,7 @@
 import { AllianceLogo, CorporationLogo } from '@/components/images';
 import CommandPaletteActions from '@/components/map/CommandPaletteActions.vue';
 import CommandPaletteAddBadge from '@/components/map/CommandPaletteAddBadge.vue';
+import CommandPaletteStructures from '@/components/map/CommandPaletteStructures.vue';
 import SolarsystemSearchResult from '@/components/solarsystem/SolarsystemSearchResult.vue';
 import { useCommandPalette } from '@/composables/useCommandPalette';
 import { useMapSearch } from '@/composables/useMapSearch';
@@ -204,7 +205,7 @@ function handleThreatSystemSelect(system: TThreatSystemMatch) {
                             v-model="search"
                             auto-focus
                             data-slot="command-input"
-                            placeholder="Search systems, aliases, occupiers, threats… or blops / cap / dest + a system"
+                            placeholder="Search systems, aliases, occupiers, threats… or blops / cap / dest + a system, dock + a structure"
                             class="h-11 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                             @keydown.esc.prevent="open = false"
                         />
@@ -224,6 +225,8 @@ function handleThreatSystemSelect(system: TThreatSystemMatch) {
                                 @close="open = false"
                                 @add="handleAddSystem"
                             />
+                            <!-- 20 Nov: "dock <name>": player structures as the destination -->
+                            <CommandPaletteStructures v-if="parsed.command === 'dock' && page.props.auth?.user" :query="query" @close="open = false" />
                             <!-- Systems on the map, then matching systems anywhere in EVE -->
                             <ComboboxGroup v-if="matched_systems.length || off_map_systems.length" class="col-span-full grid grid-cols-subgrid">
                                 <ComboboxLabel :class="label_classes"> Systems </ComboboxLabel>

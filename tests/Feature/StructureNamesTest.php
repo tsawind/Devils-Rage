@@ -73,3 +73,53 @@ it('keeps nothing when EVE refuses (the pilot cannot dock there)', function (): 
 
     expect(StructureName::nameOf(1_035_000_000_004))->toBeNull();
 });
+
+function structureSearchResult(array $ids): NicolasKion\Esi\DTO\SearchResult
+{
+    return new NicolasKion\Esi\DTO\SearchResult(agent: [], alliance: [], character: [], constellation: [], corporation: [], faction: [], inventory_type: [], region: [], solar_system: [], station: [], structure: $ids);
+}
+
+it('finds structures by name with EVE\'s search and reads their names', function (): void {
+    $character = structurePilot();
+    $character->esiTokens()->first()->esiScopes()->attach(EsiScope::query()->firstOrCreate(['name' => EsiScopeName::SearchStructures->value])->id);
+    $user = App\Models\User::factory()->create();
+    $character->update(['user_id' => $user->id]);
+    $esi = Mockery::mock(Esi::class);
+    $esi->shouldReceive('search')->once()->andReturn(new EsiResult(data: structureSearchResult([1_035_000_000_010])));
+    $esi->shouldReceive('getStructure')->once()->andReturn(new EsiResult(data: new Structure('Daisy - Rage Fort', 98000001, new Position(0.0, 0.0, 0.0), 31000005, 35833)));
+    app()->instance(Esi::class, $esi);
+
+    Pest\Laravel\actingAs($user)
+        ->getJson(route('structures.search', ['q' => 'Rage']))
+        ->assertSuccessful()
+        ->assertJsonPath('searched_eve', true)
+        ->assertJsonPath('structures.0.name', 'Daisy - Rage Fort');
+});
+
+it('lists known structures without asking EVE when no pilot granted Find structures', function (): void {
+    $user = App\Models\User::factory()->create();
+    StructureName::query()->create(['id' => 1_035_000_000_011, 'name' => 'Known Rage Raitaru']);
+    $esi = Mockery::mock(Esi::class);
+    $esi->shouldNotReceive('search');
+    app()->instance(Esi::class, $esi);
+
+    Pest\Laravel\actingAs($user)
+        ->getJson(route('structures.search', ['q' => 'rage']))
+        ->assertSuccessful()
+        ->assertJsonPath('searched_eve', false)
+        ->assertJsonPath('structures.0.name', 'Known Rage Raitaru');
+});
+
+it('takes a known structure as a waypoint destination, and refuses unknown ids', function (): void {
+    StructureName::query()->create(['id' => 1_035_000_000_012, 'name' => 'Known Fort']);
+    $rule = new App\Rules\WaypointDestination();
+    $failed = false;
+    $rule->validate('destination_id', 1_035_000_000_012, function () use (&$failed): void {
+        $failed = true;
+    });
+    expect($failed)->toBeFalse();
+    $rule->validate('destination_id', 1_035_000_000_999, function () use (&$failed): void {
+        $failed = true;
+    });
+    expect($failed)->toBeTrue();
+});

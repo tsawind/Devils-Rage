@@ -6,6 +6,7 @@ namespace App\Http\Requests;
 
 use App\Models\Character;
 use App\Models\User;
+use App\Rules\WaypointDestination;
 use Illuminate\Container\Attributes\CurrentUser;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -33,7 +34,7 @@ final class SetWaypointRequest extends FormRequest
     {
         return [
             'character_id' => 'required|integer|exists:characters,id',
-            'destination_id' => 'required|integer|exists:solarsystems,id',
+            'destination_id' => ['required', 'integer', new WaypointDestination()],
             'clear_other_waypoints' => 'sometimes|boolean',
             'add_to_beginning' => 'sometimes|boolean',
         ];
