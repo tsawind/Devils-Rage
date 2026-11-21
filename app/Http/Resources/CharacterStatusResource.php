@@ -28,7 +28,7 @@ final class CharacterStatusResource extends JsonResource
             'station_id' => $this->station_id,
             'structure_id' => $this->structure_id,
             // 20 Nov: the citadel's name, once a pilot with Structure names has read it.
-            'structure_name' => StructureName::nameOf($this->structure_id === null ? null : (int) $this->structure_id),
+            'structure_name' => StructureName::nameOf($this->structure_id),
             'ship_name' => $this->ship_name,
             'ship_type' => $this->shipType?->toResource(TypeResource::class),
             'is_online' => $this->is_online,

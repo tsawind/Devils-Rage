@@ -53,7 +53,8 @@ class LaunchGroupsController extends Controller
             $chars = [];
             foreach ($account->characters as $link) {
                 $name = (string) ($names[$link->character_id] ?? $link->displayName());
-                $chars[] = ['id' => (int) $link->character_id, 'name' => $name];
+                // 20 Nov: its access level, for the Spy / Ally / Public marks on the app's previews and bars.
+                $chars[] = ['id' => (int) $link->character_id, 'name' => $name, 'level' => $link->accessLevel()];
                 foreach ($link->launchGroups as $group) {
                     $members[$group->id][] = ['name' => $name, 'account' => $account->nickname, 'character_id' => (int) $link->character_id];
                 }
