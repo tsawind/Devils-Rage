@@ -997,29 +997,57 @@
       // Profiles this account's characters were played with, newest first.
       const ids = [...panel.querySelectorAll('.row[data-char]')].map((r) => r.dataset.char);
       const seenAt = new Map();
-      for (const id of ids) for (const p of (pc.chars || {})[id]?.profiles || []) seenAt.set(p.name, Math.max(seenAt.get(p.name) || 0, p.at || 0));
+      const mark = (n, at) => { if (n) seenAt.set(n, Math.max(seenAt.get(n) || 0, at || 0)); };
+      for (const id of ids) for (const p of (pc.chars || {})[id]?.profiles || []) mark(p.name, p.at);
+      // 23 Nov: and every folder holding this account's own file.
+      for (const [n, users] of Object.entries(folders)) if (users.map(Number).includes(user)) mark(n, (pc.folder_times || {})[n]?.[String(user)]);
       if (i.profile && !seenAt.has(i.profile)) seenAt.set(i.profile, Infinity);
-      const froms = [...seenAt.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
-      // Already its own: the profile it starts with holds only this account's files.
-      const onlyMine = (n) => { const u = folders[n] || []; return u.length === 1 && Number(u[0]) === user; };
-      const already = [i.profile, ...froms].filter(Boolean).find(onlyMine);
-      const shared = i.profile && !onlyMine(i.profile) ? (folders[i.profile] || []).length : 0;
+      const froms = [...seenAt.entries()].sort((a, b) => (b[0] === i.profile) - (a[0] === i.profile) || b[1] - a[1]).map(([n]) => n);
+      // Other accounts with a file in a folder; an old leftover copy (a month older than this
+      // account's, or untouched for 90 days) isn't really sharing it.
+      const sharers = (n) => {
+        const times = (pc.folder_times || {})[n] || {};
+        const mine = times[String(user)] || 0;
+        return (folders[n] || []).filter((u) => Number(u) !== user).map((u) => {
+          const at = times[String(u)] || 0;
+          return { user: u, at, stale: !at || (mine && mine - at > 30 * 86400000) || Date.now() - at > 90 * 86400000 };
+        });
+      };
+      const live = (n) => sharers(n).filter((o) => !o.stale);
+      // Already its own: the profile it starts with holds only this account's files (leftovers aside).
+      const onlyMine = (n) => (folders[n] || []).map(Number).includes(user) && !live(n).length;
+      const already = froms.find(onlyMine);
+      const shared = i.profile && !onlyMine(i.profile) ? live(i.profile).length : 0;
+      const ago = (t) => { if (!t || t === Infinity) return ''; const d = Math.floor((Date.now() - t) / 86400000); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`; };
+      const useOpts = froms.map((n) => {
+        const others = live(n).length;
+        const bits = [n === i.profile ? 'starts with it now' : '', ago(seenAt.get(n)) ? 'used ' + ago(seenAt.get(n)) : '', others ? `${others} other account${others === 1 ? '' : 's'} too` : ''].filter(Boolean).join(' · ');
+        return `<option value="${esc(n)}"${n === (already || i.profile) ? ' selected' : ''}>settings_${esc(n)}${bits ? ' (' + esc(bits) + ')' : ''}</option>`;
+      }).join('');
+      // Copy from: this account's profiles first, then every other profile on this PC.
+      const every = new Set([...Object.keys(folders), ...Object.values(pc.chars || {}).flatMap((c) => (c.profiles || []).map((f) => f.name)), 'Default']);
+      const rest = [...every].filter((n) => n && !froms.includes(n)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
       const first = i.profile && froms.includes(i.profile) ? i.profile : froms[0];
-      const opts = froms.map((n) => `<option value="${esc(n)}"${n === first ? ' selected' : ''}>settings_${esc(n)}${n === i.profile ? ' (started with last)' : ''}</option>`).join('') + `<option value="fresh">Fresh: EVE's default settings</option>`;
-      const suggest = (i.login || '').replace(/[^A-Za-z0-9_-]/g, '');
+      const opt = (n) => `<option value="${esc(n)}"${n === first ? ' selected' : ''}>settings_${esc(n)}${n === i.profile ? ' (started with last)' : ''}</option>`;
+      const opts = (froms.length ? `<optgroup label="This account's">${froms.map(opt).join('')}</optgroup>` : '')
+        + (rest.length ? `<optgroup label="Other profiles on this PC">${rest.map(opt).join('')}</optgroup>` : '')
+        + `<option value="fresh">Fresh: EVE's default settings</option>`;
+      const taken = new Set([...every].map((n) => n.toLowerCase()));
+      const suggest = [(i.login || '').replace(/[^A-Za-z0-9_-]/g, '')].find((n) => n && !taken.has(n.toLowerCase())) || '';
       const box = document.createElement('div');
       box.className = 'ownprof setup';
       box.innerHTML = `<b style="width: 100%">${changing ? 'Change its profile' : 'One-time setup: give this account its own EVE profile'}</b>
-        ${already ? `<div class="opt"><span><b>settings_${esc(already)}</b> already holds only this account's settings.</span><button class="btn sm p" type="button" data-use="${esc(already)}">Use settings_${esc(already)} (recommended)</button></div>` : ''}
-        ${shared ? `<div class="opt" style="color: var(--warn)">It starts with settings_${esc(i.profile)}, which ${shared} accounts share.</div>` : ''}
-        <div class="opt"><span>${already ? 'Or make a new one:' : 'Make one:'}</span><label>settings_<input class="nm" maxlength="40" size="14" value="${esc(suggest)}" placeholder="e.g. 01, main"></label><label>from <select class="fr">${opts}</select></label><button class="btn sm" type="button" data-make title="Copies that profile's game settings plus only this account's files; nothing else changes">Make it</button></div>
-        <div class="opt" style="font-size: 11px">Then pick it for this account in the EVE launcher (How, below). Any name works: it only shows in the launcher and on this PC.${changing ? ' <button class="btn sm" type="button" data-cancel>Cancel</button>' : ''}</div>
+        ${froms.length ? `<div class="opt"><span>${already ? `<b>settings_${esc(already)}</b> already holds only this account's settings.` : 'Use one it already has:'}</span><select class="us">${useOpts}</select><button class="btn sm p" type="button" data-use>Use it</button></div>` : ''}
+        ${shared ? `<div class="opt" style="color: var(--warn)">It starts with settings_${esc(i.profile)}, which ${shared} other account${shared === 1 ? '' : 's'} use${shared === 1 ? 's' : ''} too.</div>` : ''}
+        <div class="opt"><span>${froms.length ? 'Or make a new one:' : 'Make one:'}</span><label>settings_<input class="nm" maxlength="40" size="14" value="${esc(suggest)}" placeholder="e.g. 01, main"></label><label>from <select class="fr">${opts}</select></label><button class="btn sm" type="button" data-make title="Copies that profile's game settings plus only this account's files; nothing else changes">Make it</button></div>
+        <div class="opt" style="font-size: 11px">Making one: close every EVE client and the EVE launcher first (tray icon too). Then open the launcher and pick it for this account (How, below). Any name works: it only shows in the launcher and on this PC.${changing ? ' <button class="btn sm" type="button" data-cancel>Cancel</button>' : ''}</div>
         <span class="said">${esc(said)}</span>${how}`;
-      box.querySelector('[data-use]')?.addEventListener('click', (e) => send('use=' + encodeURIComponent(e.target.dataset.use), reload));
+      box.querySelector('[data-use]')?.addEventListener('click', () => send('use=' + encodeURIComponent(box.querySelector('.us').value), reload));
       box.querySelector('[data-cancel]')?.addEventListener('click', () => location.reload());
       box.querySelector('[data-make]').addEventListener('click', () => {
         const name = box.querySelector('.nm').value.trim();
         if (!/^[A-Za-z0-9_-]{1,40}$/.test(name)) { box.querySelector('.said').textContent = 'Letters, numbers, - and _ only.'; return; }
+        if (taken.has(name.toLowerCase())) { box.querySelector('.said').textContent = `settings_${name} is already there: pick it under "Use one it already has", or give a new name.`; return; }
         send(`name=${encodeURIComponent(name)}&from=${encodeURIComponent(box.querySelector('.fr').value)}`, (text) => (/^Made /.test(text) ? reload(text) : (box.querySelector('.said').textContent = text)));
       });
       panel.querySelector('.hint').after(box);
