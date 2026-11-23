@@ -230,6 +230,7 @@
   .checklist label small { color: var(--muted); }
   .checklist .acts { display: flex; gap: 8px; margin-top: 6px; align-items: center; flex-wrap: wrap; }
   body:not(.advanced) .adv-only { display: none !important; }
+  .said-err { display: block; width: 100%; background: #3a1416; color: var(--bad); font-weight: 700; font-size: 15px; border-radius: 6px; padding: 8px 10px; margin-top: 6px; }
   .errors { background: #3a1416; color: var(--bad); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; }
   @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } .row { grid-template-columns: 18px 30px minmax(0,1fr) 90px 80px; } .row select, .row .x { display: none; } }
 </style>
@@ -768,6 +769,11 @@
     }
   };
 
+  // 23 Nov: an answer from the app; anything that isn't a success (Close every EVE client…) in big red.
+  window.drSaid = (el, text) => {
+    el.textContent = text || '';
+    el.classList.toggle('said-err', !!text && !/^(Made |Moved |Deleted |Moving|Deleting|settings_\S+ is this account|Forgotten)/.test(text));
+  };
   // Archive (recommended) or delete one settings file (asks twice), answer shown in `box`.
   function fileAction(kind, id, name, profile, box) {
     const said = box.querySelector('.said') || box;
@@ -776,7 +782,7 @@
       const done = (e) => {
         if (String(e.detail?.id) !== String(id)) return;
         window.removeEventListener('devils-rage-app:pc-archived', done);
-        said.textContent = e.detail.said || '';
+        drSaid(said, e.detail.said);
         if (/^(Moved|Deleted) [1-9]/.test(said.textContent)) box.style.opacity = '.4';
       };
       window.addEventListener('devils-rage-app:pc-archived', done);
@@ -835,7 +841,7 @@
             const done = (e) => {
               if (String(e.detail?.id) !== String(c.id)) return;
               window.removeEventListener('devils-rage-app:pc-archived', done);
-              box.textContent = e.detail.said || '';
+              drSaid(box, e.detail.said);
               if (/^(Moved|Deleted)/.test(box.textContent)) setTimeout(() => row.remove(), 2500);
             };
             window.addEventListener('devils-rage-app:pc-archived', done);
@@ -854,7 +860,7 @@
           const done = (e) => {
             if (String(e.detail?.id) !== String(c.id)) return;
             window.removeEventListener('devils-rage-app:pc-archived', done);
-            box.textContent = e.detail.said || '';
+            drSaid(box, e.detail.said);
             if (/^Moved/.test(box.textContent)) setTimeout(() => row.remove(), 2500);
           };
           window.addEventListener('devils-rage-app:pc-archived', done);
@@ -978,6 +984,7 @@
         box.querySelector('[data-change]').addEventListener('click', () => { box.remove(); drawSetup(panel, i, true); });
         box.querySelector('[data-forget]').addEventListener('click', () => send('forget=1', reload));
         panel.querySelector('.hint').after(box);
+        drSaid(box.querySelector('.said'), said);
         continue;
       }
       drawSetup(panel, i, false, said);
@@ -1046,11 +1053,12 @@
       box.querySelector('[data-cancel]')?.addEventListener('click', () => location.reload());
       box.querySelector('[data-make]').addEventListener('click', () => {
         const name = box.querySelector('.nm').value.trim();
-        if (!/^[A-Za-z0-9_-]{1,40}$/.test(name)) { box.querySelector('.said').textContent = 'Letters, numbers, - and _ only.'; return; }
-        if (taken.has(name.toLowerCase())) { box.querySelector('.said').textContent = `settings_${name} is already there: pick it under "Use one it already has", or give a new name.`; return; }
-        send(`name=${encodeURIComponent(name)}&from=${encodeURIComponent(box.querySelector('.fr').value)}`, (text) => (/^Made /.test(text) ? reload(text) : (box.querySelector('.said').textContent = text)));
+        if (!/^[A-Za-z0-9_-]{1,40}$/.test(name)) { drSaid(box.querySelector('.said'), 'Letters, numbers, - and _ only.'); return; }
+        if (taken.has(name.toLowerCase())) { drSaid(box.querySelector('.said'), `settings_${name} is already there: pick it under "Use one it already has", or give a new name.`); return; }
+        send(`name=${encodeURIComponent(name)}&from=${encodeURIComponent(box.querySelector('.fr').value)}`, (text) => (/^Made /.test(text) ? reload(text) : drSaid(box.querySelector('.said'), text)));
       });
       panel.querySelector('.hint').after(box);
+      drSaid(box.querySelector('.said'), said);
     }
     profileLines(pc);
     otherChars(pc.others || []);
