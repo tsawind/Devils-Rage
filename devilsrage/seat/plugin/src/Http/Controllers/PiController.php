@@ -21,6 +21,7 @@ use DevilsRage\Seat\Pi\PiScan;
 use DevilsRage\Seat\Pi\PiSkills;
 use DevilsRage\Seat\Pi\PiTemplate;
 use DevilsRage\Seat\Pi\PlanetMaps;
+use DevilsRage\Seat\Pi\PlanetOrder;
 use DevilsRage\Seat\Services\Corporation;
 use DevilsRage\Seat\Models\Account;
 use DevilsRage\Seat\Services\DiscordDm;
@@ -492,7 +493,7 @@ class PiController extends Controller
                 ])->values()->all(),
             ];
         }
-        usort($out, fn (array $a, array $b): int => strnatcmp($a['name'], $b['name']));
+        usort($out, fn (array $a, array $b): int => PlanetOrder::compare($a['name'], $b['name']));
 
         return $out;
     }
@@ -823,7 +824,7 @@ class PiController extends Controller
                 'no_colony' => true,
             ];
         }
-        usort($out, fn (array $a, array $b): int => strnatcmp($a['name'], $b['name']));
+        usort($out, fn (array $a, array $b): int => PlanetOrder::compare($a['name'], $b['name']));
         $hereNames = CharacterInfo::query()->whereIn('character_id', $here->keys()->all())->pluck('name', 'character_id');
 
         return response()->json([

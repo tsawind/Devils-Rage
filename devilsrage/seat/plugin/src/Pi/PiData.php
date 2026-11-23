@@ -140,7 +140,7 @@ final class PiData
             $byCharacter[(int) $planet->character_id][] = $result;
         }
         foreach ($byCharacter as &$list) {
-            usort($list, fn (array $a, array $b): int => strnatcmp($a['name'], $b['name']));
+            usort($list, fn (array $a, array $b): int => PlanetOrder::compare($a['name'], $b['name']));
         }
 
         return $byCharacter;
