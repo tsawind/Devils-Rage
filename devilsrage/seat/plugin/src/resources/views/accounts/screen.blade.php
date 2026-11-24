@@ -757,7 +757,7 @@
       for (const p of profs) {
         const line = document.createElement('div');
         line.className = 'prow';
-        line.innerHTML = `<span>settings_${esc(p.name)}</span><span>${day(p.at)}</span><button type="button" title="Show this file in File Explorer">📂</button><button type="button" title="Recommended: move this file to the archive folder (nothing is deleted)">Archive</button><button type="button" title="Delete this file for good (asks twice)">Delete</button><span class="said"></span>`;
+        line.innerHTML = `<span>settings_${esc(p.name)}</span><span>${day(p.at)}</span><button type="button" title="Show this file in File Explorer">📂</button><button type="button" title="Recommended: move only this character's file in settings_${esc(p.name)} to the archive folder (nothing is deleted). For the whole folder: Change → Archive folder.">Archive file</button><button type="button" title="Delete only this character's file in settings_${esc(p.name)} (asks twice). For the whole folder: Change → Delete folder.">Delete file</button><span class="said"></span>`;
         const [open, arch, del] = line.querySelectorAll('button');
         open.addEventListener('click', () => ask(`pc-open-folder?id=${id}&profile=${encodeURIComponent(p.name)}`));
         arch.addEventListener('click', () => fileAction('archive', id, name, p.name, line));
@@ -789,7 +789,7 @@
       ask(`pc-other-${kind}?id=${id}&name=${encodeURIComponent(name || '')}&profile=${encodeURIComponent(profile || '')}`);
     };
     if (kind === 'archive') { go(); return; }
-    said.innerHTML = `Delete settings_${esc(profile)}'s file for ${esc(name || 'this character')}? Archive keeps it. <button type="button">Delete</button> <button type="button">Cancel</button>`;
+    said.innerHTML = `Delete only ${esc(name || 'this character')}'s file in settings_${esc(profile)} (not the folder)? Archive keeps it. <button type="button">Delete</button> <button type="button">Cancel</button>`;
     const [y1, n1] = said.querySelectorAll('button');
     n1.addEventListener('click', () => { said.textContent = ''; });
     y1.addEventListener('click', () => {
@@ -1044,12 +1044,32 @@
       const box = document.createElement('div');
       box.className = 'ownprof setup';
       box.innerHTML = `<b style="width: 100%">${changing ? 'Change its profile' : 'One-time setup: give this account its own EVE profile'}</b>
-        ${froms.length ? `<div class="opt"><span>${already ? `<b>settings_${esc(already)}</b> already holds only this account's settings.` : 'Use one it already has:'}</span><select class="us">${useOpts}</select><button class="btn sm p" type="button" data-use>Use it</button></div>` : ''}
+        ${froms.length ? `<div class="opt"><span>${already ? `<b>settings_${esc(already)}</b> already holds only this account's settings.` : 'Use one it already has:'}</span><select class="us">${useOpts}</select><button class="btn sm p" type="button" data-use>Use it</button><span class="fold"><button class="btn sm" type="button" data-farch title="Move this whole profile folder into Devils Rage archive (the launcher stops listing it; Client settings can put it back). Every EVE client and the launcher closed.">Archive folder</button><button class="btn sm" type="button" data-fdel title="Delete this whole profile folder (a snapshot of its files is kept in Client settings). Every EVE client and the launcher closed.">Delete folder</button></span></div>` : ''}
         ${shared ? `<div class="opt" style="color: var(--warn)">It starts with settings_${esc(i.profile)}, which ${shared} other account${shared === 1 ? '' : 's'} use${shared === 1 ? 's' : ''} too.</div>` : ''}
         <div class="opt"><span>${froms.length ? 'Or make a new one:' : 'Make one:'}</span><label>settings_<input class="nm" maxlength="40" size="14" value="${esc(suggest)}" placeholder="e.g. 01, main"></label><label>from <select class="fr">${opts}</select></label><button class="btn sm" type="button" data-make title="Copies that profile's game settings plus only this account's files; nothing else changes">Make it</button></div>
         <div class="opt" style="font-size: 11px">Making one: close every EVE client and the EVE launcher first (tray icon too). Then open the launcher and pick it for this account (How, below). Any name works: it only shows in the launcher and on this PC.${changing ? ' <button class="btn sm" type="button" data-cancel>Cancel</button>' : ''}</div>
         <span class="said">${esc(said)}</span>${how}`;
       box.querySelector('[data-use]')?.addEventListener('click', () => send('use=' + encodeURIComponent(box.querySelector('.us').value), reload));
+      // 23 Nov: a whole profile folder (the file rows below only touch one character's file).
+      const folderDo = (what) => {
+        const pick = box.querySelector('.us').value;
+        const fold = box.querySelector('.fold');
+        const keep = fold.innerHTML;
+        const back = () => { fold.innerHTML = keep; wire(); };
+        const step = (text, next) => {
+          fold.innerHTML = `<span>${text}</span> <button class="btn sm" type="button" data-y>Yes</button> <button class="btn sm p" type="button" data-n>Cancel</button>`;
+          fold.querySelector('[data-y]').addEventListener('click', next);
+          fold.querySelector('[data-n]').addEventListener('click', back);
+        };
+        const go = () => send(`folder=${what}&profile=${encodeURIComponent(pick)}`, (text) => (/^(Archived|Deleted) /.test(text) ? reload(text) : (back(), drSaid(box.querySelector('.said'), text))));
+        if (what === 'archive') step(`Archive the whole settings_${esc(pick)} folder?`, go);
+        else step(`Delete the whole settings_${esc(pick)} folder?`, () => step('A snapshot of its files is kept in Client settings; the folder is gone. Delete it?', go));
+      };
+      const wire = () => {
+        box.querySelector('[data-farch]')?.addEventListener('click', () => folderDo('archive'));
+        box.querySelector('[data-fdel]')?.addEventListener('click', () => folderDo('delete'));
+      };
+      wire();
       box.querySelector('[data-cancel]')?.addEventListener('click', () => location.reload());
       box.querySelector('[data-make]').addEventListener('click', () => {
         const name = box.querySelector('.nm').value.trim();
