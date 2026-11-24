@@ -757,6 +757,7 @@
       for (const p of profs) {
         const line = document.createElement('div');
         line.className = 'prow';
+        line.dataset.profile = p.name;
         line.innerHTML = `<span>settings_${esc(p.name)}</span><span>${day(p.at)}</span><button type="button" title="Show this file in File Explorer">📂</button><button type="button" title="Recommended: move only this character's file in settings_${esc(p.name)} to the archive folder (nothing is deleted). For the whole folder: Change → Archive folder.">Archive file</button><button type="button" title="Delete only this character's file in settings_${esc(p.name)} (asks twice). For the whole folder: Change → Delete folder.">Delete file</button><span class="said"></span>`;
         const [open, arch, del] = line.querySelectorAll('button');
         open.addEventListener('click', () => ask(`pc-open-folder?id=${id}&profile=${encodeURIComponent(p.name)}`));
@@ -789,9 +790,29 @@
       ask(`pc-other-${kind}?id=${id}&name=${encodeURIComponent(name || '')}&profile=${encodeURIComponent(profile || '')}`);
     };
     if (kind === 'archive') { go(); return; }
-    said.innerHTML = `Delete only ${esc(name || 'this character')}'s file in settings_${esc(profile)} (not the folder)? Archive keeps it. <button type="button">Delete</button> <button type="button">Cancel</button>`;
-    const [y1, n1] = said.querySelectorAll('button');
+    said.innerHTML = `Delete only ${esc(name || 'this character')}'s file in settings_${esc(profile)}? Archive keeps it. <button type="button">Delete file</button> ${profile ? `<button type="button">Delete the whole settings_${esc(profile)} folder</button> ` : ''}<button type="button">Cancel</button>`;
+    const buttons = [...said.querySelectorAll('button')];
+    const y1 = buttons[0], n1 = buttons[buttons.length - 1];
     n1.addEventListener('click', () => { said.textContent = ''; });
+    // 23 Nov: or the whole profile folder (every character's and account's files in it).
+    if (profile) buttons[1].addEventListener('click', () => {
+      said.innerHTML = `<b>Delete the whole settings_${esc(profile)} folder?</b> Every character's and account's settings in it go; a snapshot is kept in Client settings. Every EVE client and the launcher must be closed. <button type="button">Yes, delete the folder</button> <button type="button">Cancel</button>`;
+      const [y3, n3] = said.querySelectorAll('button');
+      n3.addEventListener('click', () => { said.textContent = ''; });
+      y3.addEventListener('click', () => {
+        said.textContent = 'Deleting…';
+        const done = (e) => {
+          if (String(e.detail?.user) !== '0') return;
+          window.removeEventListener('devils-rage-app:pc-profile', done);
+          drSaid(said, e.detail.said || '');
+          if (/^Deleted settings_/.test(said.textContent)) {
+            for (const row of document.querySelectorAll('.prow')) if (row.dataset.profile === profile) row.style.opacity = '.4';
+          }
+        };
+        window.addEventListener('devils-rage-app:pc-profile', done);
+        ask(`pc-account-profile?user=0&folder=delete&profile=${encodeURIComponent(profile)}`);
+      });
+    });
     y1.addEventListener('click', () => {
       said.innerHTML = `<b>Last check:</b> its window layout there is gone for good. <button type="button">Yes, delete</button> <button type="button">Cancel</button>`;
       const [y2, n2] = said.querySelectorAll('button');
