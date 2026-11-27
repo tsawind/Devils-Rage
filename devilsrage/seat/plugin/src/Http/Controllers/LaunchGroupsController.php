@@ -154,7 +154,8 @@ class LaunchGroupsController extends Controller
         $user = auth()->user();
         $data = $request->validate([
             'name' => ['required', 'string', 'max:40'],
-            'character_ids' => ['required', 'array', 'min:1', 'max:150'],
+            // 27 Nov: may be empty: a group of login screens only (the app keeps those on the PC).
+            'character_ids' => ['present', 'array', 'max:150'],
             'character_ids.*' => ['integer'],
         ]);
         $name = trim($data['name']);
@@ -165,7 +166,7 @@ class LaunchGroupsController extends Controller
             ->whereIn('account_id', Account::query()->where('user_id', $user->id)->pluck('id'))
             ->whereIn('character_id', array_map('intval', $data['character_ids']))
             ->get();
-        if ($links->isEmpty()) {
+        if ($links->isEmpty() && $data['character_ids'] !== []) {
             return response()->json(['message' => 'None of those characters is in your accounts.'], 422);
         }
         $group = LaunchGroup::query()->where('user_id', $user->id)->where('name', $name)->first();
