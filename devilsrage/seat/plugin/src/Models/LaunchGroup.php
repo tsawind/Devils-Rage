@@ -36,6 +36,12 @@ class LaunchGroup extends Model
         return $this->belongsToMany(AccountCharacter::class, self::PIVOT, 'launch_group_id', 'account_character_id');
     }
 
+    /** 28 Nov: accounts in the group at their login screen (no character picked). */
+    public function logins(): BelongsToMany
+    {
+        return $this->belongsToMany(Account::class, 'devilsrage_launch_group_logins', 'launch_group_id', 'account_id');
+    }
+
     /** The shared groups first, then the pilot's own by name. */
     public function scopeVisibleTo(Builder $query, int $userId): Builder
     {

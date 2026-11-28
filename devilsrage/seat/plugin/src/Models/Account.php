@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace DevilsRage\Seat\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -53,6 +54,12 @@ class Account extends Model
     public function scopeOrdered($query)
     {
         return $query->orderBy('position')->orderBy('nickname');
+    }
+
+    /** 28 Nov: launch groups this account is in at its login screen (no character picked). */
+    public function loginGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(LaunchGroup::class, 'devilsrage_launch_group_logins', 'account_id', 'launch_group_id');
     }
 
     public function characters(): HasMany

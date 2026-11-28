@@ -39,13 +39,20 @@ class LaunchGroupsController extends Controller
         $user = auth()->user();
         $accounts = Account::query()
             ->where('user_id', $user->id)
-            ->with(['characters' => fn ($query) => $query->orderBy('position')->orderBy('id'), 'characters.launchGroups'])
+            ->with(['characters' => fn ($query) => $query->orderBy('position')->orderBy('id'), 'characters.launchGroups', 'loginGroups'])
             ->ordered()
             ->get();
         $names = CharacterInfo::query()
             ->whereIn('character_id', $accounts->flatMap(fn (Account $a) => $a->characters->pluck('character_id'))->all())
             ->pluck('name', 'character_id');
         $groups = LaunchGroup::forUser((int) $user->id);
+        // 28 Nov: login-screen members, by group (only this member's accounts).
+        $logins = [];
+        foreach ($accounts as $account) {
+            foreach ($account->loginGroups as $group) {
+                $logins[$group->id][] = ['account' => (string) $account->nickname, 'account_id' => (int) $account->id];
+            }
+        }
 
         $outAccounts = [];
         $members = [];
@@ -80,6 +87,7 @@ class LaunchGroupsController extends Controller
                 'name' => (string) $group->name,
                 'kind' => $group->user_id !== null ? 'own' : ($group->locked ? 'corp-slot' : 'corp'),
                 'members' => $members[$group->id] ?? [],
+                'logins' => $logins[$group->id] ?? [],
             ])->values()->all(),
         ]);
     }
@@ -157,6 +165,9 @@ class LaunchGroupsController extends Controller
             // 27 Nov: may be empty: a group of login screens only (the app keeps those on the PC).
             'character_ids' => ['present', 'array', 'max:150'],
             'character_ids.*' => ['integer'],
+            // 28 Nov: accounts at their login screen (Character: None in the launcher).
+            'login_account_ids' => ['sometimes', 'array', 'max:150'],
+            'login_account_ids.*' => ['integer'],
         ]);
         $name = trim($data['name']);
         if (LaunchGroup::query()->whereNull('user_id')->where('name', $name)->exists()) {
@@ -177,6 +188,10 @@ class LaunchGroupsController extends Controller
             $group = LaunchGroup::query()->create(['user_id' => $user->id, 'name' => $name, 'locked' => false]);
         }
         $group->characters()->sync($links->pluck('id')->all());
+        if (array_key_exists('login_account_ids', $data)) {
+            $logins = Account::query()->where('user_id', $user->id)->whereIn('id', array_map('intval', $data['login_account_ids']))->pluck('id')->all();
+            $group->logins()->sync($logins);
+        }
 
         return response()->json(['id' => (int) $group->id, 'ticked' => $links->count()]);
     }
