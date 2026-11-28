@@ -74,4 +74,36 @@ class LauncherAccountsController extends Controller
 
         return response()->json(['message' => "Your accounts: {$moved} characters placed, {$created} new accounts (rename them on Your accounts).", 'moved' => $moved, 'created' => $created]);
     }
+
+    /**
+     * 27 Nov: EVE account numbers the app learned on a PC (a character logged in there, and its
+     * sign-in named the EVE account), for accounts that have none yet. Only the member's own
+     * accounts, never one that has a number already, and never a number another of their
+     * accounts has.
+     */
+    public function launcherIds(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'max:200'],
+            'ids.*.account_id' => ['required', 'integer', 'min:1'],
+            'ids.*.launcher_user_id' => ['required', 'integer', 'min:1'],
+        ]);
+        $user = auth()->user();
+        $saved = 0;
+        DB::transaction(function () use ($data, $user, &$saved): void {
+            foreach ($data['ids'] as $pair) {
+                $taken = Account::query()->where('user_id', $user->id)->where('launcher_user_id', $pair['launcher_user_id'])->exists();
+                if ($taken) {
+                    continue;
+                }
+                $saved += Account::query()
+                    ->where('user_id', $user->id)
+                    ->whereKey($pair['account_id'])
+                    ->whereNull('launcher_user_id')
+                    ->update(['launcher_user_id' => $pair['launcher_user_id']]);
+            }
+        });
+
+        return response()->json(['saved' => $saved]);
+    }
 }

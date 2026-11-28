@@ -203,6 +203,9 @@
   details.profs summary::after { content: ' ▾'; }
   details.profs[open] summary::after { content: ' ▴'; }
   details.profs .prow { display: flex; gap: 8px; align-items: center; padding: 2px 0 2px 10px; }
+  /* 27 Nov: an error under the file's line, full width, not squeezed in beside its buttons. */
+  details.profs .prow { flex-wrap: wrap; }
+  details.profs .prow .said-err { flex: 1 0 100%; order: 99; font-size: 13px; }
   details.profs .prow span:first-child { width: 150px; }
   details.profs .prow button { background: none; border: 1px solid #3a3a44; border-radius: 4px; color: var(--muted); font-size: 11px; padding: 0 6px; cursor: pointer; }
   details.profs .prow button:hover { color: var(--text); }
@@ -1056,7 +1059,9 @@
       const every = new Set([...Object.keys(folders), ...Object.values(pc.chars || {}).flatMap((c) => (c.profiles || []).map((f) => f.name)), 'Default']);
       const rest = [...every].filter((n) => n && !froms.includes(n)).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
       const first = i.profile && froms.includes(i.profile) ? i.profile : froms[0];
-      const opt = (n) => `<option value="${esc(n)}"${n === first ? ' selected' : ''}>settings_${esc(n)}${n === i.profile ? ' (started with last)' : ''}</option>`;
+      // 27 Nov: how long since anything in it changed (its newest account file on this PC).
+      const changedAt = (n) => Math.max(0, ...Object.values((pc.folder_times || {})[n] || {}).map(Number));
+      const opt = (n) => { const bits = [n === i.profile ? 'started with last' : '', ago(changedAt(n)) ? 'changed ' + ago(changedAt(n)) : ''].filter(Boolean).join(' · '); return `<option value="${esc(n)}"${n === first ? ' selected' : ''}>settings_${esc(n)}${bits ? ' (' + esc(bits) + ')' : ''}</option>`; };
       const opts = (froms.length ? `<optgroup label="This account's">${froms.map(opt).join('')}</optgroup>` : '')
         + (rest.length ? `<optgroup label="Other profiles on this PC">${rest.map(opt).join('')}</optgroup>` : '')
         + `<option value="fresh">Fresh: EVE's default settings</option>`;

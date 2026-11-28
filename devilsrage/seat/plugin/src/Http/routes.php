@@ -59,6 +59,7 @@ Route::group([
     Route::post('accounts', [AccountsController::class, 'storeAccount'])->name('devilsrage.accounts.store');
     Route::get('accounts/mine.json', [\DevilsRage\Seat\Http\Controllers\LauncherAccountsController::class, 'mine'])->name('devilsrage.accounts.mine');
     Route::post('accounts/launcher-import', [\DevilsRage\Seat\Http\Controllers\LauncherAccountsController::class, 'import'])->name('devilsrage.accounts.launcher');
+    Route::post('accounts/launcher-ids', [\DevilsRage\Seat\Http\Controllers\LauncherAccountsController::class, 'launcherIds'])->name('devilsrage.accounts.launcher-ids');
     Route::post('accounts/share', [AccountsController::class, 'share'])->name('devilsrage.accounts.share');
     Route::post('accounts/name', [AccountsController::class, 'saveName'])->name('devilsrage.accounts.name');
     Route::post('accounts/{account}/rename', [AccountsController::class, 'renameAccount'])->name('devilsrage.accounts.rename');
